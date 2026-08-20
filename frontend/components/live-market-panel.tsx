@@ -88,43 +88,81 @@ function MainPriceChart({ item, days }: { item: MarketSummary; days: RangeWeeks 
     return <div className="trend-chart-state"><ChartLine size={34} weight="light" /><strong>历史数据不足</strong><p>当前只有 {validHistory(item).length} 个公开周价格点。</p></div>;
   }
 
-  const values = stats.points.map((point) => point.median);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const padding = (max - min || max * .08 || 1) * .14;
-  const chartMin = min - padding;
-  const chartMax = max + padding;
-  const scaleY = (value: number) => 292 - ((value - chartMin) / (chartMax - chartMin)) * 248;
-  const chartPoints = stats.points.map((point, index) => ({ ...point, x: 42 + (index / Math.max(1, stats.points.length - 1)) * 916, y: scaleY(point.median) }));
-  const line = linearPath(chartPoints);
-  const area = `${line} L ${chartPoints.at(-1)!.x} 292 L ${chartPoints[0].x} 292 Z`;
-  const highPoint = chartPoints.reduce((best, point) => point.median > best.median ? point : best);
-  const lowPoint = chartPoints.reduce((best, point) => point.median < best.median ? point : best);
-  const active = activeIndex === null ? null : chartPoints[activeIndex];
+  const candles = stats.points.map((point, index) => {
+    const open = index === 0 ? point.median : stats.points[index - 1].median;
+    return {
+      ...point,
+      open,
+      high: Math.max(open, point.median),
+      low: Math.min(open, point.median),
+      close: point.median,
+    };
+  });
+  const rawMin = Math.min(...candles.map((candle) => candle.low));
+  const rawMax = Math.max(...candles.map((candle) => candle.high));
+  const padding = Math.max((rawMax - rawMin) * .16, rawMax * .025, .02);
+  const chartMin = Math.max(0, rawMin - padding);
+  const chartMax = rawMax + padding;
+  const plot = { left: 54, right: 946, top: 52, bottom: 292 };
+  const scaleY = (value: number) => plot.top + ((chartMax - value) / (chartMax - chartMin || 1)) * (plot.bottom - plot.top);
+  const candleWidth = Math.min(34, Math.max(13, ((plot.right - plot.left) / candles.length) * .56));
+  const chartCandles = candles.map((candle, index) => {
+    const averageWindow = candles.slice(Math.max(0, index - 3), index + 1);
+    const ma4 = averageWindow.reduce((total, entry) => total + entry.close, 0) / averageWindow.length;
+    return {
+      ...candle,
+      x: plot.left + ((index + .5) / candles.length) * (plot.right - plot.left),
+      openY: scaleY(candle.open),
+      highY: scaleY(candle.high),
+      lowY: scaleY(candle.low),
+      closeY: scaleY(candle.close),
+      ma4,
+      maY: scaleY(ma4),
+    };
+  });
+  const maLine = linearPath(chartCandles.map((candle) => ({ x: candle.x, y: candle.maY })));
+  const highPoint = chartCandles.reduce((best, point) => point.high > best.high ? point : best);
+  const lowPoint = chartCandles.reduce((best, point) => point.low < best.low ? point : best);
+  const active = activeIndex === null ? chartCandles.at(-1)! : chartCandles[activeIndex];
 
   const selectPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    setActiveIndex(Math.round(ratio * (chartPoints.length - 1)));
+    const pointerRatio = (event.clientX - rect.left) / rect.width;
+    const chartRatio = Math.max(0, Math.min(1, (pointerRatio - .054) / .892));
+    setActiveIndex(Math.round(chartRatio * (chartCandles.length - 1)));
   };
 
   const trendTone = stats.delta > 0 ? "is-up" : stats.delta < 0 ? "is-down" : "is-flat";
 
   return <div className={`trend-main-chart ${trendTone}`} onPointerMove={selectPoint} onPointerLeave={() => setActiveIndex(null)} onPointerDown={selectPoint}>
-    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" role="img" aria-label={`${item.gpu_model} 价格趋势`}>
-      {[68, 124, 180, 236, 292].map((y) => <line className="trend-grid-line" x1="42" x2="958" y1={y} y2={y} key={y} />)}
-      <line className="trend-median-line" x1="42" x2="958" y1={scaleY(stats.median)} y2={scaleY(stats.median)} />
-      <path className="trend-main-area" d={area} key={`area-${item.gpu_model}-${days}`} />
-      <path className="trend-main-line" d={line} fill="none" key={`line-${item.gpu_model}-${days}`} />
-      <circle className="trend-extreme-point is-high" cx={highPoint.x} cy={highPoint.y} r="5" />
-      <circle className="trend-extreme-point is-low" cx={lowPoint.x} cy={lowPoint.y} r="5" />
-      {active && <><line className="trend-cursor-line" x1={active.x} x2={active.x} y1="42" y2="292" /><circle className="trend-active-point" cx={active.x} cy={active.y} r="6" /></>}
+    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" role="img" aria-label={`${item.gpu_model} 周价格 K 线`}>
+      {[0, 1, 2, 3, 4].map((line) => {
+        const y = plot.top + ((plot.bottom - plot.top) / 4) * line;
+        return <line className="trend-grid-line" x1={plot.left} x2={plot.right} y1={y} y2={y} key={line} />;
+      })}
+      <line className="trend-median-line" x1={plot.left} x2={plot.right} y1={scaleY(stats.median)} y2={scaleY(stats.median)} />
+      <path className="trend-kline-ma" d={maLine} key={`ma-${item.gpu_model}-${days}`} />
+      {chartCandles.map((candle) => {
+        const bodyTop = Math.min(candle.openY, candle.closeY);
+        const bodyHeight = Math.max(3.5, Math.abs(candle.closeY - candle.openY));
+        return <g className={`trend-candle ${candle.close >= candle.open ? "is-up" : "is-down"}`} key={candle.date}>
+          <title>{candle.date} · O {candle.open.toFixed(3)} H {candle.high.toFixed(3)} L {candle.low.toFixed(3)} C {candle.close.toFixed(3)}</title>
+          <line className="trend-candle__wick" x1={candle.x} x2={candle.x} y1={candle.highY} y2={candle.lowY} />
+          <rect className="trend-candle__body" x={candle.x - candleWidth / 2} y={bodyHeight === 3.5 ? bodyTop - 1.75 : bodyTop} width={candleWidth} height={bodyHeight} />
+        </g>;
+      })}
+      {activeIndex !== null && <line className="trend-cursor-line" x1={active.x} x2={active.x} y1={plot.top} y2={plot.bottom} />}
     </svg>
-    <div className="trend-chart-legend"><span><i className="is-price" />每周公开中位价</span></div>
-    <span className="trend-high-label" style={{ left: `${highPoint.x / 10}%`, top: `${highPoint.y / 3.3}%` }}>最高 {formatPrice(highPoint.median)}</span>
-    <span className="trend-low-label" style={{ left: `${lowPoint.x / 10}%`, top: `${lowPoint.y / 3.3}%` }}>最低 {formatPrice(lowPoint.median)}</span>
+    <div className="trend-chart-legend">
+      <span><i className="is-candle-up" />上涨</span>
+      <span><i className="is-candle-down" />下跌</span>
+      <span><i className="is-average" />MA4 {active.ma4.toFixed(3)}</span>
+      <span className="trend-chart-ohlc">{new Date(`${active.date}T00:00:00Z`).toLocaleDateString("zh-CN", { timeZone: "UTC" })} · O {active.open.toFixed(3)} H {active.high.toFixed(3)} L {active.low.toFixed(3)} C {active.close.toFixed(3)}</span>
+    </div>
+    <span className="trend-high-label" style={{ left: `${highPoint.x / 10}%`, top: `${highPoint.highY / 3.3}%` }}>最高 {formatPrice(highPoint.high)}</span>
+    <span className="trend-low-label" style={{ left: `${lowPoint.x / 10}%`, top: `${lowPoint.lowY / 3.3}%` }}>最低 {formatPrice(lowPoint.low)}</span>
     <span className="trend-median-label" style={{ top: `${scaleY(stats.median) / 3.3}%` }}>中位价 {formatPrice(stats.median)}</span>
-    {active && <div className="trend-chart-tooltip" style={{ left: `${Math.max(10, Math.min(90, active.x / 10))}%`, top: `${Math.max(5, active.y / 3.3 - 13)}%` }}><strong>{formatPrice(active.median)} / GPU·小时</strong><span>{new Date(`${active.date}T00:00:00`).toLocaleDateString("zh-CN")}</span></div>}
+    {activeIndex !== null && <div className="trend-chart-tooltip" style={{ left: `${Math.max(10, Math.min(90, active.x / 10))}%`, top: `${Math.max(7, active.highY / 3.3 - 6)}%` }}><strong>{formatPrice(active.close)} / GPU·小时</strong><span>开 {active.open.toFixed(3)} · 高 {active.high.toFixed(3)} · 低 {active.low.toFixed(3)} · 收 {active.close.toFixed(3)}</span><span>{new Date(`${active.date}T00:00:00Z`).toLocaleDateString("zh-CN", { timeZone: "UTC" })}</span></div>}
     <div className="trend-axis-dates"><span>{new Date(`${stats.points[0].date}T00:00:00`).toLocaleDateString("zh-CN")}</span><span>{new Date(`${stats.points.at(-1)!.date}T00:00:00`).toLocaleDateString("zh-CN")}</span></div>
   </div>;
 }
