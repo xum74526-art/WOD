@@ -190,19 +190,61 @@ html :where([class*="card"], [class*="panel"], [class*="console"], [class*="ledg
 .ui-settings:hover { color: var(--ink); background: var(--layer-hover-01); }
 .ui-settings--compact { width: 44px; padding: 0; }
 
-/* Typography follows the registry scale instead of oversized campaign type. */
-.home-v2-hero { min-height: 560px; padding-block: 72px; }
+/* The home hero uses one shared top baseline: decision copy on the left, live market data on the right. */
+.home-v2-hero {
+  min-height: 0;
+  padding-block: 56px 72px;
+  grid-template-columns: minmax(360px, .78fr) minmax(620px, 1.22fr);
+  align-items: stretch;
+  column-gap: 56px;
+}
 .home-v2-hero::before { display: none; }
-.home-v2-hero__copy h1 { max-width: 660px; font-size: clamp(46px, 5vw, 64px); line-height: 1; letter-spacing: -.045em; }
+.home-v2-hero__copy { min-height: 100%; padding-top: 3px; display: flex; align-items: flex-start; flex-direction: column; }
+.home-v2-hero__copy h1 {
+  max-width: 540px;
+  margin-top: 28px;
+  font-size: clamp(50px, 4.6vw, 62px);
+  line-height: .98;
+  letter-spacing: -.052em;
+}
 .home-v2-hero__copy h1 em::after { height: 8px; bottom: 3px; background: var(--accent-soft); }
 .home-v2-kicker,
 .hero-eyebrow,
 .auth-eyebrow,
 .workspace-page__head p { color: var(--accent); font: 500 12px/1.35 var(--font-mono); letter-spacing: .08em; }
 .home-v2-kicker::before { height: 1px; background: var(--accent); }
-.home-v2-hero__copy > p { color: var(--foreground); font-size: 16px; line-height: 1.625; }
+.home-v2-hero__copy > p { max-width: 470px; margin-top: 22px; color: var(--foreground); font-size: 16px; line-height: 1.625; }
+.home-v2-rental-flow { width: 100%; max-width: 470px; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--border-subtle); list-style: none; }
+.home-v2-rental-flow li { min-height: 50px; border-bottom: 1px solid var(--border-subtle); display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px; }
+.home-v2-rental-flow li > span { color: var(--accent); font: 500 10px var(--font-mono); letter-spacing: .08em; }
+.home-v2-rental-flow strong,
+.home-v2-rental-flow small { display: block; }
+.home-v2-rental-flow strong { color: var(--ink); font-size: 12px; font-weight: 600; }
+.home-v2-rental-flow small { margin-top: 3px; color: var(--muted-foreground); font-size: 10px; line-height: 1.4; }
+.home-v2-actions { margin-top: auto; padding-top: 24px; }
+.home-v2-assurances { margin-top: 20px; }
 .home-v2-assurances li { color: var(--muted-foreground); font-size: 12px; }
 .home-v2-assurances li::before { width: 6px; height: 6px; border: 0; border-radius: 0; background: var(--success); box-shadow: none; }
+
+.home-v2-hero > .gpu-kline-card { width: 100%; align-self: stretch; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-card__head { min-height: 92px; padding: 20px 24px 17px; }
+.home-v2-hero > .gpu-kline-card h2 { font-size: 22px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-quote { min-height: 74px; padding: 12px 24px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-quote strong { font-size: 34px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-legend { min-height: 40px; padding: 13px 24px 4px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-plot { padding-inline: 10px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-plot svg { height: 248px; }
+.home-v2-hero > .gpu-kline-card .gpu-kline-stats div { min-height: 58px; padding: 11px 16px; }
+.home-v2-hero > .gpu-kline-card > footer { min-height: 46px; padding-inline: 24px; }
+
+@media (max-width: 1050px) {
+  .home-v2-hero { padding-block: 48px 64px; grid-template-columns: 1fr; align-items: start; row-gap: 40px; }
+  .home-v2-hero__copy { min-height: 0; max-width: 720px; display: block; }
+  .home-v2-hero__copy h1 { max-width: 620px; }
+  .home-v2-rental-flow { max-width: 620px; }
+  .home-v2-actions { margin-top: 28px; padding-top: 0; }
+  .home-v2-hero > .gpu-kline-card { align-self: start; }
+}
 
 /* Surfaces and cards use Carbon-style layers: flat, square and bordered. */
 :where(
@@ -460,8 +502,26 @@ html :where([class*="card"], [class*="panel"], [class*="console"], [class*="ledg
 
 @media (max-width: 760px) {
   .site-header__actions > .ui-settings { display: none; }
-  .home-v2-hero { padding-block: 50px 36px; }
-  .home-v2-hero__copy h1 { font-size: clamp(42px, 12vw, 54px); }
+  .home-v2-hero { padding-block: 40px 52px; row-gap: 32px; }
+  .home-v2-hero__copy { padding-top: 0; }
+  .home-v2-hero__copy h1 { margin-top: 22px; font-size: clamp(42px, 12vw, 54px); }
+  .home-v2-hero__copy > p { margin-top: 20px; font-size: 15px; }
+  .home-v2-rental-flow { margin-top: 24px; }
+  .home-v2-rental-flow li { min-height: 52px; }
+  .home-v2-actions { margin-top: 24px; padding-top: 0; }
+  .home-v2-assurances { margin-top: 18px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-card__head { min-height: 0; padding: 18px 17px 16px; }
+  .home-v2-hero > .gpu-kline-card h2 { font-size: 20px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-quote { min-height: 70px; padding: 12px 17px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-quote strong { font-size: 32px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-legend { min-height: 0; padding: 13px 17px 4px; flex-wrap: wrap; gap: 9px 15px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-plot { padding-inline: 8px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-plot svg { height: 220px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-stats { grid-template-columns: repeat(2, 1fr); }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-stats div { min-height: 56px; padding: 10px 13px; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-stats div:nth-child(2) { border-right: 0; }
+  .home-v2-hero > .gpu-kline-card .gpu-kline-stats div:nth-child(-n + 2) { border-bottom: 1px solid var(--border-subtle); }
+  .home-v2-hero > .gpu-kline-card > footer { min-height: 0; padding: 13px 17px; }
   .workspace-page { padding: 34px 0 56px; }
   .site-footer.site-footer--kai { padding: 40px 22px; grid-template-columns: 1fr 1fr; gap: 32px; }
   .site-footer--kai .site-footer__brand { grid-column: 1 / -1; grid-row: auto; }

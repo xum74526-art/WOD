@@ -16,6 +16,20 @@ export default function HomePage() {
             <span className="home-v2-kicker">GPU SERVER MARKETPLACE</span>
             <h1>GPU 服务器，<br /><em>按需即用</em></h1>
             <p>透明比较 GPU 型号、配置与小时价格。完成支付后，平台自动授权你的 SSH 公钥，复制命令即可连接。</p>
+            <ol className="home-v2-rental-flow" aria-label="GPU 服务器租用流程">
+              <li>
+                <span>01</span>
+                <div><strong>选定服务器</strong><small>比较 GPU、显存、区域与小时价格</small></div>
+              </li>
+              <li>
+                <span>02</span>
+                <div><strong>提交 SSH 公钥</strong><small>付款后只下发公钥，平台不接收私钥</small></div>
+              </li>
+              <li>
+                <span>03</span>
+                <div><strong>复制连接命令</strong><small>Agent 自动授权，到期自动撤销</small></div>
+              </li>
+            </ol>
             <div className="home-v2-actions">
               <Link className="primary-link primary-link--large" href="/market">浏览 GPU 服务器 <ArrowRight size={17}/></Link>
               <Link className="outline-link outline-link--large" href="/supplier/apply">商家发布服务器</Link>
