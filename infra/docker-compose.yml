@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:18
     environment:
-      POSTGRES_DB: wod_web
-      POSTGRES_USER: wod_web
+      POSTGRES_DB: kai
+      POSTGRES_USER: kai
       POSTGRES_PASSWORD: change-before-use
     ports:
       - "55432:5432"
     volumes:
-      - wod_web_postgres:/var/lib/postgresql
+      - kai_postgres:/var/lib/postgresql
 
   redis:
     image: redis:8-alpine
@@ -27,4 +27,4 @@ services:
       - redis
 
 volumes:
-  wod_web_postgres:
+  kai_postgres:

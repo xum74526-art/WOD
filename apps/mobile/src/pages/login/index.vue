@@ -1,0 +1,233 @@
+<template>
+  <view class="page">
+    <view class="shell" :style="{ paddingTop: 'calc(52rpx + var(--safe-top))' }">
+      <view class="logo-area">
+        <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
+        <view class="brand-copy">
+          <text class="logo">KAI</text>
+          <text class="sub">{{ t('AI 算力资产管理') }}</text>
+        </view>
+      </view>
+
+      <view class="auth-card">
+        <view class="mode-switch">
+          <view class="mode-item" :class="{ active: mode === 'login' }" @tap="setMode('login')">{{ t('登录') }}</view>
+          <view class="mode-item" :class="{ active: mode === 'register' }" @tap="setMode('register')">{{ t('注册') }}</view>
+        </view>
+
+        <view v-if="thirdPartyLoginEnabled" class="method-switch">
+          <view class="method-item" :class="{ active: authMethod === 'password' }" @tap="setAuthMethod('password')">
+            <text>{{ t(mode === 'login' ? 'identifierLogin' : 'identifierRegister') }}</text>
+          </view>
+          <view class="method-item" :class="{ active: authMethod === 'kai' }" @tap="setAuthMethod('kai')">
+            <text>{{ t(mode === 'login' ? 'kaiLogin' : 'kaiRegister') }}</text>
+          </view>
+        </view>
+
+        <view v-if="authMethod === 'password'" class="phone-form">
+          <view class="field" v-if="mode === 'register'">
+            <text class="flabel">{{ t('k_819767ad') }}</text>
+            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" />
+          </view>
+          <view class="field">
+            <text class="flabel">{{ t('emailOrPhone') }}</text>
+            <input class="finput" v-model="form.identifier" type="text" :placeholder="t('enterEmailOrPhone')" placeholder-class="ph" maxlength="255" />
+          </view>
+          <view class="field">
+            <text class="flabel">{{ t('k_a8105204') }}</text>
+            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" />
+            <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
+          </view>
+        </view>
+
+        <view v-else class="kai-panel">
+          <view class="kai-mark">KAI</view>
+          <text class="kai-title">{{ t(mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister') }}</text>
+          <text class="kai-desc">{{ t('kaiIdentityHint') }}</text>
+          <view class="kai-flow">
+            <view class="flow-dot">1</view><text>{{ t('kaiVerifyStep') }}</text>
+            <view class="flow-line" />
+            <view />
+            <view class="flow-dot">2</view><text>{{ t('kaiReturnStep') }}</text>
+          </view>
+          <view v-if="kaiConfigured === false" class="config-warning">{{ t('kaiNotConfigured') }}</view>
+          <text class="phone-note">{{ t('kaiPhoneBindingHint') }}</text>
+        </view>
+
+        <view class="agree">
+          <view class="check" :class="{ checked: agree }" @tap="agree = !agree"><text v-if="agree" class="ck">✓</text></view>
+          <view class="atext">{{ t('我已阅读并同意') }}<text class="alink" @tap.stop="goAgreement('agreement')">{{ t('用户协议') }}</text>{{ t('和') }}<text class="alink" @tap.stop="goAgreement('privacy')">{{ t('隐私政策') }}</text></view>
+        </view>
+
+        <view class="btn-primary" :class="{ disabled: submitting || !agree }" @tap="submit">
+          <text v-if="authMethod === 'password'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
+          <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
+        </view>
+        <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { useUserStore } from '@/store/user'
+import { getKaiAuthConfig, startKaiAuth } from '@/api/user'
+import AppIcon from '@/components/AppIcon.vue'
+import { useI18nStore } from '@/store/i18n'
+
+const { t } = useI18nStore()
+const userStore = useUserStore()
+const mode = ref<'login' | 'register'>('login')
+const authMethod = ref<'password' | 'kai'>('password')
+const form = reactive({ username: '', identifier: '', password: '' })
+const showPwd = ref(false)
+const agree = ref(false)
+const submitting = ref(false)
+const kaiConfigured = ref<boolean | null>(null)
+const thirdPartyLoginEnabled = true
+
+function setMode(value: 'login' | 'register') {
+  mode.value = value
+}
+
+function setAuthMethod(value: 'password' | 'kai') {
+  authMethod.value = value
+}
+
+function goAgreement(type: string) {
+  uni.navigateTo({ url: '/pages/agreement/index?type=' + type })
+}
+
+async function checkKaiConfig() {
+  if (!thirdPartyLoginEnabled) {
+    kaiConfigured.value = false
+    return
+  }
+  try {
+    const config = await getKaiAuthConfig()
+    kaiConfigured.value = config.configured
+  } catch {
+    kaiConfigured.value = null
+  }
+}
+
+function openExternalAuthorization(url: string) {
+  let opened = false
+  // #ifdef H5
+  window.location.assign(url)
+  opened = true
+  // #endif
+  // #ifdef APP-PLUS
+  plus.runtime.openURL(url)
+  opened = true
+  // #endif
+  // #ifndef H5
+  // #ifndef APP-PLUS
+  uni.setClipboardData({ data: url })
+  uni.showToast({ title: t('kaiLinkCopied'), icon: 'none' })
+  opened = true
+  // #endif
+  // #endif
+  return opened
+}
+
+async function submitKai() {
+  if (kaiConfigured.value === false) {
+    uni.showToast({ title: t('kaiNotConfigured'), icon: 'none' })
+    return
+  }
+  submitting.value = true
+  try {
+    const result = await startKaiAuth(mode.value)
+    openExternalAuthorization(result.authorization_url)
+  } catch {
+    submitting.value = false
+  }
+}
+
+async function submit() {
+  if (submitting.value) return
+  if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
+  if (authMethod.value === 'kai') { await submitKai(); return }
+  if (!form.identifier || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
+  if (mode.value === 'register' && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
+  submitting.value = true
+  try {
+    if (mode.value === 'login') await userStore.login(form.identifier.trim(), form.password)
+    else await userStore.register(form.username, form.identifier.trim(), form.password)
+    uni.showToast({ title: t('success'), icon: 'success' })
+    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+  } catch { /* request toast */ }
+  submitting.value = false
+}
+
+onLoad(async (options) => {
+  const ticket = typeof options?.kai_ticket === 'string' ? options.kai_ticket : ''
+  const error = typeof options?.kai_error === 'string' ? options.kai_error : ''
+  if (error) {
+    const key = error === 'access_denied'
+      ? 'kaiCancelled'
+      : error === 'account_not_found'
+        ? 'kaiAccountNotFound'
+        : error === 'identity_conflict'
+          ? 'kaiIdentityConflict'
+          : 'kaiLoginFailed'
+    uni.showToast({ title: t(key), icon: 'none' })
+    return
+  }
+  if (!ticket) return
+  submitting.value = true
+  authMethod.value = 'kai'
+  try {
+    await userStore.loginWithKaiTicket(ticket)
+    uni.showToast({ title: t('loginSuccess'), icon: 'success' })
+    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+  } catch { /* request toast */ }
+  submitting.value = false
+})
+
+onMounted(checkKaiConfig)
+</script>
+
+<style lang="scss" scoped>
+.page { min-height: 100vh; background: var(--bg-2); }
+.shell { padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
+.logo-area { display: flex; align-items: center; margin: 28rpx 8rpx 40rpx; }
+.logo-img { width: 88rpx; height: 88rpx; border-radius: 22rpx; margin-right: 22rpx; }
+.brand-copy { display: flex; flex-direction: column; }
+.logo { font-size: 44rpx; line-height: 1; font-weight: 800; color: var(--text); letter-spacing: 2rpx; }
+.sub { margin-top: 12rpx; color: var(--text-sub); font-size: 24rpx; }
+.auth-card { background: var(--card); border: 1rpx solid var(--border); border-radius: 28rpx; padding: 24rpx; box-shadow: 0 14rpx 42rpx rgba(15, 38, 47, 0.06); }
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border-radius: 18rpx; padding: 6rpx; margin-bottom: 28rpx; }
+.mode-item { height: 76rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 28rpx; font-weight: 600; border-radius: 14rpx; }
+.mode-item.active { color: var(--text); background: var(--card); box-shadow: 0 5rpx 18rpx rgba(15, 38, 47, 0.08); }
+.method-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-bottom: 28rpx; }
+.method-item { min-height: 76rpx; border: 1rpx solid var(--border); border-radius: 16rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 26rpx; }
+.method-item.active { color: var(--primary); background: rgba(24, 175, 196, .08); border-color: var(--primary); font-weight: 600; }
+.field { position: relative; margin-bottom: 22rpx; background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 16rpx; padding: 20rpx 24rpx; }
+.flabel { color: var(--text-sub); font-size: 22rpx; display: block; margin-bottom: 10rpx; }
+.finput { color: var(--text); font-size: 30rpx; min-height: 42rpx; }
+.ph { color: var(--text-dim); }
+.eye { position: absolute; right: 24rpx; bottom: 27rpx; color: var(--text-sub); }
+.eye.on { color: var(--primary); }
+.kai-panel { padding: 20rpx 8rpx 8rpx; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.kai-mark { width: 100rpx; height: 100rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center; background: #15272d; color: #fff; font-size: 24rpx; font-weight: 800; letter-spacing: 2rpx; box-shadow: inset 0 0 0 1rpx rgba(255,255,255,.12); }
+.kai-title { margin-top: 24rpx; font-size: 32rpx; font-weight: 700; color: var(--text); }
+.kai-desc { margin-top: 12rpx; color: var(--text-sub); font-size: 24rpx; line-height: 1.6; max-width: 540rpx; }
+.kai-flow { width: 100%; box-sizing: border-box; margin-top: 28rpx; padding: 22rpx 24rpx; border-radius: 16rpx; background: var(--bg-2); display: grid; grid-template-columns: 36rpx 1fr; gap: 10rpx 14rpx; align-items: center; text-align: left; color: var(--text-sub); font-size: 23rpx; }
+.flow-dot { width: 34rpx; height: 34rpx; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20rpx; }
+.flow-line { width: 2rpx; height: 18rpx; background: var(--border); justify-self: center; }
+.config-warning { width: 100%; box-sizing: border-box; margin-top: 20rpx; padding: 18rpx; background: rgba(239, 68, 68, .08); color: #dc2626; border-radius: 14rpx; font-size: 23rpx; }
+.phone-note { margin-top: 20rpx; color: var(--text-dim); font-size: 22rpx; }
+.agree { display: flex; align-items: flex-start; margin: 28rpx 4rpx 28rpx; }
+.check { width: 36rpx; height: 36rpx; border-radius: 18rpx; border: 1rpx solid var(--text-dim); margin-right: 14rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.check.checked { background: var(--primary); border-color: var(--primary); }
+.ck { color: #fff; font-size: 22rpx; }
+.atext { color: var(--text-sub); font-size: 23rpx; flex: 1; line-height: 1.55; }
+.alink { color: var(--primary); }
+.btn-primary { background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; }
+.btn-primary.disabled { opacity: 0.4; }
+.security-note { display: block; text-align: center; color: var(--text-dim); font-size: 21rpx; margin: 20rpx 0 4rpx; }
+</style>

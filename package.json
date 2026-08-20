@@ -1,0 +1,19 @@
+{
+  "name": "kai-unified",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KAI unified web, iOS, Android and API platform",
+  "scripts": {
+    "check:web": "npm --prefix apps/web run type-check",
+    "build:web": "npm --prefix apps/web run build",
+    "check:mobile": "npm --prefix apps/mobile run type-check",
+    "test:mobile": "npm --prefix apps/mobile test",
+    "check:mobile:ios": "npm --prefix apps/mobile run check:ios",
+    "check:contracts": "node packages/api-contracts/check-mobile-api.mjs",
+    "build:mobile:h5": "npm --prefix apps/mobile run build:h5",
+    "build:mobile:app": "npm --prefix apps/mobile run build:app"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

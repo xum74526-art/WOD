@@ -1,0 +1,200 @@
+.asset-panel {
+  padding-top: 8rpx;
+  animation: asset-panel-in 200ms ease both;
+}
+
+.asset-panel__hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 290rpx;
+  padding: 34rpx;
+  border: 1rpx solid rgba(24, 175, 196, 0.2);
+  border-radius: 24rpx;
+  background: linear-gradient(145deg, var(--primary-soft), var(--card) 72%);
+  box-shadow: var(--shadow);
+}
+
+.asset-panel__hero::after {
+  content: '';
+  position: absolute;
+  width: 240rpx;
+  height: 240rpx;
+  right: -98rpx;
+  top: -112rpx;
+  border: 42rpx solid rgba(24, 175, 196, 0.08);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.asset-panel__eyebrow {
+  position: relative;
+  z-index: 1;
+  display: block;
+  color: var(--text-sub);
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.asset-panel__amount {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.asset-panel__amount-value {
+  color: var(--text);
+  font-size: 64rpx;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -2rpx;
+}
+
+.asset-panel__amount-unit { color: var(--text-sub); font-size: 23rpx; }
+
+.asset-panel__hero-note {
+  position: relative;
+  z-index: 1;
+  display: block;
+  color: var(--text-sub);
+  font-size: 22rpx;
+  line-height: 1.5;
+  margin-top: 14rpx;
+}
+
+.asset-panel__metrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 30rpx;
+}
+
+.asset-panel__metric { min-width: 0; padding: 0 14rpx; text-align: center; }
+.asset-panel__metric:first-child { padding-left: 0; }
+.asset-panel__metric:last-child { padding-right: 0; }
+.asset-panel__metric + .asset-panel__metric { border-left: 1rpx solid var(--divider); }
+.asset-panel__metric-value {
+  display: block;
+  color: var(--text);
+  font-size: 30rpx;
+  font-weight: 760;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-panel__metric-value.positive { color: var(--up); }
+.asset-panel__metric-value.danger { color: var(--down); }
+.asset-panel__metric-value.warning { color: #b26a16; }
+.asset-panel__metric-label { display: block; color: var(--text-sub); font-size: 20rpx; line-height: 1.35; margin-top: 8rpx; }
+
+.asset-panel__section { margin-top: 34rpx; }
+.asset-panel__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20rpx; margin-bottom: 18rpx; }
+.asset-panel__section-title { color: var(--text); font-size: 30rpx; font-weight: 720; }
+.asset-panel__section-meta { color: var(--text-sub); font-size: 21rpx; text-align: right; }
+
+.asset-panel__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1rpx solid var(--card-border);
+  border-radius: 24rpx;
+  background: var(--card);
+  overflow: hidden;
+}
+.asset-panel__summary-item { min-width: 0; padding: 26rpx; }
+.asset-panel__summary-item:nth-child(even) { border-left: 1rpx solid var(--divider); }
+.asset-panel__summary-item:nth-child(n + 3) { border-top: 1rpx solid var(--divider); }
+.asset-panel__summary-label { display: block; color: var(--text-sub); font-size: 21rpx; }
+.asset-panel__summary-value { display: block; color: var(--text); font-size: 29rpx; font-weight: 730; margin-top: 8rpx; font-variant-numeric: tabular-nums; }
+.asset-panel__summary-value.positive { color: var(--up); }
+.asset-panel__summary-value.danger { color: var(--down); }
+
+.asset-panel__list {
+  border: 1rpx solid var(--card-border);
+  border-radius: 24rpx;
+  background: var(--card);
+  overflow: hidden;
+}
+.asset-panel__row { min-height: 104rpx; padding: 24rpx 26rpx; display: flex; align-items: center; gap: 18rpx; }
+.asset-panel__row + .asset-panel__row { border-top: 1rpx solid var(--divider); }
+.asset-panel__row:active { background: var(--primary-soft); }
+.asset-panel__row-icon { width: 62rpx; height: 62rpx; flex-shrink: 0; border-radius: 16rpx; color: var(--primary); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; }
+.asset-panel__row-main { min-width: 0; flex: 1; }
+.asset-panel__row-title { display: block; color: var(--text); font-size: 26rpx; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-panel__row-meta { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.45; margin-top: 7rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-panel__row-side { flex-shrink: 0; max-width: 42%; text-align: right; }
+.asset-panel__row-value { display: block; color: var(--text); font-size: 24rpx; font-weight: 680; font-variant-numeric: tabular-nums; }
+.asset-panel__row-value.positive { color: var(--up); }
+.asset-panel__row-value.danger { color: var(--down); }
+.asset-panel__row-hint { display: block; color: var(--text-sub); font-size: 19rpx; margin-top: 6rpx; }
+
+.asset-panel__actions { display: flex; gap: 14rpx; margin-top: 26rpx; }
+.asset-panel__button {
+  min-width: 0;
+  min-height: 84rpx;
+  padding: 0 28rpx;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  font-size: 25rpx;
+  font-weight: 680;
+  white-space: nowrap;
+}
+.asset-panel__button.primary { flex: 1; background: var(--primary); color: #062d34; }
+.asset-panel__button.secondary { color: var(--primary); border: 1rpx solid rgba(24, 175, 196, 0.42); background: var(--bg); }
+.asset-panel__button:active { transform: scale(0.98); }
+
+.asset-panel__state {
+  min-height: 270rpx;
+  padding: 50rpx 34rpx;
+  border: 1rpx solid var(--card-border);
+  border-radius: 24rpx;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.asset-panel__state-icon { color: var(--text-dim); margin-bottom: 18rpx; }
+.asset-panel__state-title { color: var(--text); font-size: 27rpx; font-weight: 680; }
+.asset-panel__state-text { color: var(--text-sub); font-size: 22rpx; line-height: 1.55; margin-top: 10rpx; }
+.asset-panel__state-action { min-height: 70rpx; padding: 0 28rpx; margin-top: 22rpx; border-radius: 16rpx; background: var(--primary); color: #062d34; display: flex; align-items: center; justify-content: center; font-size: 23rpx; font-weight: 680; }
+
+.asset-panel__skeleton { display: flex; flex-direction: column; gap: 16rpx; }
+.asset-panel__skeleton-block { height: 126rpx; border-radius: 24rpx; background: linear-gradient(90deg, var(--card), var(--bg-2), var(--card)); background-size: 200% 100%; animation: asset-skeleton 1.2s ease infinite; }
+
+.asset-panel__status-scroll { width: calc(100% + 64rpx); margin-left: -32rpx; white-space: nowrap; }
+.asset-panel__status-strip { display: inline-flex; gap: 14rpx; padding: 0 32rpx 8rpx; }
+.asset-panel__status-card { width: 172rpx; min-height: 142rpx; padding: 22rpx; border: 1rpx solid var(--card-border); border-radius: 22rpx; background: var(--card); }
+.asset-panel__status-card.active { border-color: var(--primary); background: var(--primary-soft); }
+.asset-panel__status-card:active { transform: scale(0.98); }
+.asset-panel__status-value { display: block; color: var(--text); font-size: 38rpx; font-weight: 780; font-variant-numeric: tabular-nums; }
+.asset-panel__status-value.positive { color: var(--up); }
+.asset-panel__status-value.warning { color: #b26a16; }
+.asset-panel__status-value.danger { color: var(--down); }
+.asset-panel__status-label { display: block; color: var(--text-sub); font-size: 21rpx; margin-top: 10rpx; }
+
+.asset-panel__notice { padding: 24rpx 26rpx; border-left: 6rpx solid var(--primary); border-radius: 0 18rpx 18rpx 0; background: var(--primary-soft); color: var(--text-sub); font-size: 22rpx; line-height: 1.55; }
+
+@keyframes asset-panel-in { from { opacity: 0; transform: translateY(8rpx); } to { opacity: 1; transform: translateY(0); } }
+@keyframes asset-skeleton { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-panel { animation-duration: 80ms; }
+  .asset-panel__skeleton-block { animation: none; }
+  .asset-panel__button, .asset-panel__row, .asset-panel__status-card { transition: none; }
+}
+
+@media (max-width: 360px) {
+  .asset-panel__amount-value { font-size: 56rpx; }
+  .asset-panel__hero { padding: 30rpx; }
+  .asset-panel__metric { padding: 0 8rpx; }
+  .asset-panel__button { padding: 0 20rpx; font-size: 23rpx; }
+}

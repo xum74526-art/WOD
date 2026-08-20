@@ -1,0 +1,31 @@
+{
+  "common": {
+    "uni.app.quit": "再按一次退出应用",
+    "uni.async.error": "连接超时，点击重试",
+    "uni.showActionSheet.cancel": "取消",
+    "uni.showModal.cancel": "取消",
+    "uni.showModal.confirm": "确定",
+    "uni.chooseImage.cancel": "取消",
+    "uni.chooseImage.sourceType.album": "从相册选择",
+    "uni.chooseImage.sourceType.camera": "拍摄",
+    "uni.chooseVideo.cancel": "取消",
+    "uni.chooseVideo.sourceType.album": "从相册选择",
+    "uni.chooseVideo.sourceType.camera": "拍摄",
+    "uni.previewImage.cancel": "取消",
+    "uni.previewImage.button.save": "保存图像",
+    "uni.previewImage.save.success": "图像已保存",
+    "uni.previewImage.save.fail": "图像保存失败",
+    "uni.setClipboardData.success": "已复制",
+    "uni.scanCode.title": "扫码",
+    "uni.scanCode.album": "相册",
+    "uni.scanCode.fail": "识别失败",
+    "uni.scanCode.flash.on": "打开闪光灯",
+    "uni.scanCode.flash.off": "关闭闪光灯",
+    "uni.picker.done": "完成",
+    "uni.picker.cancel": "取消",
+    "uni.button.feedback.title": "问题反馈",
+    "uni.button.feedback.send": "发送"
+  },
+  "ios": {},
+  "android": {}
+}

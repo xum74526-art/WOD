@@ -2,8 +2,8 @@ name: kai-ip-deployment
 
 x-backend-environment: &backend-environment
   APP_ENV: development
-  POSTGRES_USER: ${POSTGRES_USER:-wod_web}
-  POSTGRES_DB: ${POSTGRES_DB:-wod_web}
+  POSTGRES_USER: ${POSTGRES_USER:-kai}
+  POSTGRES_DB: ${POSTGRES_DB:-kai}
   POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
   REDIS_PASSWORD_FILE: /run/secrets/redis_password
   SECRET_KEY_FILE: /run/secrets/app_secret_key
@@ -46,8 +46,8 @@ services:
     image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-wod_web}
-      POSTGRES_USER: ${POSTGRES_USER:-wod_web}
+      POSTGRES_DB: ${POSTGRES_DB:-kai}
+      POSTGRES_USER: ${POSTGRES_USER:-kai}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
@@ -78,7 +78,7 @@ services:
   migrate:
     build:
       context: ..
-      dockerfile: backend/Dockerfile
+      dockerfile: services/api/Dockerfile
     image: kai-backend:${KAI_IMAGE_TAG:-latest}
     restart: "no"
     command: ["alembic", "upgrade", "head"]
@@ -127,11 +127,11 @@ secrets:
 
 volumes:
   postgres_data:
-    name: wod-production_postgres_data
+    name: kai-ip_postgres_data
   redis_data:
-    name: wod-production_redis_data
+    name: kai-ip_redis_data
   market_cache:
-    name: wod-production_market_cache
+    name: kai-ip_market_cache
 
 networks:
   private:

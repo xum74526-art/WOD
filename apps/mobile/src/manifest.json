@@ -1,0 +1,102 @@
+{
+    "name" : "KAI",
+    "appid" : "",
+    "description" : "AI 算力资产管理 App",
+    "locale" : "zh-Hans",
+    "versionName" : "1.0.3",
+    "versionCode" : "103",
+    "transformPx" : false,
+    "vueVersion" : "3",
+    "app-plus" : {
+        "usingComponents" : true,
+        "darkmode" : true,
+        "screenOrientation" : [ "portrait-primary" ],
+        "splashscreen" : {
+            "alwaysShowBeforeRender" : true,
+            "autoclose" : true,
+            "waiting" : false
+        },
+        "safearea" : {
+            "background" : "#FFFFFF",
+            "backgroundDark" : "#0A0E14",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        },
+        "uniStatistics" : {
+            "enable" : false
+        },
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.example.kai",
+                "schemes" : "kai",
+                "minSdkVersion" : 23,
+                "targetSdkVersion" : 36,
+                "abiFilters" : [ "arm64-v8a", "armeabi-v7a" ],
+                "usesCleartextTraffic" : false,
+                "permissionPhoneState" : {
+                    "request" : "none"
+                },
+                "excludePermissions" : [
+                    "<uses-permission android:name=\"android.permission.INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_PHONE_STATE\"/>"
+                ]
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "static/logo/logo-72.png",
+                    "xhdpi" : "static/logo/logo-96.png",
+                    "xxhdpi" : "static/logo/logo-144.png",
+                    "xxxhdpi" : "static/logo/logo-192.png"
+                },
+                "ios" : {
+                    "appstore" : "static/logo/ios-appstore-1024.png",
+                    "ipad" : {
+                        "app" : "static/logo/logo-144.png",
+                        "app@2x" : "static/logo/logo-192.png"
+                    },
+                    "iphone" : {
+                        "app@2x" : "static/logo/logo-96.png",
+                        "app@3x" : "static/logo/logo-144.png"
+                    }
+                }
+            },
+            "ios" : {
+                "appid" : "com.example.kai",
+                "devices" : "iphone",
+                "deploymentTarget" : "13.0",
+                "urltypes" : "kai",
+                "dSYMs" : true,
+                "privacyDescription" : {
+                    "NSPhotoLibraryUsageDescription" : "用于选择您主动提交的头像、社区媒体、实名材料或付款凭证。",
+                    "NSPhotoLibraryAddUsageDescription" : "用于按您的操作保存应用生成或下载的图片。",
+                    "NSCameraUsageDescription" : "用于拍摄您主动提交的头像、社区媒体、实名材料或付款凭证。",
+                    "NSMicrophoneUsageDescription" : "仅在您主动录制社区视频时用于录制声音。"
+                }
+            }
+        }
+    },
+    "h5" : {
+        "title" : "KAI",
+        "router" : {
+            "mode" : "history",
+            "base" : "/"
+        },
+        "devServer" : {
+            "port" : 9000,
+            "proxy" : {
+                "/api" : {
+                    "target" : "http://127.0.0.1:8100",
+                    "changeOrigin" : true
+                }
+            }
+        }
+    },
+    "mp-weixin" : {
+        "appid" : "",
+        "setting" : {
+            "urlCheck" : false
+        }
+    }
+}
