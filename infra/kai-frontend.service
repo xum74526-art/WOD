@@ -1,0 +1,21 @@
+[Unit]
+Description=KAI Next.js frontend
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/wod/frontend-release
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node /home/ubuntu/wod/frontend-release/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

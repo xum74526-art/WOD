@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: wod_web
+      POSTGRES_USER: wod_web
+      POSTGRES_PASSWORD: change-before-use
+    ports:
+      - "55432:5432"
+    volumes:
+      - wod_web_postgres:/var/lib/postgresql
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "56379:6379"
+
+  rsshub:
+    image: diygod/rsshub:latest
+    restart: unless-stopped
+    ports:
+      - "1200:1200"
+    environment:
+      CACHE_TYPE: redis
+      REDIS_URL: redis://redis:6379/
+    depends_on:
+      - redis
+
+volumes:
+  wod_web_postgres:

@@ -1,0 +1,43 @@
+# ---- Python / backend ----
+.venv*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+# 开发 SQLite 运行时数据(启动自动建表)
+backend/wod_web.db
+# 数据库备份必须存放在仓库外；即使误放到项目内目录也不提交
+database/backups/
+
+# 本地环境变量与密钥；示例配置继续纳入版本管理
+.env
+.env.*
+!.env.example
+!**/.env.example
+infra/production.env
+infra/local.env
+infra/ip.env
+infra/secrets/runtime/
+
+# ---- Node / frontend ----
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- QA 生成产物(可由 scripts/render-qa.mjs 重新生成)----
+frontend/qa/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/playwright/.auth/
+frontend-release/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

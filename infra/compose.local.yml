@@ -1,0 +1,47 @@
+name: kai-local-acceptance
+
+x-local-backend-environment: &local-backend-environment
+  APP_ENV: development
+  CORS_ORIGINS: http://127.0.0.1:19200,http://localhost:19200
+  FRONTEND_BASE_URL: http://127.0.0.1:19200
+  PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://127.0.0.1:18100}
+  AGENT_PUBLIC_API_BASE_URL: http://127.0.0.1:18100
+  COOKIE_SECURE: "false"
+  AGENT_LOCAL_SIMULATOR_ENABLED: "true"
+  PAYMENT_PROVIDER_ENABLED: ${PAYMENT_PROVIDER_ENABLED:-true}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-pingxx}
+  PINGXX_APP_ID: ${PINGXX_APP_ID:-}
+  PINGXX_LIVE_MODE: "false"
+  PINGXX_REQUEST_SIGNING_ENABLED: ${PINGXX_REQUEST_SIGNING_ENABLED:-false}
+  PINGXX_DEFAULT_CHANNEL: ${PINGXX_DEFAULT_CHANNEL:-alipay_pc_direct}
+  EMAIL_VERIFICATION_ENABLED: "false"
+  EMAIL_NOTIFICATION_ENABLED: "false"
+  NEWS_SYNC_ENABLED: "false"
+  MARKET_SNAPSHOT_ENABLED: ${MARKET_SNAPSHOT_ENABLED:-false}
+  MARKET_SNAPSHOT_INTERVAL_MINUTES: "60"
+  MARKET_SNAPSHOT_RETENTION_DAYS: "400"
+
+services:
+  migrate:
+    environment: *local-backend-environment
+
+  backend:
+    environment: *local-backend-environment
+    ports:
+      - "18100:8100"
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_KAI_API_BASE_URL: http://127.0.0.1:18100
+        NEXT_PUBLIC_MARKET_STATUS: unconfigured
+    ports:
+      - "19100:3000"
+
+volumes:
+  postgres_data:
+    external: true
+    name: wod-local-acceptance_postgres_data
+  redis_data:
+    external: true
+    name: wod-local-acceptance_redis_data

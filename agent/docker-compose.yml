@@ -1,0 +1,25 @@
+services:
+  kai-agent:
+    build:
+      context: .
+      args:
+        VERSION: "0.3.0"
+    image: kai-agent:0.3.0
+    container_name: kai-agent
+    restart: unless-stopped
+    environment:
+      KAI_API_URL: "${KAI_API_URL}"
+      KAI_ENROLLMENT_TOKEN: "${KAI_ENROLLMENT_TOKEN}"
+      KAI_AGENT_RUNTIME: "docker"
+    gpus: all
+    ports:
+      - "${KAI_SSH_PORT:-2222}:22"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - kai-agent-data:/var/lib/kai-agent
+      - kai-agent-home:/home
+
+volumes:
+  kai-agent-data:
+  kai-agent-home:

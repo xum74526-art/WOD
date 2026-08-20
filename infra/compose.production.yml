@@ -1,0 +1,208 @@
+name: kai-production
+
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  POSTGRES_USER: ${POSTGRES_USER:-wod_web}
+  POSTGRES_DB: ${POSTGRES_DB:-wod_web}
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+  REDIS_PASSWORD_FILE: /run/secrets/redis_password
+  SECRET_KEY_FILE: /run/secrets/app_secret_key
+  PAYOUT_ENCRYPTION_KEY_FILE: /run/secrets/payout_encryption_key
+  KYC_ENCRYPTION_KEY_FILE: /run/secrets/kyc_encryption_key
+  PINGXX_API_KEY_FILE: /run/secrets/pingxx_api_key
+  PINGXX_MERCHANT_PRIVATE_KEY_FILE: /run/secrets/pingxx_merchant_private_key
+  PINGXX_PUBLIC_KEY_FILE: /run/secrets/pingxx_public_key
+  SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+  CORS_ORIGINS: https://${KAI_DOMAIN:?KAI_DOMAIN is required}
+  FRONTEND_BASE_URL: https://${KAI_DOMAIN}
+  PUBLIC_API_BASE_URL: https://${KAI_DOMAIN}
+  AGENT_PUBLIC_API_BASE_URL: https://${KAI_DOMAIN}
+  COOKIE_SECURE: "true"
+  AGENT_LOCAL_SIMULATOR_ENABLED: "false"
+  NEWS_SYNC_ENABLED: ${NEWS_SYNC_ENABLED:-false}
+  MARKET_SNAPSHOT_ENABLED: ${MARKET_SNAPSHOT_ENABLED:-true}
+  MARKET_SNAPSHOT_INTERVAL_MINUTES: ${MARKET_SNAPSHOT_INTERVAL_MINUTES:-60}
+  MARKET_SNAPSHOT_RETENTION_DAYS: ${MARKET_SNAPSHOT_RETENTION_DAYS:-400}
+  GETDEPLOYING_API_BASE_URL: ${GETDEPLOYING_API_BASE_URL:-https://getdeploying.com/api}
+  RSSHUB_BASE_URL: http://rsshub:1200
+  PAYMENT_PROVIDER_ENABLED: ${PAYMENT_PROVIDER_ENABLED:-true}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-pingxx}
+  PINGXX_API_BASE_URL: ${PINGXX_API_BASE_URL:-https://api.pingxx.com}
+  PINGXX_APP_ID: ${PINGXX_APP_ID:-}
+  PINGXX_LIVE_MODE: ${PINGXX_LIVE_MODE:-true}
+  PINGXX_REQUEST_SIGNING_ENABLED: ${PINGXX_REQUEST_SIGNING_ENABLED:-true}
+  PINGXX_DEFAULT_CHANNEL: ${PINGXX_DEFAULT_CHANNEL:-alipay_pc_direct}
+  EMAIL_VERIFICATION_ENABLED: ${EMAIL_VERIFICATION_ENABLED:-true}
+  EMAIL_NOTIFICATION_ENABLED: ${EMAIL_NOTIFICATION_ENABLED:-true}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+  SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+  PLATFORM_COMMISSION_RATE: ${PLATFORM_COMMISSION_RATE:-0.05}
+  SETTLEMENT_HOLD_HOURS: ${SETTLEMENT_HOLD_HOURS:-24}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: json
+
+x-backend-secrets: &backend-secrets
+  - postgres_password
+  - redis_password
+  - app_secret_key
+  - payout_encryption_key
+  - kyc_encryption_key
+  - pingxx_api_key
+  - pingxx_merchant_private_key
+  - pingxx_public_key
+  - smtp_password
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wod_web}
+      POSTGRES_USER: ${POSTGRES_USER:-wod_web}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["sh", "-ec", "exec redis-server --appendonly yes --requirepass \"$$(cat /run/secrets/redis_password)\""]
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: kai-backend:${KAI_IMAGE_TAG:-latest}
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-environment
+    secrets: *backend-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [private]
+
+  backend:
+    image: kai-backend:${KAI_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment: *backend-environment
+    secrets: *backend-secrets
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - market_cache:/app/data
+    networks: [private]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_KAI_API_BASE_URL: https://${KAI_DOMAIN}
+        NEXT_PUBLIC_MARKET_STATUS: ${NEXT_PUBLIC_MARKET_STATUS:-unconfigured}
+    image: kai-frontend:${KAI_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [private]
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      KAI_DOMAIN: ${KAI_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks: [private]
+
+  rsshub:
+    image: diygod/rsshub:latest
+    profiles: ["news"]
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        redis_password="$$(cat /run/secrets/redis_password)"
+        encoded_redis_password="$$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$${redis_password}")"
+        export REDIS_URL="redis://:$${encoded_redis_password}@redis:6379/1"
+        exec dumb-init -- npm run start
+    environment:
+      CACHE_TYPE: redis
+    secrets:
+      - redis_password
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [private]
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE_PATH:?POSTGRES_PASSWORD_FILE_PATH is required}
+  redis_password:
+    file: ${REDIS_PASSWORD_FILE_PATH:?REDIS_PASSWORD_FILE_PATH is required}
+  app_secret_key:
+    file: ${APP_SECRET_KEY_FILE_PATH:?APP_SECRET_KEY_FILE_PATH is required}
+  payout_encryption_key:
+    file: ${PAYOUT_ENCRYPTION_KEY_FILE_PATH:?PAYOUT_ENCRYPTION_KEY_FILE_PATH is required}
+  kyc_encryption_key:
+    file: ${KYC_ENCRYPTION_KEY_FILE_PATH:?KYC_ENCRYPTION_KEY_FILE_PATH is required}
+  pingxx_api_key:
+    file: ${PINGXX_API_KEY_FILE_PATH:?PINGXX_API_KEY_FILE_PATH is required}
+  pingxx_merchant_private_key:
+    file: ${PINGXX_MERCHANT_PRIVATE_KEY_FILE_PATH:?PINGXX_MERCHANT_PRIVATE_KEY_FILE_PATH is required}
+  pingxx_public_key:
+    file: ${PINGXX_PUBLIC_KEY_FILE_PATH:?PINGXX_PUBLIC_KEY_FILE_PATH is required}
+  smtp_password:
+    file: ${SMTP_PASSWORD_FILE_PATH:?SMTP_PASSWORD_FILE_PATH is required}
+
+volumes:
+  postgres_data:
+    name: wod-production_postgres_data
+  redis_data:
+    name: wod-production_redis_data
+  market_cache:
+    name: wod-production_market_cache
+  caddy_data:
+    name: wod-production_caddy_data
+  caddy_config:
+    name: wod-production_caddy_config
+
+networks:
+  private:

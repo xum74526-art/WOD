@@ -1,0 +1,32 @@
+{
+  "name": "kai-web-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 9100",
+    "build": "next build",
+    "start": "next start -p 9100",
+    "type-check": "tsc --noEmit",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/noto-sans-sc": "^5.3.0",
+    "@fontsource-variable/work-sans": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0",
+    "@phosphor-icons/react": "2.1.10",
+    "@radix-ui/themes": "3.3.0",
+    "next": "16.3.1",
+    "pingpp-js": "^2.5.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "typescript": "5.9.3"
+  }
+}
