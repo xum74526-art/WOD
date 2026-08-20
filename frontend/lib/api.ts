@@ -1,7 +1,7 @@
 export const apiBaseUrl = (
   process.env.NEXT_PUBLIC_KAI_API_BASE_URL ??
   process.env.NEXT_PUBLIC_WOD_API_BASE_URL ??
-  "http://127.0.0.1:8100"
+  (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8100")
 ).replace(/\/$/, "");
 
 export type ApiErrorBody = {
