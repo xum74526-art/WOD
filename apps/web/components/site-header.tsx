@@ -15,6 +15,7 @@ const navigation = [
   { label: "算力社区", href: "/community" },
   { label: "求购", href: "/requests" },
   { label: "商家入驻", href: "/supplier/apply" },
+  { label: "下载 App", href: "/download" },
 ];
 
 function isNavigationActive(pathname: string, href: string) {
