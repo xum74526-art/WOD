@@ -12,8 +12,8 @@ npm run dev:h5
 
 环境变量：
 
-- `WOD_H5_API_TARGET`：H5 开发代理目标，例如 `http://127.0.0.1:8000`。
-- `VITE_WOD_APP_API_BASE`：原生 App 使用的完整 HTTPS API，例如 `https://api.example.com/api`。
+- `WOD_H5_API_TARGET`：H5 开发代理目标；云端联调使用 `https://wod.kai.com`。
+- `VITE_WOD_APP_API_BASE`：原生 App 使用的完整 HTTPS API，生产地址为 `https://wod.kai.com/api`。
 
 浏览器页面统一请求 `/api`；原生 App 在构建时写入 `VITE_WOD_APP_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
 

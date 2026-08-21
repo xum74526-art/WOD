@@ -1,6 +1,6 @@
 {
   "name": "wod-mobile",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "WOD - AI 算力资产管理 App",
   "scripts": {
     "dev:h5": "uni",

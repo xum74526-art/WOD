@@ -1,6 +1,6 @@
 // H5 开发环境走 Vite 的 /api 代理；原生 App 使用构建时配置的 HTTPS API。
 // 复制 .env.example 为 .env.local 后设置 VITE_WOD_APP_API_BASE。
-const APP_API_BASE = String(import.meta.env.VITE_WOD_APP_API_BASE || 'https://api.example.com/api').replace(/\/$/, '')
+const APP_API_BASE = String(import.meta.env.VITE_WOD_APP_API_BASE || 'https://wod.kai.com/api').replace(/\/$/, '')
 let API_BASE = '/api'
 // #ifndef H5
 API_BASE = APP_API_BASE

@@ -1,4 +1,5 @@
 import { request, upload } from './request'
+import { KAI_AUTH_APP_RETURN_URL } from '@/utils/kai-auth-callback'
 
 export interface UserInfo {
   id: number
@@ -35,7 +36,7 @@ export function getKaiAuthConfig() {
 
 export function startKaiAuth(intent: 'login' | 'register') {
   return request<{ authorization_url: string }>({
-    url: '/auth/kai/start', method: 'POST', data: { intent },
+    url: '/auth/kai/start', method: 'POST', data: { intent, return_url: KAI_AUTH_APP_RETURN_URL },
   })
 }
 

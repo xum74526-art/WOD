@@ -83,13 +83,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { request } from '@/api/request'
 import { getKaiAuthConfig, startKaiAuth } from '@/api/user'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
+import {
+  kaiAuthCallbackFingerprint,
+  parseKaiAuthQuery,
+  parseKaiAuthUrl,
+  type KaiAuthCallback,
+} from '@/utils/kai-auth-callback'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -102,6 +108,12 @@ const showPwd = ref(false)
 const agree = ref(false)
 const submitting = ref(false)
 const kaiConfigured = ref<boolean | null>(null)
+const externalKaiAuthorizationPending = ref(false)
+let processingKaiCallback = ''
+let kaiReturnProbeTimer: ReturnType<typeof setTimeout> | null = null
+let kaiReturnProbeGeneration = 0
+const HANDLED_KAI_CALLBACK_KEY = 'wod_kai_callback_fingerprint'
+const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 
 function setMode(value: 'login' | 'register') {
   mode.value = value
@@ -162,10 +174,113 @@ async function submitKai() {
   submitting.value = true
   try {
     const result = await startKaiAuth(mode.value)
-    openExternalAuthorization(result.authorization_url)
+    externalKaiAuthorizationPending.value = true
+    if (!openExternalAuthorization(result.authorization_url)) {
+      externalKaiAuthorizationPending.value = false
+      submitting.value = false
+    }
   } catch {
+    externalKaiAuthorizationPending.value = false
     submitting.value = false
   }
+}
+
+async function handleKaiCallback(callback: KaiAuthCallback | null) {
+  if (!callback) return false
+  const fingerprint = kaiAuthCallbackFingerprint(callback)
+  if (fingerprint === processingKaiCallback) return true
+  if (uni.getStorageSync(HANDLED_KAI_CALLBACK_KEY) === fingerprint) {
+    externalKaiAuthorizationPending.value = false
+    submitting.value = false
+    return true
+  }
+
+  processingKaiCallback = fingerprint
+  externalKaiAuthorizationPending.value = false
+  submitting.value = true
+  authMethod.value = 'kai'
+  try {
+    if (callback.error) {
+      uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
+      uni.showToast({ title: t(callback.error === 'access_denied' ? 'kaiCancelled' : 'kaiLoginFailed'), icon: 'none' })
+      return true
+    }
+    if (!callback.ticket) return false
+    await userStore.loginWithKaiTicket(callback.ticket)
+    uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
+    uni.showToast({ title: t('loginSuccess'), icon: 'success' })
+    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+    return true
+  } catch {
+    // Keep the callback retryable when ticket exchange failed because of a
+    // temporary network problem. The backend still enforces one-time tickets.
+    return true
+  } finally {
+    processingKaiCallback = ''
+    submitting.value = false
+  }
+}
+
+function runtimeKaiCallback() {
+  let callback: KaiAuthCallback | null = null
+  // #ifdef APP-PLUS
+  callback = parseKaiAuthUrl(plus.runtime.arguments)
+  // #endif
+  return callback
+}
+
+function stopKaiReturnProbe() {
+  kaiReturnProbeGeneration += 1
+  if (kaiReturnProbeTimer) clearTimeout(kaiReturnProbeTimer)
+  kaiReturnProbeTimer = null
+}
+
+function probeKaiReturnCallback() {
+  stopKaiReturnProbe()
+  const generation = kaiReturnProbeGeneration
+
+  const probe = (index: number) => {
+    if (generation !== kaiReturnProbeGeneration) return
+    const callback = runtimeKaiCallback()
+    if (callback) {
+      const fingerprint = kaiAuthCallbackFingerprint(callback)
+      const handled = uni.getStorageSync(HANDLED_KAI_CALLBACK_KEY) === fingerprint
+      // iOS may fire onShow before plus.runtime.arguments is refreshed. The
+      // old callback can therefore still be visible briefly; keep waiting for
+      // the new ticket instead of treating the stale value as this login.
+      if (!handled && fingerprint !== processingKaiCallback) {
+        void handleKaiCallback(callback)
+        return
+      }
+    }
+
+    const nextIndex = index + 1
+    if (nextIndex < KAI_RETURN_PROBE_DELAYS.length) {
+      const delay = KAI_RETURN_PROBE_DELAYS[nextIndex] - KAI_RETURN_PROBE_DELAYS[index]
+      kaiReturnProbeTimer = setTimeout(() => probe(nextIndex), delay)
+      return
+    }
+    if (externalKaiAuthorizationPending.value) {
+      externalKaiAuthorizationPending.value = false
+      submitting.value = false
+    }
+  }
+
+  probe(0)
+}
+
+function registerKaiRuntimeListener() {
+  // Some iOS runtime versions deliver the refreshed scheme arguments through
+  // newintent after onShow. Listening to both paths avoids a timing dependency.
+  // #ifdef APP-PLUS
+  document.addEventListener('newintent', probeKaiReturnCallback, false)
+  // #endif
+}
+
+function unregisterKaiRuntimeListener() {
+  // #ifdef APP-PLUS
+  document.removeEventListener('newintent', probeKaiReturnCallback, false)
+  // #endif
 }
 
 async function submit() {
@@ -185,25 +300,22 @@ async function submit() {
   submitting.value = false
 }
 
-onLoad(async (options) => {
-  const ticket = typeof options?.kai_ticket === 'string' ? options.kai_ticket : ''
-  const error = typeof options?.kai_error === 'string' ? options.kai_error : ''
-  if (error) {
-    uni.showToast({ title: t(error === 'access_denied' ? 'kaiCancelled' : 'kaiLoginFailed'), icon: 'none' })
-    return
-  }
-  if (!ticket) return
-  submitting.value = true
-  authMethod.value = 'kai'
-  try {
-    await userStore.loginWithKaiTicket(ticket)
-    uni.showToast({ title: t('loginSuccess'), icon: 'success' })
-    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
-  } catch { /* request toast */ }
-  submitting.value = false
+onLoad((options) => {
+  void handleKaiCallback(parseKaiAuthQuery(options))
 })
 
-onMounted(checkKaiConfig)
+onShow(() => {
+  probeKaiReturnCallback()
+})
+
+onMounted(() => {
+  registerKaiRuntimeListener()
+  void checkKaiConfig()
+})
+onUnmounted(() => {
+  unregisterKaiRuntimeListener()
+  stopKaiReturnProbe()
+})
 </script>
 
 <style lang="scss" scoped>
