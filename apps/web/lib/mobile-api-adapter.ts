@@ -187,6 +187,17 @@ function safeReturnPath(value: unknown) {
 }
 
 function publicOrigin(request: NextRequest) {
+  const configured = process.env.WEB_PUBLIC_ORIGIN?.trim();
+  if (configured) {
+    const url = new URL(configured);
+    if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+      throw new Error("WEB_PUBLIC_ORIGIN must contain only the public Web origin");
+    }
+    if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+      throw new Error("WEB_PUBLIC_ORIGIN must use HTTPS in production");
+    }
+    return url.origin;
+  }
   const protocol = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "");
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || request.nextUrl.host;
   return new URL(`${protocol}://${host}`).origin;
@@ -760,6 +771,21 @@ export async function handleMobileApi(request: NextRequest, segments: string[]) 
       desc: body.description || undefined,
     } });
     return result.ok ? apiSuccess(result.body.data, {}, 201) : upstreamFailure(result);
+  }
+
+  if (path === "admin/supplier-applications" && request.method === "GET") {
+    const result = await upstream(request, "/api/supplier/admin/applications", { query: request.nextUrl.searchParams });
+    if (!result.ok) return upstreamFailure(result);
+    const page = pageEnvelope(result.body.data);
+    return apiSuccess(page.data, page.meta);
+  }
+  const supplierReviewMatch = path.match(/^admin\/supplier-applications\/(\d+)\/(approve|reject)$/);
+  if (supplierReviewMatch && request.method === "POST") {
+    const result = await upstream(request, `/api/supplier/admin/applications/${supplierReviewMatch[1]}/${supplierReviewMatch[2]}`, {
+      method: "POST",
+      body: { version: number(body.version, 1), note: text(body.note) || undefined },
+    });
+    return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
   }
 
   if (/^account\/addresses(?:\/\d+)?(?:\/default)?$/.test(path)) {

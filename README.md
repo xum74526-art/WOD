@@ -63,9 +63,10 @@ MOBILE_API_ALLOW_INSECURE_HTTP=true
 ```dotenv
 MOBILE_API_ORIGIN=https://api.example.com
 MOBILE_API_ALLOW_INSECURE_HTTP=false
+WEB_PUBLIC_ORIGIN=https://wod.kai.com
 ```
 
-不要把后端地址放进 `NEXT_PUBLIC_*`。Web 登录后把 WOD JWT 放入 HttpOnly、SameSite=Lax Cookie；浏览器 JavaScript 无法读取 Token。生产环境未设置 `MOBILE_API_ORIGIN`、使用 HTTP，或地址中包含路径和账号密码时，BFF 会拒绝启动业务请求。
+不要把后端地址放进 `NEXT_PUBLIC_*`。`WEB_PUBLIC_ORIGIN` 是 OAuth 回跳使用的固定公网源，可避免反向代理终止 TLS 后误判为 HTTP。Web 登录后把 WOD JWT 放入 HttpOnly、SameSite=Lax Cookie；浏览器 JavaScript 无法读取 Token。生产环境未设置 `MOBILE_API_ORIGIN`、使用 HTTP，或地址中包含路径和账号密码时，BFF 会拒绝启动业务请求。
 
 ## 验证
 
