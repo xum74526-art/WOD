@@ -17,6 +17,8 @@ import {
   getOrder,
   listOrders,
   markOrderDelivered,
+  getPublicProduct,
+  renewOrder,
   startOrderDelivery,
   type Order,
   type OrderStatus,
@@ -57,11 +59,16 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [renewalCycles, setRenewalCycles] = useState<number[]>([30]);
+  const [renewalCycle, setRenewalCycle] = useState(30);
 
   const loadDetail = useCallback(async (id: number) => {
     const order = await getOrder(scope, id);
     setDetail(order);
     setSelectedId(id);
+    if (scope === "account" && order.product_id && order.available_actions.includes("renew")) {
+      try { const product = (await getPublicProduct(order.product_id)).data; const cycles = product.cycle?.length ? product.cycle : [30]; setRenewalCycles(cycles); setRenewalCycle(cycles.includes(30) ? 30 : cycles[0]); } catch { setRenewalCycles([30]); setRenewalCycle(30); }
+    }
   }, [scope]);
 
   const load = useCallback(async (nextStatus: OrderStatus | "" = status) => {
@@ -105,8 +112,8 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (reason?.trim()) void act("cancel", () => cancelOrder(scope, detail.id, detail.version, reason.trim()), "订单已取消");
   }
 
-  function deliveryNote(promptText: string, action: (note: string) => Promise<unknown>, key: string, message: string) {
-    const note = window.prompt(`${promptText}\n请勿填写密码、私钥或其他登录凭据。`, "");
+  function deliveryNote(promptText: string, action: (note: string) => Promise<unknown>, key: string, message: string, sshDelivery = false) {
+    const note = window.prompt(sshDelivery ? `${promptText}\n示例：ssh gpu-user@203.0.113.10 -p 2222\n请勿填写密码或私钥。` : `${promptText}\n请勿填写密码或私钥。`, "");
     if (note !== null) void act(key, () => action(note.trim()), message);
   }
 
@@ -114,13 +121,12 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   function orderSpec(order: Order) { return order.snapshot.product?.gpu_model || order.snapshot.request?.gpu_model || "服务器"; }
   function orderReference(order: Order) { return order.snapshot.product?.resource_no || order.snapshot.request?.request_no || order.order_no; }
   function paymentCopy(order: Order) {
-    const real = order.snapshot.payment_mode === "pingxx";
-    if (order.payment_status !== "paid") return { title: real ? "等待 Ping++ 付款" : "等待本机测试付款", body: real ? "验签回调并主动查单成功后，系统才会授权 SSH。" : "本机开发支付不会产生真实资金变动。" };
-    return real ? { title: "Ping++ 付款已验证", body: "支付回调已验签并经主动查单确认，SSH 授权流程已经开始。" } : { title: "本机测试付款已记账", body: "这笔记录只用于本机闭环测试，不代表真实扣款。" };
+    if (order.payment_status !== "paid") return { title: "等待手机端钱包处理", body: "余额与冻结金额以手机端统一账本为准。" };
+    return { title: "手机端钱包已冻结订单金额", body: "商家交付并经买家确认后，订单状态会写回同一数据库。" };
   }
 
   return <section className="workspace-page commerce-workspace order-workspace">
-    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / RENTAL ORDERS" : "BUYER / ORDERS"}</p><h1>{supplierView ? "租赁订单" : "我的订单"}</h1><span>{supplierView ? "订单记录保留付款、SSH 公钥授权和租期事件。" : "连接命令与续费请前往“我的服务器”。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>SSH 私钥不进入平台<br />支付暂为占位 Provider</span></div></div>
+    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / MOBILE ORDERS" : "BUYER / MOBILE ORDERS"}</p><h1>{supplierView ? "交付订单" : "我的订单"}</h1><span>{supplierView ? "订单来自手机端；已付款后填写 SSH 信息完成交付。" : "订单、交付信息和资产状态与 App 实时共用。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>手机端统一账本<br />SSH 私钥不进入平台</span></div></div>
     <div className="commerce-tabs">{filters.map(([value, label]) => <button className={status === value ? "active" : ""} key={value || "all"} onClick={() => { setStatus(value); void load(value); }}>{label}</button>)}</div>
     {error && <div className="commerce-error">{error}</div>}{success && <div className="commerce-success">{success}</div>}
     <div className="order-console">
@@ -131,11 +137,12 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
         <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "商家"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{detail.duration_hours ? "租用周期" : "创建时间"}</small><strong>{detail.duration_hours ? `${detail.duration_hours} 小时` : formatDate(detail.created_at)}</strong></div></div>
         <section className="confirmation-grid"><div className={detail.buyer_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家确认</small><strong>{detail.buyer_confirmed_at ? formatDate(detail.buyer_confirmed_at) : "等待确认"}</strong></span></div><div className={detail.supplier_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>商家确认</small><strong>{detail.supplier_confirmed_at ? formatDate(detail.supplier_confirmed_at) : "等待确认"}</strong></span></div></section>
         {detail.delivery_note && <div className="delivery-note"><Package size={18} /><div><strong>最近交付说明</strong><p>{detail.delivery_note}</p></div></div>}
+        {detail.available_actions.includes("renew") && <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_days ?? 0} 天后到期</span></header><div>{renewalCycles.map((cycle) => <button type="button" className={renewalCycle === cycle ? "active" : ""} key={cycle} onClick={() => setRenewalCycle(cycle)}>{cycle >= 365 && cycle % 365 === 0 ? `${cycle / 365} 年` : cycle >= 30 && cycle % 30 === 0 ? `${cycle / 30} 个月` : `${cycle} 天`}</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用手机端钱包续费 ${renewalCycle} 天？`)) void act("renew", () => renewOrder(detail.id, renewalCycle), `已续费 ${renewalCycle} 天`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>}
         <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events?.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>
         <footer className="order-actions">
           {detail.available_actions.includes("confirm") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("confirm", () => confirmOrder(scope, detail.id, detail.version, "确认资源与交付计划"), "订单已确认") }><CheckCircle size={16} />{busy === "confirm" ? "确认中…" : "确认接单"}</button>}
           {detail.available_actions.includes("start_delivery") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写交付进度说明（可选）", (note) => startOrderDelivery(detail.id, detail.version, note), "start", "订单已进入交付中") }><RocketLaunch size={16} />开始交付</button>}
-          {detail.available_actions.includes("mark_delivered") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写交付完成说明（可选）", (note) => markOrderDelivered(detail.id, detail.version, note), "deliver", "已通知买家验收") }><Package size={16} />标记已交付</button>}
+          {detail.available_actions.includes("mark_delivered") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写有效 SSH 连接信息", (note) => markOrderDelivered(detail.id, detail.version, note), "deliver", "已提交 SSH 交付，等待买家确认", true) }><Package size={16} />提交 SSH 交付</button>}
           {detail.available_actions.includes("complete") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("complete", () => completeOrder(detail.id, detail.version, "买家确认验收通过"), "订单已完成") }><CheckCircle size={16} />确认验收完成</button>}
           {detail.available_actions.includes("cancel") && <button className="commerce-danger" disabled={Boolean(busy)} onClick={cancel}><Prohibit size={16} />取消订单</button>}
         </footer>

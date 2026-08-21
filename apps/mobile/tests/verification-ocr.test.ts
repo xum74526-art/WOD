@@ -57,7 +57,7 @@ test('user and finance views never render OCR text or raw validity values', () =
   }
 })
 
-test('identity submission carries explicit consent into the canonical manual KYC contract', () => {
+test('identity submission requires explicit local OCR consent', () => {
   const source = readFileSync(new URL('../src/pages/verification/index.vue', import.meta.url), 'utf8')
   const apiSource = readFileSync(new URL('../src/api/verification.ts', import.meta.url), 'utf8')
   assert.match(source, /const ocrConsent = ref\(false\)/)
@@ -65,22 +65,14 @@ test('identity submission carries explicit consent into the canonical manual KYC
   assert.match(source, /localOcrConsentRequired/)
   assert.match(source, /submitVerification\(form\.real_name, id, true\)/)
   assert.match(source, /async function retryOcr\(\)[\s\S]*?await onSubmit\(\)/)
-  assert.match(apiSource, /url: '\/account\/kyc\/manual'/)
-  assert.match(apiSource, /legal_name: real_name/)
-  assert.match(apiSource, /identifier_number: id_card/)
-  assert.match(apiSource, /declaration_accepted: sensitive_consent/)
+  assert.match(apiSource, /data: \{ real_name, id_card, sensitive_consent \}/)
 })
 
-test('finance review never invents a legacy photo endpoint for manual approval', () => {
+test('finance review keeps a guarded manual approval path when OCR is not matched', () => {
   const source = readFileSync(new URL('../src/pages/finance/index.vue', import.meta.url), 'utf8')
-  const apiSource = readFileSync(new URL('../src/api/finance.ts', import.meta.url), 'utf8')
-  assert.match(source, /if \(!item\.front_photo_uploaded \|\| !item\.back_photo_uploaded\) return false/)
   assert.match(source, /return isOcrMatched\(item\) \|\| hasViewedBothPhotos\(item\)/)
+  assert.match(source, /success: \(\) => markPhotoViewed\(item, side\)/)
   assert.match(source, /requiresManualOverride \? 'approveAfterManualCheckConfirm' : 'approveIdentityConfirm'/)
   assert.match(source, /isOcrMatched\(item\) \? 'oneClickApproveIdentity' : 'approveAfterManualCheck'/)
-  assert.match(apiSource, /front_photo_uploaded: false/)
-  assert.match(apiSource, /back_photo_uploaded: false/)
-  assert.doesNotMatch(source, /uni\.downloadFile/)
-  assert.doesNotMatch(source, /finance\/verifications\/.*\/photo/)
   assert.doesNotMatch(source, /status === null \|\| status === 'matched'/)
 })

@@ -54,14 +54,12 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-import { createSupplierResource } from '@/api/supplier'
+import { request } from '@/api/request'
 import { navigateBack } from '@/utils/nav'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import { useI18nStore } from '@/store/i18n'
 import { fromCardHours } from '@/utils/format'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 
 const { t, tr } = useI18nStore()
 const submitting = ref(false)
@@ -80,10 +78,6 @@ const form = reactive({
   name: '', gpu_model: '', memory: '', cuda: '', price: '',
   stock: '1', city: '', image_url: '', desc: '',
   region_name: '', region_code: '',
-})
-
-onLoad(() => {
-  if (!isDirectCommerceEnabled()) uni.switchTab({ url: '/pages/profile/index' })
 })
 
 function onRegion(e: any) {
@@ -120,16 +114,18 @@ async function onSubmit() {
   }
   submitting.value = true
   try {
-    await createSupplierResource({
-      name: form.name,
-      gpu_model: form.gpu_model,
-      memory: form.memory || '1GB',
-      price: fromCardHours(priceInCardHours),
-      region: form.region_code,
-      image_url: form.image_url || undefined,
-      description: form.desc || '供应商算力资源',
+    await request({
+      url: '/supplier/devices', method: 'POST',
+      data: {
+        name: form.name, gpu_model: form.gpu_model, memory: form.memory || '-',
+        cuda: form.cuda || null, price: fromCardHours(priceInCardHours),
+        desc: form.desc || '供应商上架算力', image_url: form.image_url || '/static/gpu/gpu.png',
+        region_code: form.region_code, region_name: form.region_name,
+        city: form.city || '-', stock: Number(form.stock),
+      },
+      silent: true,
     })
-    uni.showToast({ title: t('资源草稿已创建'), icon: 'success' })
+    uni.showToast({ title: t('上架成功'), icon: 'success' })
     setTimeout(() => navigateBack(), 800)
   } catch {
     uni.showToast({ title: t('操作失败'), icon: 'none' })

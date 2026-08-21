@@ -198,13 +198,13 @@ const personalPanelMeta = computed<AssetPanelMeta[]>(() => [
 ])
 
 const supplierPanelMeta = computed<AssetPanelMeta[]>(() => [
-  { key: 'asset-overview', label: t('merchantOperationsOverview'), description: t('merchantAssetOverviewSummary') },
-  { key: 'compute-assets', label: t('merchantComputeInventory'), description: t('merchantComputeAssetsSummary') },
-  { key: 'device-hosting', label: t('merchantHostingFleet'), description: t('merchantHostingFleetSummary') },
-  { key: 'device-status', label: t('merchantDeviceOperations'), description: t('merchantDeviceOperationsSummary') },
-  { key: 'hosting-earnings', label: t('merchantSalesSettlement'), description: t('merchantSalesSettlementSummary') },
-  { key: 'action-required', label: t('merchantOperationsAlerts'), description: t('merchantOperationsAlertsSummary') },
-  { key: 'expiry-maintenance', label: t('merchantInventoryMaintenance'), description: t('merchantExpiryMaintenanceSummary') },
+  { key: 'asset-overview', label: t('personalAssetOverview'), description: t('merchantAssetOverviewSummary') },
+  { key: 'compute-assets', label: t('personalComputeAssets'), description: t('merchantComputeAssetsSummary') },
+  { key: 'device-hosting', label: t('personalDeviceHosting'), description: t('merchantHostingFleetSummary') },
+  { key: 'device-status', label: t('personalDeviceStatus'), description: t('merchantDeviceOperationsSummary') },
+  { key: 'hosting-earnings', label: t('personalEarningsSettlement'), description: t('merchantSalesSettlementSummary') },
+  { key: 'action-required', label: t('personalActionRequired'), description: t('merchantOperationsAlertsSummary') },
+  { key: 'expiry-maintenance', label: t('personalExpiryRenewal'), description: t('merchantExpiryMaintenanceSummary') },
 ])
 
 const activePanelMeta = computed(() => role.value === 'supplier' ? supplierPanelMeta.value : personalPanelMeta.value)

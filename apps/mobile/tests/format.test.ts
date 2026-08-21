@@ -4,9 +4,6 @@ import test from 'node:test'
 import {
   fmtCH,
   fmtCHr,
-  formatLocalDateTime,
-  formatLocalMonthDay,
-  formatLocalTime,
   formatMoney,
   formatNumber,
   formatNumberInput,
@@ -50,13 +47,4 @@ test('card-hour units follow an in-page language switch without storage reload',
   assert.equal(fmtCHr(1.002), '1 CH/h')
 
   setFormatLanguage('zh')
-})
-
-test('date labels stay deterministic when Android Intl is unavailable', () => {
-  const localDate = new Date(2026, 7, 21, 0, 12)
-  assert.equal(formatLocalDateTime(localDate, 'zh'), '2026/08/21 00:12')
-  assert.equal(formatLocalDateTime(localDate, 'en'), '08/21/2026 00:12')
-  assert.equal(formatLocalMonthDay(localDate), '8/21')
-  assert.equal(formatLocalTime(localDate), '00:12:00')
-  assert.equal(formatLocalDateTime('invalid', 'zh'), '')
 })

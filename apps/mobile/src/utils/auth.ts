@@ -1,5 +1,5 @@
-const TOKEN_KEY = 'kai_access_token'
-const USER_KEY = 'kai_user'
+const TOKEN_KEY = 'wod_token'
+const USER_KEY = 'wod_user'
 
 export function getToken(): string {
   return uni.getStorageSync(TOKEN_KEY) || ''

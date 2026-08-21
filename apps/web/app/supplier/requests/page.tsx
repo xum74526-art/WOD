@@ -1,3 +1,3 @@
 import { ProductShell } from "@/components/product-shell";
-import { SupplierRequestBoard } from "@/components/supplier-request-board";
-export default function SupplierRequestsPage() { return <ProductShell variant="supplier"><SupplierRequestBoard /></ProductShell>; }
+import { MobileBuyRequestWorkspace } from "@/components/mobile-buy-request-workspace";
+export default function SupplierRequestsPage() { return <ProductShell variant="supplier"><MobileBuyRequestWorkspace view="seller" /></ProductShell>; }

@@ -27,32 +27,36 @@
         <view class="retry-button" role="button" @tap="load(true)">{{ t('retry') }}</view>
       </view>
       <view v-else-if="!list.length" class="state">{{ t('k_e3a7209e') }}</view>
-      <view v-if="list.length" class="product-grid">
-        <view v-for="p in list" :key="p.id" class="market-tile" @tap="go(p.id)">
-          <view class="tile-visual">
-            <image
-              class="tile-image"
-              :src="productImage(p)"
-              mode="aspectFill"
-              lazy-load
-              :fade-show="false"
-              @error="markImageFailed(p.id)"
-            />
-            <view class="status-chip" :class="{ online: p.server_online }">
-              <view class="status-dot"></view>
-              <text>{{ p.server_online ? '在线' : '离线' }}</text>
-            </view>
-            <text class="memory-chip">{{ p.memory }}</text>
+      <view v-for="p in list" :key="p.id" class="card prod" @tap="go(p.id)">
+        <image
+          class="pimg"
+          :src="productImage(p)"
+          mode="aspectFill"
+          lazy-load
+          :fade-show="false"
+          @error="markImageFailed(p.id)"
+        />
+        <view class="pbody">
+          <view class="pt">
+            <text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text>
+            <text class="pmem">{{ p.memory }}</text>
           </view>
-          <view class="tile-body">
-            <text class="tile-model">{{ p.gpu_model }}</text>
-            <text class="tile-region">{{ tr(p.region_name || '-') }}</text>
-            <view class="tile-spec"><text>{{ serverConfiguration(p) }}</text><text>{{ p.bandwidth_mbps ? `${p.bandwidth_mbps}M` : '—' }}</text></view>
-            <view class="tile-price"><text class="tile-price-value">{{ fmtCardHours(p.price) }}</text><text class="tile-price-unit">卡时/小时</text></view>
-            <view class="tile-footer">
-              <text class="tile-supplier">{{ p.supplier_name || '已审核商家' }}</text>
-              <text class="tile-arrow">›</text>
+          <view class="pmid">
+            <view class="info"><text class="il">{{ t("rentable") }}</text><text class="iv">{{ p.stock }}</text></view>
+            <view class="info"><text class="il">{{ t("region") }}</text><text class="iv">{{ tr(p.region_name || '-') }}</text></view>
+            <view v-if="p.supplier_id" class="info"><text class="il">{{ t("merchant") }}</text><text class="iv info-link" @tap.stop="goStore(p.supplier_id)">{{ t("view") }}</text></view>
+            <view v-else class="info"><text class="il">{{ t('marketOfferSource') }}</text><text class="iv">{{ marketSourceLabel(p) }}</text></view>
+          </view>
+          <view class="pbot">
+            <view class="pprice">
+              <view class="hourly-price"><text class="pp">{{ fmtCH(p.price) }}</text><text class="pu">/h</text></view>
+              <view class="market-card-metrics">
+                <text class="pch" :class="changeTone(modelChange(p))">{{ modelChangeText(p) }}</text>
+                <text class="pch-range">{{ modelPriceRangeText(p) }}</text>
+                <text v-if="modelHistorySourceText(p)" class="pch-source">{{ modelHistorySourceText(p) }}</text>
+              </view>
             </view>
+            <view class="buy" :class="{ disabled: !p.purchasable }">{{ t(p.purchasable ? 'buyUsage' : 'marketOfferUnavailableShort') }}</view>
           </view>
         </view>
       </view>
@@ -66,13 +70,25 @@
 import { ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getProducts } from '@/api/gpu'
+import { getMarketRanking, type MarketRankingItem } from '@/api/market'
 import type { Product } from '@/api/gpu'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
-import { fmtCardHours } from '@/utils/format'
+import { fmtCH, fmtCHn } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
+import { localizeProductName } from '@/utils/localize-content'
+import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
-import { mergeUniqueProducts } from '@/utils/market-list'
+import {
+  buildMarketRangeMap,
+  gpuMarketKey,
+  hasCompleteSevenDayMetric,
+  mergeUniqueProducts,
+  sortByMarketPriority,
+  trustedSevenDayChange,
+  trustedSevenDayPriceRange,
+  type MarketRangeMap,
+} from '@/utils/market-list'
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
@@ -87,9 +103,33 @@ const mem = ref('')
 const region = ref('')
 const category = ref('')
 const sort = ref('default')
+type ModelRange = Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours' | 'market_status' | 'history_provenance'>
+const volatilityMap = ref<MarketRangeMap & Record<string, ModelRange>>({})
 const failedImages = ref<Record<number, boolean>>({})
+let quoteLoadedAt = 0
+let quoteInFlight: Promise<void> | null = null
 let loadGeneration = 0
 let productsLoadedAt = 0
+
+async function loadQuote() {
+  if (Date.now() - quoteLoadedAt < 30_000) return
+  if (quoteInFlight) return quoteInFlight
+  quoteInFlight = (async () => {
+    try {
+      const ranking = await getMarketRanking(true)
+      volatilityMap.value = buildMarketRangeMap(ranking.items) as MarketRangeMap & Record<string, ModelRange>
+      quoteLoadedAt = Date.now()
+      if (sort.value === 'default' && list.value.length) {
+        list.value = sortByMarketPriority(list.value, volatilityMap.value)
+      }
+    } catch {
+      // 商品列表不依赖行情接口；行情暂不可用时仍优先展示可租资源。
+    } finally {
+      quoteInFlight = null
+    }
+  })()
+  return quoteInFlight
+}
 
 const types = [
   { code: '', name: '全部' },
@@ -139,6 +179,7 @@ async function load(reset = false) {
     })
     if (generation !== loadGeneration) return
     list.value = requestedPage === 1 ? res.items : mergeUniqueProducts(list.value, res.items)
+    if (sort.value === 'default') list.value = sortByMarketPriority(list.value, volatilityMap.value)
     total.value = res.total
     if (requestedPage === 1) productsLoadedAt = Date.now()
     if (list.value.length >= res.total) finished.value = true
@@ -160,23 +201,52 @@ onShow(() => {
     uni.removeStorageSync('wod-market-keyword')
     shouldReload = true
   }
+  // 商品和行情并行加载。首屏不再被耗时较长的行情统计接口阻塞。
   if (shouldReload) void load(true)
+  void loadQuote()
 })
 onReachBottom(() => load())
-function doSearch(event?: { detail?: { value?: string } }) {
-  // Android IMEs may emit `confirm` before the last v-model update reaches
-  // the page. Use the value carried by the confirm event so fast input such
-  // as "H100" never searches an earlier partial value such as "H".
-  const confirmed = event?.detail?.value
-  if (typeof confirmed === 'string') keyword.value = confirmed
-  load(true)
-}
+function doSearch() { load(true) }
 function go(id: number) { nav('/pages/product/detail?id=' + id) }
 function goStore(sid?: number) { if (sid) nav('/pages/store/index?id=' + sid) }
-function serverConfiguration(product: Pick<Product, 'cpu_cores' | 'ram_gb'>): string {
-  const cpu = product.cpu_cores ? `${product.cpu_cores}C` : '—'
-  const ram = product.ram_gb ? `${product.ram_gb}G` : '—'
-  return `${cpu} · ${ram}`
+function marketSourceName(source?: Product['market_source']) {
+  if (source === 'vast') return 'Vast.ai'
+  if (source === 'autodl') return 'AutoDL'
+  return 'WOD'
+}
+function marketSourceLabel(product: Pick<Product, 'market_source' | 'market_source_status'>) {
+  const name = marketSourceName(product.market_source)
+  return product.market_source_status === 'delayed' ? `${name} · ${t('delayedData')}` : name
+}
+function modelRange(p: Pick<Product, 'gpu_model' | 'memory'>): ModelRange | undefined { return volatilityMap.value[gpuMarketKey(p.gpu_model, p.memory)] }
+function modelChange(p: Pick<Product, 'gpu_model' | 'memory'>): number | null {
+  const metric = modelRange(p)
+  return hasCompleteSevenDayMetric(metric) ? trustedSevenDayChange(metric) : null
+}
+function modelChangeText(p: Pick<Product, 'gpu_model' | 'memory'>): string {
+  const value = modelChange(p)
+  const metric = modelRange(p)
+  return value == null
+    ? (Number(metric?.history_day_count || 0) > 1 ? t('chartObservedDays', { days: metric!.history_day_count }) : t('currentQuoteBaseline'))
+    : t('sevenDayChangeValue', { value: formatSignedMarketPercentNumber(value) })
+}
+function modelPriceRangeText(p: Pick<Product, 'gpu_model' | 'memory'>): string {
+  const metric = modelRange(p)
+  const range = hasCompleteSevenDayMetric(metric) ? trustedSevenDayPriceRange(metric) : null
+  return range
+    ? t('sevenDayPriceRangeValue', { low: fmtCHn(range.low), high: fmtCHn(range.high) })
+    : (Number(metric?.history_day_count || 0) > 1 ? t('chartObservedDays', { days: metric!.history_day_count }) : t('currentQuoteBaseline'))
+}
+function modelHistorySourceText(p: Pick<Product, 'gpu_model' | 'memory'>): string {
+  const provenance = modelRange(p)?.history_provenance
+  const provider = String(provenance?.upstream_provider || '').trim()
+  if (!provider) return ''
+  return provenance?.kind === 'external_reference'
+    ? t('historyReferenceProviderShort', { provider })
+    : t('historyObservedProviderShort', { provider })
+}
+function changeTone(value: number | null): string {
+  return value == null || value === 0 ? 'neutral' : value > 0 ? 'rise' : 'fall'
 }
 function productImage(p: Pick<Product, 'id' | 'image_url' | 'gpu_model'>): string {
   if (failedImages.value[p.id]) return fallbackProductImage(p.gpu_model)
@@ -206,24 +276,31 @@ function markImageFailed(id: number) {
 .state { color: var(--text-sub); text-align: center; padding: 40rpx 0; font-size: 26rpx; }
 .error-state { display: flex; flex-direction: column; align-items: center; gap: 20rpx; }
 .retry-button { min-height: 72rpx; padding: 0 32rpx; display: flex; align-items: center; justify-content: center; color: var(--primary); border: 1rpx solid var(--primary); border-radius: var(--radius); font-weight: 600; }
-.product-grid { display: flex; flex-wrap: wrap; align-items: stretch; gap: 20rpx; }
-.market-tile { width: calc(50% - 10rpx); min-width: 0; overflow: hidden; background: var(--card); border: 1rpx solid var(--card-border); border-radius: 20rpx; box-shadow: 0 8rpx 28rpx rgba(15, 38, 48, 0.07); }
-.tile-visual { position: relative; height: 194rpx; overflow: hidden; background: #0b1117; }
-.tile-visual::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 54rpx; background: linear-gradient(180deg, rgba(11,17,23,0), rgba(11,17,23,0.5)); pointer-events: none; }
-.tile-image { width: 100%; height: 100%; display: block; }
-.status-chip { position: absolute; z-index: 2; top: 14rpx; left: 14rpx; display: flex; align-items: center; gap: 7rpx; min-height: 38rpx; padding: 0 12rpx; color: rgba(255,255,255,0.78); background: rgba(9,17,22,0.72); border: 1rpx solid rgba(255,255,255,0.15); border-radius: 999rpx; font-size: 19rpx; backdrop-filter: blur(8rpx); }
-.status-chip.online { color: #d9ffec; }
-.status-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: #9ba6ad; box-shadow: 0 0 0 4rpx rgba(155,166,173,0.13); }
-.status-chip.online .status-dot { background: #35d68a; box-shadow: 0 0 0 4rpx rgba(53,214,138,0.16); }
-.memory-chip { position: absolute; z-index: 2; right: 14rpx; bottom: 14rpx; max-width: 132rpx; padding: 5rpx 12rpx; overflow: hidden; color: #fff; background: rgba(19,170,194,0.88); border-radius: 8rpx; font-size: 20rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.tile-body { padding: 20rpx 20rpx 18rpx; }
-.tile-model { display: -webkit-box; min-height: 72rpx; overflow: hidden; color: var(--text); font-size: 29rpx; font-weight: 700; line-height: 36rpx; letter-spacing: -0.4rpx; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.tile-region { display: block; margin-top: 8rpx; overflow: hidden; color: var(--text-sub); font-size: 21rpx; line-height: 30rpx; text-overflow: ellipsis; white-space: nowrap; }
-.tile-spec { display: flex; align-items: center; justify-content: space-between; gap: 8rpx; margin-top: 14rpx; padding: 12rpx 0; color: var(--text-sub); border-top: 1rpx solid var(--divider); border-bottom: 1rpx solid var(--divider); font-size: 20rpx; font-variant-numeric: tabular-nums; }
-.tile-price { display: flex; align-items: baseline; gap: 7rpx; margin-top: 15rpx; white-space: nowrap; }
-.tile-price-value { color: var(--up); font-size: 34rpx; font-weight: 750; letter-spacing: -1rpx; font-variant-numeric: tabular-nums; }
-.tile-price-unit { color: var(--text-dim); font-size: 18rpx; }
-.tile-footer { display: flex; align-items: center; justify-content: space-between; gap: 8rpx; margin-top: 12rpx; }
-.tile-supplier { min-width: 0; overflow: hidden; color: var(--text-sub); font-size: 19rpx; text-overflow: ellipsis; white-space: nowrap; }
-.tile-arrow { flex: 0 0 auto; width: 34rpx; height: 34rpx; color: var(--primary); background: var(--primary-soft); border-radius: 50%; font-size: 30rpx; line-height: 30rpx; text-align: center; }
+.card { background: var(--card); border-radius: var(--radius); border: 1rpx solid var(--card-border); box-shadow: 0 4rpx 24rpx var(--card-border); }
+.prod { overflow: hidden; margin-bottom: 24rpx; }
+.pimg { width: 100%; height: 240rpx; display: block; }
+.pbody { padding: 32rpx; }
+.pt { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24rpx; }
+.pn { color: var(--text); font-size: 34rpx; font-weight: 600; }
+.pmem { color: var(--primary); font-size: 24rpx; background: rgba(24,175,196,0.14); padding: 6rpx 18rpx; border-radius: 10rpx; }
+.pmid { display: flex; justify-content: space-between; padding: 24rpx 0; border-top: 1rpx solid var(--divider); border-bottom: 1rpx solid var(--divider); margin-bottom: 24rpx; }
+.info { display: flex; flex-direction: column; align-items: center; }
+.il { color: var(--text-sub); font-size: 22rpx; }
+.iv { color: var(--text); font-size: 28rpx; font-weight: 600; margin-top: 8rpx; font-variant-numeric: tabular-nums; }
+.info-link { color: var(--primary); }
+.up { color: var(--up); }
+.pprice { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 10rpx; }
+.hourly-price { display: flex; align-items: baseline; gap: 8rpx; }
+.market-card-metrics { display: flex; flex-direction: column; align-items: flex-start; gap: 6rpx; }
+.pch { color: var(--primary); background: var(--primary-soft); font-size: 22rpx; font-weight: 600; padding: 4rpx 12rpx; border-radius: 8rpx; }
+.pch.rise { color: #C9363E; background: rgba(229,72,77,0.1); }
+.pch.fall { color: #168A5B; background: rgba(22,163,106,0.1); }
+.pch.neutral { color: var(--text-sub); background: var(--bg-2); }
+.pch-range { color: var(--text-sub); font-size: 20rpx; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.pch-source { color: var(--text-dim); font-size: 18rpx; line-height: 1.3; }
+.pbot { display: flex; justify-content: space-between; align-items: flex-end; gap: 18rpx; }
+.pp { color: var(--up); font-size: 40rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pu { color: var(--text-sub); font-size: 24rpx; }
+.buy { color: var(--primary); font-size: 26rpx; border: 1rpx solid var(--primary); padding: 12rpx 32rpx; border-radius: var(--radius); }
+.buy.disabled { color: var(--text-dim); border-color: var(--border); }
 </style>

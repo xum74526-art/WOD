@@ -95,7 +95,7 @@
 import { computed, ref, watch } from 'vue'
 import type { MarketCandle, MarketHistoryState } from '@/api/market'
 import { useI18nStore } from '@/store/i18n'
-import { formatLocalDateTime, formatLocalMonthDay, formatNumber, toCardHours } from '@/utils/format'
+import { formatNumber, toCardHours } from '@/utils/format'
 import { candleChangePercent, formatSignedMarketPercent } from '@/utils/market-chart'
 
 const i18n = useI18nStore()
@@ -200,7 +200,9 @@ const focusedDate = computed(() => {
   const timestamp = focusedCandle.value?.time
     ?? (props.referenceObservedAt ? new Date(props.referenceObservedAt).getTime() : Number.NaN)
   return Number.isFinite(timestamp)
-    ? formatLocalDateTime(timestamp, i18n.lang)
+    ? new Date(timestamp).toLocaleString(i18n.locale, {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    })
     : t('currentQuoteBaseline')
 })
 
@@ -304,7 +306,7 @@ function axisNumber(value: number): string {
   return formatNumber(value, { maximumFractionDigits: 2, useGrouping: false })
 }
 function timeLabel(time: number): string {
-  return formatLocalMonthDay(time)
+  return new Date(time).toLocaleDateString(i18n.locale, { month: 'numeric', day: 'numeric' })
 }
 function linePath(values: Array<number | null>, x: (index: number) => number, y: (value: number) => number): string {
   const segments: string[] = []

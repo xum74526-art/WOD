@@ -6,17 +6,13 @@ import { useEffect, useState } from "react";
 import { getCurrentUser, type AuthUser } from "@/lib/api";
 import { listPublicProducts, type PublicProduct } from "@/lib/commerce-api";
 import { errorMessage, formatMoney } from "@/lib/commerce-ui";
+import { useI18n } from "@/components/locale-root";
+import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
 
 type ViewerRole = AuthUser["role"] | "guest" | "loading";
 
-function marketAction(role: ViewerRole, productId: number) {
-  if (role === "supplier") return { href: "/supplier/resources", label: "管理服务器" };
-  if (role === "admin") return { href: "/admin/resources", label: "审核服务器" };
-  if (role === "loading") return { href: `/market/products/${productId}`, label: "查看服务器" };
-  return { href: `/market/products/${productId}`, label: "查看并租用" };
-}
-
 export function MerchantResourceMarket({ limit }: { limit?: number }) {
+  const { locale, t } = useI18n();
   const [rows, setRows] = useState<PublicProduct[]>([]);
   const [viewerRole, setViewerRole] = useState<ViewerRole>("loading");
   const [loading, setLoading] = useState(true);
@@ -35,25 +31,26 @@ export function MerchantResourceMarket({ limit }: { limit?: number }) {
   const displayRows = typeof limit === "number" ? rows.slice(0, limit) : rows;
 
   const marketDescription = viewerRole === "supplier"
-    ? "这里是买家看到的公开市场；服务器上架、Agent 和租约请在商家后台管理。"
+    ? (locale === "en" ? "This is the public market buyers see. Products, stock, and orders come from the mobile supplier backend." : "这里是买家看到的公开市场；商品、库存与订单均来自手机端商家后台。")
     : viewerRole === "admin"
-      ? "这里是公开市场预览；服务器审核与发布请在管理控制台完成。"
-      : "由已审核商家提供，买家付款后使用自己的 SSH 公钥登录。";
+      ? (locale === "en" ? "Public market preview. Review and publish servers from the admin console." : "这里是公开市场预览；服务器审核与发布请在管理控制台完成。")
+      : (locale === "en" ? "Products and stock come from the mobile backend. Suppliers deliver SSH access after purchase." : "商品与库存来自手机端后端；下单后由商家交付 SSH 信息。");
 
   return <section className="merchant-market" aria-labelledby="merchant-market-title">
-    <header><div><p>KAI VERIFIED SERVERS</p><h2 id="merchant-market-title">商家服务器</h2><span>{marketDescription}</span></div><div className="sandbox-seal is-ready"><ShieldCheck size={19}/><span><small>SSH RENTAL</small><strong>公钥自动授权</strong></span></div></header>
-    {loading ? <div className="merchant-market__state">正在读取商家资源…</div> : error ? <div className="merchant-market__state is-error">{error}</div> : displayRows.length === 0 ? <div className="merchant-market__state"><strong>暂无已发布资源</strong><span>商家资源审核通过后会自动出现在这里。</span></div> : <div className="merchant-resource-grid">{displayRows.map((row) => {
+    <header><div><p>WOD SHARED COMPUTE</p><h2 id="merchant-market-title">{t("market.shared", "共享算力资源")}</h2><span>{marketDescription}</span></div><div className="sandbox-seal is-ready"><ShieldCheck size={19}/><span><small>ONE DATA SOURCE</small><strong>{t("market.source", "手机端数据")}</strong></span></div></header>
+    {loading ? <div className="merchant-market__state">{t("market.loading", "正在读取商家资源…")}</div> : error ? <div className="merchant-market__state is-error">{error}</div> : displayRows.length === 0 ? <div className="merchant-market__state"><strong>{t("market.empty", "暂无已发布资源")}</strong><span>{t("market.emptyDesc", "商家资源审核通过后会自动出现在这里。")}</span></div> : <div className="merchant-resource-grid">{displayRows.map((row) => {
       const legacyTestResource = row.name === "错误型号资源";
-      const action = marketAction(viewerRole, row.id);
-      const displayName = legacyTestResource ? `${row.gpu_model} ${row.gpu_memory_gb}GB 独占训练节点` : row.name;
+      const action = viewerRole === "supplier" ? { href: "/supplier/resources", label: t("market.manage", "管理服务器") } : viewerRole === "admin" ? { href: "/admin/resources", label: t("market.review", "审核服务器") } : viewerRole === "loading" ? { href: `/market/products/${row.id}`, label: t("market.view", "查看服务器") } : { href: `/market/products/${row.id}`, label: t("market.rent", "查看并租用") };
+      const displayName = localizeMarketProductName(legacyTestResource ? `${row.gpu_model} ${row.gpu_memory_gb}GB 独占训练节点` : row.name, locale);
+      const supplierName = localizeSupplierName(row.source_name, locale);
       const displayCpuCores = row.cpu_cores || (legacyTestResource ? 64 : null);
       const displayRamGb = row.ram_gb || (legacyTestResource ? 512 : null);
-      const status = row.server_online ? "Agent 在线" : legacyTestResource ? "已发布" : "暂不可租";
+      const status = row.purchasable ? t("market.available", "可下单") : legacyTestResource ? (locale === "en" ? "Published" : "已发布") : t("market.unavailable", "暂不可租");
       return <article key={row.id}>
-        <header><div><small>{row.source_name || "已审核商家"}</small><h3>{displayName}</h3></div><span className={!row.server_online && !legacyTestResource ? "is-offline" : ""}>{status}</span></header>
+        <header><div><small>{row.supplier_id ? <Link href={`/stores/${row.supplier_id}`}>{supplierName}</Link> : supplierName}</small><h3>{displayName}</h3></div><span className={!row.server_online && !legacyTestResource ? "is-offline" : ""}>{status}</span></header>
         <div className="merchant-resource-gpu"><Cpu size={24}/><strong>{row.gpu_model}</strong><span>{row.gpu_memory_gb}GB</span></div>
-        <dl><div><dt><MapPin size={13}/>区域</dt><dd>{row.region}</dd></div><div><dt><HardDrives size={13}/>配置</dt><dd>{displayCpuCores || "—"}C / {displayRamGb || "—"}GB</dd></div></dl>
-        <footer><div><small>每小时价格</small><strong>{formatMoney(row.price.amount, row.price.currency, row.price.unit)}</strong></div><Link href={action.href}>{action.label} <ArrowRight size={15}/></Link></footer>
+        <dl><div><dt><MapPin size={13}/>{t("market.region", "区域")}</dt><dd>{localizeMarketRegion(row.region, locale)}</dd></div><div><dt><HardDrives size={13}/>{t("market.config", "配置")}</dt><dd>{displayCpuCores || "—"}C / {displayRamGb || "—"}GB</dd></div></dl>
+        <footer><div><small>{t("market.hourly", "每小时价格")}</small><strong>{formatMoney(row.price.amount, row.price.currency, locale === "en" ? row.price.unit.replace("GPU·小时", "GPU·hour") : row.price.unit)}</strong></div><Link href={action.href}>{action.label} <ArrowRight size={15}/></Link></footer>
       </article>;
     })}</div>}
   </section>;

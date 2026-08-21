@@ -30,7 +30,7 @@ const AGREEMENT_ZH: LegalSection[] = [
   {
     title: '一、总则',
     paragraphs: [
-        'KAI（以下简称“本平台”）当前为封闭测试版移动应用，提供算力行情参考、已审核 KAI 商家算力使用订单、设备管理和社区交流等测试功能。用户注册即视为同意本协议全部条款。',
+        'WOD（以下简称“本平台”）当前为封闭测试版移动应用，提供算力行情参考、已审核 WOD 商家算力使用订单、设备管理和社区交流等测试功能。用户注册即视为同意本协议全部条款。',
     ],
   },
   {
@@ -45,8 +45,8 @@ const AGREEMENT_ZH: LegalSection[] = [
   {
     title: '三、算力交易',
     paragraphs: [
-      '1. 当前有效的 Vast.ai、AutoDL 与 KAI 报价均可用于封闭测试下单；过期报价、来源不可用或零库存资源不可购买。',
-      '2. 购买使用或购买持有均全额冻结测试卡时，由 KAI 平台或已审核商家人工交付有效 SSH，用户确认后才创建对应资产。',
+      '1. 当前有效的 Vast.ai、AutoDL 与 WOD 报价均可用于封闭测试下单；过期报价、来源不可用或零库存资源不可购买。',
+      '2. 购买使用或购买持有均全额冻结测试卡时，由 WOD 平台或已审核商家人工交付有效 SSH，用户确认后才创建对应资产。',
       '3. 购买持有仅登记交付后的测试资产；二级市场和自动收益未开放，不支持交付前回售或产生收益。',
       '4. 商家交付SSH前可取消订单并退回冻结测试卡时；SSH交付后不可自行取消。',
       '5. 平台服务费从商家结算额中计算，不会作为买家额外扣款。',
@@ -102,7 +102,7 @@ const AGREEMENT_EN: LegalSection[] = [
   {
     title: '1. General Terms',
     paragraphs: [
-        'KAI (the “Platform”) is currently a closed-test mobile application. It provides market-reference data, usage orders from approved KAI merchants, device management and community features for testing. By registering, you agree to these terms.',
+        'WOD (the “Platform”) is currently a closed-test mobile application. It provides market-reference data, usage orders from approved WOD merchants, device management and community features for testing. By registering, you agree to these terms.',
     ],
   },
   {
@@ -117,8 +117,8 @@ const AGREEMENT_EN: LegalSection[] = [
   {
     title: '3. Compute Transactions',
     paragraphs: [
-      '1. Current Vast.ai, AutoDL and KAI quotes can be ordered during closed testing. Expired, unavailable-source or zero-stock resources cannot be purchased.',
-      '2. Usage and holding purchases freeze the full test CH amount. KAI or an approved merchant manually provides valid SSH access, and the matching asset is created only after buyer confirmation.',
+      '1. Current Vast.ai, AutoDL and WOD quotes can be ordered during closed testing. Expired, unavailable-source or zero-stock resources cannot be purchased.',
+      '2. Usage and holding purchases freeze the full test CH amount. WOD or an approved merchant manually provides valid SSH access, and the matching asset is created only after buyer confirmation.',
       '3. A holding purchase only records a delivered test asset. Secondary trading and automatic returns are unavailable; it cannot be resold or earn returns before delivery.',
       '4. An order may be canceled before SSH delivery and its frozen test CH returned. It cannot be self-canceled after SSH delivery.',
       '5. The service fee is calculated from the merchant settlement and is not an additional buyer charge.',

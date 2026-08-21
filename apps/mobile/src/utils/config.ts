@@ -1,7 +1,7 @@
 // H5 开发环境走 Vite 的 /api 代理；原生 App 使用构建时配置的 HTTPS API。
-// 复制 .env.example 为 .env.local 后设置 VITE_KAI_API_BASE。
-const APP_API_BASE = String(import.meta.env.VITE_KAI_API_BASE || 'https://api.example.com/api/v1').replace(/\/$/, '')
-let API_BASE = '/api/v1'
+// 复制 .env.example 为 .env.local 后设置 VITE_WOD_APP_API_BASE。
+const APP_API_BASE = String(import.meta.env.VITE_WOD_APP_API_BASE || 'https://api.example.com/api').replace(/\/$/, '')
+let API_BASE = '/api'
 // #ifndef H5
 API_BASE = APP_API_BASE
 // #endif
@@ -15,7 +15,7 @@ export function resolveApiMediaUrl(value?: string | null): string {
 
   const base = API_BASE.replace(/\/$/, '')
   if (source.startsWith('/api/')) {
-    const apiRoot = base.replace(/\/api\/v\d+$/, '').replace(/\/api$/, '')
+    const apiRoot = base.endsWith('/api') ? base.slice(0, -4) : base
     return `${apiRoot}${source}`
   }
   // Community media is intentionally exposed by a narrow API route. The
@@ -39,7 +39,7 @@ export function resolveBackendUrl(value?: string | null): string {
   if (/^https:\/\//i.test(source)) return source
   if (!source.startsWith('/api/')) return ''
   if (/^https:\/\//i.test(API_BASE)) {
-    const apiRoot = API_BASE.replace(/\/api\/v\d+$/, '').replace(/\/api$/, '')
+    const apiRoot = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE
     return `${apiRoot}${source}`
   }
   // #ifdef H5

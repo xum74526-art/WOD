@@ -145,7 +145,7 @@ function onHelp() {
 function onAbout() {
   uni.showModal({
     title: t('k_17651c8f'),
-    content: `KAI - ${t('AI 算力资产管理')}\n${i18n.lang === 'en' ? 'Version' : '版本'} v${appVersion}`,
+    content: `WOD - ${t('AI 算力资产管理')}\n${i18n.lang === 'en' ? 'Version' : '版本'} v${appVersion}`,
     showCancel: false,
     confirmText: t('知道了'),
   })

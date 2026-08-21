@@ -17,41 +17,22 @@ export interface BankCardItem {
 }
 
 export function getBankCards() {
-  return request<{ bank_accounts: BankCardItem[] }>({ url: '/account/bank-accounts' })
-    .then(result => result.bank_accounts || [])
+  return request<BankCardItem[]>({ url: '/bank-cards' })
 }
 export function getBankCardConfig() {
-  return request<Record<string, { available: boolean; reason?: string }>>({
-    url: '/account/modules',
-  }).then(result => {
-    const module = result.bank_accounts
-    return {
-      binding_enabled: Boolean(module?.available),
-      mode: 'manual_review' as const,
-      bank_verified: false as const,
-      notice: module?.reason || '银行卡服务尚未配置',
-    }
-  }) as Promise<{
+  return request<{
     binding_enabled: boolean
     mode: 'format_only' | 'manual_review'
     bank_verified: false
     notice?: string
-  }>
+  }>({ url: '/bank-cards/config' })
 }
 export function addBankCard(data: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean }) {
-  return request<BankCardItem>({
-    url: '/account/bank-accounts/bind',
-    method: 'POST',
-    data: {
-      bank_name: data.bank_name,
-      account_number: data.card_number,
-      account_name: data.holder,
-    },
-  })
+  return request<BankCardItem>({ url: '/bank-cards', method: 'POST', data })
 }
 export function setDefaultCard(id: number) {
-  return Promise.reject(new Error('统一后端不支持客户端切换默认收款账户'))
+  return request({ url: `/bank-cards/${id}/default`, method: 'POST' })
 }
 export function deleteCard(id: number) {
-  return request({ url: `/account/bank-accounts/${id}`, method: 'DELETE' })
+  return request({ url: `/bank-cards/${id}`, method: 'DELETE' })
 }

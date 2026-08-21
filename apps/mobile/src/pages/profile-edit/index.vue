@@ -43,13 +43,14 @@ const user = computed(() => userStore.userInfo)
 const form = reactive({ username: '' })
 const pendingAvatarPath = ref('')
 const avatarLoadFailed = ref(false)
-const avatarText = computed(() => localizePersonName(form.username || user.value?.username || 'K', i18n.lang).slice(0, 1).toUpperCase())
+const avatarText = computed(() => localizePersonName(form.username || user.value?.username || 'W', i18n.lang).slice(0, 1).toUpperCase())
 const avatarUrl = computed(() => avatarLoadFailed.value ? '' : (pendingAvatarPath.value || resolveApiMediaUrl(user.value?.avatar)))
-const phoneDisplay = computed(() => user.value?.phone || t('phoneNotBound'))
-const phoneHint = computed(() => {
-  if (!user.value?.phone) return t('phoneBindingFutureHint')
-  return user.value.phone_bound === false ? t('closedTestPhoneNotice') : t('phoneReadOnlyHint')
-})
+const phoneDisplay = computed(() => user.value?.phone_bound === false
+  ? t('phoneNotBound')
+  : (user.value?.phone || t('phoneNotBound')))
+const phoneHint = computed(() => user.value?.phone_bound === false
+  ? t('phoneBindingFutureHint')
+  : t('phoneReadOnlyHint'))
 const submitting = ref(false)
 
 onShow(async () => {

@@ -1,5 +1,5 @@
-import { AccountSecurity } from "@/components/account-security";
+import { MobileAccountSettings } from "@/components/mobile-account-settings";
 
 export default function AccountSettingsPage() {
-  return <AccountSecurity />;
+  return <MobileAccountSettings />;
 }

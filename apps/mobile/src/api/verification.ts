@@ -1,4 +1,4 @@
-import { request } from './request'
+import { request, upload } from './request'
 
 export type VerificationOcrStatus =
   | 'not_started'
@@ -41,49 +41,36 @@ export interface VerificationInfo extends VerificationOcrFields {
   back_photo_uploaded?: boolean
 }
 
-function toVerification(result: any): VerificationInfo {
-  const application = result.application || result
-  const status = result.status || application.status || 'unverified'
-  return {
-    status: status === 'approved' ? 'verified' : status,
-    real_name: application.subject?.legal_name,
-    id_card_masked: application.subject?.identifier_number,
-    consent_recorded: Boolean(application.declaration_accepted_at),
-    reject_reason: application.review_note,
-    front_photo_uploaded: false,
-    back_photo_uploaded: false,
-    ocr_status: 'unavailable',
-    ocr_message: '统一后端使用加密资料人工审核，不执行本地 OCR',
-  }
-}
-
 export function getVerification() {
-  return request<any>({ url: '/account/kyc' }).then(toVerification)
+  return request<VerificationInfo>({ url: '/verification' })
 }
 
 export function submitVerification(real_name: string, id_card: string, sensitive_consent: boolean) {
-  return request<any>({
-    url: '/account/kyc/manual',
+  return request<VerificationInfo>({
+    url: '/verification',
     method: 'POST',
-    data: {
-      verification_type: 'individual',
-      country_code: 'CN',
-      legal_name: real_name,
-      identifier_type: 'national_id',
-      identifier_number: id_card,
-      declaration_accepted: sensitive_consent,
-    },
-  }).then(toVerification)
+    data: { real_name, id_card, sensitive_consent },
+  })
 }
 
 export function uploadVerificationPhoto(filePath: string, side: 'front' | 'back') {
-  void filePath
-  void side
-  return Promise.reject<VerificationInfo>(new Error('证件照片对象存储尚未配置，请直接提交加密文字资料审核'))
+  return upload<VerificationInfo>({
+    url: '/verification/upload',
+    filePath,
+    name: side,
+    silent: true,
+    timeout: 60000,
+  })
 }
 
 export function uploadVerificationPhotos(frontFilePath: string, backFilePath: string) {
-  void frontFilePath
-  void backFilePath
-  return Promise.reject<VerificationInfo>(new Error('证件照片对象存储尚未配置，请直接提交加密文字资料审核'))
+  return upload<VerificationInfo>({
+    url: '/verification/upload',
+    files: [
+      { name: 'front', uri: frontFilePath },
+      { name: 'back', uri: backFilePath },
+    ],
+    silent: true,
+    timeout: 60000,
+  })
 }

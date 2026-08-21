@@ -1,15 +1,24 @@
 "use client";
 
-import { Moon, Sun } from "@phosphor-icons/react";
+import { Moon, Sun, Translate } from "@phosphor-icons/react";
 import { useKaiTheme } from "@/components/theme-root";
+import { useI18n } from "@/components/locale-root";
 
 export function UiSettings({ compact = false }: { compact?: boolean }) {
   const { appearance, toggleAppearance } = useKaiTheme();
-  const nextLabel = appearance === "dark" ? "切换到浅色模式" : "切换到深色模式";
+  const { locale, t, toggleLocale } = useI18n();
+  const nextLabel = appearance === "dark" ? t("theme.toLight", "切换到浅色模式") : t("theme.toDark", "切换到深色模式");
+  const languageLabel = locale === "en" ? t("language.switchChinese", "切换到中文") : t("language.switchEnglish", "Switch to English");
   return (
-    <button className={`ui-settings${compact ? " ui-settings--compact" : ""}`} type="button" onClick={toggleAppearance} aria-label={nextLabel} title={nextLabel}>
-      {appearance === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-      {!compact && <span>{appearance === "dark" ? "浅色模式" : "深色模式"}</span>}
-    </button>
+    <div className={`ui-settings-group${compact ? " ui-settings-group--compact" : ""}`}>
+      <button className={`ui-settings${compact ? " ui-settings--compact" : ""}`} type="button" onClick={toggleLocale} aria-label={languageLabel} title={languageLabel}>
+        <Translate size={17}/><span className="ui-language-code">{locale === "en" ? "中" : "EN"}</span>
+        {!compact && <span>{locale === "en" ? "中文" : "English"}</span>}
+      </button>
+      <button className={`ui-settings${compact ? " ui-settings--compact" : ""}`} type="button" onClick={toggleAppearance} aria-label={nextLabel} title={nextLabel}>
+        {appearance === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+        {!compact && <span>{appearance === "dark" ? t("theme.light", "浅色模式") : t("theme.dark", "深色模式")}</span>}
+      </button>
+    </div>
   );
 }

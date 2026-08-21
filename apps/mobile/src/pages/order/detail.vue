@@ -174,11 +174,7 @@ async function onConfirm() {
     success: async (r) => {
       if (!r.confirm) return
       try {
-        await request({
-          url: `/account/orders/${oid.value}/confirm`,
-          method: 'POST',
-          data: { version: order.value?.version, note: '买家从移动端确认交付' },
-        })
+        await request({ url: `/orders/${oid.value}/confirm`, method: 'POST' })
         uni.showToast({ title: t('确认成功'), icon: 'success' })
         await fetchOrder()
       } catch {}

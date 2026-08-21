@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowRight, ChartLine, Database } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { apiBaseUrl, readApiError } from "@/lib/api";
+import { useI18n } from "@/components/locale-root";
+import { getMobileMarketCandles, type MobileMarketModel } from "@/lib/mobile-market-api";
 
 type PricePoint = { date: string; median: number };
 type MarketSummary = {
@@ -13,8 +15,18 @@ type MarketSummary = {
   history: PricePoint[];
 };
 type MarketResponse = {
-  data: MarketSummary[];
-  meta: { history_updated_at?: string; observed_at?: string };
+  data: Array<{
+    gpu_model: string;
+    gpu_variant: string;
+    median_price_cny: number;
+    source_count: number;
+    available_gpu_count: number;
+    sources: string[];
+    history_day_count: number;
+    history_point_count: number;
+    market_status: string;
+  }>;
+  meta: { observed_at?: string };
 };
 type RangeWeeks = 4 | 8 | 14;
 
@@ -29,21 +41,17 @@ function formatPrice(value: number) {
   return value.toFixed(2);
 }
 
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00Z`).toLocaleDateString("zh-CN", {
+function formatDate(value: string, locale: "zh-CN" | "en") {
+  const timestamp = value.includes("T") ? value : `${value}T00:00:00Z`;
+  return new Date(timestamp).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN", {
     month: "2-digit",
     day: "2-digit",
     timeZone: "UTC",
   });
 }
 
-function preferredMarket(items: MarketSummary[]) {
-  return items.find((item) => item.gpu_slug === "nvidia-h100")
-    ?? items.find((item) => item.gpu_model.toUpperCase().includes("H100"))
-    ?? items[0];
-}
-
 export function GpuDailyTrendChart() {
+  const { locale } = useI18n();
   const [market, setMarket] = useState<MarketSummary | null>(null);
   const [updatedAt, setUpdatedAt] = useState("");
   const [weeks, setWeeks] = useState<RangeWeeks>(14);
@@ -55,28 +63,44 @@ export function GpuDailyTrendChart() {
     const controller = new AbortController();
     async function loadMarket() {
       try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/public/market/summary`, {
+        const response = await fetch(`${apiBaseUrl}/api/v1/public/market/ranking`, {
           cache: "no-store",
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(await readApiError(response));
         const payload = await response.json() as MarketResponse;
-        const selected = preferredMarket(
-          (payload.data ?? []).filter((item) => item.history?.some((point) => point.median > 0)),
-        );
-        if (!selected) throw new Error("暂无可用的 GPU 历史价格");
-        setMarket(selected);
-        setUpdatedAt(payload.meta?.history_updated_at ?? payload.meta?.observed_at ?? "");
+        const ranked = (payload.data ?? []).filter((item) => item.median_price_cny > 0);
+        const withHistory = ranked.filter((item) => item.history_point_count >= 2 || item.history_day_count >= 2);
+        const selected = withHistory.find((item) => item.gpu_model.toUpperCase().includes("H100")) ?? withHistory[0] ?? ranked[0];
+        if (!selected) throw new Error(locale === "en" ? "No GPU market quote is available" : "暂无可用的 GPU 行情");
+        const model: MobileMarketModel = {
+          gpu_model: selected.gpu_model,
+          gpu_variant: selected.gpu_variant,
+          sources: selected.sources,
+          sample_count: selected.source_count,
+          available_gpu_count: selected.available_gpu_count,
+          market_status: selected.market_status,
+        };
+        const candlePayload = await getMobileMarketCandles(model, "30d");
+        const history = (candlePayload.candles ?? []).map((point) => ({ date: point.start_time, median: point.close_price_cny }));
+        if (history.length < 2) throw new Error(locale === "en" ? "GPU price history is still accumulating" : "GPU 历史价格仍在积累");
+        setMarket({
+          gpu_model: `${selected.gpu_model} ${selected.gpu_variant}`.trim(),
+          gpu_slug: `${selected.gpu_model}-${selected.gpu_variant}`.toLowerCase(),
+          provider_count: selected.source_count,
+          history,
+        });
+        setUpdatedAt(candlePayload.server_time ?? payload.meta?.observed_at ?? "");
         setStatus("ready");
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        setMessage(error instanceof Error ? error.message : "行情读取失败");
+        setMessage(error instanceof Error ? error.message : locale === "en" ? "Failed to load market data" : "行情读取失败");
         setStatus("error");
       }
     }
     void loadMarket();
     return () => controller.abort();
-  }, []);
+  }, [locale]);
 
   const plot = useMemo(() => {
     const points = (market?.history ?? [])
@@ -130,9 +154,9 @@ export function GpuDailyTrendChart() {
   if (status !== "ready" || !market || !plot) {
     return <section className="gpu-kline-card gpu-trend-state" aria-live="polite">
       {status === "loading" ? <Database size={30} weight="light" /> : <ChartLine size={30} weight="light" />}
-      <strong>{status === "loading" ? "正在生成价格 K 线" : "真实行情暂不可用"}</strong>
-      <span>{status === "loading" ? "正在加载 GetDeploying GPU 公开价格。" : message}</span>
-      {status === "error" && <Link href="/market/trends">打开完整行情 <ArrowRight size={13} /></Link>}
+      <strong>{status === "loading" ? (locale === "en" ? "Building the price chart" : "正在生成价格 K 线") : (locale === "en" ? "Live market data is unavailable" : "真实行情暂不可用")}</strong>
+      <span>{status === "loading" ? (locale === "en" ? "Loading GPU prices from the mobile backend." : "正在读取手机端后端 GPU 行情。") : message}</span>
+      {status === "error" && <Link href="/market/trends">{locale === "en" ? "Open full market" : "打开完整行情"} <ArrowRight size={13} /></Link>}
     </section>;
   }
 
@@ -145,18 +169,18 @@ export function GpuDailyTrendChart() {
       <header className="gpu-kline-card__head">
         <div>
           <span className="gpu-kline-eyebrow"><i /> GPU RENTAL CANDLE INDEX</span>
-          <h2 id="gpu-trend-title">{market.gpu_model} 周价格 K 线</h2>
-          <p>GetDeploying 公开中位价 · USD / GPU·小时</p>
+          <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "weekly price candles" : "周价格 K 线"}</h2>
+          <p>{locale === "en" ? "Mobile backend market median" : "手机端后端行情中位价"} · CNY / GPU·h</p>
         </div>
-        <span className="gpu-kline-simulated gpu-trend-source">公开数据</span>
+        <span className="gpu-kline-simulated gpu-trend-source">{locale === "en" ? "Mobile data" : "手机端数据"}</span>
       </header>
 
       <div className="gpu-kline-quote">
-        <div><strong>{formatPrice(active.close)}</strong><span>USD / GPU·h</span></div>
+        <div><strong>{formatPrice(active.close)}</strong><span>CNY / GPU·h</span></div>
         <b className={isUp ? "is-up" : "is-down"}>
           {plot.delta >= 0 ? "+" : ""}{plot.delta.toFixed(2)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
         </b>
-        <nav aria-label="K 线周期">
+        <nav aria-label={locale === "en" ? "Chart range" : "K 线周期"}>
           {ranges.map((range) => <button
             className={weeks === range.value ? "active" : ""}
             onClick={() => { setWeeks(range.value); setActiveDate(""); }}
@@ -167,14 +191,14 @@ export function GpuDailyTrendChart() {
       </div>
 
       <div className="gpu-kline-legend">
-        <span className="candle">周 K 线</span>
+        <span className="candle">{locale === "en" ? "Weekly candles" : "周 K 线"}</span>
         <span className="average">MA4 {formatPrice(active.ma4)}</span>
-        <span className="volume">{market.provider_count} 家供应商</span>
-        <span className="gpu-kline-ohlc">{formatDate(active.date)} · O {formatPrice(active.open)} H {formatPrice(active.high)} L {formatPrice(active.low)} C {formatPrice(active.close)}</span>
+        <span className="volume">{market.provider_count} {locale === "en" ? (market.provider_count === 1 ? "provider" : "providers") : "家供应商"}</span>
+        <span className="gpu-kline-ohlc">{formatDate(active.date, locale)} · O {formatPrice(active.open)} H {formatPrice(active.high)} L {formatPrice(active.low)} C {formatPrice(active.close)}</span>
       </div>
 
       <div className="gpu-kline-plot gpu-candlestick-plot" onMouseLeave={() => setActiveDate("")}>
-        <svg viewBox={`0 0 ${chart.width} 300`} role="img" aria-label={`${market.gpu_model} 最近三个月周价格变化 K 线`}>
+        <svg viewBox={`0 0 ${chart.width} 300`} role="img" aria-label={locale === "en" ? `${market.gpu_model} weekly price candles for the last three months` : `${market.gpu_model} 最近三个月周价格变化 K 线`}>
           {[0, 1, 2, 3, 4].map((line) => {
             const price = plot.max - ((plot.max - plot.min) / 4) * line;
             const y = chart.top + ((chart.bottom - chart.top) / 4) * line;
@@ -205,20 +229,20 @@ export function GpuDailyTrendChart() {
             y="286"
             textAnchor={index === 0 ? "start" : index === plot.candles.length - 1 ? "end" : "middle"}
             key={plot.candles[index].date}
-          >{formatDate(plot.candles[index].date)}</text>)}
+          >{formatDate(plot.candles[index].date, locale)}</text>)}
         </svg>
       </div>
 
       <dl className="gpu-kline-stats">
-        <div><dt>区间开盘</dt><dd>{formatPrice(plot.first.open)}</dd></div>
-        <div><dt>区间最高</dt><dd>{formatPrice(plot.rawMax)}</dd></div>
-        <div><dt>区间最低</dt><dd>{formatPrice(plot.rawMin)}</dd></div>
-        <div><dt>最新收盘</dt><dd>{formatPrice(plot.latest.close)}</dd></div>
+        <div><dt>{locale === "en" ? "Range open" : "区间开盘"}</dt><dd>{formatPrice(plot.first.open)}</dd></div>
+        <div><dt>{locale === "en" ? "Range high" : "区间最高"}</dt><dd>{formatPrice(plot.rawMax)}</dd></div>
+        <div><dt>{locale === "en" ? "Range low" : "区间最低"}</dt><dd>{formatPrice(plot.rawMin)}</dd></div>
+        <div><dt>{locale === "en" ? "Latest close" : "最新收盘"}</dt><dd>{formatPrice(plot.latest.close)}</dd></div>
       </dl>
 
       <footer>
-        <span>相邻周中位价生成趋势 K 线，并非日内成交 OHLC · 更新于 {updatedAt ? new Date(updatedAt).toLocaleDateString("zh-CN") : "—"}</span>
-        <Link href="/market/trends">查看完整行情 <ArrowRight size={13} /></Link>
+        <span>{locale === "en" ? "Candles come from the mobile backend market history" : "K 线来自手机端后端行情历史"} · {locale === "en" ? "Updated" : "更新于"} {updatedAt ? new Date(updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN") : "—"}</span>
+        <Link href="/market/trends">{locale === "en" ? "Open full market" : "查看完整行情"} <ArrowRight size={13} /></Link>
       </footer>
     </section>
   );

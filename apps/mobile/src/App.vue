@@ -5,10 +5,8 @@ import { useThemeStore } from './store/theme'
 import { useI18nStore } from './store/i18n'
 import { useHostingStore } from './store/hosting'
 import { useNotificationStore } from './store/notification'
-import { handleNativeAuthDeepLink, installNativeAuthDeepLinkListener } from './utils/ios-deep-link'
 
 onLaunch(() => {
-  installNativeAuthDeepLinkListener()
   uni.$on('wod-session-changed', () => {
     useHostingStore().reset()
     const notifications = useNotificationStore()
@@ -25,10 +23,8 @@ onLaunch(() => {
   const user = useUserStore()
   user.restore()
   if (user.isLogin) useNotificationStore().startPolling()
-  handleNativeAuthDeepLink()
 })
 onShow(() => {
-  if (handleNativeAuthDeepLink()) return
   const theme = useThemeStore()
   theme.refreshSystemTheme()
   theme.applyTheme()

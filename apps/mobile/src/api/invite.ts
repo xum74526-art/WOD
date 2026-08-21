@@ -24,31 +24,9 @@ export interface InviteRecordItem {
 }
 
 export function getInviteSummary() {
-  return request<any>({ url: '/account/referrals' }).then(result => ({
-    code: result.referral_code || '',
-    invited_count: result.relations?.length || 0,
-    qualified_count: 0,
-    unverified_count: result.relations?.length || 0,
-    total_reward: 0,
-    pending_count: 0,
-    rewarded_count: result.rewards?.length || 0,
-    current_tier: result.module?.available ? 'standard' : 'not_configured',
-    next_tier_hint: result.module?.reason || '邀请奖励服务尚未配置',
-    rewards_enabled: Boolean(result.module?.available),
-    reward_mode: result.module?.available ? 'live' : 'disabled',
-  } as InviteSummary))
+  return request<InviteSummary>({ url: '/invite/summary' })
 }
 
 export function getInviteRecords() {
-  return request<any>({ url: '/account/referrals' }).then(result => {
-    const items = (result.relations || []).map((row: any) => ({
-      id: row.id,
-      invitee_phone: row.invitee_phone || row.invitee || '',
-      status: row.status || 'registered',
-      reward_amount: Number(row.reward_amount || 0),
-      created_at: row.created_at,
-      rewarded_at: row.rewarded_at,
-    }))
-    return { total: items.length, items }
-  })
+  return request<{ total: number; items: InviteRecordItem[] }>({ url: '/invite/records' })
 }

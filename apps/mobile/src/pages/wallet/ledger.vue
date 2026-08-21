@@ -23,12 +23,12 @@
             </text>
           </view>
           <view class="it-mid">
-            <text class="it-remark" v-if="displayRemark(it)">{{ displayRemark(it) }}</text>
+            <text class="it-remark" v-if="it.remark">{{ tr(it.remark) }}</text>
             <text class="it-remark dim" v-else>{{ t('{type}流水', { type: typeLabel(it.type) }) }}</text>
           </view>
           <view class="it-bottom">
             <text class="it-time">{{ formatDate(it.created_at) }}</text>
-            <text v-if="it.balance_after != null" class="it-bal">{{ t('walletBalanceLabel') }} {{ fmtCH(it.balance_after) }}</text>
+            <text class="it-bal">{{ t('walletBalanceLabel') }} {{ fmtCH(it.balance_after) }}</text>
           </view>
         </view>
         <view v-if="loading" class="load-more">{{ t('loading') }}</view>
@@ -68,7 +68,6 @@ function typeLabel(type?: string) {
     case 'revenue': return t('收益')
       case 'test_revenue': return t('historicalTestRevenue')
       case 'test_reward': return t('historicalTestReward')
-    case 'test_card_hour_credit': return t('historicalTestReward')
     case 'refund': return t('退款')
     default: return type ? tr(type) : tr('流水')
   }
@@ -99,11 +98,6 @@ async function fetchPage(reset = false) {
   } finally {
     if (generation === loadGeneration) loading.value = false
   }
-}
-
-function displayRemark(item: LedgerItem) {
-  if (!item.remark || item.remark === item.type) return ''
-  return tr(item.remark)
 }
 
 onLoad(() => fetchPage(true))

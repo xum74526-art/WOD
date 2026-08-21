@@ -12,7 +12,7 @@
         <text class="bc-label">{{ t('k_3c67102a') }}</text>
         <AmountText :value="toCardHours(wallet?.balance ?? 0)" prefix="卡时" size="xl" />
         <view class="bc-actions">
-          <view v-if="directCommerceEnabled" class="btn ghost" @tap="openRecharge">{{ t('recharge') }}</view>
+          <view class="btn ghost" @tap="openRecharge">{{ t('recharge') }}</view>
           <view class="btn primary" :class="{ disabled: !wallet?.withdraw_service_enabled }" @tap="openWithdraw">{{ t('withdraw') }}</view>
         </view>
       </view>
@@ -30,7 +30,7 @@
         </view>
       </view>
 
-      <view v-if="pendingPayment && directCommerceEnabled" class="card payment-state" :class="`state-${paymentCardState}`">
+      <view v-if="pendingPayment" class="card payment-state" :class="`state-${paymentCardState}`">
         <view class="payment-state-head">
           <view>
             <text class="payment-state-title">{{ paymentStateTitle }}</text>
@@ -54,10 +54,6 @@
           <view v-if="paymentCardState === 'failed' || paymentCardState === 'expired'" class="payment-action secondary" @tap="restartRecharge">{{ t('restartRecharge') }}</view>
           <view v-if="paymentCardState === 'success'" class="payment-action primary" @tap="dismissPaymentState">{{ t('done') }}</view>
         </view>
-      </view>
-
-      <view v-if="!directCommerceEnabled" class="service-warning">
-        {{ t('iosCompanionWalletNotice') }}
       </view>
 
       <view v-if="wallet?.revenue_settlement_enabled === false" class="service-warning">
@@ -207,13 +203,11 @@ import {
   type RechargeUiState,
   type StoredRechargeSession,
 } from '@/utils/recharge-payment'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 
 const i18n = useI18nStore()
 const { t } = i18n
 const assetStore = useAssetStore()
 const wallet = ref<WalletInfo | null>(null)
-const directCommerceEnabled = isDirectCommerceEnabled()
 const withdrawConfig = ref<WithdrawalConfig | null>(null)
 const bankCards = ref<(BankCardItem & { displayName: string })[]>([])
 const cardIndex = ref(0)
@@ -251,8 +245,7 @@ const paymentMethods = computed(() => {
 
 const cardHourRate = computed(() => Number(wallet.value?.payment_config?.card_hour_rmb_rate || 1.002))
 const rechargeEnabled = computed(() => (
-  directCommerceEnabled
-  && wallet.value?.recharge_service_enabled === true
+  wallet.value?.recharge_service_enabled === true
   && wallet.value?.payment_config?.enabled === true
   && paymentMethods.value.length > 0
 ))
@@ -401,10 +394,6 @@ async function fetchWallet() {
 }
 
 function openRecharge() {
-  if (!directCommerceEnabled) {
-    uni.showToast({ title: t('iosCompanionWalletNotice'), icon: 'none' })
-    return
-  }
   if (pendingPayment.value && (paymentCardState.value === 'pending' || paymentCardState.value === 'processing')) {
     uni.showToast({ title: t('activeRechargeExists'), icon: 'none' })
     return

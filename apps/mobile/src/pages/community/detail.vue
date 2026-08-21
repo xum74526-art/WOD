@@ -14,7 +14,7 @@
             <text class="dname">{{ authorName(post.author_name) }}</text>
             <text class="dtime">{{ formatDate(post.source_published_at || post.created_at) }} · {{ postTopic(post) }}</text>
           </view>
-          <view v-if="post.origin === 'user' && !post.is_own" class="fbtn" :class="{ following: post.is_following }" @tap="onFollow">
+          <view v-if="!post.is_own" class="fbtn" :class="{ following: post.is_following }" @tap="onFollow">
             <text>{{ t(post.is_following ? '已关注' : '+ 关注') }}</text>
           </view>
         </view>
@@ -22,8 +22,7 @@
           <text class="auto-badge">{{ t('autoNews') }}</text>
           <text class="source-name">{{ displaySource(post) }}</text>
         </view>
-        <rich-text v-if="isRichArticle(post)" class="article-rich" :nodes="postContent(post)" />
-        <text v-else class="dtext">{{ postContent(post) }}</text>
+        <text class="dtext">{{ postContent(post) }}</text>
         <view v-if="postImages(post).length" class="post-images" :class="{ single: postImages(post).length === 1 }">
           <image
             v-for="(imageUrl, imageIndex) in postImages(post)"
@@ -72,9 +71,9 @@
           <text class="source-link">{{ t(post.content_type === 'video' ? 'watchOnSource' : 'viewOriginal') }} ↗</text>
         </view>
         <view class="dactions">
-          <view class="dact" @tap="onFavorite">
-            <text class="like-icon" :class="{ liked: post.is_favorited }">{{ post.is_favorited ? '♥' : '♡' }}</text>
-            <text class="like-text" :class="{ liked: post.is_favorited }">{{ t(post.is_favorited ? '已关注' : '关注') }}</text>
+          <view class="dact" @tap="onLike">
+            <text class="like-icon" :class="{ liked: post.is_liked }">{{ post.is_liked ? '♥' : '♡' }}</text>
+            <text class="like-text" :class="{ liked: post.is_liked }">{{ post.likes }}</text>
           </view>
           <view class="dact">
             <AppIcon name="comment" :size="32" />
@@ -86,7 +85,6 @@
           </view>
         </view>
       </view>
-      <template v-if="post.content_type !== 'video'">
       <SectionHeader :title="t('k_55374d7b')" />
       <view v-if="commentsError" class="comment-error">
         <text>{{ t('dataUnavailable') }}</text>
@@ -101,10 +99,9 @@
           <text class="ctime">{{ formatDate(c.created_at) }}</text>
         </view>
       </view>
-      </template>
       <view class="bottom-spacer" />
     </view>
-    <view v-if="post && post.content_type !== 'video'" class="input-bar" :style="{ paddingBottom: 'calc(16rpx + var(--safe-bottom))' }">
+    <view v-if="post" class="input-bar" :style="{ paddingBottom: 'calc(16rpx + var(--safe-bottom))' }">
       <input class="cinput" v-model="commentText" :placeholder="t('k_f3863e13')" placeholder-class="cph" :adjust-position="true" @confirm="onComment" />
       <view class="csend" @tap="onComment">{{ t('k_1535fcfa') }}</view>
     </view>
@@ -114,7 +111,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getPostDetail, getVideoDetail, getComments, createComment, setContentFavorite, toggleFollow, type PostItem, type CommentItem } from '@/api/community'
+import { getPostDetail, getComments, createComment, toggleLike, toggleFollow, type PostItem, type CommentItem } from '@/api/community'
 import { formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -124,7 +121,6 @@ import { useI18nStore } from '@/store/i18n'
 import { localizeCommunityText, localizePersonName } from '@/utils/localize-content'
 import { openExternalLink } from '@/utils/external-link'
 import { resolveApiMediaUrl } from '@/utils/config'
-import { articlePlainText, isArticleHtml } from '@/utils/article-content'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -134,8 +130,7 @@ const commentText = ref('')
 const loading = ref(true)
 const loadError = ref(false)
 const commentsError = ref(false)
-const pid = ref('')
-const contentKind = ref<'article' | 'video'>('article')
+const pid = ref(0)
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)
@@ -154,10 +149,6 @@ function postContent(value: PostItem): string {
   return communityText(value.content)
 }
 
-function isRichArticle(value: PostItem): boolean {
-  return isAutoPost(value) && value.content_type === 'article' && isArticleHtml(value.content)
-}
-
 function postTopic(value: PostItem): string {
   if (i18n.lang === 'en' && value.topic_en) return value.topic_en
   return communityText(value.topic || t('讨论'))
@@ -168,7 +159,7 @@ function isAutoPost(value: PostItem): boolean {
 }
 
 function displaySource(value: PostItem): string {
-  if (i18n.lang === 'en' && value.source_key === 'wod-market') return 'KAI Market'
+  if (i18n.lang === 'en' && value.source_key === 'wod-market') return 'WOD Market'
   return value.source_name || t('sourceLabel')
 }
 
@@ -217,8 +208,7 @@ function playerUrl(value: PostItem): string {
 }
 
 onLoad((opts) => {
-  pid.value = String(opts?.id || '')
-  contentKind.value = opts?.type === 'video' ? 'video' : 'article'
+  pid.value = Number(opts?.id || 0)
   void loadDetail()
 })
 
@@ -226,18 +216,15 @@ async function loadDetail() {
   loading.value = true
   loadError.value = false
   commentsError.value = false
-  if (!pid.value || (contentKind.value === 'article' && !Number(pid.value))) {
+  if (!pid.value) {
     loadError.value = true
     loading.value = false
     return
   }
-  const postRequest = contentKind.value === 'video'
-    ? getVideoDetail(pid.value)
-    : getPostDetail(Number(pid.value))
-  const commentsRequest = contentKind.value === 'video'
-    ? Promise.resolve([] as CommentItem[])
-    : getComments(Number(pid.value))
-  const [postResult, commentsResult] = await Promise.allSettled([postRequest, commentsRequest])
+  const [postResult, commentsResult] = await Promise.allSettled([
+    getPostDetail(pid.value),
+    getComments(pid.value),
+  ])
   if (postResult.status === 'rejected') {
     loadError.value = true
     post.value = null
@@ -250,18 +237,18 @@ async function loadDetail() {
 }
 
 async function loadComments() {
-  if (!pid.value || contentKind.value === 'video') return
+  if (!pid.value) return
   commentsError.value = false
-  try { comments.value = await getComments(Number(pid.value)) }
+  try { comments.value = await getComments(pid.value) }
   catch { commentsError.value = true }
 }
 
-async function onFavorite() {
+async function onLike() {
   if (!post.value) return
   try {
-    const next = !post.value.is_favorited
-    const res = await setContentFavorite(contentKind.value, pid.value, next)
-    post.value.is_favorited = res.is_favorited
+    const res = await toggleLike(pid.value)
+    post.value.is_liked = res.liked
+    post.value.likes = res.likes
   } catch {}
 }
 
@@ -276,7 +263,7 @@ async function onFollow() {
 function onShare() {
   if (!post.value) return
   uni.setClipboardData({
-    data: `${articlePlainText(postContent(post.value)).slice(0, 100)}${post.value.source_url ? `\n${post.value.source_url}` : ''}`,
+    data: `${postContent(post.value).slice(0, 100)}${post.value.source_url ? `\n${post.value.source_url}` : ''}`,
     success: () => uni.showToast({ title: t('copied'), icon: 'success' }),
   })
 }
@@ -284,7 +271,7 @@ function onShare() {
 async function onComment() {
   if (!commentText.value.trim()) return
   try {
-    const c = await createComment(Number(pid.value), commentText.value)
+    const c = await createComment(pid.value, commentText.value)
     comments.value.unshift(c)
     commentText.value = ''
     if (post.value) post.value.comments++
@@ -311,10 +298,6 @@ async function onComment() {
 .fbtn { padding: 8rpx 24rpx; border-radius: 32rpx; background: linear-gradient(135deg, var(--primary), var(--primary)); color: #fff; font-size: 22rpx; font-weight: 600; flex-shrink: 0; }
 .fbtn.following { background: var(--bg); color: var(--text-sub); border: 1rpx solid var(--border); }
 .dtext { color: var(--text); font-size: 28rpx; line-height: 1.6; display: block; margin-bottom: 20rpx; }
-.article-rich { display: block; margin-bottom: 20rpx; color: var(--text); font-size: 28rpx; line-height: 1.7; overflow: hidden; overflow-wrap: anywhere; }
-.article-rich :deep(img) { display: block; max-width: 100% !important; height: auto !important; margin: 20rpx auto; border-radius: 14rpx; }
-.article-rich :deep(p) { margin: 0 0 22rpx; }
-.article-rich :deep(a) { color: var(--primary); text-decoration: underline; }
 .post-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8rpx; margin-bottom: 20rpx; }
 .post-images.single { grid-template-columns: 1fr; }
 .post-image { width: 100%; height: 210rpx; border-radius: 12rpx; background: var(--bg); }

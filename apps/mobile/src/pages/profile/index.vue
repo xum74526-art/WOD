@@ -82,7 +82,7 @@
             <text class="rb-l">{{ t('k_e1e32957') }}</text>
           </view>
         </view>
-        <text class="rb-hint">{{ rebateHint(supplierRebate.next_tier_hint) }}</text>
+        <text class="rb-hint">{{ tr(supplierRebate.next_tier_hint) }}</text>
       </view>
 
       <!-- 消费返佣卡片（仅个人模式） -->
@@ -105,7 +105,7 @@
             <text class="rb-l">{{ t('k_ec4f52f4') }}</text>
           </view>
         </view>
-        <text class="rb-hint">{{ rebateHint(rebate.next_tier_hint) }}</text>
+        <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
       </view>
 
       <view v-for="group in widgetGroups" :key="group.key" class="card widget-card">
@@ -146,7 +146,6 @@ import { localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
 import { getProfileWidgetGroups, type ProfileWidget } from '@/config/profile-widgets'
 import { getFinanceAccess, type FinanceAccess } from '@/api/finance'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 
 const userStore = useUserStore()
 const assetStore = useAssetStore()
@@ -162,7 +161,6 @@ const dash = ref<Awaited<ReturnType<typeof getDashboard>> | null>(null)
 const supplierWallet = ref<Awaited<ReturnType<typeof getSupplierWallet>> | null>(null)
 const loadError = ref(false)
 const financeAccess = ref<FinanceAccess | null>(null)
-const directCommerceEnabled = isDirectCommerceEnabled()
 
 const user = computed(() => userStore.userInfo)
 const displayUsername = computed(() => localizePersonName(user.value?.username || t('未登录'), i18n.lang))
@@ -171,7 +169,7 @@ const avatarLoadFailed = ref(false)
 const avatarUrl = computed(() => avatarLoadFailed.value ? '' : resolveApiMediaUrl(user.value?.avatar))
 const totalAsset = computed(() => (assetStore.summary?.total_value ?? 0) + (wallet.value?.balance ?? 0))
 
-const widgetGroups = computed(() => getProfileWidgetGroups(role.value, canSwitchRole.value, directCommerceEnabled))
+const widgetGroups = computed(() => getProfileWidgetGroups(role.value, canSwitchRole.value))
 
 async function load() {
   loadError.value = false
@@ -219,9 +217,6 @@ function goInvite() { nav('/pages/invite/index') }
 function goWallet() { nav('/pages/wallet/index') }
 function goRevenue() { nav('/pages/revenue/index') }
 function goProfile() { nav('/pages/profile-edit/index') }
-function rebateHint(value: string) {
-  return value === 'not_configured' ? t('rewardProgramDisabled') : tr(value)
-}
 
 async function onSwitchRole() {
   try {

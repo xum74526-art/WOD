@@ -32,12 +32,3 @@ test('provider model paths with case-sensitive App filenames resolve to real bun
   assert.equal(resolveProductImage('/static/gpu/MTTS4000.jpg', 'MTTS4000'), '/static/gpu/MTTS4000.jpg')
   assert.equal(resolveProductImage('/static/gpu/RTX4070TI.jpg', 'RTX4070TI'), '/static/gpu/RTX4070Ti.jpg')
 })
-
-test('canonical market names with vendor prefixes resolve to model-specific images', () => {
-  assert.equal(fallbackProductImage('Nvidia H100'), '/static/gpu/H100.jpg')
-  assert.equal(fallbackProductImage('Nvidia RTX A6000'), '/static/gpu/A6000.jpg')
-  assert.equal(fallbackProductImage('Nvidia B200'), '/static/gpu/B200.jpg')
-  assert.equal(fallbackProductImage('Nvidia B300'), '/static/gpu/B300.jpg')
-  assert.equal(fallbackProductImage('AMD MI300X'), '/static/gpu/MI300X.jpg')
-  assert.equal(fallbackProductImage('Nvidia P100'), '/static/gpu/P100.jpg')
-})

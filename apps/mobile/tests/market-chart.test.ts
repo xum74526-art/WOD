@@ -28,15 +28,12 @@ test('chart change preserves rise and fall directions', () => {
   assert.equal(candleChangePercent(0, 1), null)
 })
 
-test('K-line change is always visible and ranges match the web weekly history', () => {
+test('K-line change is always visible and unsupported 30-day range is hidden', () => {
   assert.match(chartSource, /class="readout-change"/)
   assert.match(chartSource, /candleChangeValue/)
 
   const rangesBlock = quoteSource.match(/const ranges = computed\(\(\) => \[([\s\S]*?)\n\]\)/)?.[1] || ''
-  assert.ok(rangesBlock.includes("key: '4w'"))
-  assert.ok(rangesBlock.includes("key: '8w'"))
-  assert.ok(rangesBlock.includes("key: '14w'"))
-  assert.ok(!rangesBlock.includes("key: '7d'"))
+  assert.ok(rangesBlock.includes("key: '7d'"))
   assert.ok(!rangesBlock.includes("key: '30d'"))
   assert.match(quoteSource, /candlePeriodChange\.value \?\?/)
 })

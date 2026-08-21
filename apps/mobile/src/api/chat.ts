@@ -1,3 +1,5 @@
+import { request } from './request'
+
 export type SupportMode = 'self_service' | 'ai_assisted'
 export type SupportTicketStatus = 'pending_unassigned' | 'assigned' | 'resolved' | 'closed'
 
@@ -44,15 +46,9 @@ export interface SupportReply {
 }
 
 export function getSupportSession(lang: 'zh' | 'en' = 'zh') {
-  return Promise.resolve<SupportSession>({
-    conversation_id: null,
-    service_mode: 'self_service',
-    human_support_configured: false,
-    messages: [],
-    tickets: [],
-    notice: lang === 'en'
-      ? 'Human support is not configured. Please use the help center.'
-      : '人工客服尚未配置，请先使用帮助中心。',
+  return request<SupportSession>({
+    url: `/chat/session?lang=${lang}`,
+    silent: true,
   })
 }
 
@@ -62,20 +58,16 @@ export function sendMessage(options: {
   clientMessageId: string
   lang?: 'zh' | 'en'
 }) {
-  const now = new Date().toISOString()
-  const reply = options.lang === 'en'
-    ? 'Human support is not configured yet. Your message was not uploaded.'
-    : '人工客服尚未配置，本条消息未上传。'
-  return Promise.resolve<SupportReply>({
-    conversation_id: options.conversationId || 0,
-    message: {
-      id: Date.now(), role: 'user', content: options.message, response_mode: 'user',
-      topic: null, can_create_ticket: false, reply_to_id: null, created_at: now,
+  return request<SupportReply>({
+    url: '/chat',
+    method: 'POST',
+    silent: true,
+    data: {
+      message: options.message,
+      conversation_id: options.conversationId || undefined,
+      client_message_id: options.clientMessageId,
+      lang: options.lang || 'zh',
     },
-    reply,
-    is_human: false,
-    service_mode: 'self_service',
-    can_create_ticket: false,
   })
 }
 
@@ -87,9 +79,24 @@ export function createSupportTicket(options: {
   category?: string | null
   lang?: 'zh' | 'en'
 }) {
-  return Promise.reject(new Error('人工工单服务尚未配置')) as Promise<{ ticket: SupportTicket; notice: string }>
+  return request<{ ticket: SupportTicket; notice: string }>({
+    url: '/chat/tickets',
+    method: 'POST',
+    silent: true,
+    data: {
+      conversation_id: options.conversationId,
+      source_message_id: options.sourceMessageId || undefined,
+      subject: options.subject,
+      description: options.description,
+      category: options.category || 'other',
+      lang: options.lang || 'zh',
+    },
+  })
 }
 
 export function listSupportTickets() {
-  return Promise.resolve<{ items: SupportTicket[] }>({ items: [] })
+  return request<{ items: SupportTicket[] }>({
+    url: '/chat/tickets',
+    silent: true,
+  })
 }

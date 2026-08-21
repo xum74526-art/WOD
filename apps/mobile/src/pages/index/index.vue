@@ -35,7 +35,7 @@
 
       <view v-if="homeLoadError" class="home-load-warning">
         <text>{{ t('partialAssetDataUnavailable') }}</text>
-        <text class="home-load-retry" role="button" @tap="load(true)">{{ t('retry') }}</text>
+        <text class="home-load-retry" role="button" @tap="load">{{ t('retry') }}</text>
       </view>
 
       <scroll-view scroll-x class="price-bar" :show-scrollbar="false">
@@ -51,7 +51,7 @@
       <view class="quick">
         <view class="q-item" @tap="go('/pages/wallet/index')">
           <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
-          <text class="q-text">{{ t(directCommerceEnabled ? 'recharge' : 'wallet') }}</text>
+          <text class="q-text">{{ t('recharge') }}</text>
         </view>
         <view class="q-item" @tap="go('/pages/wallet/index')">
           <view class="q-icon"><AppIcon name="arrow-right" :size="36" /></view>
@@ -59,7 +59,7 @@
         </view>
         <view class="q-item" @tap="goTab('/pages/market/index')">
           <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
-          <text class="q-text">{{ t(directCommerceEnabled ? 'buyCompute' : 'viewMarket') }}</text>
+          <text class="q-text">{{ t('buyCompute') }}</text>
         </view>
         <view class="q-item" @tap="go('/pages/orders/index')">
           <view class="q-icon"><AppIcon name="order" :size="36" /></view>
@@ -101,28 +101,35 @@
         <scroll-view scroll-x class="hot-model-tabs-scroll" :show-scrollbar="false">
           <view class="hot-model-tabs">
             <view v-for="(trend, index) in hotTrends" :key="`${trend.item.gpu_model}-${trend.item.gpu_variant}`" class="hot-model-tab" :class="{ active: hotTrendIndex === index }" @tap="hotTrendIndex = index">
-              <text>{{ marketVendorLabel(trend.item.gpu_model) }}</text>
-              <text>{{ marketModelLabel(trend.item.gpu_model) }}</text>
+              <text>{{ trend.item.gpu_model }}</text>
+              <text>{{ trend.item.gpu_variant || t('standardVariant') }}</text>
             </view>
           </view>
         </scroll-view>
         <template v-if="activeHotTrend">
-          <view class="hot-compact-card" @tap="goTrend(activeHotTrend)">
-            <view class="hot-compact-summary">
-              <view>
-                <text class="hot-model">{{ activeHotTrend.item.gpu_model }}</text>
-                <text class="hot-variant">{{ activeHotTrend.item.gpu_variant || t('standardVariant') }}</text>
-              </view>
-              <view class="hot-market-value">
-                <text class="hot-price">{{ activeHotTrend.item.median_price_cny == null ? '--' : fmtCHr(activeHotTrend.item.median_price_cny) }}</text>
-                <text class="hot-change" :class="changeTone(trendSevenDayChange(activeHotTrend))">{{ trendChangeText(activeHotTrend) }}</text>
-              </view>
+          <view class="hot-market-head" @tap="goTrend(activeHotTrend)">
+            <view>
+              <text class="hot-model">{{ activeHotTrend.item.gpu_model }}</text>
+              <text class="hot-variant">{{ activeHotTrend.item.gpu_variant || t('standardVariant') }}</text>
             </view>
-            <MarketSparkline :candles="activeHotTrend.candles?.candles || []" />
-            <view class="hot-compact-foot">
-              <text>{{ t('fourWeeks') }} · {{ hotMarketSource(activeHotTrend) }}</text>
-              <text>{{ t('viewDetail') }} ›</text>
+            <view class="hot-market-value">
+              <text class="hot-price">{{ activeHotTrend.item.median_price_cny == null ? '--' : fmtCHr(activeHotTrend.item.median_price_cny) }}</text>
+              <text class="hot-change" :class="changeTone(trendSevenDayChange(activeHotTrend))">{{ trendChangeText(activeHotTrend) }}</text>
+              <text v-if="trendHasFullHistory(activeHotTrend)" class="hot-range">{{ priceRangeText(activeHotTrend.item) }}</text>
             </view>
+          </view>
+          <view class="hot-full-chart" @tap="retryActiveTrend">
+            <CandlestickChart
+              :candles="activeHotTrend.candles?.candles || []"
+              :source-note="historySourceText(activeHotTrend)"
+              :history-state="marketHistoryDisplayState(activeHotTrend.candles)"
+              :observed-days="marketObservedDayCount(activeHotTrend.candles)"
+              :reference-price-cny="activeHotTrend.candles?.latest_live_price_cny ?? activeHotTrend.item.median_price_cny"
+              :reference-sample-count="activeHotTrend.item.sample_count"
+              :reference-observed-at="activeHotTrend.candles?.latest_live_observed_at || ''"
+              :loading="activeHotTrend.state === 'loading'"
+              :error="activeHotTrend.state === 'error'"
+            />
           </view>
         </template>
       </view>
@@ -159,7 +166,7 @@
           <view class="pr">
             <text class="pp">{{ fmtCH(p.price) }}</text>
             <text class="pu">/h</text>
-            <text class="p-buy">{{ t(directCommerceEnabled && p.purchasable ? 'buyUsage' : 'viewDetail') }}</text>
+            <text class="p-buy">{{ t(p.purchasable ? 'buyUsage' : 'viewDetail') }}</text>
           </view>
         </view>
       </template>
@@ -174,7 +181,7 @@ import { useUserStore } from '@/store/user'
 import { useAssetStore } from '@/store/asset'
 import { useNotificationStore } from '@/store/notification'
 import { getWallet } from '@/api/wallet'
-import { getRevenueDashboard } from '@/api/revenue'
+import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { fmtCH, fmtCHr, fmtCHn } from '@/utils/format'
@@ -186,27 +193,32 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import Chart from '@/components/Chart.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
-import MarketSparkline from '@/components/MarketSparkline.vue'
+import CandlestickChart from '@/components/CandlestickChart.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 import {
   hasCompleteSevenDayMetric,
   selectFeaturedProducts,
   trustedSevenDayChange,
+  trustedSevenDayPriceRange,
 } from '@/utils/market-list'
+import {
+  hasCompleteSevenDayCandles,
+  historyProvenanceLabel,
+  marketHistoryDisplayState,
+  marketObservedDayCount,
+} from '@/utils/market-history'
 import {
   buildHomeTrendRequests,
   HOME_CANDLE_REFRESH_MS,
   HOME_RANKING_REFRESH_MS,
   HOME_TREND_LIMIT,
-  selectHomeTrendCandidates,
+  isHomeMarketStatusDisplayable,
 } from '@/utils/home-market-policy'
 
 const userStore = useUserStore()
-const directCommerceEnabled = isDirectCommerceEnabled()
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 const i18n = useI18nStore()
@@ -236,34 +248,21 @@ let rankingLoadedAt = 0
 let cachedPopularModels: MarketRankingItem[] = []
 let candlesLoadedAt = 0
 let candleCandidateSignature = ''
-let homeLoadedAt = 0
-let homeLoadInFlight: Promise<void> | null = null
-const HOME_DATA_REFRESH_MS = 15_000
 
 const totalAsset = computed(() => (assetStore.summary?.total_value ?? 0) + walletBalance.value)
 const assets = computed(() => assetStore.summary?.items ?? [])
 const activeHotTrend = computed(() => hotTrends.value[hotTrendIndex.value] || hotTrends.value[0] || null)
 const notificationBadge = computed(() => notificationStore.unread > 99 ? '99+' : String(notificationStore.unread))
 
-function load(force = false): Promise<void> {
-  if (!force && homeLoadedAt && Date.now() - homeLoadedAt < HOME_DATA_REFRESH_MS) return Promise.resolve()
-  if (homeLoadInFlight) return homeLoadInFlight
-  const pending = Promise.allSettled([
-    getWallet(), getRevenueDashboard(7), loadFeaturedProducts(), assetStore.refresh(),
-  ]).then(([walletResult, revenueResult, productsResult, assetsResult]) => {
-    if (walletResult.status === 'fulfilled') walletBalance.value = walletResult.value.balance
-    if (revenueResult.status === 'fulfilled') {
-      rev.value = revenueResult.value.summary
-      chart.value = revenueResult.value.chart
-    }
-    homeLoadError.value = [walletResult, revenueResult, productsResult, assetsResult]
-      .some((result) => result.status === 'rejected')
-    homeLoadedAt = Date.now()
-  }).finally(() => {
-    if (homeLoadInFlight === pending) homeLoadInFlight = null
-  })
-  homeLoadInFlight = pending
-  return pending
+async function load() {
+  const [walletResult, revenueResult, chartResult, productsResult, assetsResult] = await Promise.allSettled([
+    getWallet(), getRevenueSummary(), getRevenueChart(7), loadFeaturedProducts(), assetStore.refresh(),
+  ])
+  if (walletResult.status === 'fulfilled') walletBalance.value = walletResult.value.balance
+  if (revenueResult.status === 'fulfilled') rev.value = revenueResult.value
+  if (chartResult.status === 'fulfilled') chart.value = chartResult.value
+  homeLoadError.value = [walletResult, revenueResult, chartResult, productsResult, assetsResult]
+    .some((result) => result.status === 'rejected')
 }
 
 async function loadFeaturedProducts(silent = true) {
@@ -287,17 +286,6 @@ async function loadFeaturedProducts(silent = true) {
 function gpuKey(value: string, variant = '') {
   return `${String(value || '').replace(/\s+/g, '').toUpperCase()}|${String(variant || '').replace(/\s+/g, '').toUpperCase()}`
 }
-function marketModelParts(value: string): string[] {
-  return String(value || '').trim().split(/\s+/).filter(Boolean)
-}
-function marketVendorLabel(value: string): string {
-  const parts = marketModelParts(value)
-  return parts.length > 1 ? parts[0] : ''
-}
-function marketModelLabel(value: string): string {
-  const parts = marketModelParts(value)
-  return parts.length > 1 ? parts.slice(1).join(' ') : (parts[0] || '')
-}
 function updateHotProducts() {
   hot.value = selectFeaturedProducts(productPool.value, volatilityMap.value, 4)
 }
@@ -307,8 +295,9 @@ async function loadHotMarket(silent = true, forceCandles = false) {
   if (typeof document !== 'undefined' && document.hidden && silent) return
   hotMarketInFlight = true
   try {
-    // Public market snapshots change much more slowly than page interactions.
-    // Reuse the ranking between refreshes to avoid background UI churn.
+    // Seven-day ranking is substantially heavier than the current candle
+    // query and does not change every ten seconds. Reuse it briefly while the
+    // real candles continue to refresh on the requested ten-second cadence.
     if (!rankingLoadedAt || Date.now() - rankingLoadedAt >= HOME_RANKING_REFRESH_MS) {
       const ranking = await getMarketRanking(silent)
       volatilityMap.value = {}
@@ -320,9 +309,10 @@ async function loadHotMarket(silent = true, forceCandles = false) {
         }
       }
       updateHotProducts()
-      const eligibleCandidates = selectHomeTrendCandidates(ranking.items)
-      const completeCandidates = eligibleCandidates.filter(hasCompleteSevenDayMetric)
-      cachedPopularModels = (completeCandidates.length ? completeCandidates.concat(eligibleCandidates) : eligibleCandidates)
+      const liveCandidates = ranking.items
+        .filter((item) => isHomeMarketStatusDisplayable(item.market_status) && item.median_price_cny != null && item.sample_count > 0)
+      const completeCandidates = liveCandidates.filter(hasCompleteSevenDayMetric)
+      cachedPopularModels = (completeCandidates.length ? completeCandidates.concat(liveCandidates) : liveCandidates)
         .sort(compareHomeMarketCandidate)
         .filter((item, index, items) => items.findIndex((candidate) => gpuKey(candidate.gpu_model, candidate.gpu_variant) === gpuKey(item.gpu_model, item.gpu_variant)) === index)
         .slice(0, HOME_TREND_LIMIT)
@@ -331,8 +321,8 @@ async function loadHotMarket(silent = true, forceCandles = false) {
     const plan = buildHomeTrendRequests(cachedPopularModels)
     const signature = plan.map((request) => `${request.key}|${request.sources.join(',')}|${request.billingMode}`).join(';')
     const existingByKey = new Map(hotTrends.value.map((trend) => [gpuKey(trend.item.gpu_model, trend.item.gpu_variant), trend]))
-    // Keep the current quote fields fresh without reloading the seven-day
-    // archive whose display bucket is six hours.
+    // Keep the current quote fields fresh every ten seconds without reloading
+    // a seven-day archive whose display bucket is six hours.
     hotTrends.value = plan.map((request) => {
       const existing = existingByKey.get(request.key)
       return existing
@@ -379,8 +369,7 @@ async function loadHotMarket(silent = true, forceCandles = false) {
     }
     hotMarketError.value = false
     if (hotTrendIndex.value >= hotTrends.value.length) hotTrendIndex.value = 0
-  } catch (error) {
-    console.error('[home-market] failed to load market data', error)
+  } catch {
     hotMarketError.value = true
   } finally {
     hotMarketLoading.value = false
@@ -390,11 +379,21 @@ async function loadHotMarket(silent = true, forceCandles = false) {
 
 function startMarketTimer() {
   stopMarketTimer()
-  marketTimer = setInterval(() => loadHotMarket(true), HOME_RANKING_REFRESH_MS)
+  marketTimer = setInterval(() => loadHotMarket(true), 10000)
+}
+
+function sourceLabel(source: string) {
+  if (source === 'vast') return 'Vast.ai'
+  if (source === 'autodl') return 'AutoDL'
+  return source === 'wod' ? 'WOD' : source
 }
 
 function stopMarketTimer() {
   if (marketTimer) { clearInterval(marketTimer); marketTimer = null }
+}
+
+function retryActiveTrend() {
+  if (activeHotTrend.value?.state === 'error') loadHotMarket(false, true)
 }
 
 function retryFeaturedProducts() {
@@ -405,7 +404,7 @@ onShow(() => {
   i18n.updateTabBar()
   if (!userStore.isLogin) { uni.reLaunch({ url: '/pages/login/index' }); return }
   Promise.all([load(), loadHotMarket(false)]).catch(() => {})
-  notificationStore.refresh().catch(() => {})
+  notificationStore.refresh(true).catch(() => {})
   startMarketTimer()
 })
 onHide(stopMarketTimer)
@@ -446,13 +445,24 @@ function changeText(item: MarketRankingItem): string {
     ? (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
     : t('sevenDayChangeValue', { value: formatSignedMarketPercentNumber(value) })
 }
+function priceRangeText(item: MarketRankingItem): string {
+  const range = hasCompleteSevenDayMetric(item) ? trustedSevenDayPriceRange(item) : null
+  return range
+    ? t('sevenDayPriceRangeValue', { low: fmtCHn(range.low), high: fmtCHn(range.high) })
+    : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
+}
+function trendHasFullHistory(trend: HotTrend): boolean {
+  return hasCompleteSevenDayCandles(trend.candles)
+}
 function trendSevenDayChange(trend: HotTrend): number | null {
-  return trend.candles?.candles.length ? sevenDayChange(trend.item) : null
+  return trendHasFullHistory(trend) ? sevenDayChange(trend.item) : null
 }
 function trendChangeText(trend: HotTrend): string {
   const value = trendSevenDayChange(trend)
-  if (value != null) return t('fourWeekChangeValue', { value: formatSignedMarketPercentNumber(value) })
-  return t('currentQuoteBaseline')
+  if (value != null) return t('sevenDayChangeValue', { value: formatSignedMarketPercentNumber(value) })
+  return marketHistoryDisplayState(trend.candles) === 'partial'
+    ? t('chartObservedDays', { days: marketObservedDayCount(trend.candles) })
+    : t('currentQuoteBaseline')
 }
 function changeTone(value: number | null): string {
   return value == null || value === 0 ? 'neutral' : value > 0 ? 'rise' : 'fall'
@@ -468,14 +478,10 @@ function compareHomeMarketCandidate(a: MarketRankingItem, b: MarketRankingItem):
   if (aOfficial !== bOfficial) return bOfficial - aOfficial
   return b.available_gpu_count - a.available_gpu_count || b.sample_count - a.sample_count
 }
-function hotMarketSource(trend: HotTrend): string {
-  const provider = trend.candles?.provenance?.upstream_provider
-    || trend.item.history_provenance?.upstream_provider
-    || trend.item.sources[0]
-  if (provider === 'getdeploying') return 'GetDeploying'
-  if (provider === 'vast') return 'Vast.ai'
-  if (provider === 'autodl') return 'AutoDL'
-  return provider === 'wod' ? 'KAI' : String(provider || '')
+function historySourceText(trend: HotTrend): string {
+  return historyProvenanceLabel(trend.candles?.provenance || trend.item.history_provenance, t)
+    || trend.candles?.requested_sources.map(sourceLabel).join(' · ')
+    || trend.item.sources.map(sourceLabel).join(' · ')
 }
 function goTrend(trend: { item: MarketRankingItem }) {
   const model = encodeURIComponent(trend.item.gpu_model)
@@ -537,14 +543,13 @@ function markProductImageFailed(id: number) {
 
 .hot-market-panel { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
 .hot-model-tabs-scroll { width: 100%; white-space: nowrap; border-bottom: 1px solid var(--divider); }
-.hot-model-tabs { width: 100%; display: flex; padding: 10rpx; box-sizing: border-box; gap: 4rpx; }
-.hot-model-tab { width: 0; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4rpx; padding: 13rpx 10rpx; box-sizing: border-box; border-radius: 10rpx; color: var(--text-sub); }
-.hot-model-tab text:first-child { max-width: 100%; font-size: 17rpx; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-model-tab text:last-child { max-width: 100%; font-size: 22rpx; font-weight: 750; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot-model-tabs { display: inline-flex; min-width: 100%; padding: 10rpx; box-sizing: border-box; gap: 8rpx; }
+.hot-model-tab { width: 172rpx; flex: 0 0 172rpx; min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: 6rpx; padding: 15rpx 8rpx; box-sizing: border-box; border-radius: 10rpx; color: var(--text-sub); }
+.hot-model-tab text:first-child { font-size: 22rpx; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.hot-model-tab text:last-child { font-size: 17rpx; white-space: nowrap; }
 .hot-model-tab.active { color: var(--primary); background: var(--primary-soft); }
-.hot-compact-card { padding: 20rpx 24rpx 16rpx; }
-.hot-compact-card:active { opacity: 0.72; }
-.hot-compact-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; }
+.hot-market-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; padding: 22rpx 24rpx 8rpx; }
+.hot-market-head:active { opacity: 0.72; }
 .hot-market-value { min-width: 0; max-width: 62%; }
 .hot-model { display: block; color: var(--text); font-size: 25rpx; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hot-variant { display: block; color: var(--text-sub); font-size: 18rpx; margin-top: 4rpx; white-space: nowrap; }
@@ -553,16 +558,15 @@ function markProductImageFailed(id: number) {
 .hot-change { display: block; color: var(--text-dim); font-size: 18rpx; line-height: 1.35; margin-top: 4rpx; white-space: normal; }
 .hot-change.rise { color: #E5484D; }
 .hot-change.fall { color: #168A5B; }
-.hot-compact-card :deep(.market-sparkline) { margin-top: 12rpx; }
-.hot-compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 8rpx; color: var(--text-sub); font-size: 17rpx; }
-.hot-compact-foot text:last-child { flex-shrink: 0; color: var(--primary); font-weight: 650; }
+.hot-range { display: block; color: var(--text-sub); font-size: 17rpx; line-height: 1.35; margin-top: 3rpx; }
+.hot-full-chart { padding: 0 8rpx; }
 .hot-market-empty { padding: 38rpx 20rpx; color: var(--text-sub); text-align: center; font-size: 22rpx; display: flex; flex-direction: column; align-items: center; gap: 18rpx; }
 .hot-market-retry { min-height: 64rpx; padding: 0 26rpx; display: flex; align-items: center; color: var(--primary); border: 1rpx solid var(--primary); border-radius: var(--radius); font-weight: 700; }
 .hot-market-skeleton { padding: 10rpx 20rpx 24rpx; }
 .hot-sk-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; }
 .hot-sk-tabs view { height: 48rpx; border-radius: 10rpx; background: var(--divider); }
 .hot-sk-head { width: 44%; height: 22rpx; border-radius: 11rpx; background: var(--divider); margin: 28rpx 4rpx 18rpx; }
-.hot-sk-chart { height: 150rpx; border-radius: 12rpx; background: var(--divider); }
+.hot-sk-chart { height: 550rpx; border-radius: 12rpx; background: var(--divider); }
 .featured-state { min-height: 180rpx; margin-bottom: 16rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18rpx; color: var(--text-sub); background: var(--card); border: 1rpx solid var(--card-border); border-radius: var(--radius); font-size: 22rpx; }
 .featured-list-skeleton { margin-bottom: 8rpx; }
 .featured-skeleton-row { display: flex; align-items: center; gap: 20rpx; min-height: 112rpx; padding: 12px; margin-bottom: 8px; }

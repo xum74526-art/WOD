@@ -4,7 +4,7 @@
       <view class="logo-area">
         <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
         <view class="brand-copy">
-          <text class="logo">KAI</text>
+          <text class="logo">WOD</text>
           <text class="sub">{{ t('AI 算力资产管理') }}</text>
         </view>
       </view>
@@ -15,23 +15,36 @@
           <view class="mode-item" :class="{ active: mode === 'register' }" @tap="setMode('register')">{{ t('注册') }}</view>
         </view>
 
-        <view v-if="thirdPartyLoginEnabled" class="method-switch">
-          <view class="method-item" :class="{ active: authMethod === 'password' }" @tap="setAuthMethod('password')">
-            <text>{{ t(mode === 'login' ? 'identifierLogin' : 'identifierRegister') }}</text>
+        <view class="method-switch">
+          <view class="method-item" :class="{ active: authMethod === 'phone' }" @tap="setAuthMethod('phone')">
+            <text>{{ t(mode === 'login' ? 'phoneLogin' : 'phoneRegister') }}</text>
           </view>
           <view class="method-item" :class="{ active: authMethod === 'kai' }" @tap="setAuthMethod('kai')">
             <text>{{ t(mode === 'login' ? 'kaiLogin' : 'kaiRegister') }}</text>
           </view>
         </view>
 
-        <view v-if="authMethod === 'password'" class="phone-form">
+        <view v-if="authMethod === 'phone'" class="phone-form">
+          <view v-if="mode === 'register'" class="config-warning">{{ t('closedTestPhoneNotice') }}</view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_819767ad') }}</text>
             <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" />
           </view>
+          <view class="field" v-if="mode === 'register'">
+            <text class="flabel">{{ t('k_1dfb714c') }}</text>
+            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" />
+          </view>
+          <view class="field" v-if="mode === 'register'">
+            <text class="flabel">{{ t('k_b19c3a24') }}</text>
+            <view class="captcha-row">
+              <input class="finput captcha-input" v-model="form.captcha_code" :placeholder="t('k_8001cfd7')" placeholder-class="ph" maxlength="6" />
+              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha" mode="aspectFit" />
+              <view v-else class="captcha-placeholder" @tap="refreshCaptcha">{{ t('k_3ca790b3') }}</view>
+            </view>
+          </view>
           <view class="field">
-            <text class="flabel">{{ t('emailOrPhone') }}</text>
-            <input class="finput" v-model="form.identifier" type="text" :placeholder="t('enterEmailOrPhone')" placeholder-class="ph" maxlength="255" />
+            <text class="flabel">{{ t('k_8098e2b4') }}</text>
+            <input class="finput" v-model="form.phone" type="number" :placeholder="t('k_6e4f4b33')" placeholder-class="ph" maxlength="11" />
           </view>
           <view class="field">
             <text class="flabel">{{ t('k_a8105204') }}</text>
@@ -60,7 +73,7 @@
         </view>
 
         <view class="btn-primary" :class="{ disabled: submitting || !agree }" @tap="submit">
-          <text v-if="authMethod === 'password'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
+          <text v-if="authMethod === 'phone'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
           <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
         </view>
         <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
@@ -73,6 +86,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
+import { request } from '@/api/request'
 import { getKaiAuthConfig, startKaiAuth } from '@/api/user'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
@@ -80,31 +94,38 @@ import { useI18nStore } from '@/store/i18n'
 const { t } = useI18nStore()
 const userStore = useUserStore()
 const mode = ref<'login' | 'register'>('login')
-const authMethod = ref<'password' | 'kai'>('password')
-const form = reactive({ username: '', identifier: '', password: '' })
+const authMethod = ref<'phone' | 'kai'>('phone')
+const form = reactive({ username: '', phone: '', password: '', invite_code: '', captcha_code: '' })
+const captchaImg = ref('')
+const captchaKey = ref('')
 const showPwd = ref(false)
 const agree = ref(false)
 const submitting = ref(false)
 const kaiConfigured = ref<boolean | null>(null)
-const thirdPartyLoginEnabled = true
 
 function setMode(value: 'login' | 'register') {
   mode.value = value
+  if (value === 'register' && authMethod.value === 'phone' && !captchaImg.value) refreshCaptcha()
 }
 
-function setAuthMethod(value: 'password' | 'kai') {
+function setAuthMethod(value: 'phone' | 'kai') {
   authMethod.value = value
+  if (value === 'phone' && mode.value === 'register' && !captchaImg.value) refreshCaptcha()
 }
 
 function goAgreement(type: string) {
   uni.navigateTo({ url: '/pages/agreement/index?type=' + type })
 }
 
+async function refreshCaptcha() {
+  try {
+    const res = await request<{ key: string; image: string }>({ url: '/auth/captcha' })
+    captchaKey.value = res.key
+    captchaImg.value = res.image
+  } catch {}
+}
+
 async function checkKaiConfig() {
-  if (!thirdPartyLoginEnabled) {
-    kaiConfigured.value = false
-    return
-  }
   try {
     const config = await getKaiAuthConfig()
     kaiConfigured.value = config.configured
@@ -151,12 +172,13 @@ async function submit() {
   if (submitting.value) return
   if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
   if (authMethod.value === 'kai') { await submitKai(); return }
-  if (!form.identifier || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
+  if (!form.phone || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
   if (mode.value === 'register' && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
+  if (mode.value === 'register' && !form.captcha_code) { uni.showToast({ title: t('请输入验证码'), icon: 'none' }); return }
   submitting.value = true
   try {
-    if (mode.value === 'login') await userStore.login(form.identifier.trim(), form.password)
-    else await userStore.register(form.username, form.identifier.trim(), form.password)
+    if (mode.value === 'login') await userStore.login(form.phone, form.password)
+    else await userStore.register(form.username, form.phone, form.password, form.invite_code || undefined, captchaKey.value, form.captcha_code)
     uni.showToast({ title: t('success'), icon: 'success' })
     setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
   } catch { /* request toast */ }
@@ -167,14 +189,7 @@ onLoad(async (options) => {
   const ticket = typeof options?.kai_ticket === 'string' ? options.kai_ticket : ''
   const error = typeof options?.kai_error === 'string' ? options.kai_error : ''
   if (error) {
-    const key = error === 'access_denied'
-      ? 'kaiCancelled'
-      : error === 'account_not_found'
-        ? 'kaiAccountNotFound'
-        : error === 'identity_conflict'
-          ? 'kaiIdentityConflict'
-          : 'kaiLoginFailed'
-    uni.showToast({ title: t(key), icon: 'none' })
+    uni.showToast({ title: t(error === 'access_denied' ? 'kaiCancelled' : 'kaiLoginFailed'), icon: 'none' })
     return
   }
   if (!ticket) return
@@ -210,6 +225,10 @@ onMounted(checkKaiConfig)
 .flabel { color: var(--text-sub); font-size: 22rpx; display: block; margin-bottom: 10rpx; }
 .finput { color: var(--text); font-size: 30rpx; min-height: 42rpx; }
 .ph { color: var(--text-dim); }
+.captcha-row { display: flex; align-items: center; gap: 16rpx; }
+.captcha-input { flex: 1; }
+.captcha-img { width: 112px; height: 46px; border-radius: 8rpx; flex-shrink: 0; }
+.captcha-placeholder { width: 112px; height: 46px; border-radius: 8rpx; background: var(--card); border: 1rpx solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22rpx; color: var(--text-sub); flex-shrink: 0; }
 .eye { position: absolute; right: 24rpx; bottom: 27rpx; color: var(--text-sub); }
 .eye.on { color: var(--primary); }
 .kai-panel { padding: 20rpx 8rpx 8rpx; display: flex; flex-direction: column; align-items: center; text-align: center; }

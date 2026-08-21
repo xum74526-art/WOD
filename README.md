@@ -1,85 +1,86 @@
-# KAI Unified
+# KAI + WOD
 
-KAI 算力平台的统一单仓库（monorepo）：一个 FastAPI 后端向 Next.js 网页、uni-app iOS/Android 和服务器 Agent 提供同一套 `/api/v1` 业务接口。
+本仓库现在采用“手机端后端是唯一事实来源”的架构。WOD FastAPI 与它的 SQLite 数据库负责账号、商品、行情、钱包、订单、资产、商家和通知；Web 不再运行自己的数据库。
 
-## 仓库结构
-
-| 目录 | 内容 | 技术 |
-|---|---|---|
-| `apps/web` | 电脑端和手机浏览器 | Next.js 16 / React 19 / TypeScript |
-| `apps/mobile` | iOS 和 Android App | uni-app / Vue 3 / TypeScript |
-| `services/api` | 统一 API、数据库模型与迁移 | FastAPI / SQLAlchemy / Alembic |
-| `packages/api-contracts` | OpenAPI 快照与 Mobile 契约检查 | Python / Node.js |
-| `agent` | Linux / Windows 算力服务器 Agent | Go |
-| `infra` | Docker Compose、Caddy 和部署模板 | Docker |
-| `docs` | 架构、构建、测试与发布文档 | Markdown |
+## 当前架构
 
 ```text
-Next.js Web ─────────┐
-uni-app iOS/Android ──├──> FastAPI /api/v1 ──> PostgreSQL
-KAI Agent ─────────┘
+uni-app iOS / Android ───────────────> WOD FastAPI /api ──> wod.db
+                                            ↑
+Next.js Web ──> 同源 /api/v1 BFF ───────────┘
+                 （无数据库，只做鉴权和字段适配）
 ```
 
-网页 UI 和 App UI 保持独立，账号、余额、行情、商品、订单和社区数据共用统一后端。手机浏览器使用 Next.js；uni-app H5 仅用于 App 开发预览和 QA。
+| 目录 | 作用 |
+|---|---|
+| `apps/mobile` | 原 WOD uni-app 手机端，直接使用 WOD `/api` |
+| `services/mobile-api` | 唯一业务后端与唯一数据库模型 |
+| `apps/web` | Next.js Web；通过无数据库 BFF 读取/修改手机端数据 |
+| `services/api` | 旧 KAI Web 后端源码，仅作历史参考，不参与当前本地运行 |
+| `agent`、旧 `infra` | 旧 KAI Agent/部署源码，不属于当前手机端数据闭环 |
 
-## 快速开始
+Web 的手机端直通契约是 `/api/v1/mobile/*`，例如 `/api/v1/mobile/wallet` 会在服务端转发为 WOD `/api/wallet`。现有 Web 页面迁移期间使用 `/api/v1` 兼容适配，适配结果仍只来自 WOD。浏览器不直接访问 WOD 地址，也不持有 WOD JWT。
 
-需要 Node.js 22 LTS（最低 20.19）、npm 10+、Python 3.12 和 Go 1.22+。iOS/Android 运行与打包还需要 HBuilderX；iOS 需要 macOS + Xcode，Android 需要 Android SDK/JDK。
+## 本地启动
+
+需要 Python 3.12、Node.js 20.19+ 和 npm。
 
 ```bash
-# API
-python3.12 -m venv services/api/.venv
-services/api/.venv/bin/python -m pip install -r services/api/requirements.txt
-cp services/api/.env.example services/api/.env
-services/api/.venv/bin/alembic -c services/api/alembic.ini upgrade head
-PYTHONPATH=services/api services/api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8100
+# 1. 唯一后端
+python3.12 -m venv services/mobile-api/.venv
+services/mobile-api/.venv/bin/python -m pip install -r services/mobile-api/requirements.txt
+(cd services/mobile-api && .venv/bin/python init_db.py)
+(cd services/mobile-api && MARKET_HISTORY_SYNC_ENABLED=false COMMUNITY_ONLINE_ENABLED=false \
+  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1)
 
-# Web（另一个终端）
+# 2. Web（另一个终端）
 npm ci --prefix apps/web
-npm --prefix apps/web run dev
+MOBILE_API_ORIGIN=http://127.0.0.1:8000 npm --prefix apps/web run dev
 
-# Mobile H5 预览（另一个终端）
+# 3. Mobile H5（可选，另一个终端）
 npm ci --prefix apps/mobile
-cp apps/mobile/.env.example apps/mobile/.env.local
 npm --prefix apps/mobile run dev:h5
 ```
 
 - Web：`http://127.0.0.1:9100`
-- Mobile H5 预览：`http://127.0.0.1:9000`
-- API 文档：`http://127.0.0.1:8100/docs`
+- Mobile H5：`http://127.0.0.1:9000`
+- 手机端后端文档：`http://127.0.0.1:8000/docs`
+- Web 到手机端健康检查：`http://127.0.0.1:9100/api/v1/health`
 
-## 编译
+本地 SQLite 位于 `services/mobile-api/wod.db`（已被 Git 忽略）。Web 不创建 `.db` 文件，也不需要 PostgreSQL/Redis。
 
-```bash
-# 网页类型检查和生产构建
-npm run check:web
-npm run build:web
+## 配置
 
-# iOS/Android 共用业务资源
-npm run check:mobile
-npm run test:mobile
-npm run build:mobile:app
+Web 只使用服务端变量。当前局域网联调在 `apps/web/.env.local` 中配置：
 
-# 整仓库检查
-./tooling/check-all.sh
+```dotenv
+MOBILE_API_ORIGIN=http://192.168.110.32:8000
+MOBILE_API_ALLOW_INSECURE_HTTP=true
 ```
 
-`build:mobile:app` 生成的 `apps/mobile/dist/build/app` 是 App 业务资源，不是独立 IPA/APK/AAB。正式安装包需要在 HBuilderX 配置 DCloud AppID、包名和平台签名。
+正式部署必须改为 HTTPS，并关闭开发开关：
 
-完整流程见 [编译与发布指南](docs/BUILD_GUIDE.md)，本机开发见 [开发说明](docs/DEVELOPMENT.md)，GitHub 上传范围见 [GitHub 上传说明](docs/GITHUB_UPLOAD.md)。
+```dotenv
+MOBILE_API_ORIGIN=https://api.example.com
+MOBILE_API_ALLOW_INSECURE_HTTP=false
+```
 
-## 当前验证状态
+不要把后端地址放进 `NEXT_PUBLIC_*`。Web 登录后把 WOD JWT 放入 HttpOnly、SameSite=Lax Cookie；浏览器 JavaScript 无法读取 Token。生产环境未设置 `MOBILE_API_ORIGIN`、使用 HTTP，或地址中包含路径和账号密码时，BFF 会拒绝启动业务请求。
 
-- 118/118 个 Mobile 网络请求通过 `/api/v1` OpenAPI 契约检查。
-- API 自动测试 16/16 通过。
-- Mobile 自动测试 54/54 通过，App 业务资源构建通过。
-- iOS 和 Android 模拟器已完成测试账号登录和主要功能回归。
+## 验证
 
-详见 [实施状态](docs/IMPLEMENTATION_STATUS.md)、[后端统一报告](docs/BACKEND_UNIFICATION_REPORT.md) 和 [Android 测试报告](docs/ANDROID_TEST_REPORT.md)。
+```bash
+npm run check:all
+```
 
-## 安全与提交规则
+该命令运行：
 
-- 不提交 `.env`、数据库、上传文件、日志、私钥、证书、keystore 或打包产物。
-- 不提交 `node_modules`、`.venv`、`.next`、`dist` 或 `unpackage`。
-- Web 写请求使用 Cookie + CSRF，App 使用限定通道的 Bearer Token。
-- 支付、KYC、推送、Kai 统一认证和对象存储在没有生产密钥时必须明确不可用，不伪造成功。
+- 手机端后端编译与完整单元测试；
+- Web TypeScript 检查与生产构建；
+- Mobile TypeScript 检查与单元测试。
+
+## 已停用的旧 Web 模块
+
+手机端后端没有团队、API Key、KAI Agent、公钥自动租约和旧 Web 私有文件等模型。对应旧路由不会回退到 `services/api`，而是明确返回 HTTP 503 和 `mobile_source_unavailable`。导航已优先保留共享商品、订单、钱包、通知、地址与手机端商家流程。
+
+生产部署前仍需配置强 `SECRET_KEY`、独立 `SENSITIVE_DATA_KEY`、持久化数据库/上传目录以及所需的行情和支付服务。

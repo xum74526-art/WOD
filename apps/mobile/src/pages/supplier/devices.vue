@@ -68,12 +68,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import {
-  getSupplierDevices,
-  setSupplierResourceListed,
-  updateSupplierResource,
-  type SupplierDeviceItem,
-} from '@/api/supplier'
+import { request } from '@/api/request'
 import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import BottomActionBar from '@/components/BottomActionBar.vue'
@@ -88,7 +83,20 @@ import { fallbackProductImage, resolveProductImage } from '@/utils/product-image
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
-type DeviceItem = SupplierDeviceItem
+interface DeviceItem {
+  id: number
+  name: string
+  gpu_model: string
+  memory: string
+  price: number
+  stock: number
+  region: string
+  city: string
+  order_count: number
+  status: string
+  list_status: string
+  image_url: string | null
+}
 
 const devices = ref<DeviceItem[]>([])
 const failedImages = ref<Record<number, boolean>>({})
@@ -115,7 +123,7 @@ async function load() {
   devices.value = []
   failedImages.value = {}
   try {
-    devices.value = await getSupplierDevices(FILTER_MAP[filterIdx.value] as 'on' | 'off' | 'all')
+    devices.value = await request({ url: '/supplier/devices', data: { status_filter: FILTER_MAP[filterIdx.value] } })
   } catch { loadError.value = true }
   loading.value = false
 }
@@ -136,7 +144,8 @@ function onToggle(d: DeviceItem, newStatus: string) {
   sheet.onConfirm = async () => {
     sheet.show = false
     try {
-      Object.assign(d, await setSupplierResourceListed(d, newStatus === 'on'))
+      await request({ url: `/supplier/devices/${d.id}`, method: 'PUT', data: { status: newStatus } })
+      d.list_status = newStatus
       uni.showToast({ title: t(isDelist ? '已下架' : '已上架'), icon: 'success' })
       if (filterIdx.value !== 2) load()
     } catch {
@@ -187,10 +196,13 @@ async function onSaveEdit() {
   }
   const backendPrice = fromCardHours(priceInCardHours)
   try {
-    Object.assign(editTarget.value, await updateSupplierResource(editTarget.value, {
-      price: backendPrice,
-      stock: Number(editForm.stock),
-    }))
+    await request({
+      url: `/supplier/devices/${editTarget.value.id}`,
+      method: 'PUT',
+      data: { price: backendPrice, stock: Number(editForm.stock) },
+    })
+    editTarget.value.price = backendPrice
+    editTarget.value.stock = Number(editForm.stock)
     editShow.value = false
     uni.showToast({ title: t('已保存'), icon: 'success' })
   } catch {

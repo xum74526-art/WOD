@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { KycWorkspace } from "@/components/kyc-workspace";
+import { MobileVerificationWorkspace } from "@/components/mobile-verification-workspace";
 
 export const metadata: Metadata = { title: "实名认证" };
 
 export default function VerificationPage() {
-  return <KycWorkspace />;
+  return <MobileVerificationWorkspace />;
 }

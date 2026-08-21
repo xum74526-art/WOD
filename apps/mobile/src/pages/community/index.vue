@@ -15,7 +15,7 @@
         <text class="title">{{ t("tabCommunity") }}</text>
         <view class="top-actions" @tap="enterSearch"><AppIcon name="search" :size="40" /></view>
       </view>
-      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="[t('recommend'), t('follow'), t('latest'), t('video')]" :model-value="tab" @update:model-value="onTab" /></view>
+      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="['推荐','关注','最新','视频']" :model-value="tab" @update:model-value="onTab" /></view>
 
       <view v-if="loading && !list.length" class="state">{{ t("loading") }}</view>
       <view v-else-if="loadError && !list.length" class="state error-state">
@@ -25,14 +25,14 @@
       <view v-else-if="!list.length" class="card ph">
         <EmptyState :text="searching ? '没有找到相关内容' : '暂无动态'" />
       </view>
-      <view v-for="d in list" :key="d.id" class="card dcard" @tap="goDetail(d)">
+      <view v-for="d in list" :key="d.id" class="card dcard" @tap="goDetail(d.id)">
         <view class="dhead">
           <view class="davatar">{{ authorInitial(d.author_name) }}</view>
           <view class="dinfo">
             <text class="dname">{{ authorName(d.author_name) }}</text>
-            <text class="dtime">{{ formatDate(d.source_published_at || d.created_at) }}</text>
+            <text class="dtime">{{ formatDate(d.source_published_at || d.created_at) }} · {{ postTopic(d) }}</text>
           </view>
-          <view v-if="d.origin === 'user' && !d.is_own" class="fbtn" :class="{ following: d.is_following }" @tap.stop="onFollow(d)">
+          <view v-if="!d.is_own" class="fbtn" :class="{ following: d.is_following }" @tap.stop="onFollow(d)">
             <text>{{ t(d.is_following ? '已关注' : '+ 关注') }}</text>
           </view>
         </view>
@@ -40,7 +40,6 @@
           <text class="auto-badge">{{ t('autoNews') }}</text>
           <text class="source-name">{{ displaySource(d) }}</text>
         </view>
-        <text class="dtitle">{{ postTopic(d) }}</text>
         <text class="dtext">{{ postContent(d) }}</text>
         <view v-if="postImages(d).length" class="post-images" :class="{ single: postImages(d).length === 1 }">
           <image
@@ -61,7 +60,7 @@
           :enable-progress-gesture="true"
           @tap.stop
         />
-        <view v-else-if="d.content_type === 'video'" class="dvideo" @tap.stop="goDetail(d)">
+        <view v-else-if="d.content_type === 'video'" class="dvideo" @tap.stop="goDetail(d.id)">
           <view class="vthumb">
             <image v-if="d.thumbnail_url" class="vimage" :src="d.thumbnail_url" mode="aspectFill" />
             <view class="vshade" />
@@ -74,11 +73,11 @@
           <text>↗</text>
         </view>
         <view class="dactions">
-          <view class="dact" @tap.stop="onFavorite(d)">
-            <text class="like-icon" :class="{ liked: d.is_favorited }">{{ d.is_favorited ? '♥' : '♡' }}</text>
-            <text class="like-text" :class="{ liked: d.is_favorited }">{{ t(d.is_favorited ? '已关注' : '关注') }}</text>
+          <view class="dact" @tap.stop="onLike(d)">
+            <text class="like-icon" :class="{ liked: d.is_liked }">{{ d.is_liked ? '♥' : '♡' }}</text>
+            <text class="like-text" :class="{ liked: d.is_liked }">{{ d.likes }}</text>
           </view>
-          <view v-if="d.content_type !== 'video'" class="dact" @tap.stop="goDetail(d)">
+          <view class="dact" @tap.stop="goDetail(d.id)">
             <AppIcon name="comment" :size="32" />
             <text>{{ d.comments }}</text>
           </view>
@@ -98,7 +97,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
-import { getPosts, setContentFavorite, toggleFollow, type PostItem } from '@/api/community'
+import { getPosts, toggleLike, toggleFollow, type PostItem } from '@/api/community'
 import { formatDate } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
 import { openExternalLink } from '@/utils/external-link'
@@ -108,7 +107,6 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizeCommunityText, localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
-import { articlePlainText } from '@/utils/article-content'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -118,7 +116,7 @@ const loadError = ref(false)
 const finished = ref(false)
 const page = ref(1)
 const tab = ref(0)
-const TAB_MAP = ['recommend', 'follow', 'latest', 'video'] as const
+const TAB_MAP = ['recommend', 'follow', 'latest', 'video']
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)
@@ -147,7 +145,7 @@ function isAutoPost(post: PostItem): boolean {
 }
 
 function displaySource(post: PostItem): string {
-  if (i18n.lang === 'en' && post.source_key === 'wod-market') return 'KAI Market'
+  if (i18n.lang === 'en' && post.source_key === 'wod-market') return 'WOD Market'
   return post.source_name || t('sourceLabel')
 }
 
@@ -158,7 +156,7 @@ function openSource(post: PostItem) {
 }
 
 function postImages(post: PostItem): string[] {
-  if (!Array.isArray(post.images)) return []
+  if (post.origin !== 'user' || !Array.isArray(post.images)) return []
   return post.images.map(resolveApiMediaUrl).filter(Boolean)
 }
 
@@ -238,21 +236,17 @@ function clearKeyword() {
   finished.value = true
 }
 
-async function onFavorite(d: PostItem) {
+async function onLike(d: PostItem) {
   try {
-    const next = !d.is_favorited
-    const res = await setContentFavorite(d.content_type === 'video' ? 'video' : 'article', d.id, next)
-    d.is_favorited = res.is_favorited
-    if (TAB_MAP[tab.value] === 'follow' && !res.is_favorited) {
-      list.value = list.value.filter(item => item.id !== d.id || item.content_type !== d.content_type)
-      if (!list.value.length) finished.value = true
-    }
+    const res = await toggleLike(d.id)
+    d.is_liked = res.liked
+    d.likes = res.likes
   } catch {}
 }
 
 function onShare(d: PostItem) {
   uni.setClipboardData({
-    data: `${articlePlainText(postContent(d)).slice(0, 100)}${d.source_url ? `\n${d.source_url}` : ''}`,
+    data: `${postContent(d).slice(0, 100)}${d.source_url ? `\n${d.source_url}` : ''}`,
     success: () => uni.showToast({ title: t('copied'), icon: 'success' }),
   })
 }
@@ -267,10 +261,7 @@ async function onFollow(d: PostItem) {
 }
 
 function goPublish() { nav('/pages/community/publish') }
-function goDetail(post: PostItem) {
-  const kind = post.content_type === 'video' ? 'video' : 'article'
-  nav(`/pages/community/detail?id=${encodeURIComponent(String(post.id))}&type=${kind}`)
-}
+function goDetail(id: number) { nav('/pages/community/detail?id=' + id) }
 </script>
 
 <style lang="scss" scoped>
@@ -297,10 +288,9 @@ function goDetail(post: PostItem) {
 .dinfo { flex: 1; }
 .dname { color: var(--text); font-size: 28rpx; font-weight: 600; display: block; }
 .dtime { color: var(--text-dim); font-size: 22rpx; display: block; margin-top: 4rpx; }
-.dtitle { display: block; margin-bottom: 12rpx; color: var(--text); font-size: 30rpx; line-height: 1.42; font-weight: 700; }
 .fbtn { min-height: 72rpx; display: flex; align-items: center; padding: 8rpx 24rpx; border-radius: 36rpx; background: linear-gradient(135deg, var(--primary), var(--primary)); color: #fff; font-size: 22rpx; font-weight: 600; flex-shrink: 0; }
 .fbtn.following { background: var(--bg); color: var(--text-sub); border: 1rpx solid var(--border); }
-.dtext { color: var(--text); font-size: 28rpx; line-height: 1.6; display: -webkit-box; margin-bottom: 20rpx; overflow: hidden; text-overflow: ellipsis; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.dtext { color: var(--text); font-size: 28rpx; line-height: 1.6; display: block; margin-bottom: 20rpx; }
 .post-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8rpx; margin-bottom: 20rpx; }
 .post-images.single { grid-template-columns: 1fr; }
 .post-image { width: 100%; height: 200rpx; border-radius: 12rpx; background: var(--bg); }

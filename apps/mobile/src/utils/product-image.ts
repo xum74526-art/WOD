@@ -8,10 +8,7 @@ const VERIFIED_MODEL_IMAGES: Record<string, string> = {
   A4000: 'A4000.jpg',
   A5000: 'A5000.jpg',
   A6000: 'A6000.jpg',
-  RTXA6000: 'A6000.jpg',
   A800: 'A800.jpg',
-  B200: 'B200.jpg',
-  B300: 'B300.jpg',
   GRIDK1: 'GRIDK1.jpg',
   GRIDK2: 'GRIDK2.jpg',
   GTX1080: 'GTX1080.jpg',
@@ -26,11 +23,9 @@ const VERIFIED_MODEL_IMAGES: Record<string, string> = {
   L40: 'L40.jpg',
   L40S: 'L40S.jpg',
   M40: 'M40.jpg',
-  MI300X: 'MI300X.jpg',
   MTTS4000: 'MTTS4000.jpg',
   P4: 'P4.jpg',
   P40: 'P40.jpg',
-  P100: 'P100.jpg',
   RTX2060: 'RTX2060.jpg',
   RTX2070: 'RTX2070.jpg',
   RTX2080TI: 'RTX2080Ti.jpg',
@@ -57,13 +52,7 @@ const VERIFIED_MODEL_IMAGES: Record<string, string> = {
 }
 
 function modelKey(value?: string | null): string {
-  let key = String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-  let previous = ''
-  while (key !== previous) {
-    previous = key
-    key = key.replace(/^(NVIDIA|AMD|GEFORCE|TESLA|QUADRO)/, '')
-  }
-  return key
+  return String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 }
 
 /**

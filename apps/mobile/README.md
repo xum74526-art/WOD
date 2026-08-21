@@ -1,6 +1,6 @@
-# KAI Mobile
+# WOD 前端
 
-uni-app + Vue 3 + TypeScript 前端，可构建 H5、Android/iOS App 和微信小程序。
+uni-app + Vue 3 + TypeScript 前端，可构建 H5、Android App 和微信小程序。
 
 ## 开发
 
@@ -12,10 +12,10 @@ npm run dev:h5
 
 环境变量：
 
-- `KAI_H5_API_TARGET`：H5 开发代理目标，例如 `http://127.0.0.1:8100`。
-- `VITE_KAI_API_BASE`：原生 App 使用的完整 HTTPS API，例如 `https://api.example.com/api/v1`。
+- `WOD_H5_API_TARGET`：H5 开发代理目标，例如 `http://127.0.0.1:8000`。
+- `VITE_WOD_APP_API_BASE`：原生 App 使用的完整 HTTPS API，例如 `https://api.example.com/api`。
 
-浏览器页面统一请求 `/api/v1`；原生 App 在构建时写入 `VITE_KAI_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
+浏览器页面统一请求 `/api`；原生 App 在构建时写入 `VITE_WOD_APP_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
 
 ## 验证
 
@@ -23,14 +23,13 @@ npm run dev:h5
 npm run type-check
 npm test
 npm run test:i18n
-npm run check:ios
 npm run build:h5
 npm run build:app
 ```
 
 ## App 配置
 
-交付版 `src/manifest.json` 已清空 DCloud AppID，并使用示例包名 `com.example.kai`。云打包前必须改为接收方自己的：
+交付版 `src/manifest.json` 已清空 DCloud AppID，并使用示例包名 `com.example.wod`。云打包前必须改为接收方自己的：
 
 1. DCloud AppID
 2. Android applicationId/包名
@@ -38,7 +37,7 @@ npm run build:app
 4. Android 签名证书
 5. 正式 HTTPS API 地址
 
-详见 `../../docs/BUILD_GUIDE.md` 和 `../../docs/ANDROID_BUILD.md`。
+详见 `../docs/ANDROID_BUILD.md`。
 
 ## 主要目录
 
@@ -52,12 +51,3 @@ npm run build:app
 - `scripts/check-i18n.mjs`：中英文键与字面量审计
 
 正式发布前请确认 `src/static/gpu` 中的品牌图片拥有合法使用权。
-
-## iOS
-
-- `VITE_KAI_IOS_DISTRIBUTION=app-store`：公开伴侣版，隐藏外部充值和直接购买入口。
-- `VITE_KAI_IOS_DISTRIBUTION=enterprise`：经授权的企业/内部完整版本。
-- `src/nativeResources/ios/PrivacyInfo.xcprivacy`：项目隐私清单。
-- `src/static/logo/ios-appstore-1024.png`：1024×1024、无透明通道的 App Store 主图标。
-
-完整 iOS/Android 编译与发布步骤见 `../../docs/BUILD_GUIDE.md`。

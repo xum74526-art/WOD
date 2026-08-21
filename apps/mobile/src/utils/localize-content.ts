@@ -4,7 +4,7 @@ type AppLanguage = 'zh' | 'en'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
-  'WOD资讯': 'KAI News',
+  'WOD资讯': 'WOD News',
 }
 
 const COMMUNITY_EN: Record<string, string> = {

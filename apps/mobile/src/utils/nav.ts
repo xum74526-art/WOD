@@ -3,8 +3,6 @@
  * 双重防护：① 时间锁 800ms  ② URL 去重（目标=当前页则跳过）
  */
 
-import { isDistributionRouteAllowed } from '@/utils/ios-distribution'
-
 let navLock = false
 let lastUrl = ''
 
@@ -20,7 +18,6 @@ function _getCurrentPath(): string {
 }
 
 export function navigateTo(url: string) {
-  if (!isDistributionRouteAllowed(url)) return
   if (navLock) return
   // 去重：如果目标 URL 跟上次跳转的一样，且在锁定期内，跳过
   if (url === lastUrl && navLock) return

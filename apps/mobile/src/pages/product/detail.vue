@@ -116,7 +116,7 @@ import { getMarketCandles, type MarketCandles } from '@/api/market'
 import { createOrder } from '@/api/order'
 import { getWallet } from '@/api/wallet'
 import { getRebateSummary, type RebateSummary } from '@/api/user'
-import { formatLocalDateTime, formatNumber, fmtCardHours, fmtCH, toCardHours } from '@/utils/format'
+import { formatNumber, fmtCardHours, fmtCH, toCardHours } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
@@ -127,7 +127,6 @@ import { useI18nStore } from '@/store/i18n'
 import { localizeRegionName } from '@/utils/region-name'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 import {
   historyProvenanceLabel,
   marketHistoryDisplayState,
@@ -152,7 +151,6 @@ const productImageFailed = ref(false)
 const pid = ref(0)
 const pendingRequestId = ref('')
 const pendingRequestSignature = ref('')
-const directCommerceEnabled = isDirectCommerceEnabled()
 let candleTimer: ReturnType<typeof setInterval> | null = null
 const DEFAULT_PURCHASE_CYCLES = [1, 7, 30, 90, 180, 365]
 const supplierName = computed(() => localizePersonName(product.value?.supplier_name || '', i18n.lang))
@@ -167,25 +165,19 @@ const maxQuantity = computed(() => {
   const stock = Number(product.value?.stock || 0)
   return Math.max(0, Math.min(Math.floor(stock), 99))
 })
-const canBuy = computed(() => Boolean(directCommerceEnabled && product.value?.purchasable === true && maxQuantity.value > 0))
+const canBuy = computed(() => Boolean(product.value?.purchasable === true && maxQuantity.value > 0))
 const isProviderOffer = computed(() => Boolean(product.value?.market_source && product.value.market_source !== 'wod'))
 const purchaseUnavailableText = computed(() => {
-  if (!directCommerceEnabled) return t('iosCompanionCommerceNotice')
   if (maxQuantity.value <= 0) return t('noStockAvailable')
   if (product.value?.is_market_current === false) return t('marketOfferUnavailable')
   return t('wodListingUnavailable')
 })
-const unavailableActionLabel = computed(() => !directCommerceEnabled
-  ? 'viewOnly'
-  : product.value?.market_source && product.value.market_source !== 'wod'
-    ? 'marketReferenceOnlyShort'
-    : 'marketOfferUnavailableShort')
+const unavailableActionLabel = computed(() => product.value?.market_source && product.value.market_source !== 'wod' ? 'marketReferenceOnlyShort' : 'marketOfferUnavailableShort')
 const sourceName = computed(() => {
   const source = product.value?.market_source
   if (source === 'vast') return 'Vast.ai'
   if (source === 'autodl') return 'AutoDL'
-  if (!source || source === 'wod' || source === 'kai') return 'KAI'
-  return localizePersonName(source, i18n.lang)
+  return 'WOD'
 })
 const chartHistoryState = computed(() => marketHistoryDisplayState(candles.value))
 const chartObservedDays = computed(() => marketObservedDayCount(candles.value))
@@ -203,8 +195,7 @@ function parseApiDate(value: string) {
 }
 const offerUpdateText = computed(() => {
   if (!product.value?.price_updated_at) return t('notUpdated')
-  const date = parseApiDate(product.value.price_updated_at)
-  const formatted = formatLocalDateTime(date, i18n.lang) || t('notUpdated')
+  const formatted = parseApiDate(product.value.price_updated_at).toLocaleString()
   return product.value.is_market_current ? formatted : `${formatted} · ${t(product.value.market_source_status === 'unavailable' ? 'sourceUnavailable' : 'staleData')}`
 })
 
@@ -346,7 +337,7 @@ const estRebate = computed(() => {
 
 async function onBuy() {
   showConfirm.value = false
-  if (submitting.value || !directCommerceEnabled || !canBuy.value) return
+  if (submitting.value || !canBuy.value) return
   submitting.value = true
   try {
     const created = await createOrder(pid.value, cycle.value, purchaseType.value, quantity.value, ensureRequestId())
@@ -361,10 +352,6 @@ async function onBuy() {
 }
 
 function openConfirm() {
-  if (!directCommerceEnabled) {
-    uni.showToast({ title: t('iosCompanionCommerceNotice'), icon: 'none' })
-    return
-  }
   if (!canBuy.value) {
     uni.showToast({ title: purchaseUnavailableText.value, icon: 'none' })
     return

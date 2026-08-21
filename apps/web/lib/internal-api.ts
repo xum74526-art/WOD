@@ -10,6 +10,14 @@ export type Notice = {
   id: number; category: string; title: string; body: string; action_path: string | null;
   is_read: boolean; read_at: string | null; created_at: string;
 };
+export type NotificationPreferences = {
+  order_enabled: boolean; device_enabled: boolean; revenue_enabled: boolean;
+  wallet_enabled: boolean; system_enabled: boolean; updated_at?: string;
+};
+export type NotificationPreferenceResponse = {
+  preferences: NotificationPreferences;
+  delivery: { in_app_enabled: boolean; system_push_configured: boolean; system_push_provider?: string; system_push_status: "configured" | "pending_configuration" };
+};
 export type Team = {
   id: number; name: string; owner_user_id: number; created_at: string; updated_at: string; version: number;
   members: Array<{ user_id: number; display_name: string; email: string | null; role: string; joined_at: string }>;
@@ -47,6 +55,8 @@ export function listNotifications(unreadOnly = false) { return apiEnvelopeReques
 export function getUnreadCount() { return apiRequest<{ unread_count: number }>("/api/v1/notifications/unread-count"); }
 export function readNotification(id: number) { return apiRequest<Notice>(`/api/v1/notifications/${id}/read`, { method: "PATCH" }); }
 export function readAllNotifications() { return apiRequest<{ updated_count: number }>("/api/v1/notifications/read-all", { method: "POST" }); }
+export function getNotificationPreferences() { return apiRequest<NotificationPreferenceResponse>("/api/v1/mobile/notifications/preferences"); }
+export function updateNotificationPreferences(input: Partial<NotificationPreferences>) { return apiRequest<NotificationPreferenceResponse>("/api/v1/mobile/notifications/preferences", { method: "PUT", body: JSON.stringify(input) }); }
 
 export function listTeams() { return apiRequest<TeamSnapshot>("/api/v1/account/teams"); }
 export function createTeam(name: string) { return apiRequest<Team>("/api/v1/account/teams", { method: "POST", body: JSON.stringify({ name }) }); }

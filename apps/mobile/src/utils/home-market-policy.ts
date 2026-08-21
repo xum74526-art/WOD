@@ -1,6 +1,11 @@
 export const HOME_TREND_LIMIT = 4
-export const HOME_RANKING_REFRESH_MS = 60_000
+export const HOME_RANKING_REFRESH_MS = 10_000
 export const HOME_CANDLE_REFRESH_MS = 5 * 60_000
+
+/** Keep valid delayed quotes visible while rejecting unusable source states. */
+export function isHomeMarketStatusDisplayable(status: string): boolean {
+  return status === 'live' || status === 'delayed'
+}
 
 type TrendCandidate = {
   gpu_model: string
@@ -12,38 +17,11 @@ type TrendCandidate = {
   } | null
 }
 
-type RankedTrendCandidate = TrendCandidate & {
-  median_price_cny: number | null
-  sample_count: number
-  market_status: string
-  hot_eligible?: boolean
-  history_day_count?: number
-}
-
 export type HomeTrendRequest<T extends TrendCandidate = TrendCandidate> = {
   item: T
   sources: string[]
   billingMode: 'ondemand' | 'wod_listing'
   key: string
-}
-
-/**
- * Prefer currently quoted models, but keep attributed historical price-index
- * rows as a truthful fallback when the upstream snapshot has no live offers.
- * An empty live marketplace must not hide an otherwise usable market history.
- */
-export function selectHomeTrendCandidates<T extends RankedTrendCandidate>(items: T[]): T[] {
-  const quoted = items.filter((item) => (
-    item.market_status !== 'unavailable'
-    && Number.isFinite(Number(item.median_price_cny))
-    && Number(item.median_price_cny) > 0
-  ))
-  const live = quoted.filter((item) => item.market_status === 'live' && item.sample_count > 0)
-  const historical = quoted.filter((item) => (
-    item.market_status !== 'live'
-    && (item.hot_eligible || Number(item.history_day_count || 0) > 1)
-  ))
-  return live.concat(historical)
 }
 
 /**

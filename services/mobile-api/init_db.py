@@ -1,0 +1,627 @@
+"""建表脚本：兼容旧库自动补列。"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from sqlalchemy import inspect, text  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.db.base import Base  # noqa: E402
+from app.db.session import engine  # noqa: E402
+from app.models import *  # noqa: F401,F403,E402
+from app.db.session import SessionLocal  # noqa: E402
+
+# 需要确保存在的列（兼容旧 wod.db）
+_ENSURE = {
+    "users": ["role", "supplier_status", "phone_bound"],
+    "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
+    "orders": ["purchase_type", "ssh_info", "quantity", "client_request_id"],
+    "products": ["image_url", "region_code", "region_name", "country_code", "city", "source_price", "source_currency", "exchange_rate", "price_updated_at", "stock", "reliability", "supplier_id"],
+    "posts": [
+        "content_en", "topic_en", "origin", "content_type", "source_key",
+        "source_name", "source_url", "source_item_id", "source_author",
+        "source_published_at", "summary", "rights_status", "rights_checked_at",
+        "video_provider", "video_id", "video_url", "embed_url", "thumbnail_url",
+        "canonical_url", "content_hash", "ingested_at", "publish_batch", "video_duration",
+    ],
+    "notifications": ["title_en", "content_en", "action_url", "dedupe_key"],
+    "verifications": [
+        "ocr_status", "ocr_summary", "ocr_error_code", "ocr_updated_at",
+        "ocr_input_token", "consent_at",
+    ],
+    "wallets": ["withdrawable_balance", "withdraw_frozen"],
+    "bank_cards": [
+        "card_fingerprint", "status", "verification_mode", "review_reason",
+        "reviewed_by", "reviewed_at", "updated_at",
+    ],
+    "ledger": ["ref_payment_order_id", "event_key"],
+}
+
+_DATETIME_COLS = {
+    "end_at", "start_at", "price_updated_at", "source_published_at",
+    "rights_checked_at", "ingested_at", "reviewed_at", "updated_at",
+    "ocr_updated_at",
+    "consent_at",
+}
+_INTEGER_COLS = {"quantity", "video_duration", "stock", "supplier_id", "ref_payment_order_id", "reviewed_by"}
+_NUMERIC_COLS = {"sell_price", "source_price", "exchange_rate", "reliability", "withdrawable_balance", "withdraw_frozen"}
+_BOOLEAN_COLS = {"phone_bound"}
+
+def _ensure_columns(db_engine=None):
+    target_engine = db_engine or engine
+    insp = inspect(target_engine)
+    for table, cols in _ENSURE.items():
+        if table not in insp.get_table_names():
+            continue
+        existing = {c["name"] for c in insp.get_columns(table)}
+        for col in cols:
+            if col not in existing:
+                if col in _DATETIME_COLS:
+                    col_type = "DATETIME"
+                elif col in _INTEGER_COLS:
+                    col_type = "INTEGER"
+                elif col in _NUMERIC_COLS:
+                    col_type = "NUMERIC"
+                elif col in _BOOLEAN_COLS:
+                    col_type = "BOOLEAN DEFAULT FALSE"
+                else:
+                    col_type = "TEXT"
+                with target_engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                print(f"[init_db] 补列: {table}.{col}")
+    if "orders" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text("UPDATE orders SET quantity = 1 WHERE quantity IS NULL OR quantity < 1"))
+    if "verifications" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE verifications SET ocr_status = 'not_started' "
+                "WHERE ocr_status IS NULL OR ocr_status = ''"
+            ))
+
+
+def _migrate_unverified_phone_flags(db_engine=None):
+    """One-time truth migration for numbers never verified by an SMS flow.
+
+    WOD has not had a real phone-ownership verification service. Historical
+    ``phone_bound=true`` values therefore came only from an unsafe default.
+    A durable marker makes this demotion idempotent and prevents a future,
+    genuinely verified flag from being reset on every startup.
+    """
+    target_engine = db_engine or engine
+    marker = "20260817_phone_binding_requires_verification"
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS app_migrations ("
+            "name VARCHAR(128) PRIMARY KEY, "
+            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        already_applied = conn.execute(
+            text("SELECT name FROM app_migrations WHERE name = :name"),
+            {"name": marker},
+        ).first()
+        if already_applied:
+            return False
+        conn.execute(text("UPDATE users SET phone_bound = FALSE"))
+        conn.execute(
+            text("INSERT INTO app_migrations (name) VALUES (:name)"),
+            {"name": marker},
+        )
+    print("[init_db] 已将无短信验证证据的历史手机号标记为未绑定")
+    return True
+
+
+def _migrate_offline_purchases():
+    """Keep legacy records visible in the new unified buy-request flow."""
+    from datetime import timedelta
+
+    from app.models.buy_request import BuyRequest
+    from app.models.offline_purchase import OfflinePurchase
+
+    status_map = {
+        "submitted": "published",
+        "contacted": "processing",
+        "done": "completed",
+        "rejected": "rejected",
+    }
+    db = SessionLocal()
+    try:
+        migrated = 0
+        for legacy in db.query(OfflinePurchase).all():
+            exists = db.query(BuyRequest).filter(
+                BuyRequest.legacy_offline_purchase_id == legacy.id
+            ).first()
+            if exists:
+                continue
+            created_at = legacy.created_at
+            db.add(BuyRequest(
+                user_id=legacy.user_id,
+                request_type="offline",
+                gpu_model=legacy.device_model,
+                quantity=legacy.quantity,
+                budget=legacy.budget,
+                currency="CNY",
+                requirements={"legacy_remark": legacy.remark or ""},
+                contact=legacy.contact,
+                phone=legacy.phone,
+                status=status_map.get(legacy.status, "published"),
+                expires_at=created_at + timedelta(days=30) if created_at else None,
+                legacy_offline_purchase_id=legacy.id,
+                created_at=created_at,
+                updated_at=created_at,
+            ))
+            migrated += 1
+        db.commit()
+        if migrated:
+            print(f"[init_db] 迁移旧线下采购记录: {migrated} 条")
+    finally:
+        db.close()
+
+
+def _migrate_legacy_market_history():
+    """Reuse real AutoDL snapshots already collected by the previous synchronizer."""
+    from collections import defaultdict
+    from decimal import Decimal
+    import hashlib
+
+    from app.models.market_price import MarketPriceSnapshot
+    from app.models.price_history import PriceHistory
+    from app.models.product import Product
+    from app.services.gpu_catalog import canonicalize_gpu, memory_variant_from_text
+
+    db = SessionLocal()
+    try:
+        groups = defaultdict(list)
+        rows = db.query(PriceHistory, Product).join(Product, Product.id == PriceHistory.product_id).filter(
+            Product.source_price.isnot(None),
+            Product.source_currency == "CNY",
+        ).all()
+        for history, product in rows:
+            model = canonicalize_gpu(history.gpu_model) or canonicalize_gpu(product.name)
+            if not model or not history.recorded_at or history.price <= 0:
+                continue
+            key = (history.recorded_at, model, memory_variant_from_text(product.memory))
+            groups[key].append(Decimal(str(history.price)))
+        migrated = 0
+        for (observed_at, model, variant), prices in groups.items():
+            if db.query(MarketPriceSnapshot).filter(
+                MarketPriceSnapshot.source == "autodl",
+                MarketPriceSnapshot.gpu_model == model,
+                MarketPriceSnapshot.gpu_variant == variant,
+                MarketPriceSnapshot.observed_at == observed_at,
+            ).first():
+                continue
+            unique_prices = sorted(set(prices))
+            middle = unique_prices[len(unique_prices) // 2]
+            signature = hashlib.sha256(
+                f"legacy|{observed_at.isoformat()}|{model}|{variant}|{middle}".encode("utf-8")
+            ).hexdigest()
+            db.add(MarketPriceSnapshot(
+                source="autodl",
+                gpu_model=model,
+                gpu_variant=variant,
+                billing_mode="ondemand",
+                currency="CNY",
+                min_price=min(unique_prices),
+                p25_price=middle,
+                median_price=middle,
+                p75_price=middle,
+                max_price=max(unique_prices),
+                min_price_cny=min(unique_prices),
+                median_price_cny=middle,
+                max_price_cny=max(unique_prices),
+                sample_count=len(unique_prices),
+                available_gpu_count=0,
+                fx_rate=Decimal("1"),
+                fx_source="CNY native",
+                fx_date=observed_at.date().isoformat(),
+                data_quality="legacy_verified",
+                signature=signature,
+                observed_at=observed_at,
+                fetched_at=observed_at,
+            ))
+            migrated += 1
+        db.commit()
+        if migrated:
+            print(f"[init_db] 迁移历史真实行情: {migrated} 条")
+    finally:
+        db.close()
+
+
+def _migrate_sensitive_fields(db_session=None):
+    """Encrypt legacy plaintext values without changing their visible meaning."""
+    from app.core.sensitive import protect
+    from app.models.bank_card import BankCard
+    from app.models.order import Order
+    from app.models.verification import Verification
+
+    owns_session = db_session is None
+    db = db_session or SessionLocal()
+    try:
+        migrated = 0
+        for row in db.query(Verification).all():
+            encrypted = protect(row.id_card)
+            if encrypted != row.id_card:
+                row.id_card = encrypted
+                migrated += 1
+        for row in db.query(BankCard).all():
+            encrypted = protect(row.card_number)
+            if encrypted != row.card_number:
+                row.card_number = encrypted
+                migrated += 1
+            encrypted_phone = protect(row.phone)
+            if encrypted_phone != row.phone:
+                row.phone = encrypted_phone
+                migrated += 1
+        for row in db.query(Order).filter(Order.ssh_info.isnot(None)).all():
+            encrypted = protect(row.ssh_info)
+            if encrypted != row.ssh_info:
+                row.ssh_info = encrypted
+                migrated += 1
+        db.commit()
+        if migrated:
+            print(f"[init_db] 已加密历史敏感字段: {migrated} 条")
+    finally:
+        if owns_session:
+            db.close()
+
+
+def _ensure_user_wallets(db_session=None):
+    """Give every existing account its required zero-value wallet.
+
+    Older test databases may contain accounts created before wallet creation was
+    made transactional.  Creating a missing wallet with zero balances restores
+    API compatibility without inventing spendable credit.
+    """
+    from decimal import Decimal
+
+    from app.models.user import User
+    from app.models.wallet import Wallet
+
+    owns_session = db_session is None
+    db = db_session or SessionLocal()
+    try:
+        missing_user_ids = [
+            user_id for (user_id,) in db.query(User.id).outerjoin(
+                Wallet, Wallet.user_id == User.id
+            ).filter(Wallet.id.is_(None)).all()
+        ]
+        for user_id in missing_user_ids:
+            db.add(Wallet(
+                user_id=user_id,
+                balance=Decimal("0"),
+                frozen=Decimal("0"),
+                withdrawable_balance=Decimal("0"),
+                withdraw_frozen=Decimal("0"),
+            ))
+        db.commit()
+        if missing_user_ids:
+            print(f"[init_db] 补齐零余额钱包: {len(missing_user_ids)} 个")
+        return len(missing_user_ids)
+    finally:
+        if owns_session:
+            db.close()
+
+
+def _migrate_payment_precision_and_pending_deadlines(
+    db_engine=None,
+    db_session=None,
+):
+    """Upgrade card-hour precision and normalize legacy payment state.
+
+    SQLite applies Numeric scale in SQLAlchemy rather than storage, so the new
+    model declaration is sufficient there. PostgreSQL requires an explicit,
+    lossless type alteration. Historical MaPay credits made by the old code
+    stored CNY in a CH wallet; they are corrected once and every later ledger
+    balance_after receives the same conservation delta.
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from app.models.ledger import Ledger
+    from app.models.payment import PaymentOrder
+    from app.models.wallet import Wallet
+    from app.services.mapay import checkout_ttl_seconds, utc_now
+
+    target_engine = db_engine or engine
+    if target_engine.dialect.name == "postgresql":
+        target_inspector = inspect(target_engine)
+        precision_columns = (
+            ("wallets", "balance"),
+            ("wallets", "frozen"),
+            ("wallets", "withdrawable_balance"),
+            ("wallets", "withdraw_frozen"),
+            ("ledger", "amount"),
+            ("ledger", "balance_after"),
+        )
+        current_scales = {
+            (table, column["name"]): getattr(column["type"], "scale", None)
+            for table, _ in precision_columns
+            for column in target_inspector.get_columns(table)
+        }
+        with target_engine.begin() as conn:
+            for table, column in precision_columns:
+                if (current_scales.get((table, column)) or 0) >= 6:
+                    continue
+                conn.execute(text(
+                    f"ALTER TABLE {table} ALTER COLUMN {column} "
+                    f"TYPE NUMERIC(18, 6) USING {column}::numeric(18, 6)"
+                ))
+
+    owns_session = db_session is None
+    db = db_session or Session(bind=target_engine)
+    marker = "20260820_payment_card_hour_precision_v1"
+    try:
+        # Claim the migration by inserting its unique marker at the start of
+        # the *same* transaction as the wallet/ledger repair. ON CONFLICT makes
+        # concurrent startup workers serialize without both applying a delta;
+        # any repair failure rolls the marker back with the money changes.
+        db.execute(text(
+            "CREATE TABLE IF NOT EXISTS app_migrations ("
+            "name VARCHAR(128) PRIMARY KEY, "
+            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        claim = db.execute(
+            text(
+                "INSERT INTO app_migrations (name) VALUES (:name) "
+                "ON CONFLICT (name) DO NOTHING"
+            ),
+            {"name": marker},
+        )
+        owns_precision_migration = claim.rowcount == 1
+        corrected = 0
+        if owns_precision_migration:
+            linked_credits = db.query(PaymentOrder, Ledger).join(
+                Ledger,
+                Ledger.ref_payment_order_id == PaymentOrder.id,
+            ).filter(
+                PaymentOrder.credited_at.isnot(None),
+                Ledger.type == "recharge",
+                Ledger.direction == "in",
+            ).order_by(Ledger.id.asc()).all()
+            for payment, credit_ledger in linked_credits:
+                expected = Decimal(payment.card_hours).quantize(Decimal("0.000001"))
+                recorded = Decimal(credit_ledger.amount).quantize(Decimal("0.000001"))
+                delta = expected - recorded
+                if delta == 0:
+                    continue
+                wallet_updated = db.query(Wallet).filter(
+                    Wallet.id == credit_ledger.wallet_id,
+                ).update({
+                    Wallet.balance: Wallet.balance + delta,
+                }, synchronize_session=False)
+                if wallet_updated != 1:
+                    continue
+                db.query(Ledger).filter(
+                    Ledger.user_id == credit_ledger.user_id,
+                    Ledger.id >= credit_ledger.id,
+                ).update({
+                    Ledger.balance_after: Ledger.balance_after + delta,
+                }, synchronize_session=False)
+                amount_updated = db.query(Ledger).filter(
+                    Ledger.id == credit_ledger.id,
+                    Ledger.amount == recorded,
+                ).update({Ledger.amount: expected}, synchronize_session=False)
+                if amount_updated != 1:
+                    raise RuntimeError("legacy payment credit changed during precision migration")
+                corrected += 1
+            db.commit()
+            db.expire_all()
+        else:
+            # End the no-op claim transaction before normal deadline cleanup.
+            db.commit()
+
+        ttl_seconds = checkout_ttl_seconds()
+        now = utc_now()
+        normalized = 0
+        expired = 0
+        pending_orders = db.query(PaymentOrder).filter(
+            PaymentOrder.status == "pending",
+            PaymentOrder.credited_at.is_(None),
+        ).all()
+        for payment in pending_orders:
+            if payment.created_at:
+                expected_deadline = payment.created_at + timedelta(seconds=ttl_seconds)
+                if (
+                    payment.expires_at is None
+                    or payment.expires_at > expected_deadline + timedelta(seconds=1)
+                ):
+                    payment.expires_at = expected_deadline
+                    normalized += 1
+            if payment.expires_at and payment.expires_at <= now:
+                payment.status = "expired"
+                payment.failure_reason = "支付时限已结束；如已付款请查询支付平台状态"
+                expired += 1
+        db.commit()
+        if corrected or normalized or expired:
+            print(
+                "[init_db] 支付迁移: "
+                f"历史卡时入账修正 {corrected} / 截止时间归一 {normalized} / 过期 {expired}"
+            )
+        return {
+            "corrected_credits": corrected,
+            "normalized_deadlines": normalized,
+            "expired_orders": expired,
+        }
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if owns_session:
+            db.close()
+
+
+def _migrate_manual_payout_fields(db_engine=None, db_session=None):
+    """Initialize the manual-payout schema without inventing withdrawable funds."""
+    from app.core.sensitive import fingerprint, reveal
+    from app.models.bank_card import BankCard
+    from app.utils.bank_util import luhn_check
+
+    target_engine = db_engine or engine
+    owns_session = db_session is None
+    db = db_session or Session(bind=target_engine)
+    try:
+        # Historical/recharge/reward/revenue rows are deliberately ignored.
+        # The only safe migration value is zero until a future auditable source
+        # explicitly credits withdrawable_balance.
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE wallets SET withdrawable_balance = 0 "
+                "WHERE withdrawable_balance IS NULL"
+            ))
+            conn.execute(text(
+                "UPDATE wallets SET withdraw_frozen = 0 "
+                "WHERE withdraw_frozen IS NULL"
+            ))
+
+        seen: set[tuple[int, str]] = set()
+        default_seen: set[int] = set()
+        changed = 0
+        cards = db.query(BankCard).order_by(BankCard.user_id.asc(), BankCard.id.asc()).all()
+        for card in cards:
+            plain = "".join(reveal(card.card_number).split())
+            strict_format_valid = (
+                plain.isdigit()
+                and 12 <= len(plain) <= 19
+                and luhn_check(plain)
+            )
+            registration_candidate = not card.status or card.status in {
+                "registered", "pending_review", "active",
+            }
+            if not strict_format_valid:
+                if card.status != "disabled":
+                    card.status = "disabled"
+                    changed += 1
+                if card.verification_mode != "legacy_unvalidated":
+                    card.verification_mode = "legacy_unvalidated"
+                    changed += 1
+                if card.is_default:
+                    card.is_default = False
+                    changed += 1
+                if card.card_fingerprint is not None:
+                    card.card_fingerprint = None
+                    changed += 1
+                reason = "历史卡号未通过严格数字格式或 Luhn 校验，已停用，请重新登记"
+                if card.review_reason != reason:
+                    card.review_reason = reason
+                    changed += 1
+                continue
+            if registration_candidate:
+                if card.status != "registered":
+                    card.status = "registered"
+                    changed += 1
+                if card.verification_mode != "format_only":
+                    card.verification_mode = "format_only"
+                    changed += 1
+            card_key = fingerprint(plain)
+            if card_key and (card.user_id, card_key) in seen:
+                # Preserve the encrypted historical row for audit, but do not
+                # allow duplicate review or default-card selection.
+                card.card_fingerprint = None
+                card.status = "disabled"
+                card.is_default = False
+                card.review_reason = "历史重复卡号已停用"
+                changed += 1
+                continue
+            seen.add((card.user_id, card_key))
+            if card.card_fingerprint != card_key:
+                card.card_fingerprint = card_key
+                changed += 1
+            if card.status != "registered" and card.is_default:
+                card.is_default = False
+                changed += 1
+            elif card.status == "registered" and card.is_default and card.user_id in default_seen:
+                card.is_default = False
+                changed += 1
+            elif card.status == "registered" and card.is_default:
+                default_seen.add(card.user_id)
+        db.commit()
+
+        if target_engine.dialect.name == "postgresql":
+            with target_engine.begin() as conn:
+                conn.execute(text("ALTER TABLE ledger ALTER COLUMN type TYPE VARCHAR(32)"))
+                conn.execute(text("ALTER TABLE bank_cards ALTER COLUMN phone TYPE TEXT"))
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_event_key "
+                "ON ledger (event_key) WHERE event_key IS NOT NULL"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_bank_card_user_fingerprint "
+                "ON bank_cards (user_id, card_fingerprint) WHERE card_fingerprint IS NOT NULL"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_withdrawal_bank_reference "
+                "ON withdrawal_orders (bank_reference) WHERE bank_reference IS NOT NULL"
+            ))
+        if changed:
+            print(f"[init_db] 人工提现字段归一: 银行卡 {changed} 项；历史可提现余额保持 0")
+        return changed
+    finally:
+        if owns_session:
+            db.close()
+
+
+def init():
+    Base.metadata.create_all(bind=engine)
+    _ensure_columns()
+    _migrate_unverified_phone_flags()
+    _migrate_payment_precision_and_pending_deadlines()
+    _migrate_manual_payout_fields()
+    if engine.dialect.name == "sqlite":
+        # WAL permits App reads to continue while independent market-source
+        # collectors persist fresh snapshots.  The setting is durable for the
+        # database file and is safe to re-assert on every container startup.
+        with engine.connect() as conn:
+            conn.exec_driver_sql("PRAGMA journal_mode=WAL")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_publish_batch ON posts (publish_batch)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_content_type ON posts (content_type)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_source_item_id ON posts (source_item_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_content_hash ON posts (content_hash)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_snapshot_lookup ON market_price_snapshots (gpu_model, gpu_variant, source, observed_at)"))
+        # Latest-price queries group by this exact source-series identity.  The
+        # original lookup index starts with gpu_model and forces SQLite to build
+        # a temporary grouping tree as history grows.
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_market_snapshot_latest "
+            "ON market_price_snapshots (source, gpu_model, gpu_variant, billing_mode, observed_at DESC)"
+        ))
+        # Seven-day metrics filter by source and observation time before grouping
+        # in Python, so keep that access path independent from product lookups.
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_market_snapshot_history "
+            "ON market_price_snapshots (source, observed_at, gpu_model, gpu_variant, billing_mode)"
+        ))
+        # OHLC requests select one exact model/variant/billing series, then scan
+        # only the requested sources and range in chronological order.
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_market_snapshot_candles "
+            "ON market_price_snapshots (gpu_model, gpu_variant, billing_mode, source, observed_at)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_market_history_selection "
+            "ON market_history_points (upstream_provider, gpu_model, gpu_variant, billing_mode, dataset_source, observed_at)"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_buy_request_owner_type ON buy_requests (user_id, request_type, status)"))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_client_request_id "
+            "ON orders (client_request_id) WHERE client_request_id IS NOT NULL"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_created ON notifications (user_id, created_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications (user_id, is_read, created_at DESC)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_user_dedupe ON notifications (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL"))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_payment_credit "
+            "ON ledger (ref_payment_order_id) WHERE ref_payment_order_id IS NOT NULL"
+        ))
+    _migrate_offline_purchases()
+    _migrate_legacy_market_history()
+    _migrate_sensitive_fields()
+    _ensure_user_wallets()
+    print("[init_db] 表已创建/确认存在")
+
+
+if __name__ == "__main__":
+    init()

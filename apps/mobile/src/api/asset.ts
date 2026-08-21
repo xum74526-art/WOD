@@ -33,9 +33,7 @@ export interface AssetItem {
 }
 
 export function sellAsset(id: number) {
-  return Promise.reject(new Error('服务器租约不支持转售')) as Promise<{
-    id: number; status: string; sell_price: number; buy_price: number; pnl: number
-  }>
+  return request<{ id: number; status: string; sell_price: number; buy_price: number; pnl: number }>({ url: `/assets/${id}/sell`, method: 'POST' })
 }
 
 export interface AssetSummary {
@@ -49,56 +47,9 @@ export interface AssetSummary {
 }
 
 export function getAssets(status_filter?: string) {
-  return request<Array<{
-    id: number
-    product_id: number
-    order_id: number
-    amount: string
-    duration_hours: number
-    status: string
-    starts_at?: string | null
-    expires_at?: string | null
-    created_at?: string
-    server_name: string
-    gpu_model: string
-    renewable: boolean
-  }>>({ url: '/account/leases' }).then((leases) => {
-    const filtered = status_filter ? leases.filter(item => item.status === status_filter) : leases
-    const items = filtered.map<AssetItem>(lease => ({
-      id: lease.id,
-      product_id: lease.product_id,
-      order_id: lease.order_id,
-      quantity: 1,
-      value: Number(lease.amount),
-      unit_value: Number(lease.amount),
-      daily_rate: 0,
-      status: lease.status,
-      start_at: lease.starts_at || undefined,
-      end_at: lease.expires_at || undefined,
-      created_at: lease.created_at,
-      product_name: lease.server_name,
-      gpu_model: lease.gpu_model,
-      can_sell: false,
-      revenue_settlement_enabled: false,
-      reward_service_enabled: false,
-      trading_unavailable_reason: 'lease_not_tradeable',
-    }))
-    return {
-      total_value: items.reduce((sum, item) => sum + item.value, 0),
-      wallet_balance: 0,
-      pending_revenue: 0,
-      revenue_rate: 0,
-      revenue_settlement_enabled: false,
-      historical_test_revenue: 0,
-      items,
-    }
-  })
+  return request<AssetSummary>({ url: '/assets', data: status_filter ? { status_filter } : {} })
 }
 
 export function getAsset(id: number) {
-  return getAssets().then(summary => {
-    const asset = summary.items.find(item => item.id === id)
-    if (!asset) throw new Error('服务器租约不存在')
-    return asset
-  })
+  return request<AssetItem>({ url: `/assets/${id}` })
 }

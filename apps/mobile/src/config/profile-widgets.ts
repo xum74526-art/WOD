@@ -55,21 +55,15 @@ const SUPPLIER_ACCOUNT_ITEMS: ProfileWidget[] = [
 export function getProfileWidgetGroups(
   role: ProfileRole,
   hasSupplierAccess: boolean,
-  directCommerceEnabled = true,
 ): ProfileWidgetGroup[] {
   if (role === 'supplier') {
-    const accountItems = directCommerceEnabled
-      ? [...SUPPLIER_ACCOUNT_ITEMS]
-      : SUPPLIER_ACCOUNT_ITEMS.filter((item) => item.key !== 'procurement')
     return [
       { key: 'merchant-operations', label: 'merchantOperations', items: [...SUPPLIER_OPERATION_ITEMS] },
-      { key: 'account-tools', label: 'accountTools', items: accountItems },
+      { key: 'account-tools', label: 'accountTools', items: [...SUPPLIER_ACCOUNT_ITEMS] },
     ]
   }
 
-  const personalServices = directCommerceEnabled
-    ? [...PERSONAL_SERVICE_ITEMS]
-    : PERSONAL_SERVICE_ITEMS.filter((item) => item.key !== 'procurement')
+  const personalServices = [...PERSONAL_SERVICE_ITEMS]
   if (!hasSupplierAccess) {
     personalServices.push({
       key: 'onboarding',

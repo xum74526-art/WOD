@@ -1,4 +1,4 @@
-import { request } from './request'
+import { request, upload } from './request'
 
 export interface UserInfo {
   id: number
@@ -10,50 +10,16 @@ export interface UserInfo {
   supplier_status?: string
 }
 
-interface CanonicalUser {
-  id: number
-  display_name: string
-  email?: string | null
-  phone?: string | null
-  phone_verified?: boolean
-  role?: string
+export function login(phone: string, password: string) {
+  return request<{ token: string; user: UserInfo }>({
+    url: '/auth/login', method: 'POST', data: { phone, password },
+  })
 }
 
-interface TokenSession {
-  access_token: string
-  token_type: 'Bearer'
-  expires_in: number
-  user: CanonicalUser
-}
-
-function toUserInfo(user: CanonicalUser): UserInfo {
-  return {
-    id: user.id,
-    username: user.display_name,
-    phone: user.phone,
-    phone_bound: Boolean(user.phone_verified),
-    role: user.role,
-  }
-}
-
-function toMobileSession(session: TokenSession) {
-  return { token: session.access_token, user: toUserInfo(session.user) }
-}
-
-export function login(identifier: string, password: string) {
-  return request<TokenSession>({
-    url: '/auth/token', method: 'POST', data: { identifier, password },
-  }).then(toMobileSession)
-}
-
-export function register(username: string, identifier: string, password: string, invite_code?: string, captcha_key?: string, captcha_code?: string) {
-  return request<TokenSession>({
-    url: '/auth/token/register', method: 'POST', data: {
-      display_name: username,
-      identifier,
-      password,
-    },
-  }).then(toMobileSession)
+export function register(username: string, phone: string, password: string, invite_code?: string, captcha_key?: string, captcha_code?: string) {
+  return request<{ token: string; user: UserInfo }>({
+    url: '/auth/register', method: 'POST', data: { username, phone, password, invite_code, captcha_key, captcha_code },
+  })
 }
 
 export interface KaiAuthConfig {
@@ -74,42 +40,31 @@ export function startKaiAuth(intent: 'login' | 'register') {
 }
 
 export function exchangeKaiTicket(ticket: string) {
-  return request<TokenSession>({
+  return request<{ token: string; user: UserInfo }>({
     url: '/auth/kai/exchange', method: 'POST', data: { ticket },
-  }).then(toMobileSession)
-}
-
-export function getProfile() {
-  return request<{ user: CanonicalUser }>({ url: '/auth/token/me' })
-    .then(result => toUserInfo(result.user))
-}
-
-export function revokeSession() {
-  return request<{ revoked: boolean }>({ url: '/auth/token/revoke', method: 'POST', silent: true })
-}
-
-export function updateProfile(data: { username?: string }) {
-  if (!data.username) return getProfile()
-  return request<CanonicalUser>({
-    url: '/account/profile', method: 'PATCH', data: { display_name: data.username },
-  }).then(toUserInfo)
-}
-
-export function uploadAvatar(filePath: string) {
-  void filePath
-  return Promise.reject<{ avatar: string }>(new Error('头像存储服务尚未配置'))
-}
-
-export function changePassword(old_password: string, new_password: string) {
-  return request({
-    url: '/account/security/password',
-    method: 'POST',
-    data: { current_password: old_password, new_password },
   })
 }
 
+export function getProfile() {
+  return request<UserInfo>({ url: '/user/profile' })
+}
+
+export function updateProfile(data: { username?: string }) {
+  return request<UserInfo>({ url: '/user/profile', method: 'PUT', data })
+}
+
+export function uploadAvatar(filePath: string) {
+  return upload<{ avatar: string }>({
+    url: '/user/avatar', filePath, name: 'avatar',
+  })
+}
+
+export function changePassword(old_password: string, new_password: string) {
+  return request({ url: '/user/password', method: 'POST', data: { old_password, new_password } })
+}
+
 export function switchRole() {
-  return Promise.reject<{ role: string }>(new Error('账户角色由商家审核流程确定，不能直接切换'))
+  return request<{ role: string }>({ url: '/user/role/switch', method: 'POST' })
 }
 
 export interface RebateSummary {
@@ -123,15 +78,6 @@ export interface RebateSummary {
   monthly_cap: number
 }
 
-export function getRebateSummary(): Promise<RebateSummary> {
-  return request<any>({ url: '/account/referrals' }).then(result => ({
-    month_spent: 0,
-    month_rebated: 0,
-    current_rate: 0,
-    next_tier_hint: result.module?.reason || '奖励服务尚未配置',
-    pending_rebate: 0,
-    rewards_enabled: Boolean(result.module?.available),
-    reward_mode: result.module?.available ? 'live' : 'disabled',
-    monthly_cap: 0,
-  }))
+export function getRebateSummary() {
+  return request<RebateSummary>({ url: '/user/rebate' })
 }

@@ -149,36 +149,3 @@ export function formatDate(s?: string): string {
   if (!s) return ''
   return s.slice(0, 10)
 }
-
-function twoDigits(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
-/**
- * Locale-aware date/time without Intl. Some Android uni-app runtimes either
- * omit Intl or fall back to an English system string for Chinese pages.
- */
-export function formatLocalDateTime(value: string | number | Date, lang = currentLang()): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (!Number.isFinite(date.getTime())) return ''
-  const year = date.getFullYear()
-  const month = twoDigits(date.getMonth() + 1)
-  const day = twoDigits(date.getDate())
-  const time = `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`
-  return lang === 'en'
-    ? `${month}/${day}/${year} ${time}`
-    : `${year}/${month}/${day} ${time}`
-}
-
-export function formatLocalMonthDay(value: string | number | Date): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (!Number.isFinite(date.getTime())) return ''
-  return `${date.getMonth() + 1}/${date.getDate()}`
-}
-
-export function formatLocalTime(value: string | number | Date, includeSeconds = true): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (!Number.isFinite(date.getTime())) return ''
-  const base = `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`
-  return includeSeconds ? `${base}:${twoDigits(date.getSeconds())}` : base
-}

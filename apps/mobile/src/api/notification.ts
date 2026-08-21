@@ -1,4 +1,4 @@
-import { request, requestEnvelope } from './request'
+import { request } from './request'
 
 export interface NotificationItem {
   id: number
@@ -44,62 +44,17 @@ export interface NotificationListResponse {
   has_more: boolean
 }
 
-interface CanonicalNotification {
-  id: number
-  category: string
-  title: string
-  body: string
-  action_path?: string | null
-  is_read: boolean
-  created_at?: string
-}
-
-function toNotification(row: CanonicalNotification): NotificationItem {
-  return {
-    id: row.id,
-    title: row.title,
-    content: row.body,
-    type: row.category,
-    action_url: row.action_path || undefined,
-    is_read: row.is_read,
-    created_at: row.created_at,
-  }
-}
-
 export function getNotifications(params?: {
   type_filter?: NotificationType
   unread_only?: boolean
   page?: number
   page_size?: number
 }, silent = false) {
-  const page = params?.page || 1
-  const pageSize = params?.page_size || 20
-  return requestEnvelope<CanonicalNotification[], { total?: number }>({
-    url: '/notifications',
-    data: {
-      page,
-      page_size: pageSize,
-      ...(params?.type_filter ? { category: params.type_filter } : {}),
-      ...(params?.unread_only != null ? { unread_only: params.unread_only } : {}),
-    },
-    silent,
-  }).then(({ data, meta }) => {
-    const total = Number(meta.total ?? data.length)
-    const items = data.map(toNotification)
-    return {
-      items,
-      unread: items.filter(item => !item.is_read).length,
-      total,
-      page,
-      page_size: pageSize,
-      has_more: page * pageSize < total,
-    }
-  })
+  return request<NotificationListResponse>({ url: '/notifications', data: params || {}, silent })
 }
 
 export function getUnreadCount(silent = true) {
-  return request<{ unread_count: number }>({ url: '/notifications/unread-count', silent })
-    .then(result => ({ unread: result.unread_count }))
+  return request<{ unread: number }>({ url: '/notifications/unread-count', silent })
 }
 
 export function getNotificationPreferences(silent = false) {
@@ -115,7 +70,7 @@ export function updateNotificationPreferences(data: Partial<NotificationPreferen
 }
 
 export function markRead(id: number) {
-  return request({ url: `/notifications/${id}/read`, method: 'PATCH' })
+  return request({ url: `/notifications/${id}/read`, method: 'POST' })
 }
 
 export function markAllRead() {

@@ -40,7 +40,7 @@ export type WalletSnapshot = {
   provider: ProviderDescriptor;
   balances: Array<{ currency: string; available: string; frozen: string }>;
   payment_intents: PaymentIntent[];
-  ledger_mode: "double_entry";
+  ledger_mode: "mobile_ledger";
 };
 
 export type KycSnapshot = {

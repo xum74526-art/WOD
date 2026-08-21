@@ -1,7 +1,7 @@
 {
-  "name": "kai-mobile",
+  "name": "wod-mobile",
   "version": "1.0.3",
-  "description": "KAI - AI 算力资产管理 App",
+  "description": "WOD - AI 算力资产管理 App",
   "scripts": {
     "dev:h5": "uni",
     "build:h5": "uni build",
@@ -10,7 +10,6 @@
     "test:market": "node --experimental-strip-types --test tests/market-list.test.ts",
     "test:format": "node --experimental-strip-types --test tests/format.test.ts",
     "test:i18n": "node scripts/check-i18n.mjs",
-    "check:ios": "node scripts/check-ios.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",

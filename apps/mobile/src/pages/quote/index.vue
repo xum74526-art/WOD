@@ -222,7 +222,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHn, formatLocalTime, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCH, fmtCHn, formatNumber, toCardHours } from '@/utils/format'
 import { candleChangePercent, formatSignedMarketPercent, formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import {
   hasCompleteSevenDayMetric,
@@ -245,8 +245,8 @@ const candles = ref<MarketCandles | null>(null)
 const sourceStates = ref<MarketSourceState[]>([])
 const regions = ref<any[]>([])
 const selectedKey = ref('')
-const selectedSources = ref<string[]>(['getdeploying'])
-const timeRange = ref('14w')
+const selectedSources = ref<string[]>(['autodl', 'vast'])
+const timeRange = ref('7d')
 const refreshIn = ref(10)
 const initialLoading = ref(true)
 const refreshing = ref(false)
@@ -261,12 +261,15 @@ let sourceStatesLoadedAt = 0
 
 const tabs = computed(() => [t('priceTrends'), t('modelRanking'), t('regionalPrices')])
 const ranges = computed(() => [
-  { key: '4w', label: t('fourWeeks') },
-  { key: '8w', label: t('eightWeeks') },
-  { key: '14w', label: t('threeMonths') },
+  { key: '1h', label: t('oneHour') },
+  { key: '6h', label: t('sixHours') },
+  { key: '24h', label: t('twentyFourHours') },
+  { key: '7d', label: t('sevenDays') },
 ])
 const sourceOptions = computed(() => [
-  { key: 'getdeploying', name: 'GetDeploying' },
+  { key: 'autodl', name: 'AutoDL' },
+  { key: 'vast', name: 'Vast.ai' },
+  { key: 'wod', name: 'WOD' },
 ])
 const currentModel = computed(() => models.value.find((item) => modelKey(item) === selectedKey.value) || models.value[0])
 const availableSourceOptions = computed(() => sourceOptions.value.filter((source) => currentModel.value?.sources.includes(source.key)))
@@ -295,7 +298,7 @@ const selectedSevenDayChange = computed(() => {
 })
 const selectedHistoryHeadline = computed(() => selectedSevenDayChange.value == null
   ? chartStateSummary.value
-  : t('periodChangeValue', { value: formatSignedMarketPercentNumber(selectedSevenDayChange.value) }))
+  : t('sevenDayChangeValue', { value: formatSignedMarketPercentNumber(selectedSevenDayChange.value) }))
 const historySourceText = computed(() => historyProvenanceLabel(candles.value?.provenance || selectedMetric.value?.history_provenance, t))
 const overallStatus = computed(() => {
   const states = sourceStates.value.filter((item) => selectedSources.value.includes(item.source)).map((item) => item.status)
@@ -308,7 +311,7 @@ const overallStatus = computed(() => {
 const lastUpdated = computed(() => {
   const dates = (latest.value?.items || []).map((item) => item.source_checked_at).filter(Boolean).map((value) => new Date(value as string).getTime())
   if (!dates.length) return '--'
-  return formatLocalTime(Math.max(...dates)) || '--'
+  return new Date(Math.max(...dates)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 })
 const latestObservedAt = computed(() => {
   const values = (latest.value?.items || [])
@@ -343,7 +346,7 @@ function originalPrice(item: MarketSnapshot) {
 }
 function sourceChecked(item: MarketSnapshot) {
   if (!item.source_checked_at) return t('notUpdated')
-  return formatLocalTime(item.source_checked_at) || t('notUpdated')
+  return new Date(item.source_checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 function statusText(status: string) {
   const map: Record<string, string> = { live: 'liveData', delayed: 'delayedData', stale: 'staleData', unavailable: 'sourceUnavailable', pending: 'sourcePending' }
@@ -380,12 +383,12 @@ function changeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_c
   const value = sevenDayChange(item)
   return value == null
     ? (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
-    : t('periodChangeValue', { value: formatSignedMarketPercentNumber(value) })
+    : t('sevenDayChangeValue', { value: formatSignedMarketPercentNumber(value) })
 }
 function priceRangeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours'> | MarketModel): string {
   const range = hasCompleteSevenDayMetric(item) ? trustedSevenDayPriceRange(item) : null
   return range
-    ? t('periodPriceRangeValue', { low: fmtCHn(range.low), high: fmtCHn(range.high) })
+    ? t('sevenDayPriceRangeValue', { low: fmtCHn(range.low), high: fmtCHn(range.high) })
     : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
 }
 function changeTone(value: number | null): string {
@@ -435,10 +438,17 @@ async function refreshPrices(silent = true, forceHistory = false) {
   const model = currentModel.value
   const sources = [...selectedSources.value]
   const range = timeRange.value
-  const billingMode = 'ondemand'
-  const historySources = sources
+  const billingMode = sources.every((source) => source === 'wod') ? 'wod_listing' : 'ondemand'
+  // Current-price switches describe the live offer pool.  A seven-day chart
+  // may additionally use the independently labelled Vast historical archive
+  // when the selected live provider has only flat or incomplete observations.
+  // The backend still selects one exact provider series and exposes its
+  // provenance, so live and archive prices are never blended into one candle.
+  const historySources = range === '7d' && !sources.includes('vast') && !sources.every((source) => source === 'wod')
+    ? [...sources, 'vast']
+    : sources
   const historyKey = `${model.gpu_model}|${model.gpu_variant}|${range}|${[...historySources].sort().join(',')}|${billingMode}`
-  const historyRefreshMs = 5 * 60_000
+  const historyRefreshMs = range === '7d' ? 5 * 60_000 : range === '24h' ? 30_000 : 8_000
   const needsHistory = forceHistory
     || !candles.value
     || candleRequestKey !== historyKey
@@ -484,20 +494,8 @@ async function refreshPrices(silent = true, forceHistory = false) {
 
 async function loadRegions() {
   try {
-    const products = await request<any[]>({ url: '/public/products' })
-    const grouped = new Map<string, number[]>()
-    for (const product of products) {
-      const region = product.region || '未标注地区'
-      const values = grouped.get(region) || []
-      values.push(Number(product.price?.amount || 0))
-      grouped.set(region, values)
-    }
-    regions.value = [...grouped.entries()].map(([region, values]) => ({
-      region,
-      avg_price: values.reduce((sum, value) => sum + value, 0) / values.length,
-      min_price: Math.min(...values),
-      count: values.length,
-    }))
+    const data = await request<{ regions: any[] }>({ url: '/products/quote/regional' })
+    regions.value = data.regions
   } catch {}
 }
 

@@ -65,16 +65,7 @@ async function load() {
   loadError.value = false
   list.value = []
   try {
-    const canonicalStatus = ['confirmed', 'delivered', 'completed'][tab.value]
-    const rows = await request<any[]>({ url: '/supplier/orders', data: { status: canonicalStatus, page_size: 100 } })
-    list.value = rows.map(row => ({
-      ...row,
-      cycle_days: Math.max(1, Math.ceil(Number(row.duration_hours || 24) / 24)),
-      amount: Number(row.amount || 0),
-      product_name: row.snapshot?.product_name || row.snapshot?.server_name || `#${row.product_id || ''}`,
-      gpu_model: row.snapshot?.gpu_model || '',
-      status: row.status === 'confirmed' ? 'paid' : row.status === 'delivered' ? 'delivering' : row.status,
-    }))
+    list.value = await request<OrderItem[]>({ url: '/supplier/orders', data: { status_filter: STATUS_MAP[tab.value] } })
   } catch { loadError.value = true }
   loading.value = false
 }
@@ -97,15 +88,11 @@ function showDeliver(id: number) {
 }
 
 async function onDeliver() {
+  if (!sshText.value) { uni.showToast({ title: t('请填写SSH信息'), icon: 'none' }); return }
   showSheet.value = false
   try {
-    const order = await request<any>({ url: `/supplier/orders/${deliveringId.value}`, silent: true })
-    await request({
-      url: `/supplier/orders/${deliveringId.value}/start-delivery`,
-      method: 'POST',
-      data: { version: order.version, note: '移动端发起统一 Agent 交付流程' },
-    })
-    uni.showToast({ title: t('已进入交付流程'), icon: 'success' })
+    await request({ url: `/orders/${deliveringId.value}/deliver`, method: 'POST', data: { ssh_info: sshText.value } })
+    uni.showToast({ title: t('交付成功'), icon: 'success' })
     await load()
   } catch {}
 }

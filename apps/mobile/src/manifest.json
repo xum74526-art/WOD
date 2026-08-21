@@ -1,21 +1,14 @@
 {
-    "name" : "KAI",
+    "name" : "WOD",
     "appid" : "",
     "description" : "AI 算力资产管理 App",
     "locale" : "zh-Hans",
     "versionName" : "1.0.3",
     "versionCode" : "103",
     "transformPx" : false,
-    "vueVersion" : "3",
     "app-plus" : {
         "usingComponents" : true,
         "darkmode" : true,
-        "screenOrientation" : [ "portrait-primary" ],
-        "splashscreen" : {
-            "alwaysShowBeforeRender" : true,
-            "autoclose" : true,
-            "waiting" : false
-        },
         "safearea" : {
             "background" : "#FFFFFF",
             "backgroundDark" : "#0A0E14",
@@ -28,8 +21,7 @@
         },
         "distribute" : {
             "android" : {
-                "packagename" : "com.example.kai",
-                "schemes" : "kai",
+                "packagename" : "com.example.wod",
                 "minSdkVersion" : 23,
                 "targetSdkVersion" : 36,
                 "abiFilters" : [ "arm64-v8a", "armeabi-v7a" ],
@@ -51,7 +43,7 @@
                     "xxxhdpi" : "static/logo/logo-192.png"
                 },
                 "ios" : {
-                    "appstore" : "static/logo/ios-appstore-1024.png",
+                    "appstore" : "static/logo/logo.png",
                     "ipad" : {
                         "app" : "static/logo/logo-144.png",
                         "app@2x" : "static/logo/logo-192.png"
@@ -63,22 +55,12 @@
                 }
             },
             "ios" : {
-                "appid" : "com.example.kai",
-                "devices" : "iphone",
-                "deploymentTarget" : "13.0",
-                "urltypes" : "kai",
-                "dSYMs" : true,
-                "privacyDescription" : {
-                    "NSPhotoLibraryUsageDescription" : "用于选择您主动提交的头像、社区媒体、实名材料或付款凭证。",
-                    "NSPhotoLibraryAddUsageDescription" : "用于按您的操作保存应用生成或下载的图片。",
-                    "NSCameraUsageDescription" : "用于拍摄您主动提交的头像、社区媒体、实名材料或付款凭证。",
-                    "NSMicrophoneUsageDescription" : "仅在您主动录制社区视频时用于录制声音。"
-                }
+                "dSYMs" : false
             }
         }
     },
     "h5" : {
-        "title" : "KAI",
+        "title" : "WOD",
         "router" : {
             "mode" : "history",
             "base" : "/"
@@ -87,7 +69,7 @@
             "port" : 9000,
             "proxy" : {
                 "/api" : {
-                    "target" : "http://127.0.0.1:8100",
+                    "target" : "http://127.0.0.1:8000",
                     "changeOrigin" : true
                 }
             }

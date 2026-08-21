@@ -72,7 +72,6 @@ const { t } = useI18nStore()
 const userStore = useUserStore()
 const info = reactive({ company_name: '', contact: '', phone: '', region: '', desc: '' })
 const loadError = ref(false)
-const profileVersion = ref<number | null>(null)
 type SupplierNotificationKey = 'order_enabled' | 'device_enabled' | 'revenue_enabled'
 const notificationPrefs = reactive<NotificationPreferences>({
   order_enabled: true,
@@ -88,20 +87,13 @@ const notificationSaving = ref<SupplierNotificationKey | null>(null)
 async function load() {
   loadError.value = false
   const [supplierResult] = await Promise.allSettled([
-    request({ url: '/supplier/settings' }),
+    request({ url: '/supplier/mine' }),
     loadNotificationSettings(),
   ])
   if (supplierResult.status === 'fulfilled') {
-    const d = supplierResult.value as any
-    if (d?.application) {
-      Object.assign(info, {
-        company_name: d.profile?.store_name || d.application.company_name,
-        contact: d.profile?.contact_name || d.application.contact_name,
-        phone: d.profile?.contact_phone || d.application.contact_phone,
-        region: d.profile?.service_regions?.[0] || d.application.region || '',
-        desc: d.profile?.introduction || '',
-      })
-      profileVersion.value = d.profile?.version || null
+    const d = supplierResult.value
+    if (d && (d as any).status === 'approved') {
+      Object.assign(info, d)
     }
   } else {
     loadError.value = true
@@ -111,19 +103,7 @@ onShow(() => load())
 
 async function onSave() {
   try {
-    const result = await request<any>({
-      url: '/supplier/settings',
-      method: 'PUT',
-      data: {
-        store_name: info.company_name,
-        contact_name: info.contact,
-        contact_phone: info.phone,
-        service_regions: info.region ? [info.region] : [],
-        introduction: info.desc,
-        version: profileVersion.value,
-      },
-    })
-    profileVersion.value = result.version
+    await request({ url: '/supplier/profile', method: 'PUT', data: { ...info } })
     uni.showToast({ title: t('已保存'), icon: 'success' })
   } catch {}
 }

@@ -4,7 +4,7 @@ import test from 'node:test'
 import {
   buildHomeTrendRequests,
   HOME_TREND_LIMIT,
-  selectHomeTrendCandidates,
+  isHomeMarketStatusDisplayable,
 } from '../src/utils/home-market-policy.ts'
 
 function item(index: number) {
@@ -45,48 +45,10 @@ test('duplicate model identities never create duplicate homepage requests', () =
   assert.deepEqual(plan.map((entry) => entry.item.gpu_model), ['GPU1', 'GPU2'])
 })
 
-test('historical GetDeploying rows remain eligible when the snapshot has no live offers', () => {
-  const candidates = selectHomeTrendCandidates([{
-    ...item(1),
-    sources: ['getdeploying'],
-    volatility_sources: ['getdeploying'],
-    median_price_cny: 3.38,
-    sample_count: 0,
-    market_status: 'delayed',
-    hot_eligible: true,
-    history_day_count: 14,
-  }])
-
-  assert.equal(candidates.length, 1)
-  assert.equal(candidates[0].gpu_model, 'GPU1')
-})
-
-test('live rows stay ahead of historical fallback rows', () => {
-  const candidates = selectHomeTrendCandidates([
-    {
-      ...item(1), median_price_cny: 2, sample_count: 0, market_status: 'delayed',
-      hot_eligible: true, history_day_count: 14,
-    },
-    {
-      ...item(2), median_price_cny: 3, sample_count: 4, market_status: 'live',
-      hot_eligible: true, history_day_count: 7,
-    },
-  ])
-
-  assert.deepEqual(candidates.map((entry) => entry.gpu_model), ['GPU2', 'GPU1'])
-})
-
-test('unavailable or history-free rows are excluded from the homepage', () => {
-  const candidates = selectHomeTrendCandidates([
-    {
-      ...item(1), median_price_cny: 2, sample_count: 0, market_status: 'unavailable',
-      hot_eligible: false, history_day_count: 0,
-    },
-    {
-      ...item(2), median_price_cny: 3, sample_count: 0, market_status: 'delayed',
-      hot_eligible: false, history_day_count: 1,
-    },
-  ])
-
-  assert.equal(candidates.length, 0)
+test('homepage keeps delayed quotes visible but rejects unusable source states', () => {
+  assert.equal(isHomeMarketStatusDisplayable('live'), true)
+  assert.equal(isHomeMarketStatusDisplayable('delayed'), true)
+  assert.equal(isHomeMarketStatusDisplayable('stale'), false)
+  assert.equal(isHomeMarketStatusDisplayable('unavailable'), false)
+  assert.equal(isHomeMarketStatusDisplayable('pending'), false)
 })

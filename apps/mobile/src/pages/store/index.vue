@@ -29,7 +29,7 @@
             <view class="pbot">
               <text class="pp">{{ fmtCH(p.price) }}</text><text class="pu">/h</text>
               <text class="pstock">{{ t('rentable') }} {{ p.stock }}</text>
-              <text class="p-buy" :class="{ disabled: !directCommerceEnabled || !p.purchasable }">{{ t(!directCommerceEnabled ? 'viewDetail' : (p.purchasable ? 'buyUsage' : 'marketOfferUnavailableShort')) }}</text>
+              <text class="p-buy" :class="{ disabled: !p.purchasable }">{{ t(p.purchasable ? 'buyUsage' : 'marketOfferUnavailableShort') }}</text>
             </view>
           </view>
         </view>
@@ -53,11 +53,9 @@ import { formatNumber, fmtCH } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
-const directCommerceEnabled = isDirectCommerceEnabled()
 const info = ref<SupplierInfo | null>(null)
 const products = ref<Product[]>([])
 const sid = ref(0)

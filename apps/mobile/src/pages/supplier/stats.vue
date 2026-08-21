@@ -55,7 +55,6 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '@/api/request'
-import { getSupplierDevices } from '@/api/supplier'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import Chart from '@/components/Chart.vue'
@@ -78,20 +77,7 @@ function utilizationWidth(value: unknown): string {
 async function load() {
   loadError.value = false
   try {
-    const [analytics, devices] = await Promise.all([
-      request<any>({ url: '/supplier/analytics' }),
-      getSupplierDevices('all'),
-    ])
-    stats.value = {
-      total_products: devices.length,
-      total_orders: Number(analytics.metrics?.order_count || 0),
-      revenue_trend: analytics.series || [],
-      device_stats: devices.map(device => ({
-        ...device,
-        utilization: Number(analytics.metrics?.utilization_rate || 0),
-      })),
-      attention_count: devices.filter(device => device.status !== 'online').length,
-    }
+    stats.value = await request({ url: '/supplier/stats' }) as any
   } catch {
     stats.value = null
     loadError.value = true

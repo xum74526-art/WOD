@@ -22,13 +22,13 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  async function login(identifier: string, password: string) {
-    const res = await userApi.login(identifier, password)
+  async function login(phone: string, password: string) {
+    const res = await userApi.login(phone, password)
     return applySession(res)
   }
 
-  async function register(username: string, identifier: string, password: string, invite_code?: string, captcha_key?: string, captcha_code?: string) {
-    const res = await userApi.register(username, identifier, password, invite_code, captcha_key, captcha_code)
+  async function register(username: string, phone: string, password: string, invite_code?: string, captcha_key?: string, captcha_code?: string) {
+    const res = await userApi.register(username, phone, password, invite_code, captcha_key, captcha_code)
     return applySession(res)
   }
 
@@ -68,8 +68,6 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function logout() {
-    // request() captures the token before local state is cleared.
-    userApi.revokeSession().catch(() => {})
     clearSession()
     clearAuth()
     uni.$emit('wod-auth-expired')

@@ -71,17 +71,6 @@ test('supplier operations and shared account tools remain separate groups', () =
   assert.ok(groups[1].items.every((item) => !item.route.includes('/pages/supplier/')))
 })
 
-test('App Store companion profile removes procurement entry without hiding history', () => {
-  const personal = getProfileWidgetGroups('personal', true, false).flatMap((group) => group.items)
-  const supplier = getProfileWidgetGroups('supplier', true, false).flatMap((group) => group.items)
-
-  assert.ok(!personal.some((item) => item.key === 'procurement'))
-  assert.ok(!supplier.some((item) => item.key === 'procurement'))
-  assert.ok(personal.some((item) => item.key === 'orders'))
-  assert.ok(personal.some((item) => item.key === 'wallet'))
-  assert.ok(supplier.some((item) => item.key === 'orders'))
-})
-
 test('role-facing aliases use their own AppIcon paths', () => {
   for (const [businessIcon, genericIcon] of [
     ['bank-card', 'wallet'],

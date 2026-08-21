@@ -207,7 +207,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onShow } from '@dcloudio/uni-app'
 import {
   createBuyRequest,
   createBuyRequestQuote,
@@ -224,8 +224,7 @@ import SegmentedControl from '@/components/SegmentedControl.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useUserStore } from '@/store/user'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHr, formatLocalDateTime, formatNumberInput, fromCardHours, toCardHours } from '@/utils/format'
-import { isDirectCommerceEnabled } from '@/utils/ios-distribution'
+import { fmtCH, fmtCHr, formatNumberInput, fromCardHours, toCardHours } from '@/utils/format'
 
 const userStore = useUserStore()
 const i18n = useI18nStore()
@@ -248,10 +247,6 @@ const detail = ref<{ request: BuyRequestItem; quotes: BuyRequestQuote[] } | null
 const quoteForm = reactive({ unit_price: '', total_price: '', message: '' })
 const form = reactive({
   gpu_model: '', gpu_variant: '', quantity: '1', gpu_hours: '', max_unit_price: '', budget: '', region: '', contact: '', phone: '', remark: '', need_hosting: false, invoice_required: false,
-})
-
-onLoad(() => {
-  if (!isDirectCommerceEnabled()) uni.switchTab({ url: '/pages/profile/index' })
 })
 
 const requestType = computed<'online' | 'offline'>(() => requestTab.value === 0 ? 'online' : 'offline')
@@ -311,7 +306,7 @@ async function setModel(item: MarketModel) {
     const sources = item.sources.filter((source) => source !== 'wod')
     const market = await getLatestMarket(item.gpu_model, item.gpu_variant, sources.length ? sources : item.sources, true)
     marketReference.value = market.summary.median_price_cny
-    marketReferenceTime.value = market.server_time ? formatLocalDateTime(market.server_time, i18n.lang) : '--'
+    marketReferenceTime.value = market.server_time ? new Date(market.server_time).toLocaleString() : '--'
   } catch { marketReference.value = null; marketReferenceTime.value = '--' }
 }
 function onModelChange(event: any) {
@@ -382,7 +377,6 @@ async function submitQuote() {
 }
 
 onShow(async () => {
-  if (!isDirectCommerceEnabled()) return
   i18n.updateTabBar()
   try { await userStore.fetchProfile() } catch {}
   if (!isSupplierMode.value) viewMode.value = 'buyer'

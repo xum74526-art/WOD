@@ -1,7 +1,8 @@
-export const apiBaseUrl = (
-  process.env.NEXT_PUBLIC_KAI_API_BASE_URL ??
-  (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8100")
-).replace(/\/$/, "");
+/**
+ * Web requests stay on the Next.js origin. The server-side BFF forwards them
+ * to the canonical mobile backend without exposing its JWT to browser code.
+ */
+export const apiBaseUrl = "";
 
 export type ApiErrorBody = {
   detail?: string;
@@ -60,28 +61,19 @@ export type ApiEnvelope<T, M extends Record<string, unknown> = Record<string, un
 const publicEnvelopeCache = new Map<string, { expiresAt: number; value: ApiEnvelope<unknown> }>();
 const publicEnvelopeRequests = new Map<string, Promise<ApiEnvelope<unknown>>>();
 
-function cookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const value = document.cookie.split("; ").find((part) => part.startsWith(`${name}=`));
-  return decodeURIComponent(value?.split("=").slice(1).join("=") || "");
-}
-
 export async function apiEnvelopeRequest<T, M extends Record<string, unknown> = Record<string, unknown>>(
   path: string,
   init: RequestInit = {},
 ): Promise<ApiEnvelope<T, M>> {
   const headers = new Headers(init.headers);
   const method = (init.method || "GET").toUpperCase();
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrf = cookie("kai_csrf");
-    if (csrf) headers.set("X-CSRF-Token", csrf);
-  }
+  const formBody = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body && !formBody && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      credentials: "include",
+      credentials: "same-origin",
       cache: init.cache ?? "no-store",
       headers,
     });
@@ -140,12 +132,23 @@ export function passwordLogin(input: { identifier: string; password: string }) {
   return apiRequest<{ user: AuthUser }>("/api/v1/auth/password/login", { method: "POST", body: JSON.stringify(input) });
 }
 
-export function passwordRegister(input: { display_name: string; identifier: string; password: string }) {
+export function getAuthCaptcha() {
+  return apiRequest<{ key: string; image: string }>("/api/v1/auth/captcha");
+}
+
+export function passwordRegister(input: { display_name: string; identifier: string; password: string; captcha_key: string; captcha_code: string; invite_code?: string }) {
   return apiRequest<{ user: AuthUser }>("/api/v1/auth/password/register", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function getKaiAuthConfig() {
   return apiRequest<{ configured: boolean; issuer: string; scopes: string[] }>("/api/v1/auth/kai/config");
+}
+
+export function exchangeKaiTicket(ticket: string) {
+  return apiRequest<{ user: AuthUser; return_to: string }>("/api/v1/auth/kai/exchange", {
+    method: "POST",
+    body: JSON.stringify({ ticket }),
+  });
 }
 
 export function kaiWebAuthorizationUrl(intent: "login" | "register", returnTo: string) {

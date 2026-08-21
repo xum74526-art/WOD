@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { MobileAssetsWorkspace } from "@/components/mobile-assets-workspace";
 
-export default function AccountAssetsPage() {
-  redirect("/account/leases");
-}
+export const metadata: Metadata = { title: "个人资产" };
+
+export default function AccountAssetsPage() { return <MobileAssetsWorkspace />; }
