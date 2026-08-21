@@ -1,7 +1,7 @@
 [Unit]
 Description=KAI Next.js frontend
-After=network-online.target docker.service
-Wants=network-online.target
+After=network-online.target wod-mobile-api.service
+Wants=network-online.target wod-mobile-api.service
 
 [Service]
 Type=simple
@@ -12,6 +12,7 @@ Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
+EnvironmentFile=-/home/ubuntu/wod/runtime/web.env
 ExecStart=/usr/bin/node /home/ubuntu/wod/frontend-release/server.js
 Restart=always
 RestartSec=5
