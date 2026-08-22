@@ -4,7 +4,7 @@
       <view class="logo-area">
         <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
         <view class="brand-copy">
-          <text class="logo">WOD</text>
+          <text class="logo">{{ t('appName') }}</text>
           <text class="sub">{{ t('AI 算力资产管理') }}</text>
         </view>
       </view>
@@ -209,7 +209,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     await userStore.loginWithKaiTicket(callback.ticket)
     uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
     uni.showToast({ title: t('loginSuccess'), icon: 'success' })
-    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+    setTimeout(enterAuthenticatedApp, 500)
     return true
   } catch {
     // Keep the callback retryable when ticket exchange failed because of a
@@ -219,6 +219,13 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     processingKaiCallback = ''
     submitting.value = false
   }
+}
+
+function enterAuthenticatedApp() {
+  uni.switchTab({
+    url: '/pages/index/index',
+    fail: () => uni.reLaunch({ url: '/pages/index/index' }),
+  })
 }
 
 function runtimeKaiCallback() {
@@ -273,13 +280,19 @@ function registerKaiRuntimeListener() {
   // Some iOS runtime versions deliver the refreshed scheme arguments through
   // newintent after onShow. Listening to both paths avoids a timing dependency.
   // #ifdef APP-PLUS
-  document.addEventListener('newintent', probeKaiReturnCallback, false)
+  const globalEvent = (plus as unknown as {
+    globalEvent?: { addEventListener(event: string, listener: () => void): void }
+  }).globalEvent
+  globalEvent?.addEventListener('newintent', probeKaiReturnCallback)
   // #endif
 }
 
 function unregisterKaiRuntimeListener() {
   // #ifdef APP-PLUS
-  document.removeEventListener('newintent', probeKaiReturnCallback, false)
+  const globalEvent = (plus as unknown as {
+    globalEvent?: { removeEventListener(event: string, listener: () => void): void }
+  }).globalEvent
+  globalEvent?.removeEventListener('newintent', probeKaiReturnCallback)
   // #endif
 }
 
@@ -305,6 +318,10 @@ onLoad((options) => {
 })
 
 onShow(() => {
+  if (userStore.isLogin) {
+    setTimeout(enterAuthenticatedApp, 800)
+    return
+  }
   probeKaiReturnCallback()
 })
 

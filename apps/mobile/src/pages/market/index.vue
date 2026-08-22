@@ -212,7 +212,7 @@ function goStore(sid?: number) { if (sid) nav('/pages/store/index?id=' + sid) }
 function marketSourceName(source?: Product['market_source']) {
   if (source === 'vast') return 'Vast.ai'
   if (source === 'autodl') return 'AutoDL'
-  return 'WOD'
+  return '北斗 kai'
 }
 function marketSourceLabel(product: Pick<Product, 'market_source' | 'market_source_status'>) {
   const name = marketSourceName(product.market_source)

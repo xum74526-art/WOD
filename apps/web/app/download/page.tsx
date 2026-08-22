@@ -4,8 +4,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "下载 KAI App",
-  description: "下载 KAI Android App，或查看 iOS 与 Android 应用商店发布状态。",
+  title: "下载 北斗 kai App",
+  description: "下载 北斗 kai Android App，或查看 iOS 与 Android 应用商店发布状态。",
 };
 
 const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim();
@@ -16,12 +16,12 @@ export default function DownloadPage() {
       <SiteHeader />
       <main className="download-page__main">
         <header className="download-hero">
-          <p className="hero-eyebrow">KAI MOBILE / 1.0.3</p>
+          <p className="hero-eyebrow">北斗 kai MOBILE / 1.0.3</p>
           <h1>把算力市场<br />装进口袋</h1>
-          <p>网页与 App 使用同一个 KAI 账号、余额、订单和算力数据。选择你的设备开始使用。</p>
+          <p>网页与 App 使用同一个北斗 kai 账号、余额、订单和算力数据。选择你的设备开始使用。</p>
         </header>
 
-        <section className="download-platforms" aria-label="KAI App 下载方式">
+        <section className="download-platforms" aria-label="北斗 kai App 下载方式">
           <article className="download-platform download-platform--android">
             <div className="download-platform__head">
               <span className="download-platform__icon"><AndroidLogo size={34} weight="fill" /></span>
@@ -72,7 +72,7 @@ export default function DownloadPage() {
 
         <aside className="download-security-note">
           <ShieldCheck size={21} weight="duotone" />
-          <div><strong>只从 KAI 官方页面安装</strong><span>正式 APK 发布时，这里会显示文件大小和校验信息。应用商店入口在审核通过前保持占位状态。</span></div>
+          <div><strong>只从北斗 kai 官方页面安装</strong><span>正式 APK 发布时，这里会显示文件大小和校验信息。应用商店入口在审核通过前保持占位状态。</span></div>
         </aside>
       </main>
       <SiteFooter />

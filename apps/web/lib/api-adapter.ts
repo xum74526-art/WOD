@@ -319,7 +319,7 @@ function product(value: unknown) {
     price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
     total_quantity: number(item.reported_stock, stock),
     available_quantity: stock,
-    source_name: text(item.supplier_name, text(item.market_source, "WOD")),
+    source_name: text(item.supplier_name, text(item.market_source, "北斗 kai")),
     source_observed_at: text(item.price_updated_at) || null,
     server_online: Boolean(item.purchasable),
     purchasable: Boolean(item.purchasable),
@@ -383,7 +383,7 @@ function mapOrderStatus(status: string) {
 function order(value: unknown, supplierView = false) {
   const item = object(value);
   const mappedStatus = mapOrderStatus(text(item.status));
-  const supplierName = text(item.supplier_name, "WOD 商家");
+  const supplierName = text(item.supplier_name, "北斗 kai 商家");
   const available: string[] = [];
   if (!supplierView && item.status === "delivering") available.push("complete");
   if (!supplierView && item.status === "paid") available.push("cancel");

@@ -177,7 +177,7 @@ const sourceName = computed(() => {
   const source = product.value?.market_source
   if (source === 'vast') return 'Vast.ai'
   if (source === 'autodl') return 'AutoDL'
-  return 'WOD'
+  return '北斗 kai'
 })
 const chartHistoryState = computed(() => marketHistoryDisplayState(candles.value))
 const chartObservedDays = computed(() => marketObservedDayCount(candles.value))

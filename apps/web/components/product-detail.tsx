@@ -69,10 +69,10 @@ export function ProductDetail({ productId }: { productId: string }) {
   return <div className="product-detail-layout direct-product-detail">
     <section className="product-detail-main">
       <Link className="dossier-back" href="/market">返回算力市场</Link>
-      <p className="hero-eyebrow">WOD MOBILE BACKEND / SHARED DATA</p>
+      <p className="hero-eyebrow">北斗 kai MOBILE BACKEND / SHARED DATA</p>
       <h1>{product.gpu_model} <small>{product.memory}</small></h1>
       <p>{product.name} · {product.region} · {product.purchasable ? "库存有效，可从共享钱包下单" : unavailable}</p>
-      <div className="product-source"><ShieldCheck size={19}/><span>数据来源：{product.source_name || "WOD 手机端后端"}<small>Web 与 App 共用商品、库存、钱包、订单和交付状态，不再维护 Web 独立副本。</small></span></div>
+      <div className="product-source"><ShieldCheck size={19}/><span>数据来源：{product.source_name || "北斗 kai 手机端后端"}<small>Web 与 App 共用商品、库存、钱包、订单和交付状态，不再维护 Web 独立副本。</small></span></div>
       <div className="direct-product-specs"><article><Cpu size={20}/><small>GPU</small><strong>{product.gpu_model} / {product.memory}</strong></article><article><HardDrives size={20}/><small>可用库存</small><strong>{product.available_quantity} 台</strong></article><article><TerminalWindow size={20}/><small>交付方式</small><strong>商家人工交付 SSH</strong></article></div>
       <section className="direct-product-description"><h2>资源与使用说明</h2><p>{product.description || "商家暂未补充资源说明。"}</p></section>
       <div className="sandbox-disclosure"><ShieldCheck size={20}/><div><strong>手机端统一交付流程</strong><span>钱包金额下单后先冻结；商家填写有效 SSH 信息，买家确认交付后订单完成并生成资产。Web 不保存另一套订单或余额。</span></div></div>

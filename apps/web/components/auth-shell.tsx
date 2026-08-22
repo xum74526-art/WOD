@@ -14,16 +14,16 @@ type AuthShellProps = {
 export function AuthShell({ mode }: AuthShellProps) {
   const { locale, t } = useI18n();
   const copy = mode === "login"
-    ? { kicker: "KAI ACCOUNT ACCESS", title: t("auth.intro.login", "连接你的算力资源"), description: locale === "en" ? "One account for buyer, supplier, and platform workspaces, with features shown by role." : "一个账号进入买家、商家与平台工作台，按角色显示对应功能。" }
+    ? { kicker: "北斗 kai ACCOUNT ACCESS", title: t("auth.intro.login", "连接你的算力资源"), description: locale === "en" ? "One account for buyer, supplier, and platform workspaces, with features shown by role." : "一个账号进入买家、商家与平台工作台，按角色显示对应功能。" }
     : mode === "register"
-      ? { kicker: "JOIN KAI", title: t("auth.intro.register", "创建你的 KAI 账号"), description: locale === "en" ? "Add an SSH public key after registration to rent compute and manage connections." : "注册后添加 SSH 公钥，即可租用算力并管理连接。" }
-      : { kicker: "ACCOUNT SECURITY", title: t("auth.intro.forgot", "找回 KAI 账号"), description: locale === "en" ? "Update your sign-in credentials and continue managing compute resources and leases." : "通过注册邮箱更新登录凭证，继续管理算力资源和租约。" };
+      ? { kicker: "JOIN 北斗 kai", title: t("auth.intro.register", "创建你的北斗 kai 账号"), description: locale === "en" ? "Add an SSH public key after registration to rent compute and manage connections." : "注册后添加 SSH 公钥，即可租用算力并管理连接。" }
+      : { kicker: "ACCOUNT SECURITY", title: t("auth.intro.forgot", "找回北斗 kai 账号"), description: locale === "en" ? "Update your sign-in credentials and continue managing compute resources and leases." : "通过注册邮箱更新登录凭证，继续管理算力资源和租约。" };
 
   return (
     <div className="site-page auth-page">
       <SiteHeader authMode="guest" />
       <main className="auth-page__main">
-        <section className="auth-page__intro" aria-label={locale === "en" ? "KAI account roles" : "KAI 账号用途"}>
+        <section className="auth-page__intro" aria-label={locale === "en" ? "北斗 kai account roles" : "北斗 kai 账号用途"}>
           <span className="home-v2-kicker">{copy.kicker}</span>
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>

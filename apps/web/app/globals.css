@@ -231,18 +231,37 @@ input:focus-visible {
 .brand {
   display: inline-flex;
   align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
 .brand__logo {
   display: block;
-  width: 72px;
+  width: 58px;
   height: 32px;
   object-fit: contain;
 }
 
+.brand__name {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.brand__name b {
+  color: var(--brand-strong);
+  font-weight: 760;
+}
+
 .brand--inverse .brand__logo {
   filter: brightness(0) invert(1);
+}
+
+.brand--inverse .brand__name,
+.brand--inverse .brand__name b {
+  color: #fff;
 }
 
 .site-header {

@@ -145,7 +145,7 @@ function isAutoPost(post: PostItem): boolean {
 }
 
 function displaySource(post: PostItem): string {
-  if (i18n.lang === 'en' && post.source_key === 'wod-market') return 'WOD Market'
+  if (i18n.lang === 'en' && post.source_key === 'wod-market') return '北斗 kai Market'
   return post.source_name || t('sourceLabel')
 }
 

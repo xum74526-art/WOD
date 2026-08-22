@@ -13,8 +13,8 @@ import "./kai-ui.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "KAI 算力市场",
-    template: "%s | KAI",
+    default: "北斗 kai 算力市场",
+    template: "%s | 北斗 kai",
   },
   description: "比较、购买和管理真实 GPU 算力资源。",
 };

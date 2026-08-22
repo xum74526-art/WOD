@@ -385,7 +385,7 @@ function startMarketTimer() {
 function sourceLabel(source: string) {
   if (source === 'vast') return 'Vast.ai'
   if (source === 'autodl') return 'AutoDL'
-  return source === 'wod' ? 'WOD' : source
+  return source === 'wod' ? '北斗 kai' : source
 }
 
 function stopMarketTimer() {

@@ -269,7 +269,7 @@ const ranges = computed(() => [
 const sourceOptions = computed(() => [
   { key: 'autodl', name: 'AutoDL' },
   { key: 'vast', name: 'Vast.ai' },
-  { key: 'wod', name: 'WOD' },
+  { key: 'wod', name: '北斗 kai' },
 ])
 const currentModel = computed(() => models.value.find((item) => modelKey(item) === selectedKey.value) || models.value[0])
 const availableSourceOptions = computed(() => sourceOptions.value.filter((source) => currentModel.value?.sources.includes(source.key)))

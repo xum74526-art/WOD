@@ -61,7 +61,7 @@ export function KycWorkspace() {
           <label><span>{kind === "business" ? "企业名称" : "真实姓名"}</span><input required minLength={2} maxLength={128} value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder={kind === "business" ? "营业执照上的企业全称" : "身份证件上的姓名"}/></label>
           <label><span>{kind === "business" ? "统一社会信用代码" : "身份证件号码"}</span><input required minLength={6} maxLength={64} autoComplete="off" value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="仅用于人工核验，加密保存"/></label>
           {kind === "business" && <label><span>法定代表人</span><input required minLength={2} maxLength={64} value={representative} onChange={(event) => setRepresentative(event.target.value)} placeholder="营业执照登记的法定代表人"/></label>}
-          <label className="kyc-declaration"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)}/><span>我确认以上资料真实有效，并授权 KAI 用于商家准入与结算身份核验。</span></label>
+          <label className="kyc-declaration"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)}/><span>我确认以上资料真实有效，并授权北斗 kai 用于商家准入与结算身份核验。</span></label>
           <button className="commerce-primary" type="submit" disabled={busy || !accepted || data.status === "pending" || data.status === "approved"}>{busy ? "正在加密提交…" : data.status === "pending" ? "等待管理员审核" : data.status === "approved" ? "认证已通过" : "提交人工审核"}</button>
         </form>
       </div>

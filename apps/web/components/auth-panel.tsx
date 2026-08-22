@@ -189,7 +189,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
             <h2>{isRegister ? (locale === "en" ? "Create account with Kai" : "使用 Kai 创建账号") : (locale === "en" ? "Continue with Kai" : "使用 Kai 继续")}</h2>
-            <p>{locale === "en" ? "KAI receives only the verified identity result and never reads or stores your Kai password." : "KAI 只接收统一身份结果，不会读取或保存你的 Kai 密码。"}</p>
+            <p>{locale === "en" ? "北斗 kai receives only the verified identity result and never reads or stores your Kai password." : "北斗 kai 只接收统一身份结果，不会读取或保存你的 Kai 密码。"}</p>
             <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false ? (locale === "en" ? "Kai client credentials are not configured" : "管理员尚未配置 Kai 客户端凭据") : (locale === "en" ? "You will verify with Kai and return securely" : "将前往 Kai 完成身份验证，然后安全返回")}</span></div>
           </div>
         )}
@@ -214,7 +214,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       </form>
 
       <div className="auth-panel__footer">
-        <p>{isRegister ? t("auth.already", "已经有 KAI 账号？") : t("auth.new", "第一次使用 KAI？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
+        <p>{isRegister ? t("auth.already", "已经有北斗 kai 账号？") : t("auth.new", "第一次使用北斗 kai？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
         <div><Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link><Link href="/terms">{t("footer.terms", "用户协议")}</Link><Link href="/help">{t("auth.help", "登录帮助")}</Link></div>
       </div>
     </section>

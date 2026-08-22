@@ -111,7 +111,7 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
               <button type="button" onClick={() => void logout()}><SignOut size={14}/>{t("nav.logout", "退出登录")}</button>
             </div>}
           </div>
-        </> : <><Link className="text-button" href="/register">{t("nav.register", "注册")}</Link><Link className="primary-link" href="/login">{t("nav.login", "登录 KAI")}</Link></>}
+        </> : <><Link className="text-button" href="/register">{t("nav.register", "注册")}</Link><Link className="primary-link" href="/login">{t("nav.login", "登录 北斗 kai")}</Link></>}
         <button className="mobile-menu-button" type="button" aria-label={open ? (locale === "en" ? "Close menu" : "关闭菜单") : (locale === "en" ? "Open menu" : "打开菜单")} aria-expanded={open} aria-controls="site-mobile-drawer" onClick={() => setOpen((value) => !value)}>{open ? <X size={20}/> : <List size={20}/>}</button>
       </div>
     </div>
@@ -131,7 +131,7 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
             <Link href={consoleHref(user)}>{consoleLabel}</Link>
             {user.role !== "admin" && <Link href="/account/settings">{t("nav.accountSecurity", "账户与安全")}</Link>}
             <button type="button" onClick={() => void logout()}><SignOut size={16}/>{t("nav.logout", "退出登录")}</button>
-          </> : <><Link href="/register">{t("nav.register", "注册")}</Link><Link className="site-mobile-primary" href="/login">{t("nav.login", "登录 KAI")}</Link></>}
+          </> : <><Link href="/register">{t("nav.register", "注册")}</Link><Link className="site-mobile-primary" href="/login">{t("nav.login", "登录 北斗 kai")}</Link></>}
         </footer>
       </aside>
     </div>}
