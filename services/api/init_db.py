@@ -36,6 +36,7 @@ _ENSURE = {
         "reviewed_by", "reviewed_at", "updated_at",
     ],
     "ledger": ["ref_payment_order_id", "event_key"],
+    "payment_orders": ["provider_checkout_url", "checkout_started_at"],
 }
 
 _DATETIME_COLS = {
@@ -43,6 +44,7 @@ _DATETIME_COLS = {
     "rights_checked_at", "ingested_at", "reviewed_at", "updated_at",
     "ocr_updated_at",
     "consent_at",
+    "checkout_started_at",
 }
 _INTEGER_COLS = {"quantity", "video_duration", "stock", "supplier_id", "ref_payment_order_id", "reviewed_by"}
 _NUMERIC_COLS = {"sell_price", "source_price", "exchange_rate", "reliability", "withdrawable_balance", "withdraw_frozen"}

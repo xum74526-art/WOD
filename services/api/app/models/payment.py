@@ -23,6 +23,11 @@ class PaymentOrder(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="mapay")
     provider_trade_no: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
+    # A validated provider URL makes reopening a checkout token idempotent.
+    provider_checkout_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # Recorded before outbound create I/O so other workers can distinguish an
+    # in-flight request from an abandoned/uncertain upstream order.
+    checkout_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     channel: Mapped[str | None] = mapped_column(String(24), nullable=True)
     status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
     amount_cny: Mapped[Decimal] = mapped_column(Numeric(18, 2))

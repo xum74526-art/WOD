@@ -81,10 +81,17 @@ class Settings(BaseSettings):
     QIXIANGPAY_KEY: str = ""
     QIXIANGPAY_NOTIFY_URL: str = ""
     QIXIANGPAY_RETURN_URL: str = ""
+    # Optional public API origin (normally ending in /api) used to return an
+    # absolute first-party checkout URL to native clients.
+    QIXIANGPAY_PUBLIC_API_BASE_URL: str = ""
     QIXIANGPAY_PAYMENT_TYPES: str = ""
     QIXIANGPAY_DEVICE: str = "jump"
     QIXIANGPAY_HTTP_TIMEOUT: float = 10.0
+    QIXIANGPAY_MAX_RESPONSE_BYTES: int = 256 * 1024
+    # Forwarded client IP headers are accepted only from these immediate peers.
+    QIXIANGPAY_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
     QIXIANGPAY_CHECKOUT_TTL_SECONDS: int = 300
+    QIXIANGPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
     QIXIANGPAY_MIN_AMOUNT_CNY: float = 0.01
     QIXIANGPAY_MAX_AMOUNT_CNY: float = 50000.0
     # Disabled until metered compute output and an auditable settlement source
