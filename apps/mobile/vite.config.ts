@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: env.KAI_H5_API_TARGET || env.WOD_H5_API_TARGET || 'http://127.0.0.1:8000',
+          target: env.KAI_H5_API_TARGET || env.WOD_H5_API_TARGET || 'https://wod.kai.com',
           changeOrigin: true,
         },
       },

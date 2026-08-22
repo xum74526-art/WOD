@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const TOKEN_COOKIE = "wod_web_token";
 const RETURN_TO_COOKIE = "wod_web_return_to";
-const DEFAULT_API_ORIGIN = "http://127.0.0.1:8000";
+const DEFAULT_API_ORIGIN = "https://wod.kai.com";
 
 type JsonObject = Record<string, unknown>;
 type WodEnvelope = { code?: number; msg?: string; data?: unknown; detail?: unknown };
