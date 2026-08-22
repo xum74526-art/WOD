@@ -5,6 +5,7 @@ Wants=network-online.target kai-api.service
 
 [Service]
 Type=simple
+SuccessExitStatus=143
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/wod/frontend-release
