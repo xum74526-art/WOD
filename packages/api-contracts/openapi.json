@@ -221,7 +221,7 @@
       "Body_upload_avatar_api_user_avatar_post": {
         "properties": {
           "avatar": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Avatar",
             "type": "string"
           }
@@ -235,7 +235,7 @@
       "Body_upload_community_media_api_community_media_upload_post": {
         "properties": {
           "media": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Media",
             "type": "string"
           }
@@ -251,7 +251,7 @@
           "back": {
             "anyOf": [
               {
-                "format": "binary",
+                "contentMediaType": "application/octet-stream",
                 "type": "string"
               },
               {
@@ -263,7 +263,7 @@
           "front": {
             "anyOf": [
               {
-                "format": "binary",
+                "contentMediaType": "application/octet-stream",
                 "type": "string"
               },
               {
@@ -296,7 +296,7 @@
             "type": "boolean"
           },
           "receipt": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Receipt",
             "type": "string"
           },
@@ -1515,6 +1515,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -5523,7 +5530,7 @@
     },
     "/api/payments/mapay/notify": {
       "get": {
-        "operationId": "notify_api_payments_mapay_notify_get",
+        "operationId": "notify_get_api_payments_mapay_notify_get",
         "responses": {
           "200": {
             "content": {
@@ -5536,13 +5543,13 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Notify",
+        "summary": "Notify Get",
         "tags": [
           "payment"
         ]
       },
       "post": {
-        "operationId": "notify_api_payments_mapay_notify_get",
+        "operationId": "notify_post_api_payments_mapay_notify_post",
         "responses": {
           "200": {
             "content": {
@@ -5555,7 +5562,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Notify",
+        "summary": "Notify Post",
         "tags": [
           "payment"
         ]
@@ -5695,9 +5702,44 @@
         ]
       }
     },
-    "/api/payments/qixiangpay/config": {
+    "/api/payments/qixiang/checkout/{token}": {
       "get": {
-        "operationId": "payment_config_api_payments_qixiangpay_config_get",
+        "operationId": "checkout_api_payments_qixiang_checkout__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Checkout",
+        "tags": [
+          "payment"
+        ]
+      }
+    },
+    "/api/payments/qixiang/config": {
+      "get": {
+        "operationId": "payment_config_api_payments_qixiang_config_get",
         "responses": {
           "200": {
             "content": {
@@ -5719,9 +5761,9 @@
         ]
       }
     },
-    "/api/payments/qixiangpay/notify": {
+    "/api/payments/qixiang/notify": {
       "get": {
-        "operationId": "notify_api_payments_qixiangpay_notify_get",
+        "operationId": "notify_get_api_payments_qixiang_notify_get",
         "responses": {
           "200": {
             "content": {
@@ -5734,13 +5776,13 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Notify",
+        "summary": "Notify Get",
         "tags": [
           "payment"
         ]
       },
       "post": {
-        "operationId": "notify_api_payments_qixiangpay_notify_get",
+        "operationId": "notify_post_api_payments_qixiang_notify_post",
         "responses": {
           "200": {
             "content": {
@@ -5753,15 +5795,108 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Notify",
+        "summary": "Notify Post",
         "tags": [
           "payment"
         ]
       }
     },
-    "/api/payments/qixiangpay/orders/{order_no}": {
+    "/api/payments/qixiang/orders": {
       "get": {
-        "operationId": "get_payment_api_payments_qixiangpay_orders__order_no__get",
+        "operationId": "list_payments_api_payments_qixiang_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_no",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order No"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Payments",
+        "tags": [
+          "payment"
+        ]
+      }
+    },
+    "/api/payments/qixiang/orders/{order_no}": {
+      "get": {
+        "operationId": "get_payment_api_payments_qixiang_orders__order_no__get",
         "parameters": [
           {
             "in": "path",
@@ -5804,9 +5939,54 @@
         ]
       }
     },
-    "/api/payments/qixiangpay/orders/{order_no}/query": {
+    "/api/payments/qixiang/orders/{order_no}/cancel": {
       "post": {
-        "operationId": "query_payment_api_payments_qixiangpay_orders__order_no__query_post",
+        "operationId": "cancel_payment_api_payments_qixiang_orders__order_no__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_no",
+            "required": true,
+            "schema": {
+              "title": "Order No",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Cancel Payment",
+        "tags": [
+          "payment"
+        ]
+      }
+    },
+    "/api/payments/qixiang/orders/{order_no}/query": {
+      "post": {
+        "operationId": "query_payment_api_payments_qixiang_orders__order_no__query_post",
         "parameters": [
           {
             "in": "path",
@@ -5849,9 +6029,9 @@
         ]
       }
     },
-    "/api/payments/qixiangpay/recharge-orders": {
+    "/api/payments/qixiang/recharge-orders": {
       "post": {
-        "operationId": "create_payment_api_payments_qixiangpay_recharge_orders_post",
+        "operationId": "create_payment_api_payments_qixiang_recharge_orders_post",
         "requestBody": {
           "content": {
             "application/json": {

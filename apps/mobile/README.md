@@ -1,6 +1,8 @@
 # KAI Mobile
 
-uni-app + Vue 3 + TypeScript 前端，一套源码可构建 iOS、Android 和 H5。
+uni-app + Vue 3 + TypeScript 前端，一套源码可构建 iOS、Android 和 H5。小程序与 Harmony 构建链已从本仓库移除，避免维护未交付平台的工具链与安全补丁。
+
+`.npmrc` 暂时允许 DCloud 编译器使用已验证的 Vite 6 安全版，因为当前插件仍把 peer 版本精确写为 5.2.8。H5 和 App 生产构建是该临时约束的回归门禁；DCloud 官方支持 Vite 6 后应删除它。
 
 ## 开发
 
@@ -15,7 +17,7 @@ npm run dev:h5
 - `KAI_H5_API_TARGET`：H5 开发代理目标；云端联调使用 `https://wod.kai.com`。
 - `VITE_KAI_APP_API_BASE`：原生 App 使用的完整 HTTPS API，生产地址为 `https://wod.kai.com/api`。
 
-浏览器页面统一请求 `/api`；原生 App 在构建时写入 `VITE_WOD_APP_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
+浏览器页面统一请求 `/api`；原生 App 在构建时只读取 `VITE_KAI_APP_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
 
 ## 验证
 

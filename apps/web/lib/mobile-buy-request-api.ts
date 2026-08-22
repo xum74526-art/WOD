@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api";
-const path = (value: string) => `/api/v1/mobile${value}`;
+import { canonicalApiPath as path } from "@/lib/canonical-api";
 export type MobileBuyRequest = { id: number; user_id: number; buyer_name: string; request_type: "online" | "offline"; gpu_model: string; gpu_variant?: string; quantity: number; gpu_hours?: number; max_unit_price?: number; budget?: number; currency: string; region?: string; billing_mode?: string; requirements: Record<string, unknown>; contact?: string; phone?: string; status: string; quote_count: number; expires_at?: string; created_at?: string; updated_at?: string; legacy: boolean };
 export type MobileBuyQuote = { id: number; buy_request_id: number; supplier_id: number; supplier_name: string; supplier_rating?: number; unit_price?: number; total_price: number; currency: string; available_at?: string; message?: string; status: string; expires_at?: string; created_at?: string };
 export type MobileBuyRequestSummary = { active: number; new_quotes: number; pending_confirmation: number };

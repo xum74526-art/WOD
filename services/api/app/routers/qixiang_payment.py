@@ -26,7 +26,11 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/payments/qixiang", tags=["payment"])
 # Keep the historical KAI prefix available while existing Web/App builds drain.
 # Both prefixes operate on the same qixiangpay rows and accounting boundary.
-legacy_router = APIRouter(prefix="/api/payments/qixiangpay", tags=["payment-legacy"])
+legacy_router = APIRouter(
+    prefix="/api/payments/qixiangpay",
+    tags=["payment-legacy"],
+    include_in_schema=False,
+)
 
 
 @router.get("/config")
@@ -136,16 +140,22 @@ async def _notification_params(request: Request) -> dict:
     return params
 
 
-@router.get("/notify", response_class=PlainTextResponse)
-@legacy_router.api_route(
-    "/notify",
-    methods=["GET", "POST"],
-    response_class=PlainTextResponse,
-)
-async def notify(request: Request, db: Session = Depends(get_db)):
+async def _notify(request: Request, db: Session):
     try:
         handle_notification(db, await _notification_params(request))
         return PlainTextResponse("success")
     except BizError:
         db.rollback()
         return PlainTextResponse("fail", status_code=400)
+
+
+@router.get("/notify", response_class=PlainTextResponse)
+@legacy_router.get("/notify", response_class=PlainTextResponse)
+async def notify_get(request: Request, db: Session = Depends(get_db)):
+    return await _notify(request, db)
+
+
+@router.post("/notify", response_class=PlainTextResponse)
+@legacy_router.post("/notify", response_class=PlainTextResponse)
+async def notify_post(request: Request, db: Session = Depends(get_db)):
+    return await _notify(request, db)

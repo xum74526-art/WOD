@@ -22,7 +22,7 @@ API 运行配置从 `infra/api.env.example` 复制，Web 运行配置从 `infra/
 ## 发布流程
 
 1. 在 CI 或 Linux 构建机上检出确定的 Git 提交。
-2. 运行 `npm run check:all`。
+2. 运行 `npm run check:all` 和 `npm run audit:deps`，Web、Mobile 和 Python 依赖必须为 0 已知漏洞。
 3. 执行 API 数据库备份，再运行 `services/api/init_db.py`。
 4. 构建 Next.js standalone，发布到 `/home/ubuntu/wod-releases/<commit>/`。
 5. 先在临时端口做健康检查，再原子切换 `current` 软链接。

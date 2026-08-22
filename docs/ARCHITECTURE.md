@@ -18,7 +18,7 @@ iOS 和 Android 共享 uni-app/Vue 3 的页面、状态和 API 层。只有系�
 
 ```text
 Web Browser
-  -> Next.js /api/v1 BFF
+  -> Next.js /api/v1/canonical BFF
   -> FastAPI /api
   -> Database / Uploads
 
@@ -34,6 +34,11 @@ Web BFF 只负责以下事情：
 - 为现有 Web 页面做有限的字段适配。
 
 BFF 不保存业务状态，不实现第二套订单或钱包规则。
+
+`/api/v1/mobile/*` 只是已发布 Web 链接的过渡别名；新 Web 代码必须使用
+`/api/v1/canonical/*`。`/api/payments/qixiangpay/*` 同样只为已安装旧版 App
+保留，当前 Web/iOS/Android 只使用 `/api/payments/qixiang/*`。这些别名不得
+出现在 OpenAPI 或新客户端源码中。
 
 ## API 内部边界
 
@@ -57,7 +62,19 @@ services/api/app/
 - `packages/api-contracts/openapi.json` 只能通过脚本生成。
 - Mobile 请求必须经过 `apps/mobile/src/api/request.ts`。
 - Web 浏览器请求必须使用同源 `/api/v1`。
+- 本地 Web 联调也把 `API_ORIGIN` 指向云端 API，因此与线上 Web 和 App 读写同一数据库。
 - 订单、支付、钱包、商家审核等状态枚举由后端定义。
+
+## 兼容层治理
+
+兼容代码只能出现在明确的边界，并必须有保留原因：
+
+- 支付路由别名：保护已安装旧 App 和历史回调；
+- 历史 MaPay 订单查询：保护已入账订单的可追溯性；
+- 数据库迁移和旧加密数据读取：保护线上数据。
+
+页面差异、旧环境变量、开发默认值不得继续新增兼容层。
+`check-client-boundaries.mjs` 和 OpenAPI 一致性检查在 CI 中强制这些边界。
 
 ## 平台差异
 

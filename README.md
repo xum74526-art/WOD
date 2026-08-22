@@ -5,7 +5,7 @@ KAI 是一个 monorepo：一个 FastAPI 业务后端、一个 Next.js Web，以�
 ## 架构
 
 ```text
-Web Browser ──> Next.js BFF /api/v1 ──┐
+Web Browser ──> Next.js BFF /api/v1/canonical ──┐
                                       ├──> FastAPI /api ──> wod.db
 iOS / Android ─────────────────────┘
 ```
@@ -17,6 +17,7 @@ iOS / Android ─────────────────────┘
 - `infra` 只保留当前 systemd/nginx 部署文件；运行数据和发布包不进 Git。
 
 详细边界见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+生产门禁和仍需外部配置的上线条件见 [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md)。
 
 ## 目录
 
@@ -35,16 +36,9 @@ iOS / Android ─────────────────────┘
 需要 Python 3.12、Node.js 20.19+ 和 npm。
 
 ```bash
-# API
-python3.12 -m venv services/api/.venv
-services/api/.venv/bin/python -m pip install -r services/api/requirements.txt
-(cd services/api && .venv/bin/python init_db.py)
-(cd services/api && MARKET_HISTORY_SYNC_ENABLED=false COMMUNITY_ONLINE_ENABLED=false \
-  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1)
-
-# Web（另一终端）
+# Web（默认连接云端唯一数据库）
 npm ci --prefix apps/web
-API_ORIGIN=http://127.0.0.1:8000 npm --prefix apps/web run dev
+API_ORIGIN=https://wod.kai.com npm --prefix apps/web run dev
 
 # Mobile H5（可选，另一终端）
 npm ci --prefix apps/mobile
@@ -53,10 +47,10 @@ npm --prefix apps/mobile run dev:h5
 
 - Web：`http://127.0.0.1:9100`
 - Mobile H5：`http://127.0.0.1:9000`
-- API 文档：`http://127.0.0.1:8000/docs`
+- 云端 API 文档：`https://wod.kai.com/docs`
 - Web 健康检查：`http://127.0.0.1:9100/api/v1/health`
 
-本地 SQLite 位于 `services/api/wod.db`（Git 忽略）。完整说明见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
+修改 FastAPI 时可按开发文档另外启动本地沙箱数据库；普通 Web/iOS 联调一律使用云端 API。完整说明见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
 
 ## 验证
 
@@ -65,7 +59,7 @@ npm run export:openapi
 npm run check:all
 ```
 
-`check:all` 会运行 API 编译和单元测试、Web 类型检查与生产构建、Mobile 类型检查与单元测试，以及 Mobile/API 契约检查。
+`check:all` 会运行 API 编译和单元测试、OpenAPI 快照一致性、Web 测试/类型检查/生产构建、Mobile 测试/类型检查，以及客户端边界检查。
 
 ## 开发原则
 

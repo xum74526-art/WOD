@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api";
+import { canonicalApiPath } from "@/lib/canonical-api";
 
-const mobilePath = (path: string) => `/api/v1/mobile${path}`;
 
 export type MobileAsset = {
   id: number;
@@ -280,16 +280,16 @@ export type MobileUserProfile = {
 
 export function mobileAvatarUrl(avatar?: string | null) {
   if (!avatar) return "";
-  if (avatar.startsWith("/user/avatars/")) return mobilePath(avatar);
+  if (avatar.startsWith("/user/avatars/")) return canonicalApiPath(avatar);
   return avatar;
 }
 
 export function getMobileUserProfile() {
-  return apiRequest<MobileUserProfile>(mobilePath("/user/profile"));
+  return apiRequest<MobileUserProfile>(canonicalApiPath("/user/profile"));
 }
 
 export function updateMobileUserProfile(username: string) {
-  return apiRequest<MobileUserProfile>(mobilePath("/user/profile"), {
+  return apiRequest<MobileUserProfile>(canonicalApiPath("/user/profile"), {
     method: "PUT",
     body: JSON.stringify({ username }),
   });
@@ -298,166 +298,166 @@ export function updateMobileUserProfile(username: string) {
 export function uploadMobileAvatar(file: File) {
   const form = new FormData();
   form.set("avatar", file);
-  return apiRequest<{ avatar: string }>(mobilePath("/user/avatar"), { method: "POST", body: form });
+  return apiRequest<{ avatar: string }>(canonicalApiPath("/user/avatar"), { method: "POST", body: form });
 }
 
 export function changeMobilePassword(old_password: string, new_password: string) {
-  return apiRequest<{ changed: boolean }>(mobilePath("/user/password"), {
+  return apiRequest<{ changed: boolean }>(canonicalApiPath("/user/password"), {
     method: "POST",
     body: JSON.stringify({ old_password, new_password }),
   });
 }
 
 export function switchMobileRole() {
-  return apiRequest<{ role: string }>(mobilePath("/user/role/switch"), { method: "POST" });
+  return apiRequest<{ role: string }>(canonicalApiPath("/user/role/switch"), { method: "POST" });
 }
 
 export function getMobileAssets(status?: string) {
   const query = status && status !== "all" ? `?status_filter=${encodeURIComponent(status)}` : "";
-  return apiRequest<MobileAssetSummary>(mobilePath(`/assets${query}`));
+  return apiRequest<MobileAssetSummary>(canonicalApiPath(`/assets${query}`));
 }
 
 export function getMobileAsset(id: number) {
-  return apiRequest<MobileAsset>(mobilePath(`/assets/${id}`));
+  return apiRequest<MobileAsset>(canonicalApiPath(`/assets/${id}`));
 }
 
 export function getOnboardingMine() {
-  return apiRequest<OnboardingItem[]>(mobilePath("/onboarding/mine"));
+  return apiRequest<OnboardingItem[]>(canonicalApiPath("/onboarding/mine"));
 }
 
 export function submitOnboarding(input: Omit<OnboardingItem, "id" | "status" | "created_at">) {
-  return apiRequest<OnboardingItem>(mobilePath("/onboarding"), { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<OnboardingItem>(canonicalApiPath("/onboarding"), { method: "POST", body: JSON.stringify(input) });
 }
 
 export function sellMobileAsset(id: number) {
-  return apiRequest<{ id: number; status: string; sell_price: number; pnl: number }>(mobilePath(`/assets/${id}/sell`), { method: "POST" });
+  return apiRequest<{ id: number; status: string; sell_price: number; pnl: number }>(canonicalApiPath(`/assets/${id}/sell`), { method: "POST" });
 }
 
 export function getRevenueBundle(range = 30) {
   return Promise.all([
-    apiRequest<RevenueSummary>(mobilePath("/revenue")),
-    apiRequest<RevenuePoint[]>(mobilePath(`/revenue/chart?range_days=${range}`)),
-    apiRequest<RevenueRecord[]>(mobilePath("/revenue/records")),
-    apiRequest<RebateSummary>(mobilePath("/user/rebate")),
+    apiRequest<RevenueSummary>(canonicalApiPath("/revenue")),
+    apiRequest<RevenuePoint[]>(canonicalApiPath(`/revenue/chart?range_days=${range}`)),
+    apiRequest<RevenueRecord[]>(canonicalApiPath("/revenue/records")),
+    apiRequest<RebateSummary>(canonicalApiPath("/user/rebate")),
   ]);
 }
 
 export function getInviteBundle() {
   return Promise.all([
-    apiRequest<InviteSummary>(mobilePath("/invite/summary")),
-    apiRequest<{ total: number; items: InviteRecord[] }>(mobilePath("/invite/records")),
+    apiRequest<InviteSummary>(canonicalApiPath("/invite/summary")),
+    apiRequest<{ total: number; items: InviteRecord[] }>(canonicalApiPath("/invite/records")),
   ]);
 }
 
 export function listCoupons(status = "") {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest<Coupon[]>(mobilePath(`/coupons${query}`));
+  return apiRequest<Coupon[]>(canonicalApiPath(`/coupons${query}`));
 }
 
 export function redeemCoupon(code: string) {
-  return apiRequest<Coupon>(mobilePath("/coupons/redeem"), { method: "POST", body: JSON.stringify({ code }) });
+  return apiRequest<Coupon>(canonicalApiPath("/coupons/redeem"), { method: "POST", body: JSON.stringify({ code }) });
 }
 
 export function getBankCardBundle() {
   return Promise.all([
-    apiRequest<BankCard[]>(mobilePath("/bank-cards")),
-    apiRequest<BankCardConfig>(mobilePath("/bank-cards/config")),
+    apiRequest<BankCard[]>(canonicalApiPath("/bank-cards")),
+    apiRequest<BankCardConfig>(canonicalApiPath("/bank-cards/config")),
   ]);
 }
 
 export function addBankCard(input: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean }) {
-  return apiRequest<BankCard>(mobilePath("/bank-cards"), { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<BankCard>(canonicalApiPath("/bank-cards"), { method: "POST", body: JSON.stringify(input) });
 }
 
 export function setDefaultBankCard(id: number) {
-  return apiRequest<unknown>(mobilePath(`/bank-cards/${id}/default`), { method: "POST" });
+  return apiRequest<unknown>(canonicalApiPath(`/bank-cards/${id}/default`), { method: "POST" });
 }
 
 export function deleteBankCard(id: number) {
-  return apiRequest<unknown>(mobilePath(`/bank-cards/${id}`), { method: "DELETE" });
+  return apiRequest<unknown>(canonicalApiPath(`/bank-cards/${id}`), { method: "DELETE" });
 }
 
 export function getVerification() {
-  return apiRequest<VerificationInfo>(mobilePath("/verification"));
+  return apiRequest<VerificationInfo>(canonicalApiPath("/verification"));
 }
 
 export function submitVerification(input: { real_name: string; id_card: string; sensitive_consent: boolean }) {
-  return apiRequest<VerificationInfo>(mobilePath("/verification"), { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<VerificationInfo>(canonicalApiPath("/verification"), { method: "POST", body: JSON.stringify(input) });
 }
 
 export function uploadVerificationPhotos(front?: File | null, back?: File | null) {
   const form = new FormData();
   if (front) form.set("front", front);
   if (back) form.set("back", back);
-  return apiRequest<VerificationInfo>(mobilePath("/verification/upload"), { method: "POST", body: form });
+  return apiRequest<VerificationInfo>(canonicalApiPath("/verification/upload"), { method: "POST", body: form });
 }
 
 export function getMobileWallet() {
-  return apiRequest<MobileWallet>(mobilePath("/wallet"));
+  return apiRequest<MobileWallet>(canonicalApiPath("/wallet"));
 }
 
 export function getMobileLedger() {
-  return apiRequest<{ total: number; page: number; page_size: number; items: MobileLedgerItem[] }>(mobilePath("/wallet/ledger?page=1&page_size=20"));
+  return apiRequest<{ total: number; page: number; page_size: number; items: MobileLedgerItem[] }>(canonicalApiPath("/wallet/ledger?page=1&page_size=20"));
 }
 
 export function getWithdrawalBundle() {
   return Promise.all([
-    apiRequest<WithdrawalConfig>(mobilePath("/withdrawals/config")),
-    apiRequest<{ total: number; items: WithdrawalOrder[] }>(mobilePath("/withdrawals?page=1&page_size=20")),
-    apiRequest<BankCard[]>(mobilePath("/bank-cards")),
+    apiRequest<WithdrawalConfig>(canonicalApiPath("/withdrawals/config")),
+    apiRequest<{ total: number; items: WithdrawalOrder[] }>(canonicalApiPath("/withdrawals?page=1&page_size=20")),
+    apiRequest<BankCard[]>(canonicalApiPath("/bank-cards")),
   ]);
 }
 
 export function getRechargePaymentConfig() {
-  return apiRequest<RechargePaymentConfig>(mobilePath("/payments/qixiangpay/config"));
+  return apiRequest<RechargePaymentConfig>(canonicalApiPath("/payments/qixiang/config"));
 }
 
 export function createRechargePayment(amount_cny: number, payment_type: "alipay" | "wxpay") {
-  return apiRequest<RechargePaymentOrder>(mobilePath("/payments/qixiangpay/recharge-orders"), {
+  return apiRequest<RechargePaymentOrder>(canonicalApiPath("/payments/qixiang/recharge-orders"), {
     method: "POST",
     body: JSON.stringify({ amount_cny, payment_type }),
   });
 }
 
 export function getRechargePayment(orderNo: string) {
-  return apiRequest<RechargePaymentOrder>(mobilePath(`/payments/qixiangpay/orders/${encodeURIComponent(orderNo)}`));
+  return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}`));
 }
 
 export function queryRechargePayment(orderNo: string) {
-  return apiRequest<RechargePaymentOrder>(mobilePath(`/payments/qixiangpay/orders/${encodeURIComponent(orderNo)}/query`), { method: "POST" });
+  return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/query`), { method: "POST" });
 }
 
 export function createWithdrawal(input: { amount_card_hours: number; bank_card_id: number; client_request_id: string }) {
-  return apiRequest<WithdrawalOrder>(mobilePath("/withdrawals"), { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<WithdrawalOrder>(canonicalApiPath("/withdrawals"), { method: "POST", body: JSON.stringify(input) });
 }
 
 export function cancelWithdrawal(id: number) {
-  return apiRequest<WithdrawalOrder>(mobilePath(`/withdrawals/${id}/cancel`), { method: "POST" });
+  return apiRequest<WithdrawalOrder>(canonicalApiPath(`/withdrawals/${id}/cancel`), { method: "POST" });
 }
 
 export function getSupplierRevenueBundle() {
   return Promise.all([
-    apiRequest<SupplierWallet>(mobilePath("/supplier/wallet")),
-    apiRequest<SupplierRevenueRecord[]>(mobilePath("/supplier/revenue/detail")),
+    apiRequest<SupplierWallet>(canonicalApiPath("/supplier/wallet")),
+    apiRequest<SupplierRevenueRecord[]>(canonicalApiPath("/supplier/revenue/detail")),
   ]);
 }
 
 export function getSupplierStats() {
-  return apiRequest<SupplierStats>(mobilePath("/supplier/stats"));
+  return apiRequest<SupplierStats>(canonicalApiPath("/supplier/stats"));
 }
 
 export function getSupplierRebate() {
-  return apiRequest<SupplierRebate>(mobilePath("/supplier/rebate"));
+  return apiRequest<SupplierRebate>(canonicalApiPath("/supplier/rebate"));
 }
 
 export function getSupplierProfile() {
-  return apiRequest<SupplierProfile>(mobilePath("/supplier/mine"));
+  return apiRequest<SupplierProfile>(canonicalApiPath("/supplier/mine"));
 }
 
 export function getMobileStore(id: number) {
-  return apiRequest<MobileStore>(mobilePath(`/supplier/${id}`));
+  return apiRequest<MobileStore>(canonicalApiPath(`/supplier/${id}`));
 }
 
 export function updateSupplierProfile(input: Partial<Pick<SupplierProfile, "company_name" | "contact" | "phone" | "region" | "desc">>) {
-  return apiRequest<SupplierProfile>(mobilePath("/supplier/profile"), { method: "PUT", body: JSON.stringify(input) });
+  return apiRequest<SupplierProfile>(canonicalApiPath("/supplier/profile"), { method: "PUT", body: JSON.stringify(input) });
 }

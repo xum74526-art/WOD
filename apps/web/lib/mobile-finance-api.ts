@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api";
-const path = (value: string) => `/api/v1/mobile${value}`;
+import { canonicalApiPath as path } from "@/lib/canonical-api";
 export type FinanceVerification = { id: number; user_id: number; username: string; real_name: string; id_card_masked: string; status: "pending" | "verified" | "rejected"; reject_reason?: string | null; front_photo_uploaded: boolean; back_photo_uploaded: boolean; consent_recorded?: boolean; ocr_status?: string | null; ocr_message?: string | null; created_at?: string | null; updated_at?: string | null };
 export type FinanceWithdrawal = { id: number; order_no: string; status: "reviewing" | "manual_payment_pending" | "paid" | "rejected" | "failed" | "canceled"; amount_card_hours: number; locked_rate_cny: number; gross_amount_cny: number; fee_cny: number; net_amount_cny: number; bank_card: { id: number; bank_name: string; card_number: string; card_last4?: string; holder: string }; review_note?: string | null; failure_reason?: string | null; bank_reference?: string | null; paid_at?: string | null; created_at?: string | null; updated_at?: string | null; user?: { id: number; username?: string } };
 export type PaymentInstructions = { holder: string; bank_name: string; card_number: string; phone?: string | null; amount_cny?: number; reveal_token: string; reveal_expires_at: string; notice?: string };

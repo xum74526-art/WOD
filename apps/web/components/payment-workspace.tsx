@@ -18,7 +18,7 @@ const amount = (value: unknown) => { const n = Number(value || 0); return Number
 function checkoutHref(checkoutUrl: string) {
   const parsed = new URL(checkoutUrl, window.location.origin);
   const match = parsed.pathname.match(/^\/api\/payments\/mapay\/checkout\/([A-Za-z0-9_-]+)$/);
-  return match ? `/api/v1/mobile/payments/mapay/checkout/${match[1]}` : parsed.toString();
+  return match ? `/api/v1/canonical/payments/mapay/checkout/${match[1]}` : parsed.toString();
 }
 
 function paymentLabel(status?: string) {

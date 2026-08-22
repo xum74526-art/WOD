@@ -1,40 +1,18 @@
 import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
+import { resolveApiOrigin } from "@/lib/server/api-origin";
+import {
+  callCanonicalApi as upstream,
+  callCanonicalMultipart as upstreamMultipart,
+  canonicalErrorMessage,
+  type CanonicalApiResult,
+  WEB_TOKEN_COOKIE as TOKEN_COOKIE,
+} from "@/lib/server/canonical-api-client";
 
-const TOKEN_COOKIE = "wod_web_token";
 const RETURN_TO_COOKIE = "wod_web_return_to";
-const DEFAULT_API_ORIGIN = "https://wod.kai.com";
 
 type JsonObject = Record<string, unknown>;
-type WodEnvelope = { code?: number; msg?: string; data?: unknown; detail?: unknown };
-type UpstreamResult = { ok: boolean; status: number; body: WodEnvelope; response: Response };
-
-function apiOrigin() {
-  const configured = process.env.API_ORIGIN?.trim() || process.env.MOBILE_API_ORIGIN?.trim();
-  if (process.env.NODE_ENV === "production" && !configured) {
-    throw new Error("API_ORIGIN is required in production");
-  }
-  const value = (configured || DEFAULT_API_ORIGIN).replace(/\/$/, "");
-  const url = new URL(value);
-  const local = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
-  const ipv4 = url.hostname.split(".").map(Number);
-  const privateIpv4 = ipv4.length === 4
-    && ipv4.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
-    && (ipv4[0] === 10
-      || (ipv4[0] === 172 && ipv4[1] >= 16 && ipv4[1] <= 31)
-      || (ipv4[0] === 192 && ipv4[1] === 168));
-  const allowInsecureDevelopmentOrigin = process.env.NODE_ENV === "development"
-    && (process.env.API_ALLOW_INSECURE_HTTP === "true" || process.env.MOBILE_API_ALLOW_INSECURE_HTTP === "true")
-    && (local || privateIpv4);
-  if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
-    throw new Error("API_ORIGIN must contain only the backend origin without credentials, path, query, or fragment");
-  }
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && (local || allowInsecureDevelopmentOrigin))) {
-    throw new Error("API_ORIGIN must use HTTPS; private-network HTTP can only be enabled explicitly in development");
-  }
-  return value;
-}
 
 function object(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
@@ -93,50 +71,8 @@ async function requestBody(request: NextRequest): Promise<JsonObject> {
   }
 }
 
-async function upstream(
-  request: NextRequest,
-  path: string,
-  options: { method?: string; body?: unknown; query?: URLSearchParams; auth?: boolean } = {},
-): Promise<UpstreamResult> {
-  const headers = new Headers({ Accept: "application/json" });
-  const token = request.cookies.get(TOKEN_COOKIE)?.value;
-  if (options.auth !== false && token) headers.set("Authorization", `Bearer ${token}`);
-  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
-  if (body !== undefined) headers.set("Content-Type", "application/json");
-  const query = options.query?.toString();
-  let response: Response;
-  try {
-    response = await fetch(`${apiOrigin()}${path}${query ? `?${query}` : ""}`, {
-      method: options.method || request.method,
-      headers,
-      body,
-      cache: "no-store",
-      redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch (error) {
-    const message = error instanceof Error && error.name === "TimeoutError"
-      ? "业务服务响应超时"
-      : "暂时无法连接业务服务，请稍后重试";
-    return {
-      ok: false,
-      status: 503,
-      body: { code: 1, msg: message },
-      response: new Response(null, { status: 503 }),
-    };
-  }
-  let parsed: WodEnvelope = {};
-  try { parsed = object(await response.json()) as WodEnvelope; } catch { /* normalized below */ }
-  return { ok: response.ok && parsed.code !== 1, status: response.status, body: parsed, response };
-}
-
-function upstreamFailure(result: UpstreamResult) {
-  const detail = result.body.detail;
-  const message = result.body.msg
-    || (typeof detail === "string" ? detail : "")
-    || (Array.isArray(detail) ? detail.map((item) => text(object(item).msg)).filter(Boolean).join("；") : "")
-    || `业务服务请求失败 (${result.status})`;
-  return apiError(message, result.status || 502);
+function upstreamFailure(result: CanonicalApiResult) {
+  return apiError(canonicalErrorMessage(result), result.status || 502);
 }
 
 function authUser(value: unknown) {
@@ -203,43 +139,12 @@ function publicOrigin(request: NextRequest) {
   return new URL(`${protocol}://${host}`).origin;
 }
 
-async function upstreamMultipart(request: NextRequest, path: string, fields: string[], failureMessage: string, textFields: string[] = []): Promise<UpstreamResult> {
-  const headers = new Headers({ Accept: "application/json" });
-  const token = request.cookies.get(TOKEN_COOKIE)?.value;
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const incoming = await request.formData();
-  const outgoing = new FormData();
-  for (const field of fields) {
-    const file = incoming.get(field);
-    if (file instanceof File && file.size > 0) outgoing.set(field, file, file.name);
-  }
-  for (const field of textFields) {
-    const value = incoming.get(field);
-    if (typeof value === "string") outgoing.set(field, value);
-  }
-  let response: Response;
-  try {
-    response = await fetch(`${apiOrigin()}${path}`, {
-      method: "POST",
-      headers,
-      body: outgoing,
-      cache: "no-store",
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch {
-    return { ok: false, status: 503, body: { code: 1, msg: failureMessage }, response: new Response(null, { status: 503 }) };
-  }
-  let parsed: WodEnvelope = {};
-  try { parsed = object(await response.json()) as WodEnvelope; } catch { /* normalized by caller */ }
-  return { ok: response.ok && parsed.code !== 1, status: response.status, body: parsed, response };
-}
-
 async function proxyAvatar(request: NextRequest, filename: string) {
   if (!/^avatar_\d+\.(?:jpg|png|webp)$/.test(filename)) return apiError("头像不存在", 404);
   const query = request.nextUrl.searchParams.toString();
   let response: Response;
   try {
-    response = await fetch(`${apiOrigin()}/api/user/avatars/${filename}${query ? `?${query}` : ""}`, {
+    response = await fetch(`${resolveApiOrigin()}/api/user/avatars/${filename}${query ? `?${query}` : ""}`, {
       headers: { Accept: "image/avif,image/webp,image/png,image/jpeg" },
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
@@ -264,7 +169,7 @@ async function proxyCommunityMedia(request: NextRequest, userId: string, filenam
   const range = request.headers.get("range");
   if (range) headers.set("Range", range);
   let response: Response;
-  try { response = await fetch(`${apiOrigin()}/api/uploads/community/${userId}/${filename}`, { headers, cache: "no-store", signal: AbortSignal.timeout(30_000) }); }
+  try { response = await fetch(`${resolveApiOrigin()}/api/uploads/community/${userId}/${filename}`, { headers, cache: "no-store", signal: AbortSignal.timeout(30_000) }); }
   catch { return apiError("社区媒体暂时无法读取", 503); }
   if (!response.ok && response.status !== 206) return apiError("社区媒体不存在", response.status);
   const outgoing = new Headers({ "Content-Type": response.headers.get("content-type") || "application/octet-stream", "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
@@ -275,7 +180,7 @@ async function proxyCommunityMedia(request: NextRequest, userId: string, filenam
 async function proxyCheckout(request: NextRequest, token: string) {
   let response: Response;
   try {
-    response = await fetch(`${apiOrigin()}/api/payments/mapay/checkout/${encodeURIComponent(token)}`, {
+    response = await fetch(`${resolveApiOrigin()}/api/payments/mapay/checkout/${encodeURIComponent(token)}`, {
       headers: { Accept: "text/html" },
       cache: "no-store",
       redirect: "manual",
@@ -463,7 +368,7 @@ async function marketRanking(request: NextRequest) {
   return apiSuccess(entries, {
     observed_at: text(rankingData.server_time),
     count: entries.length,
-    source: "mobile-api",
+    source: "canonical-api",
   });
 }
 
@@ -514,7 +419,7 @@ async function marketSummary(request: NextRequest) {
     observed_at: text(rankingData.server_time),
     history_updated_at: text(rankingData.server_time),
     count: withHistory.length,
-    source: "mobile-api",
+    source: "canonical-api",
   });
 }
 
@@ -547,39 +452,45 @@ function unavailable(path: string) {
 
 export async function handleApi(request: NextRequest, segments: string[]) {
   if (isMutation(request.method) && !sameOrigin(request)) return apiError("请求来源校验失败", 403, "origin_mismatch");
-  const path = segments.join("/");
-  const checkout = path.match(/^mobile\/payments\/mapay\/checkout\/([A-Za-z0-9_-]+)$/);
+  const requestedPath = segments.join("/");
+  // `/mobile/*` was the original BFF pass-through name. Normalize it at one
+  // boundary so deployed bookmarks keep working while all current clients use
+  // the platform-neutral `/canonical/*` contract.
+  const path = requestedPath.startsWith("mobile/")
+    ? `canonical/${requestedPath.slice("mobile/".length)}`
+    : requestedPath;
+  const checkout = path.match(/^canonical\/payments\/mapay\/checkout\/([A-Za-z0-9_-]+)$/);
   if (checkout && request.method === "GET") return proxyCheckout(request, checkout[1]);
-  const avatar = path.match(/^mobile\/user\/avatars\/(avatar_\d+\.(?:jpg|png|webp))$/);
+  const avatar = path.match(/^canonical\/user\/avatars\/(avatar_\d+\.(?:jpg|png|webp))$/);
   if (avatar && request.method === "GET") return proxyAvatar(request, avatar[1]);
-  const communityMedia = path.match(/^mobile\/uploads\/community\/([1-9]\d*)\/([0-9a-f]{32}\.(?:jpg|png|webp|mp4|webm))$/);
+  const communityMedia = path.match(/^canonical\/uploads\/community\/([1-9]\d*)\/([0-9a-f]{32}\.(?:jpg|png|webp|mp4|webm))$/);
   if (communityMedia && request.method === "GET") return proxyCommunityMedia(request, communityMedia[1], communityMedia[2]);
-  const verificationPhoto = path.match(/^mobile\/finance\/verifications\/(\d+)\/photo\/(front|back)$/);
+  const verificationPhoto = path.match(/^canonical\/finance\/verifications\/(\d+)\/photo\/(front|back)$/);
   if (verificationPhoto && request.method === "GET") {
     const token = request.cookies.get(TOKEN_COOKIE)?.value;
     if (!token) return apiError("未登录", 401);
     let response: Response;
-    try { response = await fetch(`${apiOrigin()}/api/finance/verifications/${verificationPhoto[1]}/photo/${verificationPhoto[2]}`, { headers: { Authorization: `Bearer ${token}`, Accept: "image/*" }, cache: "no-store", signal: AbortSignal.timeout(20_000) }); }
+    try { response = await fetch(`${resolveApiOrigin()}/api/finance/verifications/${verificationPhoto[1]}/photo/${verificationPhoto[2]}`, { headers: { Authorization: `Bearer ${token}`, Accept: "image/*" }, cache: "no-store", signal: AbortSignal.timeout(20_000) }); }
     catch { return apiError("证件照片暂时无法读取", 503); }
     if (!response.ok) return apiError("证件照片无法读取", response.status);
     return new NextResponse(response.body, { status: response.status, headers: { "Content-Type": response.headers.get("content-type") || "image/jpeg", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   }
-  if (path === "mobile/verification/upload" && request.method === "POST") {
+  if (path === "canonical/verification/upload" && request.method === "POST") {
     const result = await upstreamMultipart(request, "/api/verification/upload", ["front", "back"], "身份证照片上传失败，请稍后重试");
-    return result.ok ? apiSuccess(result.body.data, { source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
-  if (path === "mobile/user/avatar" && request.method === "POST") {
+  if (path === "canonical/user/avatar" && request.method === "POST") {
     const result = await upstreamMultipart(request, "/api/user/avatar", ["avatar"], "头像上传失败，请稍后重试");
-    return result.ok ? apiSuccess(result.body.data, { source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
-  if (path === "mobile/community/media/upload" && request.method === "POST") {
+  if (path === "canonical/community/media/upload" && request.method === "POST") {
     const result = await upstreamMultipart(request, "/api/community/media/upload", ["media"], "社区媒体上传失败，请稍后重试");
-    return result.ok ? apiSuccess(result.body.data, { source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
-  const markPaid = path.match(/^mobile\/finance\/withdrawals\/(\d+)\/mark-paid$/);
+  const markPaid = path.match(/^canonical\/finance\/withdrawals\/(\d+)\/mark-paid$/);
   if (markPaid && request.method === "POST") {
     const result = await upstreamMultipart(request, `/api/finance/withdrawals/${markPaid[1]}/mark-paid`, ["receipt"], "打款凭证上传失败，请稍后重试", ["bank_reference", "paid_amount_cny", "paid_at", "payee_confirmed", "reveal_token"]);
-    return result.ok ? apiSuccess(result.body.data, { source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
   const body = await requestBody(request);
 
@@ -668,12 +579,12 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const result = await upstream(request, "/api/products", { query: request.nextUrl.searchParams, auth: false });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
-    return apiSuccess((page.data as unknown[]).map(product), { ...page.meta, count: page.meta.total, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "mobile-api" });
+    return apiSuccess((page.data as unknown[]).map(product), { ...page.meta, count: page.meta.total, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" });
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);
   if (productMatch && request.method === "GET") {
     const result = await upstream(request, `/api/products/${productMatch[1]}`, { auth: false });
-    return result.ok ? apiSuccess(product(result.body.data), { real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(product(result.body.data), { real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }) : upstreamFailure(result);
   }
   if (path === "public/market/ranking" && request.method === "GET") return marketRanking(request);
   if (path === "public/market/summary" && request.method === "GET") return marketSummary(request);
@@ -855,7 +766,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const ledger = ledgerResult.ok ? array(object(ledgerResult.body.data).items) : [];
     return apiSuccess({
       provider: {
-        kind: "payment", provider: "mobile-api", status: wallet.payment_service_enabled ? "configured" : "disabled",
+        kind: "payment", provider: "canonical-api", status: wallet.payment_service_enabled ? "configured" : "disabled",
         configured: Boolean(wallet.payment_service_enabled), capabilities: ["wallet", "ledger"], reason: wallet.payment_service_enabled ? null : "手机端支付尚未启用",
       },
       balances: [{ currency: "CARD_HOURS", available: number(wallet.balance).toFixed(2), frozen: number(wallet.frozen).toFixed(2) }],
@@ -867,7 +778,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
         amount: number(entry.amount).toFixed(4),
         currency: "CARD_HOURS",
         status: text(entry.direction) === "in" ? "succeeded" : text(entry.type),
-        provider: "mobile-api",
+        provider: "canonical-api",
         checkout_url: null,
         expires_at: null,
         created_at: text(entry.created_at),
@@ -881,17 +792,17 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess({ changed: true, revoked_other_sessions: 0 }) : upstreamFailure(result);
   }
 
-  if (path.startsWith("mobile/")) {
-    const mobilePath = path.slice("mobile/".length);
-    if (!mobilePath || mobilePath.includes("..")) return apiError("无效的手机端 API 路径", 400);
-    if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(mobilePath)) {
+  if (path.startsWith("canonical/")) {
+    const canonicalPath = path.slice("canonical/".length);
+    if (!canonicalPath || canonicalPath.includes("..")) return apiError("无效的业务 API 路径", 400);
+    if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
-    const result = await upstream(request, `/api/${mobilePath}`, {
+    const result = await upstream(request, `/api/${canonicalPath}`, {
       body: isMutation(request.method) ? body : undefined,
       query: request.nextUrl.searchParams,
     });
-    return result.ok ? apiSuccess(result.body.data, { source: "mobile-api" }) : upstreamFailure(result);
+    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
 
   return unavailable(path);

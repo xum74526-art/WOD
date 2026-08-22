@@ -14,12 +14,12 @@
 
 ```bash
 python3.12 -m venv services/api/.venv
-services/api/.venv/bin/python -m pip install -r services/api/requirements.txt
+services/api/.venv/bin/python -m pip install -r services/api/requirements-dev.txt
 npm ci --prefix apps/web
 npm ci --prefix apps/mobile
 ```
 
-## 启动 API
+## 启动 API（仅后端开发）
 
 ```bash
 (cd services/api && .venv/bin/python init_db.py)
@@ -31,15 +31,16 @@ npm ci --prefix apps/mobile
 
 API 健康检查是 `http://127.0.0.1:8000/health`，OpenAPI 页面是 `http://127.0.0.1:8000/docs`。
 
-## 启动 Web
+## 启动 Web（默认联调云端数据）
 
 ```bash
-API_ORIGIN=http://127.0.0.1:8000 \
-API_ALLOW_INSECURE_HTTP=true \
+API_ORIGIN=https://wod.kai.com \
 npm --prefix apps/web run dev
 ```
 
-Web 只使用服务端 `API_ORIGIN`，不要创建 `NEXT_PUBLIC_API_ORIGIN`。为了平滑升级，代码暂时兼容旧名 `MOBILE_API_ORIGIN`，新配置不应继续使用它。
+Web 只使用服务端 `API_ORIGIN`，不要创建 `NEXT_PUBLIC_API_ORIGIN`。这样本地 Web 的登录令牌仍由 HttpOnly Cookie 保护，业务数据与线上 Web/iOS 来自同一云端数据库。
+
+只有修改 FastAPI 本身时才把 `API_ORIGIN` 切换为 `http://127.0.0.1:8000`，且必须同时显式设置 `API_ALLOW_INSECURE_HTTP=true`。本地 SQLite 是后端开发沙箱，不是常规前端联调数据源。
 
 ## 启动 Mobile
 
@@ -59,11 +60,13 @@ npm run check:contracts
 ```
 
 Mobile 新增请求必须经过 `apps/mobile/src/api/request.ts`，并能在 OpenAPI 中找到对应的路由与 HTTP 方法。
+Web 新增的直通业务请求必须使用 `canonicalApiPath()`，不得在页面或客户端代码中配置数据库。
 
 ## 全量检查
 
 ```bash
 npm run check:all
+npm run audit:deps
 git diff --check
 ```
 

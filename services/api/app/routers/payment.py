@@ -78,8 +78,7 @@ async def _notification_params(request: Request) -> dict:
     return params
 
 
-@router.api_route("/notify", methods=["GET", "POST"], response_class=PlainTextResponse)
-async def notify(request: Request, db: Session = Depends(get_db)):
+async def _notify(request: Request, db: Session):
     try:
         awaitable_params = await _notification_params(request)
         handle_notification(db, awaitable_params)
@@ -87,3 +86,13 @@ async def notify(request: Request, db: Session = Depends(get_db)):
     except BizError:
         db.rollback()
         return PlainTextResponse("fail", status_code=400)
+
+
+@router.get("/notify", response_class=PlainTextResponse)
+async def notify_get(request: Request, db: Session = Depends(get_db)):
+    return await _notify(request, db)
+
+
+@router.post("/notify", response_class=PlainTextResponse)
+async def notify_post(request: Request, db: Session = Depends(get_db)):
+    return await _notify(request, db)

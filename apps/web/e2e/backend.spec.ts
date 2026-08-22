@@ -30,12 +30,12 @@ test("Web BFF 健康检查、公开商品与旧模块停用状态", async ({ req
 
   const products = await request.get("/api/v1/public/products");
   expect(products.ok()).toBeTruthy();
-  await expect(products.json()).resolves.toMatchObject({ meta: { source: "mobile-api" } });
+  await expect(products.json()).resolves.toMatchObject({ meta: { source: "canonical-api" } });
 
-  for (const path of ["/api/v1/mobile/market/models", "/api/v1/mobile/market/sources/status", "/api/v1/mobile/market/ranking"]) {
+  for (const path of ["/api/v1/canonical/market/models", "/api/v1/canonical/market/sources/status", "/api/v1/canonical/market/ranking"]) {
     const response = await request.get(path);
     expect(response.ok(), `${path} should be available`).toBeTruthy();
-    await expect(response.json()).resolves.toMatchObject({ meta: { source: "mobile-api" } });
+    await expect(response.json()).resolves.toMatchObject({ meta: { source: "canonical-api" } });
   }
 
   const oldTeams = await request.get("/api/v1/account/teams");
@@ -72,26 +72,26 @@ test("Web 注册、Cookie 会话、地址与通知全部使用手机端后端", 
   await expect(notifications.json()).resolves.toMatchObject({ meta: { unread: expect.any(Number) } });
 });
 
-test("新增的个人中心功能全部通过 BFF 使用手机端业务接口", async ({ request }) => {
+test("新增的个人中心功能全部通过 BFF 使用统一业务接口", async ({ request }) => {
   await register(request);
 
   const paths = [
-    "/api/v1/mobile/assets",
-    "/api/v1/mobile/revenue",
-    "/api/v1/mobile/revenue/chart?range_days=30",
-    "/api/v1/mobile/revenue/records",
-    "/api/v1/mobile/user/rebate",
-    "/api/v1/mobile/invite/summary",
-    "/api/v1/mobile/invite/records",
-    "/api/v1/mobile/coupons",
-    "/api/v1/mobile/bank-cards",
-    "/api/v1/mobile/bank-cards/config",
-    "/api/v1/mobile/verification",
-    "/api/v1/mobile/withdrawals/config",
-    "/api/v1/mobile/withdrawals?page=1&page_size=20",
-    "/api/v1/mobile/payments/mapay/config",
-    "/api/v1/mobile/onboarding/mine",
-    "/api/v1/mobile/buy-requests/summary",
+    "/api/v1/canonical/assets",
+    "/api/v1/canonical/revenue",
+    "/api/v1/canonical/revenue/chart?range_days=30",
+    "/api/v1/canonical/revenue/records",
+    "/api/v1/canonical/user/rebate",
+    "/api/v1/canonical/invite/summary",
+    "/api/v1/canonical/invite/records",
+    "/api/v1/canonical/coupons",
+    "/api/v1/canonical/bank-cards",
+    "/api/v1/canonical/bank-cards/config",
+    "/api/v1/canonical/verification",
+    "/api/v1/canonical/withdrawals/config",
+    "/api/v1/canonical/withdrawals?page=1&page_size=20",
+    "/api/v1/canonical/payments/mapay/config",
+    "/api/v1/canonical/onboarding/mine",
+    "/api/v1/canonical/buy-requests/summary",
   ];
 
   for (const path of paths) {
@@ -106,7 +106,7 @@ test("新增的个人中心功能全部通过 BFF 使用手机端业务接口", 
     data: { balances: [{ currency: "CARD_HOURS" }], ledger_mode: "mobile_ledger" },
   });
 
-  const mobileWallet = await request.get("/api/v1/mobile/wallet");
+  const mobileWallet = await request.get("/api/v1/canonical/wallet");
   await expect(mobileWallet.json()).resolves.toMatchObject({
     data: {
       balance: expect.any(Number),
@@ -116,12 +116,12 @@ test("新增的个人中心功能全部通过 BFF 使用手机端业务接口", 
     },
   });
 
-  const identity = await request.post("/api/v1/mobile/verification", {
+  const identity = await request.post("/api/v1/canonical/verification", {
     data: { real_name: "张三", id_card: "11010519491231002X", sensitive_consent: true },
   });
   expect(identity.ok()).toBeTruthy();
   const onePixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
-  const photos = await request.post("/api/v1/mobile/verification/upload", {
+  const photos = await request.post("/api/v1/canonical/verification/upload", {
     multipart: {
       front: { name: "front.png", mimeType: "image/png", buffer: onePixelPng },
       back: { name: "back.png", mimeType: "image/png", buffer: onePixelPng },
@@ -134,30 +134,30 @@ test("新增的个人中心功能全部通过 BFF 使用手机端业务接口", 
   });
 });
 
-test("账户设置、通知偏好、社区、客服和求购使用手机端状态机", async ({ request }) => {
+test("账户设置、通知偏好、社区、客服和求购使用统一后端状态机", async ({ request }) => {
   await register(request);
 
-  const profile = await request.put("/api/v1/mobile/user/profile", { data: { username: "Web 同步用户" } });
+  const profile = await request.put("/api/v1/canonical/user/profile", { data: { username: "Web 同步用户" } });
   expect(profile.ok()).toBeTruthy();
   await expect(profile.json()).resolves.toMatchObject({ data: { username: "Web 同步用户" } });
 
-  const preferences = await request.put("/api/v1/mobile/notifications/preferences", { data: { order_enabled: false } });
+  const preferences = await request.put("/api/v1/canonical/notifications/preferences", { data: { order_enabled: false } });
   expect(preferences.ok()).toBeTruthy();
   await expect(preferences.json()).resolves.toMatchObject({ data: { preferences: { order_enabled: false } } });
 
-  const post = await request.post("/api/v1/mobile/community/posts", { data: { content: "Web 与 App 社区联调", topic: "E2E" } });
+  const post = await request.post("/api/v1/canonical/community/posts", { data: { content: "Web 与 App 社区联调", topic: "E2E" } });
   expect(post.ok()).toBeTruthy();
   const postId = ((await post.json()).data as { id: number }).id;
-  expect((await request.post(`/api/v1/mobile/community/posts/${postId}/like`)).ok()).toBeTruthy();
-  expect((await request.post(`/api/v1/mobile/community/posts/${postId}/comments`, { data: { content: "联调评论" } })).ok()).toBeTruthy();
+  expect((await request.post(`/api/v1/canonical/community/posts/${postId}/like`)).ok()).toBeTruthy();
+  expect((await request.post(`/api/v1/canonical/community/posts/${postId}/comments`, { data: { content: "联调评论" } })).ok()).toBeTruthy();
 
-  const support = await request.post("/api/v1/mobile/chat", {
+  const support = await request.post("/api/v1/canonical/chat", {
     data: { message: "如何查看订单？", client_message_id: `web-e2e-${Date.now()}`, lang: "zh" },
   });
   expect(support.ok()).toBeTruthy();
   await expect(support.json()).resolves.toMatchObject({ data: { conversation_id: expect.any(Number), reply: expect.any(String) } });
 
-  const buyRequest = await request.post("/api/v1/mobile/buy-requests", {
+  const buyRequest = await request.post("/api/v1/canonical/buy-requests", {
     data: { request_type: "online", gpu_model: "RTX4090", quantity: 1, gpu_hours: 24, currency: "CNY", requirements: {}, expires_in_hours: 24 },
   });
   expect(buyRequest.ok()).toBeTruthy();

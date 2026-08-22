@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api";
+import { canonicalApiPath } from "@/lib/canonical-api";
 
-const mobilePath = (path: string) => `/api/v1/mobile${path}`;
 
 export type MobileMarketModel = {
   gpu_model: string;
@@ -68,11 +68,11 @@ function query(input: Record<string, string>) {
 }
 
 export function getMobileMarketModels() {
-  return apiRequest<{ server_time: string; items: MobileMarketModel[] }>(mobilePath("/market/models"));
+  return apiRequest<{ server_time: string; items: MobileMarketModel[] }>(canonicalApiPath("/market/models"));
 }
 
 export function getMobileLatestMarket(model: MobileMarketModel) {
-  return apiRequest<MobileLatestMarket>(mobilePath(`/market/prices/latest?${query({
+  return apiRequest<MobileLatestMarket>(canonicalApiPath(`/market/prices/latest?${query({
     model: model.gpu_model,
     variant: model.gpu_variant,
     sources: model.sources.join(","),
@@ -80,7 +80,7 @@ export function getMobileLatestMarket(model: MobileMarketModel) {
 }
 
 export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "30d") {
-  return apiRequest<MobileMarketCandles>(mobilePath(`/market/prices/candles?${query({
+  return apiRequest<MobileMarketCandles>(canonicalApiPath(`/market/prices/candles?${query({
     model: model.gpu_model,
     variant: model.gpu_variant,
     range,
@@ -90,5 +90,5 @@ export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "
 }
 
 export function getMobileMarketSources() {
-  return apiRequest<{ server_time: string; items: MobileMarketSource[] }>(mobilePath("/market/sources/status"));
+  return apiRequest<{ server_time: string; items: MobileMarketSource[] }>(canonicalApiPath("/market/sources/status"));
 }

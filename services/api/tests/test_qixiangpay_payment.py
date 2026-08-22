@@ -730,9 +730,15 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.assertFalse(history["items"][0]["can_cancel"])
 
     def test_canonical_and_legacy_callback_routes_are_both_registered(self):
-        canonical = {route.path: route.methods for route in payment_router.router.routes}
-        legacy = {route.path: route.methods for route in payment_router.legacy_router.routes}
-        self.assertEqual(canonical["/api/payments/qixiang/notify"], {"GET"})
+        def registered(router):
+            result = {}
+            for route in router.routes:
+                result.setdefault(route.path, set()).update(route.methods)
+            return result
+
+        canonical = registered(payment_router.router)
+        legacy = registered(payment_router.legacy_router)
+        self.assertEqual(canonical["/api/payments/qixiang/notify"], {"GET", "POST"})
         self.assertEqual(legacy["/api/payments/qixiangpay/notify"], {"GET", "POST"})
         route_suffixes = {
             "/config",
@@ -748,6 +754,12 @@ class QixiangPayPaymentTests(unittest.TestCase):
             {path.removeprefix("/api/payments/qixiang") for path in canonical},
             route_suffixes,
         )
+
+        from app.main import app
+
+        openapi_paths = app.openapi()["paths"]
+        self.assertIn("/api/payments/qixiang/notify", openapi_paths)
+        self.assertNotIn("/api/payments/qixiangpay/notify", openapi_paths)
         self.assertEqual(
             {path.removeprefix("/api/payments/qixiangpay") for path in legacy},
             route_suffixes,

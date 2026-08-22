@@ -30,21 +30,21 @@ export type MobileSupplierDashboard = {
 };
 
 export function getMobileSupplierDashboard() {
-  return apiRequest<MobileSupplierDashboard>("/api/v1/mobile/supplier/dashboard");
+  return apiRequest<MobileSupplierDashboard>("/api/v1/canonical/supplier/dashboard");
 }
 
 export function listMobileSupplierDevices(statusFilter: "all" | "on" | "off" = "all") {
-  return apiRequest<MobileSupplierDevice[]>(`/api/v1/mobile/supplier/devices?status_filter=${statusFilter}`);
+  return apiRequest<MobileSupplierDevice[]>(`/api/v1/canonical/supplier/devices?status_filter=${statusFilter}`);
 }
 
 export function createMobileSupplierDevice(input: Record<string, unknown>) {
-  return apiRequest<MobileSupplierDevice>("/api/v1/mobile/supplier/devices", { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<MobileSupplierDevice>("/api/v1/canonical/supplier/devices", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function updateMobileSupplierDevice(id: number, input: Record<string, unknown>) {
-  return apiRequest<MobileSupplierDevice>(`/api/v1/mobile/supplier/devices/${id}`, { method: "PUT", body: JSON.stringify(input) });
+  return apiRequest<MobileSupplierDevice>(`/api/v1/canonical/supplier/devices/${id}`, { method: "PUT", body: JSON.stringify(input) });
 }
 
 export function deleteMobileSupplierDevice(id: number) {
-  return apiRequest<{ id: number; deleted: boolean }>(`/api/v1/mobile/supplier/devices/${id}`, { method: "DELETE" });
+  return apiRequest<{ id: number; deleted: boolean }>(`/api/v1/canonical/supplier/devices/${id}`, { method: "DELETE" });
 }

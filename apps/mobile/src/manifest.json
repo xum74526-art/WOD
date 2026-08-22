@@ -75,11 +75,5 @@
                 }
             }
         }
-    },
-    "mp-weixin" : {
-        "appid" : "",
-        "setting" : {
-            "urlCheck" : false
-        }
     }
 }

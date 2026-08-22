@@ -82,7 +82,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
     <article className={`community-post-card${featured ? " community-post-card--featured" : ""}${externalVideo ? " community-post-card--video" : ""}`}>
       <header className="community-post-card__author">
         <div className="community-user-avatar">
-          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/mobile${row.author_avatar}` : row.author_avatar} alt="" /> : (row.author_name || "匿").slice(0, 1)}
+          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : (row.author_name || "匿").slice(0, 1)}
         </div>
         <span><strong>{row.author_name || row.source_author || row.source_name || "社区用户"}</strong><small>{formatDate(row.source_published_at || row.created_at)}{row.topic ? ` · ${row.topic}` : ""}</small></span>
         {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy === `follow-${row.id}`} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? "已关注" : "关注"}</button>}

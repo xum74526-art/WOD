@@ -80,12 +80,12 @@ export function getWallet() {
 }
 
 export function getPaymentConfig() {
-  return request<PaymentConfig>({ url: '/payments/qixiangpay/config', silent: true })
+  return request<PaymentConfig>({ url: '/payments/qixiang/config', silent: true })
 }
 
 export function createRechargePayment(amount_cny: number, payment_type: RechargePaymentType) {
   return request<RechargePaymentOrder>({
-    url: '/payments/qixiangpay/recharge-orders',
+    url: '/payments/qixiang/recharge-orders',
     method: 'POST',
     data: { amount_cny, payment_type },
   })
@@ -93,14 +93,14 @@ export function createRechargePayment(amount_cny: number, payment_type: Recharge
 
 export function getRechargePayment(orderNo: string, silent = true) {
   return request<RechargePaymentOrder>({
-    url: `/payments/qixiangpay/orders/${encodeURIComponent(orderNo)}`,
+    url: `/payments/qixiang/orders/${encodeURIComponent(orderNo)}`,
     silent,
   })
 }
 
 export function queryRechargePayment(orderNo: string, silent = true) {
   return request<RechargePaymentOrder>({
-    url: `/payments/qixiangpay/orders/${encodeURIComponent(orderNo)}/query`,
+    url: `/payments/qixiang/orders/${encodeURIComponent(orderNo)}/query`,
     method: 'POST',
     silent,
   })

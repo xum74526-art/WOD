@@ -55,8 +55,8 @@ export function listNotifications(unreadOnly = false) { return apiEnvelopeReques
 export function getUnreadCount() { return apiRequest<{ unread_count: number }>("/api/v1/notifications/unread-count"); }
 export function readNotification(id: number) { return apiRequest<Notice>(`/api/v1/notifications/${id}/read`, { method: "PATCH" }); }
 export function readAllNotifications() { return apiRequest<{ updated_count: number }>("/api/v1/notifications/read-all", { method: "POST" }); }
-export function getNotificationPreferences() { return apiRequest<NotificationPreferenceResponse>("/api/v1/mobile/notifications/preferences"); }
-export function updateNotificationPreferences(input: Partial<NotificationPreferences>) { return apiRequest<NotificationPreferenceResponse>("/api/v1/mobile/notifications/preferences", { method: "PUT", body: JSON.stringify(input) }); }
+export function getNotificationPreferences() { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences"); }
+export function updateNotificationPreferences(input: Partial<NotificationPreferences>) { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences", { method: "PUT", body: JSON.stringify(input) }); }
 
 export function listTeams() { return apiRequest<TeamSnapshot>("/api/v1/account/teams"); }
 export function createTeam(name: string) { return apiRequest<Team>("/api/v1/account/teams", { method: "POST", body: JSON.stringify({ name }) }); }
