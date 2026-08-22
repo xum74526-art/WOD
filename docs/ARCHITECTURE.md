@@ -9,8 +9,8 @@
 |---|---|---|---|
 | 线上 Web | `apps/web` | 同源 `/api/v1/canonical/*` | 禁止 |
 | 本地测试 Web | `apps/web` | BFF 转发到 `https://wod.kai.com/api` | 禁止 |
-| iOS/Android | `apps/mobile` | `https://wod.kai.com/api` | 禁止 |
-| Mobile H5 | `apps/mobile` | 同源 `/api` | 禁止 |
+| iOS | `apps/ios` | `https://wod.kai.com/api` | 禁止 |
+| Android | `apps/android` | `https://wod.kai.com/api` | 禁止 |
 | 云端 API | `services/api` | FastAPI `/api/*` | 唯一允许 |
 
 因此，本地 Web、线上 Web 和手机端不需要“同步数据库文件”。它们通过同一个云端 API
@@ -18,15 +18,15 @@
 
 ## 客户端与后端
 
-KAI 有三个发布目标，但只有两套前端源码：
+KAI 有三个发布目标和三套明确的客户端目录：
 
 ```text
 apps/web     -> Web
-apps/mobile  -> iOS
-             -> Android
+apps/ios     -> iOS
+apps/android -> Android
 ```
 
-iOS 和 Android 共享 uni-app/Vue 3 的页面、状态和 API 层。只有系统权限、深度链接、推送、支付、签名等差异能进入平台适配层。
+iOS 和 Android 使用相同的 OpenAPI、订单状态和支付状态。平台目录只处理各自的界面、深度链接、权限和签名；任何业务规则仍由后端唯一实现。
 
 `services/api` 是唯一业务后端，负责账号、商品、行情、订单、资产、钱包、商家、通知和审核。前端不得维护第二份业务数据库。
 
@@ -84,7 +84,8 @@ services/api/app/
 
 - FastAPI OpenAPI 是后端 HTTP 契约的唯一来源。
 - `packages/api-contracts/openapi.json` 只能通过脚本生成。
-- Mobile 请求必须经过 `apps/mobile/src/api/request.ts`。
+- iOS 请求必须经过 `apps/ios/src/api/request.ts`，Android 请求必须经过
+  `apps/android/src/api/request.ts`。
 - Web 浏览器请求必须使用同源 `/api/v1`。
 - 本地 Web 联调也把 `API_ORIGIN` 指向云端 API，因此与线上 Web 和 App 读写同一数据库。
 - 订单、支付、钱包、商家审核等状态枚举由后端定义。
@@ -105,6 +106,15 @@ npm run check:contracts
   Token。
 - 原生 App 通过系统浏览器完成 KAI OAuth，回跳地址必须在 KAI Auth、App manifest 和 API
   环境变量中保持一致。
+- 本地账号登录后必须显式发起 Kai 身份绑定；未绑定的 Kai 身份不能在 OAuth 回调中自动创建
+  本地用户。绑定 ticket 一次性、短时有效，并且只能由发起绑定的同一已登录用户兑换。
+- 登录成功后 API 建立服务端认证会话。`created_platform` 从该会话固化为
+  `web / ios / android / admin / legacy`，历史记录统一归为 `legacy`；客户端自定义请求头不会覆盖
+  会话来源。管理员可通过 `/api/admin/overview`、`/users`、`/orders`、`/recharge-orders`
+  以及财务列表的 `platform` 参数进行审计筛选。
+- 平台来源只用于统计、排障和审计，不是授权边界。公开 Web/App 的 `client_id` 可以被复制，任何
+  管理操作仍必须校验用户角色或独立财务白名单。若将来需要证明是真实安装包或设备，应另行接入
+  Apple App Attest / DeviceCheck 和 Google Play Integrity，并在服务端完成证明校验。
 - 当前支付路由是 `/api/payments/qixiang/*`，支付状态最终以服务端验签后的回调或主动查单为准，
   不能以客户端跳转成功作为入账依据。
 - 支付密钥只存在于云端 API 环境文件，不进入 Web、Mobile 或 Git。
@@ -125,7 +135,7 @@ npm run check:contracts
 
 ## 平台差异
 
-默认先在 `apps/mobile` 共享实现。当且仅当能力确实不同时，使用 uni-app 条件编译或独立平台适配文件。不因为视觉小差异复制整个页面。
+iOS 与 Android 可以有各自的 ViewModel，但必须保持相同的 API 契约和业务状态。跨端共同修复应同步检查两端，平台差异仅限系统能力和发布要求。
 
 ## 常见修改的影响范围
 

@@ -1,4 +1,4 @@
-"""Closed-test, human-reviewed bank payout workflow.
+"""Human-reviewed bank payout workflow.
 
 This module never talks to a bank.  It records an application, freezes only
 the separately tracked withdrawable bucket, and lets an explicitly authorised
@@ -37,6 +37,7 @@ from app.models.withdrawal import (
     WithdrawalOrder,
 )
 from app.utils.response import BizError
+from app.services.auth_session import normalize_platform
 
 
 ACTIVE_WITHDRAWAL_STATUSES = ("reviewing", "manual_payment_pending")
@@ -194,6 +195,8 @@ def order_out(db: Session, order: WithdrawalOrder) -> dict:
         "paid_amount_cny": float(order.paid_amount_cny) if order.paid_amount_cny is not None else None,
         "paid_at": order.paid_at,
         "receipt_available": receipt is not None,
+        "created_platform": order.created_platform or "legacy",
+        "last_modified_platform": order.last_modified_platform or "legacy",
         "created_at": order.created_at,
         "updated_at": order.updated_at,
     }
@@ -282,6 +285,7 @@ def create_withdrawal(
     amount_card_hours: Decimal,
     bank_card_id: int,
     client_request_id: str,
+    created_platform: str = "legacy",
 ) -> WithdrawalOrder:
     if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
         raise BizError("人工提现申请尚未启用", status_code=503)
@@ -317,6 +321,7 @@ def create_withdrawal(
     if not wallet:
         raise BizError("钱包不存在", status_code=404)
 
+    platform = normalize_platform(created_platform)
     order = WithdrawalOrder(
         order_no=_new_order_no(),
         user_id=user.id,
@@ -332,6 +337,8 @@ def create_withdrawal(
         bank_name_snapshot=card.bank_name,
         card_last4_snapshot=last_four(card.card_number),
         holder_snapshot=card.holder,
+        created_platform=platform,
+        last_modified_platform=platform,
     )
     db.add(order)
     try:
@@ -382,7 +389,14 @@ def create_withdrawal(
     return order
 
 
-def approve_withdrawal(db: Session, order: WithdrawalOrder, actor: User, note: str | None) -> None:
+def approve_withdrawal(
+    db: Session,
+    order: WithdrawalOrder,
+    actor: User,
+    note: str | None,
+    *,
+    platform: str = "legacy",
+) -> None:
     changed = db.query(WithdrawalOrder).filter(
         WithdrawalOrder.id == order.id,
         WithdrawalOrder.status == "reviewing",
@@ -392,6 +406,7 @@ def approve_withdrawal(db: Session, order: WithdrawalOrder, actor: User, note: s
         WithdrawalOrder.reviewed_by: actor.id,
         WithdrawalOrder.reviewed_at: utc_now(),
         WithdrawalOrder.version: WithdrawalOrder.version + 1,
+        WithdrawalOrder.last_modified_platform: normalize_platform(platform),
     }, synchronize_session=False)
     if changed != 1:
         db.rollback()
@@ -408,6 +423,7 @@ def _unfreeze_to_status(
     allowed_from: tuple[str, ...],
     reason: str,
     actor: User | None,
+    platform: str,
 ) -> None:
     changed = db.query(WithdrawalOrder).filter(
         WithdrawalOrder.id == order.id,
@@ -418,6 +434,7 @@ def _unfreeze_to_status(
         WithdrawalOrder.reviewed_by: actor.id if actor else order.reviewed_by,
         WithdrawalOrder.reviewed_at: utc_now(),
         WithdrawalOrder.version: WithdrawalOrder.version + 1,
+        WithdrawalOrder.last_modified_platform: normalize_platform(platform),
     }, synchronize_session=False)
     if changed != 1:
         db.rollback()
@@ -446,23 +463,46 @@ def _unfreeze_to_status(
     db.commit()
 
 
-def reject_withdrawal(db: Session, order: WithdrawalOrder, actor: User, reason: str) -> None:
+def reject_withdrawal(
+    db: Session,
+    order: WithdrawalOrder,
+    actor: User,
+    reason: str,
+    *,
+    platform: str = "legacy",
+) -> None:
     _unfreeze_to_status(
-        db, order, status="rejected", allowed_from=("reviewing",), reason=reason, actor=actor,
+        db, order, status="rejected", allowed_from=("reviewing",), reason=reason,
+        actor=actor, platform=platform,
     )
 
 
-def fail_withdrawal(db: Session, order: WithdrawalOrder, actor: User, reason: str) -> None:
+def fail_withdrawal(
+    db: Session,
+    order: WithdrawalOrder,
+    actor: User,
+    reason: str,
+    *,
+    platform: str = "legacy",
+) -> None:
     _unfreeze_to_status(
-        db, order, status="failed", allowed_from=("manual_payment_pending",), reason=reason, actor=actor,
+        db, order, status="failed", allowed_from=("manual_payment_pending",), reason=reason,
+        actor=actor, platform=platform,
     )
 
 
-def cancel_withdrawal(db: Session, order: WithdrawalOrder, user: User) -> None:
+def cancel_withdrawal(
+    db: Session,
+    order: WithdrawalOrder,
+    user: User,
+    *,
+    platform: str = "legacy",
+) -> None:
     if order.user_id != user.id:
         raise BizError("提现申请不存在", status_code=404)
     _unfreeze_to_status(
-        db, order, status="canceled", allowed_from=("reviewing",), reason="用户取消", actor=None,
+        db, order, status="canceled", allowed_from=("reviewing",), reason="用户取消",
+        actor=None, platform=platform,
     )
 
 
@@ -487,6 +527,7 @@ def mark_paid(
     paid_at: datetime,
     payee_confirmed: bool,
     reveal_token: str,
+    platform: str = "legacy",
 ) -> None:
     if not payee_confirmed:
         raise BizError("请先确认已核对收款人姓名与银行卡登记信息")
@@ -528,6 +569,7 @@ def mark_paid(
         WithdrawalOrder.paid_at: paid_time,
         WithdrawalOrder.paid_by: actor.id,
         WithdrawalOrder.version: WithdrawalOrder.version + 1,
+        WithdrawalOrder.last_modified_platform: normalize_platform(platform),
     }, synchronize_session=False)
     if changed != 1:
         db.rollback()

@@ -13,9 +13,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import ExternalAuthFlow, ExternalIdentity, User, Wallet  # noqa: F401
-from app.schemas.user import UserOut
+from app.models import ExternalAuthBindTicket, ExternalAuthFlow, ExternalIdentity, User  # noqa: F401
 from app.services import kai_auth
+from app.routers import auth as auth_router
 from app.utils.response import BizError
 
 
@@ -60,6 +60,7 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         Base.metadata.create_all(engine)
         self.db = sessionmaker(bind=engine)()
         self.original = {
+            "KAI_AUTH_ISSUER": settings.KAI_AUTH_ISSUER,
             "KAI_AUTH_CLIENT_ID": settings.KAI_AUTH_CLIENT_ID,
             "KAI_AUTH_CLIENT_SECRET": settings.KAI_AUTH_CLIENT_SECRET,
             "KAI_AUTH_CALLBACK_URL": settings.KAI_AUTH_CALLBACK_URL,
@@ -73,6 +74,7 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
             setattr(settings, key, value)
 
     def configure(self):
+        settings.KAI_AUTH_ISSUER = "https://auth.kai.test"
         settings.KAI_AUTH_CLIENT_ID = "wod-test-client"
         settings.KAI_AUTH_CLIENT_SECRET = "test-secret"
         settings.KAI_AUTH_CALLBACK_URL = "https://api.wod.test/api/auth/kai/callback"
@@ -108,7 +110,14 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(BizError, "返回地址无效"):
             kai_auth.create_authorization_flow(self.db, "login", "https://evil.example/login")
 
-    def test_identity_is_stable_personal_and_phone_unbound(self):
+    def _user(self, phone: str = "13900000001") -> User:
+        user = User(phone=phone, username="本地用户", password="!", supplier_status="none")
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def test_unknown_identity_does_not_create_a_local_user(self):
         self.configure()
         claims = {
             "sub": "kai-user-001",
@@ -116,23 +125,100 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
             "email": "tester@example.com",
             "email_verified": True,
         }
-        user = kai_auth.find_or_create_user(self.db, claims)
-        again = kai_auth.find_or_create_user(self.db, claims)
-        self.assertEqual(user.id, again.id)
-        self.assertEqual(user.role, "personal")
-        self.assertEqual(user.supplier_status, "none")
-        self.assertFalse(user.phone_bound)
-        self.assertIsNone(UserOut.model_validate(user).phone)
-        self.assertEqual(self.db.query(ExternalIdentity).count(), 1)
-        self.assertEqual(self.db.query(Wallet).filter(Wallet.user_id == user.id).count(), 1)
+        self.assertIsNone(kai_auth.find_bound_user(self.db, claims))
+        self.assertEqual(self.db.query(User).count(), 0)
+        self.assertEqual(self.db.query(ExternalIdentity).count(), 0)
+
+    def test_verified_bind_ticket_explicitly_links_the_logged_in_user(self):
+        self.configure()
+        user = self._user()
+        claims = {
+            "sub": "kai-user-001",
+            "name": "Kai Tester",
+            "email": "tester@example.com",
+            "email_verified": True,
+        }
+        ticket = kai_auth.issue_bind_ticket(
+            self.db,
+            user.id,
+            claims,
+            platform="android",
+            client_id="android",
+        )
+        identity = kai_auth.bind_identity_with_ticket(self.db, ticket, user)
+        self.assertEqual(identity.user_id, user.id)
+        self.assertEqual(identity.subject, "kai-user-001")
+        self.assertEqual(kai_auth.find_bound_user(self.db, claims).id, user.id)
+        with self.assertRaisesRegex(BizError, "无效或已过期"):
+            kai_auth.bind_identity_with_ticket(self.db, ticket, user)
+
+    def test_bind_ticket_is_tied_to_initiating_user_and_uniqueness_is_enforced(self):
+        self.configure()
+        first = self._user("13900000001")
+        second = self._user("13900000002")
+        first_ticket = kai_auth.issue_bind_ticket(
+            self.db,
+            first.id,
+            {"sub": "kai-user-001"},
+            platform="web",
+            client_id="web",
+        )
+        with self.assertRaisesRegex(BizError, "无效或已过期"):
+            kai_auth.bind_identity_with_ticket(self.db, first_ticket, second)
+        kai_auth.bind_identity_with_ticket(self.db, first_ticket, first)
+
+        same_subject = kai_auth.issue_bind_ticket(
+            self.db,
+            second.id,
+            {"sub": "kai-user-001"},
+            platform="ios",
+            client_id="ios",
+        )
+        with self.assertRaisesRegex(BizError, "已绑定其他账号"):
+            kai_auth.bind_identity_with_ticket(self.db, same_subject, second)
+
+        different_subject = kai_auth.issue_bind_ticket(
+            self.db,
+            first.id,
+            {"sub": "kai-user-002"},
+            platform="web",
+            client_id="web",
+        )
+        with self.assertRaisesRegex(BizError, "当前账号已绑定其他"):
+            kai_auth.bind_identity_with_ticket(self.db, different_subject, first)
 
     def test_handoff_ticket_is_single_use(self):
         self.configure()
-        user = kai_auth.find_or_create_user(self.db, {"sub": "ticket-user", "name": "Ticket User"})
-        ticket = kai_auth.issue_handoff_ticket(self.db, user.id)
-        self.assertEqual(kai_auth.consume_handoff_ticket(self.db, ticket).id, user.id)
+        user = self._user()
+        ticket = kai_auth.issue_handoff_ticket(
+            self.db,
+            user.id,
+            platform="ios",
+            client_id="ios",
+        )
+        consumed_user, platform, client_id = kai_auth.consume_handoff_ticket(self.db, ticket)
+        self.assertEqual(consumed_user.id, user.id)
+        self.assertEqual((platform, client_id), ("ios", "ios"))
         with self.assertRaisesRegex(BizError, "无效或已过期"):
             kai_auth.consume_handoff_ticket(self.db, ticket)
+
+    def test_bind_flow_is_tied_to_authenticated_user_and_session_source(self):
+        self.configure()
+        user = self._user()
+        kai_auth.create_authorization_flow(
+            self.db,
+            "bind",
+            user_id=user.id,
+            platform="android",
+            client_id="android",
+        )
+        flow = self.db.query(ExternalAuthFlow).one()
+        self.assertEqual(flow.intent, "bind")
+        self.assertEqual(flow.user_id, user.id)
+        self.assertEqual(flow.platform, "android")
+        self.assertEqual(flow.client_id, "android")
+        with self.assertRaisesRegex(BizError, "必须先登录"):
+            kai_auth.create_authorization_flow(self.db, "bind")
 
     async def test_id_token_validates_eddsa_issuer_audience_and_nonce(self):
         self.configure()
@@ -164,6 +250,48 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         finally:
             kai_auth.httpx.AsyncClient = original_client
         self.assertEqual(verified["sub"], "verified-user")
+
+    async def test_callback_for_unknown_identity_returns_bind_required_without_creating_user(self):
+        self.configure()
+        authorization_url = kai_auth.create_authorization_flow(
+            self.db,
+            "login",
+            client_id="android",
+            platform="android",
+        )
+        state = parse_qs(urlparse(authorization_url).query)["state"][0]
+
+        original_exchange = kai_auth.exchange_authorization_code
+        original_verify = kai_auth.verify_id_token
+        original_enrich = kai_auth.enrich_with_userinfo
+
+        async def exchange(code, flow):
+            return {"id_token": "verified-token"}
+
+        async def verify(id_token, nonce):
+            return {"sub": "not-bound-yet"}
+
+        async def enrich(claims, access_token):
+            return claims
+
+        kai_auth.exchange_authorization_code = exchange
+        kai_auth.verify_id_token = verify
+        kai_auth.enrich_with_userinfo = enrich
+        try:
+            response = await auth_router.kai_callback(
+                code="authorization-code",
+                state=state,
+                iss=settings.KAI_AUTH_ISSUER,
+                error=None,
+                db=self.db,
+            )
+        finally:
+            kai_auth.exchange_authorization_code = original_exchange
+            kai_auth.verify_id_token = original_verify
+            kai_auth.enrich_with_userinfo = original_enrich
+        location = response.headers["location"]
+        self.assertEqual(parse_qs(urlparse(location).query)["kai_error"], ["identity_not_bound"])
+        self.assertEqual(self.db.query(User).count(), 0)
 
 
 if __name__ == "__main__":

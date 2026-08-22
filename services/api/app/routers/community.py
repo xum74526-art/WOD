@@ -13,12 +13,13 @@ from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.db.session import get_db
 from app.models.community import Comment, ContentIngestRun, ContentSource, Follow, Like, Post
 from app.models.user import User
 from app.schemas.community import CommentIn, CommentOut, PostCreateIn, PostOut
 from app.utils.response import BizError, success
+from app.services.auth_session import normalize_platform
 
 router = APIRouter(prefix="/api/community", tags=["community"])
 public_router = APIRouter(prefix="/api/uploads/community", tags=["community-media"])
@@ -309,7 +310,12 @@ def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
 
 
 @router.post("/posts")
-def create_post(data: PostCreateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_post(
+    data: PostCreateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     if not data.content or not data.content.strip():
         raise BizError("内容不能为空")
     images = data.images or []
@@ -331,11 +337,14 @@ def create_post(data: PostCreateIn, user: User = Depends(get_current_user), db: 
         raise BizError("视频时长只能随视频提交")
 
     images_str = json.dumps(images, ensure_ascii=False) if images else None
+    source_platform = normalize_platform(platform)
     p = Post(
         user_id=user.id, content=data.content, images=images_str,
         video=video, video_duration=data.video_duration if video else None,
         topic=data.topic, origin="user",
         content_type="video" if video else ("image" if images else "text"),
+        created_platform=source_platform,
+        last_modified_platform=source_platform,
     )
     db.add(p)
     db.commit()
@@ -352,7 +361,12 @@ def post_detail(pid: int, user: User = Depends(get_current_user), db: Session = 
 
 
 @router.post("/posts/{pid}/like")
-def toggle_like(pid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_like(
+    pid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     p = db.query(Post).filter(Post.id == pid).first()
     if not p:
         raise BizError("动态不存在", status_code=404)
@@ -360,11 +374,14 @@ def toggle_like(pid: int, user: User = Depends(get_current_user), db: Session = 
     if existing:
         db.delete(existing)
         p.likes = max(0, p.likes - 1)
+        p.last_modified_platform = normalize_platform(platform)
         db.commit()
         return success({"liked": False, "likes": p.likes})
     else:
-        db.add(Like(post_id=pid, user_id=user.id))
+        source_platform = normalize_platform(platform)
+        db.add(Like(post_id=pid, user_id=user.id, created_platform=source_platform))
         p.likes = p.likes + 1
+        p.last_modified_platform = source_platform
         db.commit()
         return success({"liked": True, "likes": p.likes})
 
@@ -384,15 +401,28 @@ def list_comments(pid: int, user: User = Depends(get_current_user), db: Session 
 
 
 @router.post("/posts/{pid}/comments")
-def create_comment(pid: int, data: CommentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_comment(
+    pid: int,
+    data: CommentIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     p = db.query(Post).filter(Post.id == pid).first()
     if not p:
         raise BizError("动态不存在", status_code=404)
     if not data.content:
         raise BizError("评论内容不能为空")
-    c = Comment(post_id=pid, user_id=user.id, content=data.content)
+    source_platform = normalize_platform(platform)
+    c = Comment(
+        post_id=pid,
+        user_id=user.id,
+        content=data.content,
+        created_platform=source_platform,
+    )
     db.add(c)
     p.comments = p.comments + 1
+    p.last_modified_platform = source_platform
     db.commit()
     db.refresh(c)
     u = db.query(User).filter(User.id == c.user_id).first()
@@ -402,7 +432,12 @@ def create_comment(pid: int, data: CommentIn, user: User = Depends(get_current_u
 
 
 @router.post("/users/{uid}/follow")
-def toggle_follow(uid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_follow(
+    uid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     if uid == user.id:
         raise BizError("不能关注自己")
     target = db.query(User).filter(User.id == uid).first()
@@ -414,7 +449,11 @@ def toggle_follow(uid: int, user: User = Depends(get_current_user), db: Session 
         db.commit()
         return success({"following": False})
     else:
-        db.add(Follow(follower_id=user.id, following_id=uid))
+        db.add(Follow(
+            follower_id=user.id,
+            following_id=uid,
+            created_platform=normalize_platform(platform),
+        ))
         db.commit()
         return success({"following": True})
 

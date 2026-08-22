@@ -12,6 +12,12 @@ import {
   type MobileUserProfile,
 } from "@/lib/mobile-business-api";
 import { errorMessage } from "@/lib/commerce-ui";
+import {
+  exchangeKaiBindingTicket,
+  getKaiBindingStatus,
+  startKaiBinding,
+  type KaiBindingStatus,
+} from "@/lib/api";
 
 const roleLabel: Record<string, string> = { personal: "个人用户", supplier: "商家", admin: "管理员" };
 
@@ -22,19 +28,47 @@ export function MobileAccountSettings() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [kaiBinding, setKaiBinding] = useState<KaiBindingStatus | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bindingExchangeStarted = useRef(false);
 
   const load = useCallback(async () => {
-    setError("");
     try {
       const result = await getMobileUserProfile();
       setProfile(result);
       setUsername(result.username || "");
     } catch (reason) {
       setError(errorMessage(reason));
+      return;
     }
+    try { setKaiBinding(await getKaiBindingStatus()); }
+    catch { setKaiBinding(null); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const bindTicket = url.searchParams.get("kai_bind_ticket");
+    const kaiError = url.searchParams.get("kai_error");
+    if (kaiError) {
+      setError(kaiError === "access_denied" ? "已取消 Kai 身份绑定" : "Kai 身份绑定失败，请重试");
+      url.searchParams.delete("kai_error");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    if (!bindTicket || bindingExchangeStarted.current) {
+      void load();
+      return;
+    }
+    bindingExchangeStarted.current = true;
+    setBusy("kai");
+    exchangeKaiBindingTicket(bindTicket)
+      .then(() => {
+        setMessage("Kai 身份已绑定，之后可直接使用 Kai 登录");
+        url.searchParams.delete("kai_bind_ticket");
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        return load();
+      })
+      .catch((reason) => setError(errorMessage(reason)))
+      .finally(() => setBusy(""));
+  }, [load]);
 
   async function run(key: string, action: () => Promise<unknown>, success: string) {
     setBusy(key); setError(""); setMessage("");
@@ -66,6 +100,18 @@ export function MobileAccountSettings() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  async function bindKaiIdentity() {
+    setBusy("kai"); setError(""); setMessage("");
+    try {
+      const result = await startKaiBinding();
+      if (!result.authorization_url) throw new Error("Kai 统一认证未返回授权地址");
+      window.location.assign(result.authorization_url);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      setBusy("");
+    }
+  }
+
   if (!profile && !error) return <section className="workspace-page"><div className="commerce-loading">正在读取手机端账户资料…</div></section>;
   return <section className="workspace-page mobile-account-settings">
     <div className="workspace-page__head"><p>ACCOUNT / MOBILE PROFILE</p><h1>账户设置</h1><span>用户名、头像、密码和身份角色与手机端使用同一账户数据。</span></div>
@@ -77,9 +123,10 @@ export function MobileAccountSettings() {
         <dl><div><dt>手机号</dt><dd>{profile.phone_bound && profile.phone ? profile.phone : "未绑定"}</dd></div><div><dt>商家审核</dt><dd>{profile.supplier_status || "未申请"}</dd></div></dl>
       </aside>
       <main className="mobile-account-forms">
-        <form className="mobile-business-form" onSubmit={saveProfile}><header><UserCircle size={21}/><div><small>PROFILE</small><h2>基本资料</h2></div></header><label>用户名<input minLength={2} maxLength={64} value={username} onChange={(event) => setUsername(event.target.value)} required/></label><p>手机号是登录凭证，当前测试环境不能在资料页直接替换。</p><button className="commerce-primary" disabled={Boolean(busy)}>{busy === "profile" ? "保存中…" : "保存资料"}</button></form>
+        <form className="mobile-business-form" onSubmit={saveProfile}><header><UserCircle size={21}/><div><small>PROFILE</small><h2>基本资料</h2></div></header><label>用户名<input minLength={2} maxLength={64} value={username} onChange={(event) => setUsername(event.target.value)} required/></label><p>手机号是登录凭证，如需更换请完成身份验证流程。</p><button className="commerce-primary" disabled={Boolean(busy)}>{busy === "profile" ? "保存中…" : "保存资料"}</button></form>
         <form className="mobile-business-form" onSubmit={changePassword}><header><Key size={21}/><div><small>SECURITY</small><h2>修改密码</h2></div></header><label>原密码<input type="password" autoComplete="current-password" value={passwords.old} onChange={(event) => setPasswords({ ...passwords, old: event.target.value })} required/></label><label>新密码<input type="password" minLength={6} maxLength={64} autoComplete="new-password" value={passwords.next} onChange={(event) => setPasswords({ ...passwords, next: event.target.value })} required/></label><label>确认新密码<input type="password" minLength={6} maxLength={64} autoComplete="new-password" value={passwords.confirmation} onChange={(event) => setPasswords({ ...passwords, confirmation: event.target.value })} required/></label><button className="commerce-primary" disabled={Boolean(busy)}>{busy === "password" ? "更新中…" : "更新密码"}</button></form>
         <section className="mobile-role-card"><header><Storefront size={21}/><div><small>ROLE</small><h2>使用身份</h2></div></header><p>{profile.supplier_status === "approved" ? "你的商家审核已通过，可以在个人用户和商家工作台之间切换。" : "通过商家审核后，才可以切换到商家工作台。"}</p><button disabled={Boolean(busy) || profile.supplier_status !== "approved"} onClick={() => void run("role", async () => { await switchMobileRole(); window.location.assign("/account"); }, "身份已切换")}><ShieldCheck size={16}/>{busy === "role" ? "切换中…" : `切换为${profile.role === "supplier" ? "个人用户" : "商家"}`}</button></section>
+        <section className="mobile-role-card"><header><ShieldCheck size={21}/><div><small>KAI IDENTITY</small><h2>Kai 身份绑定</h2></div></header><p>{kaiBinding?.bound ? "当前账号已绑定 Kai 统一身份，可在 Web、iOS 和 Android 使用同一身份登录。" : "绑定会明确将当前 KAI 账号与 Kai 统一身份关联，不会创建第二个业务账号。"}</p><button className="commerce-primary" disabled={Boolean(busy) || kaiBinding?.bound === true} onClick={() => void bindKaiIdentity()}><ShieldCheck size={16}/>{busy === "kai" ? "正在处理…" : kaiBinding?.bound ? "已绑定 Kai" : "前往 Kai 绑定"}</button></section>
       </main>
     </div>}
   </section>;

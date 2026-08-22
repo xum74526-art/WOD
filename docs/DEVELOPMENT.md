@@ -16,7 +16,8 @@
 python3.12 -m venv services/api/.venv
 services/api/.venv/bin/python -m pip install -r services/api/requirements-dev.txt
 npm ci --prefix apps/web
-npm ci --prefix apps/mobile
+npm ci --prefix apps/ios
+npm ci --prefix apps/android
 ```
 
 ## 启动 API（仅后端开发）
@@ -42,13 +43,14 @@ Web 只使用服务端 `API_ORIGIN`，不要创建 `NEXT_PUBLIC_API_ORIGIN`。�
 
 只有修改 FastAPI 本身时才把 `API_ORIGIN` 切换为 `http://127.0.0.1:8000`，且必须同时显式设置 `API_ALLOW_INSECURE_HTTP=true`。本地 SQLite 是后端开发沙箱，不是常规前端联调数据源。
 
-## 启动 Mobile
+## 启动 iOS/Android 预览
 
 ```bash
-npm --prefix apps/mobile run dev:h5
+npm --prefix apps/ios run dev:h5
+npm --prefix apps/android run dev:h5
 ```
 
-iOS 和 Android 共享 `apps/mobile`。详细 Android 环境见 [`ANDROID_BUILD.md`](ANDROID_BUILD.md)。
+iOS 预览默认使用 9000 端口，Android 预览默认使用 9001 端口。详细 Android 环境见 [`ANDROID_BUILD.md`](ANDROID_BUILD.md)。
 
 ## 契约
 
@@ -59,7 +61,7 @@ npm run export:openapi
 npm run check:contracts
 ```
 
-Mobile 新增请求必须经过 `apps/mobile/src/api/request.ts`，并能在 OpenAPI 中找到对应的路由与 HTTP 方法。
+iOS/Android 新增请求必须经过各自的 `src/api/request.ts`，并能在 OpenAPI 中找到对应的路由与 HTTP 方法。
 Web 新增的直通业务请求必须使用 `canonicalApiPath()`，不得在页面或客户端代码中配置数据库。
 
 ## 全量检查

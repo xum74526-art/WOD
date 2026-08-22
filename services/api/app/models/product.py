@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import String, DateTime, Numeric, JSON, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,6 +9,16 @@ from app.db.base import Base
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        Index(
+            "ix_products_market_external",
+            "market_source",
+            "external_product_id",
+            unique=True,
+            sqlite_where=text("external_product_id IS NOT NULL"),
+            postgresql_where=text("external_product_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128))
@@ -24,7 +34,16 @@ class Product(Base):
     region_name: Mapped[str | None] = mapped_column(String(32), nullable=True)
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
     city: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # Vast 行情价格元数据
+    # Explicit provider identity.  ``source_currency`` is retained for price
+    # display/audit but must never again be used as the provider identifier.
+    market_source: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
+    external_product_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    stock_semantics: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # KAI's gpuCountOptions describes a configurable upper bound, never live
+    # supply. Manually fulfilled purchases consume the independent platform cap.
+    source_max_configurable_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    platform_stock_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Provider price metadata
     source_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)  # USD/h
     source_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)

@@ -4,8 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { ArrowClockwise, Bank, CheckCircle, ClockCountdown, Coins, LockKey, Receipt, WarningCircle } from "@phosphor-icons/react";
 import { errorMessage } from "@/lib/commerce-ui";
 import {
-  cancelWithdrawal, createRechargePayment, createWithdrawal, getMobileLedger, getMobileWallet,
-  getRechargePayment, getRechargePaymentConfig, getWithdrawalBundle, queryRechargePayment,
+  cancelRechargePayment, cancelWithdrawal, createRechargePayment, createWithdrawal, getMobileLedger, getMobileWallet,
+  getRechargePayment, getRechargePaymentConfig, getWithdrawalBundle, listRechargePayments, queryRechargePayment,
   type BankCard, type MobileLedgerItem, type MobileWallet, type RechargePaymentConfig,
   type RechargePaymentOrder, type WithdrawalConfig, type WithdrawalOrder,
 } from "@/lib/mobile-business-api";
@@ -17,12 +17,12 @@ const amount = (value: unknown) => { const n = Number(value || 0); return Number
 
 function checkoutHref(checkoutUrl: string) {
   const parsed = new URL(checkoutUrl, window.location.origin);
-  const match = parsed.pathname.match(/^\/api\/payments\/mapay\/checkout\/([A-Za-z0-9_-]+)$/);
-  return match ? `/api/v1/canonical/payments/mapay/checkout/${match[1]}` : parsed.toString();
+  const match = parsed.pathname.match(/(?:^|\/)api\/payments\/(mapay|qixiang)\/checkout\/([A-Za-z0-9_-]+)$/);
+  return match ? `/api/v1/canonical/payments/${match[1]}/checkout/${match[2]}` : parsed.toString();
 }
 
 function paymentLabel(status?: string) {
-  return ({ pending: "等待支付", review: "确认中", paid: "充值成功", expired: "支付已过期", failed: "支付失败", late_paid_review: "超时到账复核中" } as Record<string, string>)[status || ""] || status || "无待处理订单";
+  return ({ pending: "等待支付", review: "确认中", paid: "充值成功", expired: "支付已过期", failed: "支付失败", canceled: "已取消", late_paid_review: "超时到账复核中" } as Record<string, string>)[status || ""] || status || "无待处理订单";
 }
 
 function paymentActive(status?: string) { return status === "pending" || status === "review"; }
@@ -35,9 +35,10 @@ export function PaymentWorkspace() {
   const [withdrawals, setWithdrawals] = useState<WithdrawalOrder[]>([]);
   const [cards, setCards] = useState<BankCard[]>([]);
   const [pendingPayment, setPendingPayment] = useState<RechargePaymentOrder | null>(null);
+  const [rechargeOrders, setRechargeOrders] = useState<RechargePaymentOrder[]>([]);
   const [recharge, setRecharge] = useState({ amount: "100", payment_type: "alipay" as "alipay" | "wxpay" });
   const [withdrawal, setWithdrawal] = useState({ amount: "", bank_card_id: "" });
-  const [tab, setTab] = useState<"ledger" | "withdrawals">("ledger");
+  const [tab, setTab] = useState<"ledger" | "recharges" | "withdrawals">("ledger");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -45,8 +46,8 @@ export function PaymentWorkspace() {
 
   const load = useCallback(async () => {
     setError("");
-    const [walletResult, ledgerResult, paymentResult, withdrawalResult] = await Promise.allSettled([
-      getMobileWallet(), getMobileLedger(), getRechargePaymentConfig(), getWithdrawalBundle(),
+    const [walletResult, ledgerResult, paymentResult, rechargeOrderResult, withdrawalResult] = await Promise.allSettled([
+      getMobileWallet(), getMobileLedger(), getRechargePaymentConfig(), listRechargePayments(), getWithdrawalBundle(),
     ]);
     if (walletResult.status === "fulfilled") setWallet(walletResult.value);
     if (ledgerResult.status === "fulfilled") setLedger(ledgerResult.value.items || []);
@@ -55,6 +56,7 @@ export function PaymentWorkspace() {
       const first = paymentResult.value.payment_types?.[0];
       if (first) setRecharge((value) => ({ ...value, payment_type: first }));
     }
+    if (rechargeOrderResult.status === "fulfilled") setRechargeOrders(rechargeOrderResult.value.items || []);
     if (withdrawalResult.status === "fulfilled") {
       const [config, page, bankCards] = withdrawalResult.value;
       const selectable = bankCards.filter((card) => registeredCardStatuses.has(card.status));
@@ -66,7 +68,7 @@ export function PaymentWorkspace() {
           : String(selectable.find((card) => card.is_default)?.id || selectable[0]?.id || ""),
       }));
     }
-    const failed = [walletResult, ledgerResult, paymentResult, withdrawalResult].find((result) => result.status === "rejected");
+    const failed = [walletResult, ledgerResult, paymentResult, rechargeOrderResult, withdrawalResult].find((result) => result.status === "rejected");
     if (failed?.status === "rejected") setError(errorMessage(failed.reason));
   }, []);
 
@@ -145,6 +147,30 @@ export function PaymentWorkspace() {
     try { await cancelWithdrawal(id); await load(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
   }
 
+  async function refreshRechargeOrder(row: RechargePaymentOrder) {
+    setBusy(`recharge-query-${row.order_no}`); setError("");
+    try {
+      const order = await queryRechargePayment(row.order_no);
+      if (pendingPayment?.order_no === order.order_no) setPendingPayment(order);
+      await load();
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
+  async function cancelRechargeOrder(row: RechargePaymentOrder) {
+    if (!window.confirm(`确定取消充值订单 ${row.order_no}？`)) return;
+    setBusy(`recharge-cancel-${row.order_no}`); setError("");
+    try {
+      const order = await cancelRechargePayment(row.order_no);
+      if (pendingPayment?.order_no === order.order_no) {
+        setPendingPayment(order);
+        localStorage.removeItem(PENDING_PAYMENT_KEY);
+      }
+      await load();
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
   function continueCheckout() {
     try {
       const stored = JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || "null") as { checkout_url?: string } | null;
@@ -164,6 +190,6 @@ export function PaymentWorkspace() {
       <form className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（人民币）<input type="number" min={paymentConfig?.min_amount_cny || 0.01} max={paymentConfig?.max_amount_cny || undefined} step="0.01" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge" || paymentActive(pendingPayment?.status)}>{busy === "recharge" ? "正在创建…" : paymentActive(pendingPayment?.status) ? "请先完成待支付订单" : rechargeEnabled ? "前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>支付在后端托管页面完成，Web 不接触支付密钥。</p></form>
       <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时<input type="number" min={withdrawalConfig?.min_card_hours || 0.01} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.01" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>
     </div>
-    <section className="mobile-record-panel wallet-ledger"><header><Receipt size={20}/><div><small>ACCOUNT LEDGER</small><h2>{tab === "ledger" ? "钱包流水" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>{tab === "ledger" ? ledger.length ? ledger.map((row) => <article key={row.id}><span><strong>{row.direction === "in" ? "+" : "-"}{amount(row.amount)} 卡时</strong><small>{row.remark || row.type} · 余额 {amount(row.balance_after)}</small></span><b>{row.type}</b><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</time></article>) : <div className="mobile-inline-empty">暂无钱包流水</div> : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{amount(row.amount_card_hours)} 卡时</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>¥ {amount(row.net_amount_cny)}</strong><small>手续费 ¥ {amount(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{["reviewing", "manual_payment_pending"].includes(row.status) && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}</section>
+    <section className="mobile-record-panel wallet-ledger"><header><Receipt size={20}/><div><small>ACCOUNT RECORDS</small><h2>{tab === "ledger" ? "钱包流水" : tab === "recharges" ? "充值订单" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "recharges" ? "active" : ""} onClick={() => setTab("recharges")}>充值订单</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>{tab === "ledger" ? ledger.length ? ledger.map((row) => <article key={row.id}><span><strong>{row.direction === "in" ? "+" : "-"}{amount(row.amount)} 卡时</strong><small>{row.remark || row.type} · 余额 {amount(row.balance_after)}</small></span><b>{row.type}</b><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</time></article>) : <div className="mobile-inline-empty">暂无钱包流水</div> : tab === "recharges" ? rechargeOrders.length ? rechargeOrders.map((row) => <article key={row.order_no}><span><strong>¥ {amount(row.amount_cny)} · {amount(row.card_hours)} 卡时</strong><small>{row.order_no} · {row.provider === "qixiangpay" ? "七相支付" : row.provider || "历史支付"}</small></span><b>{paymentLabel(row.status)}</b><span><strong>{row.channel === "wxpay" ? "微信支付" : row.channel === "alipay" ? "支付宝" : row.channel || "—"}</strong><small>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</small></span><time>{row.can_query !== false && !["paid", "canceled"].includes(row.status) && <button disabled={busy === `recharge-query-${row.order_no}`} onClick={() => void refreshRechargeOrder(row)}>查询</button>}{row.can_cancel && <button disabled={busy === `recharge-cancel-${row.order_no}`} onClick={() => void cancelRechargeOrder(row)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无充值订单</div> : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{amount(row.amount_card_hours)} 卡时</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>¥ {amount(row.net_amount_cny)}</strong><small>手续费 ¥ {amount(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{["reviewing", "manual_payment_pending"].includes(row.status) && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}</section>
   </section>;
 }

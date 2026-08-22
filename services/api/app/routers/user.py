@@ -68,7 +68,7 @@ def update_profile(data: ProfileUpdateIn, user: User = Depends(get_current_user)
         # persisted. The authenticated upload endpoint owns avatar changes.
         raise BizError("请通过头像上传功能修改头像")
     if data.phone is not None and data.phone != user.phone:
-        # SMS verification is not connected in the test build. Never let a
+        # SMS verification is not configured in this deployment. Never let a
         # profile edit silently replace a login identifier. Kai-only accounts
         # will use a future, dedicated verified binding flow.
         raise BizError("修改手机号需先完成验证码验证")

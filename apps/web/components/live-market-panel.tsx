@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPo
 import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass } from "@phosphor-icons/react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
 import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource } from "@/lib/mobile-market-api";
+import { KAI_REALTIME_SOURCE } from "@/lib/web-business-contract";
 
 type PricePoint = { date: string; median: number };
 type MarketSummary = {
@@ -209,7 +210,7 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
       setMarkets(data);
       setMeta(payload.meta);
       setMobileModels(modelsPayload.items ?? []);
-      setSourceStates(sourcesPayload.items ?? []);
+      setSourceStates((sourcesPayload.items ?? []).filter((source) => source.source.toLowerCase() === KAI_REALTIME_SOURCE));
       setSelectedModel((current) => current || data[0]?.gpu_model || "");
       setGpuPickerQuery((current) => current || data[0]?.gpu_model || "");
       setStatus("ready");

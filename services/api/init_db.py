@@ -1,5 +1,6 @@
 """建表脚本：兼容旧库自动补列。"""
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -11,32 +12,55 @@ from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.models import *  # noqa: F401,F403,E402
 from app.db.session import SessionLocal  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 # 需要确保存在的列（兼容旧 wod.db）
 _ENSURE = {
-    "users": ["role", "supplier_status", "phone_bound"],
+    "users": ["role", "supplier_status", "phone_bound", "created_platform"],
     "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
-    "orders": ["purchase_type", "ssh_info", "quantity", "client_request_id"],
-    "products": ["image_url", "region_code", "region_name", "country_code", "city", "source_price", "source_currency", "exchange_rate", "price_updated_at", "stock", "reliability", "supplier_id"],
+    "orders": [
+        "purchase_type", "ssh_info", "quantity", "client_request_id",
+        "purchase_hours", "created_platform", "last_modified_platform",
+    ],
+    "order_renewals": ["created_platform"],
+    "products": [
+        "image_url", "region_code", "region_name", "country_code", "city",
+        "market_source", "external_product_id", "stock_semantics",
+        "source_max_configurable_quantity", "platform_stock_cap",
+        "source_price", "source_currency", "exchange_rate", "price_updated_at",
+        "stock", "reliability", "supplier_id",
+    ],
     "posts": [
         "content_en", "topic_en", "origin", "content_type", "source_key",
         "source_name", "source_url", "source_item_id", "source_author",
         "source_published_at", "summary", "rights_status", "rights_checked_at",
         "video_provider", "video_id", "video_url", "embed_url", "thumbnail_url",
         "canonical_url", "content_hash", "ingested_at", "publish_batch", "video_duration",
+        "created_platform", "last_modified_platform",
     ],
+    "comments": ["created_platform"],
+    "likes": ["created_platform"],
+    "follows": ["created_platform"],
     "notifications": ["title_en", "content_en", "action_url", "dedupe_key"],
     "verifications": [
         "ocr_status", "ocr_summary", "ocr_error_code", "ocr_updated_at",
-        "ocr_input_token", "consent_at",
+        "ocr_input_token", "consent_at", "created_platform", "last_modified_platform",
     ],
     "wallets": ["withdrawable_balance", "withdraw_frozen"],
     "bank_cards": [
         "card_fingerprint", "status", "verification_mode", "review_reason",
-        "reviewed_by", "reviewed_at", "updated_at",
+        "reviewed_by", "reviewed_at", "updated_at", "created_platform",
+        "last_modified_platform",
     ],
-    "ledger": ["ref_payment_order_id", "event_key"],
-    "payment_orders": ["provider_checkout_url", "checkout_started_at"],
+    "ledger": ["ref_payment_order_id", "ref_order_renewal_id", "event_key"],
+    "payment_orders": [
+        "provider_checkout_url", "checkout_started_at", "created_platform",
+        "last_modified_platform",
+    ],
+    "withdrawal_orders": ["created_platform", "last_modified_platform"],
+    "invite_records": ["created_platform", "last_modified_platform"],
+    "external_auth_flows": ["user_id", "platform", "client_id"],
+    "external_auth_tickets": ["platform", "client_id"],
 }
 
 _DATETIME_COLS = {
@@ -46,7 +70,11 @@ _DATETIME_COLS = {
     "consent_at",
     "checkout_started_at",
 }
-_INTEGER_COLS = {"quantity", "video_duration", "stock", "supplier_id", "ref_payment_order_id", "reviewed_by"}
+_INTEGER_COLS = {
+    "quantity", "purchase_hours", "video_duration", "stock", "supplier_id",
+    "ref_payment_order_id", "ref_order_renewal_id", "reviewed_by", "user_id",
+    "source_max_configurable_quantity", "platform_stock_cap",
+}
 _NUMERIC_COLS = {"sell_price", "source_price", "exchange_rate", "reliability", "withdrawable_balance", "withdraw_frozen"}
 _BOOLEAN_COLS = {"phone_bound"}
 
@@ -75,12 +103,273 @@ def _ensure_columns(db_engine=None):
     if "orders" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text("UPDATE orders SET quantity = 1 WHERE quantity IS NULL OR quantity < 1"))
+            conn.execute(text(
+                "UPDATE orders SET created_platform = 'legacy' "
+                "WHERE created_platform IS NULL OR TRIM(created_platform) = ''"
+            ))
+            conn.execute(text(
+                "UPDATE orders SET last_modified_platform = 'legacy' "
+                "WHERE last_modified_platform IS NULL OR TRIM(last_modified_platform) = ''"
+            ))
+    if "order_renewals" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE order_renewals SET created_platform = 'legacy' "
+                "WHERE created_platform IS NULL OR TRIM(created_platform) = ''"
+            ))
     if "verifications" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text(
                 "UPDATE verifications SET ocr_status = 'not_started' "
                 "WHERE ocr_status IS NULL OR ocr_status = ''"
             ))
+    attribution_columns = {
+        "users": ("created_platform",),
+        "payment_orders": ("created_platform", "last_modified_platform"),
+        "verifications": ("created_platform", "last_modified_platform"),
+        "bank_cards": ("created_platform", "last_modified_platform"),
+        "withdrawal_orders": ("created_platform", "last_modified_platform"),
+        "posts": ("created_platform", "last_modified_platform"),
+        "comments": ("created_platform",),
+        "likes": ("created_platform",),
+        "follows": ("created_platform",),
+        "invite_records": ("created_platform", "last_modified_platform"),
+    }
+    table_names = set(insp.get_table_names())
+    for table, columns in attribution_columns.items():
+        if table not in table_names:
+            continue
+        with target_engine.begin() as conn:
+            for column in columns:
+                conn.execute(text(
+                    f"UPDATE {table} SET {column} = 'legacy' "
+                    f"WHERE {column} IS NULL OR TRIM({column}) = ''"
+                ))
+            conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS ix_{table}_created_platform "
+                f"ON {table} (created_platform)"
+            ))
+
+
+def _migrate_product_market_sources(db_engine=None):
+    """Persist provider identity and retire non-KAI product cards safely.
+
+    Historical products and snapshots stay in place for order/audit lookup;
+    only their sale status is disabled.  This migration is deliberately
+    idempotent and refuses to guess between duplicate upstream identities.
+    """
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    tables = set(inspector.get_table_names())
+    if "products" not in tables:
+        return
+    product_columns = {item["name"] for item in inspector.get_columns("products")}
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE products SET market_source = CASE "
+            "WHEN source_price IS NULL THEN 'wod' "
+            "WHEN UPPER(COALESCE(source_currency, '')) = 'USD' THEN 'vast' "
+            "ELSE 'autodl' END "
+            "WHERE market_source IS NULL OR TRIM(market_source) = ''"
+        ))
+        conn.execute(text(
+            "UPDATE products SET stock_semantics = CASE "
+            "WHEN market_source = 'kai' THEN 'platform_closed_test_manual_fulfillment_allocation' "
+            "WHEN market_source IN ('autodl', 'vast') THEN 'reported_available_units' "
+            "ELSE 'supplier_reported_inventory' END "
+            "WHERE stock_semantics IS NULL OR TRIM(stock_semantics) = ''"
+        ))
+        initial_kai_cap = max(int(settings.KAI_CLOSED_TEST_INITIAL_STOCK), 0)
+        conn.execute(text(
+            "UPDATE products SET source_max_configurable_quantity = "
+            "CASE WHEN stock > 0 THEN stock ELSE 0 END "
+            "WHERE market_source = 'kai' AND source_max_configurable_quantity IS NULL"
+        ))
+        conn.execute(text(
+            "UPDATE products SET platform_stock_cap = "
+            "CASE WHEN source_max_configurable_quantity < :initial_cap "
+            "THEN source_max_configurable_quantity ELSE :initial_cap END "
+            "WHERE market_source = 'kai' AND platform_stock_cap IS NULL"
+        ), {"initial_cap": initial_kai_cap})
+        conn.execute(text(
+            "UPDATE products SET stock = CASE "
+            "WHEN stock < 0 THEN 0 "
+            "WHEN platform_stock_cap IS NOT NULL AND stock > platform_stock_cap "
+            "THEN platform_stock_cap ELSE stock END, "
+            "stock_semantics = 'platform_closed_test_manual_fulfillment_allocation' "
+            "WHERE market_source = 'kai'"
+        ))
+        if "cycle" in product_columns:
+            conn.execute(text("UPDATE products SET cycle = '[]' WHERE market_source = 'kai'"))
+        conn.execute(text(
+            "UPDATE products SET status = 'off', stock = 0 "
+            "WHERE market_source IN ('autodl', 'vast')"
+        ))
+        if "market_source_status" in tables:
+            conn.execute(text(
+                "UPDATE market_source_status SET enabled = FALSE, status = 'disabled' "
+                "WHERE source <> 'kai'"
+            ))
+        if "market_history_source_status" in tables:
+            conn.execute(text(
+                "UPDATE market_history_source_status SET enabled = FALSE, status = 'disabled' "
+                "WHERE enabled = TRUE"
+            ))
+        duplicate_identity = conn.execute(text(
+            "SELECT 1 FROM products "
+            "WHERE external_product_id IS NOT NULL "
+            "GROUP BY market_source, external_product_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+        if duplicate_identity:
+            raise RuntimeError(
+                "duplicate product market identities detected; resolve before startup"
+            )
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_products_market_external "
+            "ON products (market_source, external_product_id) "
+            "WHERE external_product_id IS NOT NULL"
+        ))
+
+
+def _sqlite_rebuild_orders_without_global_request_unique(target_engine) -> None:
+    """Remove the legacy SQLite UNIQUE(client_request_id) constraint."""
+
+    raw = target_engine.raw_connection()
+    cursor = raw.cursor()
+    try:
+        schema_row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'"
+        ).fetchone()
+        if not schema_row or not schema_row[0]:
+            return
+        schema = schema_row[0]
+        index_rows = cursor.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type = 'index' AND tbl_name = 'orders' AND sql IS NOT NULL"
+        ).fetchall()
+        rebuilt = re.sub(
+            r",\s*(?:CONSTRAINT\s+[^\s]+\s+)?UNIQUE\s*\(\s*[\"`\[]?client_request_id[\"`\]]?\s*\)",
+            "",
+            schema,
+            flags=re.IGNORECASE,
+        )
+        rebuilt = re.sub(
+            r"(\bclient_request_id\b\s+[^,\n]+?)\s+UNIQUE\b",
+            r"\1",
+            rebuilt,
+            flags=re.IGNORECASE,
+        )
+        if rebuilt == schema:
+            raise RuntimeError("unable to remove legacy global order request uniqueness")
+        for original in ('CREATE TABLE "orders"', "CREATE TABLE orders", "CREATE TABLE `orders`"):
+            if original in rebuilt:
+                rebuilt = rebuilt.replace(
+                    original,
+                    'CREATE TABLE "orders__request_scope_migration"',
+                    1,
+                )
+                break
+        else:
+            raise RuntimeError("unable to prepare SQLite orders request-scope migration")
+        columns = [row[1] for row in cursor.execute("PRAGMA table_info('orders')").fetchall()]
+        quoted_columns = ", ".join(f'"{column}"' for column in columns)
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("DROP TABLE IF EXISTS orders__request_scope_migration")
+        cursor.execute(rebuilt)
+        cursor.execute(
+            f'INSERT INTO "orders__request_scope_migration" ({quoted_columns}) '
+            f'SELECT {quoted_columns} FROM "orders"'
+        )
+        cursor.execute('DROP TABLE "orders"')
+        cursor.execute('ALTER TABLE "orders__request_scope_migration" RENAME TO "orders"')
+        for _name, sql in index_rows:
+            if not sql:
+                continue
+            normalized = re.sub(r"[\s\"`\[\]]+", "", sql).lower()
+            if "uniqueindex" in normalized and "(client_request_id)" in normalized:
+                continue
+            cursor.execute(sql)
+        violations = cursor.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError("foreign-key violation after order request-scope migration")
+        raw.commit()
+        cursor.execute("PRAGMA foreign_keys=ON")
+    except Exception:
+        raw.rollback()
+        raise
+    finally:
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+            raw.close()
+
+
+def _migrate_order_request_scope(db_engine=None) -> None:
+    """Replace global order idempotency with per-user idempotency."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "orders" not in inspector.get_table_names():
+        return
+    with target_engine.connect() as conn:
+        duplicate = conn.execute(text(
+            "SELECT user_id, client_request_id FROM orders "
+            "WHERE client_request_id IS NOT NULL "
+            "GROUP BY user_id, client_request_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+    if duplicate:
+        raise RuntimeError("duplicate per-user order request ids detected; resolve before startup")
+
+    exact = ["client_request_id"]
+    global_indexes = [
+        item for item in inspector.get_indexes("orders")
+        if item.get("unique") and item.get("column_names") == exact
+    ]
+    global_constraints = [
+        item for item in inspector.get_unique_constraints("orders")
+        if item.get("column_names") == exact
+    ]
+    if target_engine.dialect.name == "sqlite" and global_constraints:
+        _sqlite_rebuild_orders_without_global_request_unique(target_engine)
+    else:
+        preparer = target_engine.dialect.identifier_preparer
+        with target_engine.begin() as conn:
+            constraint_names = {
+                item.get("name") for item in global_constraints if item.get("name")
+            }
+            if target_engine.dialect.name == "postgresql":
+                for item in global_constraints:
+                    name = item.get("name")
+                    if name:
+                        conn.execute(text(
+                            f"ALTER TABLE orders DROP CONSTRAINT IF EXISTS {preparer.quote(name)}"
+                        ))
+            for item in global_indexes:
+                name = item.get("name")
+                if name and name not in constraint_names:
+                    conn.execute(text(f"DROP INDEX IF EXISTS {preparer.quote(name)}"))
+
+    inspector = inspect(target_engine)
+    has_scoped = any(
+        item.get("unique")
+        and item.get("column_names") == ["user_id", "client_request_id"]
+        for item in inspector.get_indexes("orders")
+        + inspector.get_unique_constraints("orders")
+    )
+    with target_engine.begin() as conn:
+        if not has_scoped:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_orders_user_client_request "
+                "ON orders (user_id, client_request_id) "
+                "WHERE client_request_id IS NOT NULL"
+            ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_orders_client_request_id "
+            "ON orders (client_request_id)"
+        ))
 
 
 def _migrate_unverified_phone_flags(db_engine=None):
@@ -111,6 +400,34 @@ def _migrate_unverified_phone_flags(db_engine=None):
             {"name": marker},
         )
     print("[init_db] 已将无短信验证证据的历史手机号标记为未绑定")
+    return True
+
+
+def _ensure_auth_identity_constraints(db_engine=None):
+    """Make one Kai identity per local user a database-level invariant."""
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "external_identities" not in inspector.get_table_names():
+        return False
+    with target_engine.begin() as conn:
+        duplicate = conn.execute(text(
+            "SELECT user_id, provider, COUNT(*) AS identity_count "
+            "FROM external_identities GROUP BY user_id, provider "
+            "HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+        if duplicate:
+            raise RuntimeError(
+                "external identity conflict must be resolved before migration: "
+                f"user_id={duplicate.user_id}, provider={duplicate.provider}"
+            )
+        existing_indexes = {index["name"] for index in inspect(target_engine).get_indexes("external_identities")}
+        if "ix_external_identity_user_provider" in existing_indexes:
+            return False
+        conn.execute(text(
+            "CREATE UNIQUE INDEX ix_external_identity_user_provider "
+            "ON external_identities (user_id, provider)"
+        ))
+    print("[init_db] 已确保每个本地账号仅绑定一个 Kai 身份")
     return True
 
 
@@ -568,6 +885,9 @@ def _migrate_manual_payout_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_order_request_scope()
+    _migrate_product_market_sources()
+    _ensure_auth_identity_constraints()
     _migrate_unverified_phone_flags()
     _migrate_payment_precision_and_pending_deadlines()
     _migrate_manual_payout_fields()
@@ -607,16 +927,19 @@ def init():
             "ON market_history_points (upstream_provider, gpu_model, gpu_variant, billing_mode, dataset_source, observed_at)"
         ))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_buy_request_owner_type ON buy_requests (user_id, request_type, status)"))
-        conn.execute(text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_client_request_id "
-            "ON orders (client_request_id) WHERE client_request_id IS NOT NULL"
-        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_created_platform ON orders (created_platform)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_last_modified_platform ON orders (last_modified_platform)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_renewals_created_platform ON order_renewals (created_platform)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_created ON notifications (user_id, created_at DESC)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications (user_id, is_read, created_at DESC)"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_user_dedupe ON notifications (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL"))
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_payment_credit "
             "ON ledger (ref_payment_order_id) WHERE ref_payment_order_id IS NOT NULL"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_order_renewal "
+            "ON ledger (ref_order_renewal_id) WHERE ref_order_renewal_id IS NOT NULL"
         ))
     _migrate_offline_purchases()
     _migrate_legacy_market_history()

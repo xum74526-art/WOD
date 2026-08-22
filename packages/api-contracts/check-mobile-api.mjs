@@ -6,9 +6,13 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..', '..')
 const require = createRequire(import.meta.url)
-const ts = require(path.join(root, 'apps/mobile/node_modules/typescript'))
+const clients = ['ios', 'android']
+  .map(name => ({ name, root: path.join(root, 'apps', name) }))
+  .filter(client => fs.existsSync(path.join(client.root, 'src')))
+const dependencyClient = clients.find(client => fs.existsSync(path.join(client.root, 'node_modules', 'typescript')))
+if (!dependencyClient) throw new Error('Install dependencies for apps/ios or apps/android before checking client contracts.')
+const ts = require(path.join(dependencyClient.root, 'node_modules', 'typescript'))
 const openapi = JSON.parse(fs.readFileSync(path.join(here, 'openapi.json'), 'utf8'))
-const mobileRoot = path.join(root, 'apps', 'mobile', 'src')
 
 const apiRoutes = []
 for (const [route, operations] of Object.entries(openapi.paths)) {
@@ -59,7 +63,7 @@ function stringValue(node, source) {
   return null
 }
 
-function inspect(file) {
+function inspect(file, clientRoot) {
   const sourceText = scriptText(file)
   const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const calls = []
@@ -101,7 +105,7 @@ function inspect(file) {
         && ts.isIdentifier(node.expression.expression)
         && node.expression.expression.text === 'uni'
         && ['request', 'uploadFile', 'downloadFile'].includes(node.expression.name.text)
-      const centralTransport = path.relative(root, file) === 'apps/mobile/src/api/request.ts'
+      const centralTransport = path.resolve(file) === path.resolve(clientRoot, 'src', 'api', 'request.ts')
       if ((isRawFetch || isRawUniRequest) && !centralTransport) {
         violations.push({ ...location(node), reason: 'raw network access must go through api/request.ts' })
       }
@@ -112,7 +116,9 @@ function inspect(file) {
   return { calls, violations }
 }
 
-const inspection = sourceFiles(mobileRoot).map(inspect)
+const inspection = clients.flatMap(client => (
+  sourceFiles(path.join(client.root, 'src')).map(file => inspect(file, client.root))
+))
 const calls = inspection.flatMap(result => result.calls)
 const violations = inspection.flatMap(result => result.violations)
 const missing = calls.filter(call => !apiRoutes.some(route => (
@@ -126,4 +132,4 @@ if (missing.length || violations.length) {
   process.exit(1)
 }
 
-console.log(`Mobile API contract check passed: ${calls.length} request(s) use canonical /api routes.`)
+console.log(`iOS/Android API contract check passed: ${calls.length} request(s) use canonical /api routes.`)

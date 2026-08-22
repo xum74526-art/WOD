@@ -20,10 +20,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import hash_password
-from app.models.external_identity import ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity
+from app.models.external_identity import (
+    ExternalAuthBindTicket,
+    ExternalAuthFlow,
+    ExternalAuthTicket,
+    ExternalIdentity,
+)
 from app.models.user import User
-from app.models.wallet import Wallet
 from app.utils.response import BizError
 
 
@@ -43,6 +46,7 @@ def _b64url_decode(value: str) -> bytes:
 def is_configured() -> bool:
     return all(
         (
+            settings.KAI_AUTH_ISSUER.strip(),
             settings.KAI_AUTH_CLIENT_ID.strip(),
             settings.KAI_AUTH_CLIENT_SECRET.strip(),
             settings.KAI_AUTH_CALLBACK_URL.strip(),
@@ -69,6 +73,9 @@ def _cleanup_expired(db: Session) -> None:
     now = _utcnow()
     db.query(ExternalAuthFlow).filter(ExternalAuthFlow.expires_at < now).delete(synchronize_session=False)
     db.query(ExternalAuthTicket).filter(ExternalAuthTicket.expires_at < now).delete(synchronize_session=False)
+    db.query(ExternalAuthBindTicket).filter(
+        ExternalAuthBindTicket.expires_at < now
+    ).delete(synchronize_session=False)
 
 
 def _return_url(requested: str | None) -> str:
@@ -84,10 +91,22 @@ def _return_url(requested: str | None) -> str:
     return candidate
 
 
-def create_authorization_flow(db: Session, intent: str, return_url: str | None = None) -> str:
+def create_authorization_flow(
+    db: Session,
+    intent: str,
+    return_url: str | None = None,
+    *,
+    user_id: int | None = None,
+    platform: str = "legacy",
+    client_id: str | None = None,
+) -> str:
     _require_configured()
-    if intent not in {"login", "register"}:
+    if intent not in {"login", "register", "bind"}:
         raise BizError("统一认证请求类型无效")
+    if intent == "bind" and not user_id:
+        raise BizError("绑定统一认证前必须先登录", status_code=401)
+    if intent != "bind" and user_id is not None:
+        raise BizError("统一认证流程目标用户无效")
 
     _cleanup_expired(db)
     state = secrets.token_urlsafe(32)
@@ -102,6 +121,9 @@ def create_authorization_flow(db: Session, intent: str, return_url: str | None =
             code_verifier=code_verifier,
             nonce=nonce,
             intent=intent,
+            user_id=user_id,
+            platform=platform,
+            client_id=client_id,
             return_url=_return_url(return_url),
             expires_at=_utcnow() + timedelta(seconds=settings.KAI_AUTH_FLOW_TTL_SECONDS),
         )
@@ -244,85 +266,44 @@ async def enrich_with_userinfo(claims: dict[str, Any], access_token: str | None)
     return {**claims, **info}
 
 
-def find_or_create_user(db: Session, claims: dict[str, Any]) -> User:
+def find_bound_user(db: Session, claims: dict[str, Any]) -> User | None:
+    """Find an explicitly bound local user; never create a WOD account."""
     issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     subject = str(claims["sub"])
     identity = db.query(ExternalIdentity).filter(
         ExternalIdentity.issuer == issuer,
         ExternalIdentity.subject == subject,
     ).first()
-    if identity:
-        user = db.query(User).filter(User.id == identity.user_id).first()
-        if not user:
-            raise BizError("统一认证关联用户不存在")
-        identity.email = claims.get("email")
-        identity.email_verified = bool(claims.get("email_verified"))
-        identity.display_name = claims.get("name")
-        identity.avatar_url = claims.get("picture")
-        if claims.get("picture") and not user.avatar:
-            user.avatar = claims["picture"]
-        db.commit()
-        db.refresh(user)
-        return user
-
-    display_name = str(claims.get("name") or "").strip()
-    email = str(claims.get("email") or "").strip()
-    username = (display_name or (email.split("@", 1)[0] if email else "") or f"Kai用户{subject[-6:]}")[:64]
-    internal_phone = "kai_" + hashlib.sha256(f"{issuer}|{subject}".encode("utf-8")).hexdigest()[:16]
-    user = User(
-        username=username,
-        phone=internal_phone,
-        phone_bound=False,
-        password=hash_password(secrets.token_urlsafe(48)),
-        avatar=claims.get("picture"),
-        role="personal",
-        supplier_status="none",
-    )
-    db.add(user)
-    db.flush()
-    db.add(Wallet(user_id=user.id, balance=0, frozen=0))
-    db.add(
-        ExternalIdentity(
-            user_id=user.id,
-            provider="kai",
-            issuer=issuer,
-            subject=subject,
-            email=email or None,
-            email_verified=bool(claims.get("email_verified")),
-            display_name=display_name or None,
-            avatar_url=claims.get("picture"),
-        )
-    )
-    try:
-        db.commit()
-    except IntegrityError:
-        # A second callback for the same Kai subject may arrive concurrently.
-        # The unique issuer+subject constraint decides the winner.
-        db.rollback()
-        identity = db.query(ExternalIdentity).filter(
-            ExternalIdentity.issuer == issuer,
-            ExternalIdentity.subject == subject,
-        ).first()
-        if not identity:
-            raise BizError("统一认证账号创建失败")
-        existing_user = db.query(User).filter(User.id == identity.user_id).first()
-        if not existing_user:
-            raise BizError("统一认证关联用户不存在")
-        return existing_user
+    if not identity:
+        return None
+    user = db.query(User).filter(User.id == identity.user_id).first()
+    if not user:
+        raise BizError("统一认证关联用户不存在")
+    identity.email = _optional_text(claims.get("email"), 320)
+    identity.email_verified = bool(claims.get("email_verified"))
+    identity.display_name = _optional_text(claims.get("name"), 128)
+    identity.avatar_url = _optional_text(claims.get("picture"), 512)
+    if identity.avatar_url and not user.avatar:
+        user.avatar = identity.avatar_url
+    db.commit()
     db.refresh(user)
-    # Import lazily to avoid a router/service import cycle.
-    from app.routers.auth import _ensure_invite_code
-
-    _ensure_invite_code(user.id, db)
     return user
 
 
-def issue_handoff_ticket(db: Session, user_id: int) -> str:
+def issue_handoff_ticket(
+    db: Session,
+    user_id: int,
+    *,
+    platform: str = "legacy",
+    client_id: str | None = None,
+) -> str:
     ticket = secrets.token_urlsafe(32)
     db.add(
         ExternalAuthTicket(
             ticket_hash=_sha256(ticket),
             user_id=user_id,
+            platform=platform,
+            client_id=client_id,
             expires_at=_utcnow() + timedelta(seconds=settings.KAI_AUTH_TICKET_TTL_SECONDS),
         )
     )
@@ -330,7 +311,7 @@ def issue_handoff_ticket(db: Session, user_id: int) -> str:
     return ticket
 
 
-def consume_handoff_ticket(db: Session, ticket: str) -> User:
+def consume_handoff_ticket(db: Session, ticket: str) -> tuple[User, str, str | None]:
     if not ticket:
         raise BizError("统一认证登录凭证无效")
     row = db.query(ExternalAuthTicket).filter(ExternalAuthTicket.ticket_hash == _sha256(ticket)).first()
@@ -350,7 +331,107 @@ def consume_handoff_ticket(db: Session, ticket: str) -> User:
         raise BizError("统一认证关联用户不存在")
     db.commit()
     db.refresh(user)
-    return user
+    return user, row.platform or "legacy", row.client_id
+
+
+def _optional_text(value: Any, max_length: int) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized[:max_length] or None
+
+
+def issue_bind_ticket(
+    db: Session,
+    user_id: int,
+    claims: dict[str, Any],
+    *,
+    platform: str,
+    client_id: str | None,
+) -> str:
+    subject = _optional_text(claims.get("sub"), 255)
+    if not subject:
+        raise BizError("统一认证缺少用户标识")
+    ticket = secrets.token_urlsafe(32)
+    db.add(
+        ExternalAuthBindTicket(
+            ticket_hash=_sha256(ticket),
+            user_id=user_id,
+            provider="kai",
+            issuer=settings.KAI_AUTH_ISSUER.rstrip("/"),
+            subject=subject,
+            email=_optional_text(claims.get("email"), 320),
+            email_verified=bool(claims.get("email_verified")),
+            display_name=_optional_text(claims.get("name"), 128),
+            avatar_url=_optional_text(claims.get("picture"), 512),
+            platform=platform,
+            client_id=client_id,
+            expires_at=_utcnow() + timedelta(seconds=settings.KAI_AUTH_TICKET_TTL_SECONDS),
+        )
+    )
+    db.commit()
+    return ticket
+
+
+def bind_identity_with_ticket(db: Session, ticket: str, user: User) -> ExternalIdentity:
+    """Atomically consume a verified ticket and bind it to its initiating user."""
+    if not ticket:
+        raise BizError("统一认证绑定凭证无效")
+    now = _utcnow()
+    row = db.query(ExternalAuthBindTicket).filter(
+        ExternalAuthBindTicket.ticket_hash == _sha256(ticket)
+    ).first()
+    if (
+        not row
+        or row.user_id != user.id
+        or row.consumed_at is not None
+        or row.expires_at < now
+    ):
+        raise BizError("统一认证绑定凭证无效或已过期")
+
+    subject_identity = db.query(ExternalIdentity).filter(
+        ExternalIdentity.issuer == row.issuer,
+        ExternalIdentity.subject == row.subject,
+    ).first()
+    user_identity = db.query(ExternalIdentity).filter(
+        ExternalIdentity.user_id == user.id,
+        ExternalIdentity.provider == row.provider,
+    ).first()
+    if subject_identity and subject_identity.user_id != user.id:
+        raise BizError("该 Kai 身份已绑定其他账号", status_code=409)
+    if user_identity and (
+        user_identity.issuer != row.issuer or user_identity.subject != row.subject
+    ):
+        raise BizError("当前账号已绑定其他 Kai 身份", status_code=409)
+
+    identity = subject_identity or user_identity
+    if not identity:
+        identity = ExternalIdentity(
+            user_id=user.id,
+            provider=row.provider,
+            issuer=row.issuer,
+            subject=row.subject,
+        )
+        db.add(identity)
+    identity.email = row.email
+    identity.email_verified = row.email_verified
+    identity.display_name = row.display_name
+    identity.avatar_url = row.avatar_url
+    if row.avatar_url and not user.avatar:
+        user.avatar = row.avatar_url
+    consumed = db.query(ExternalAuthBindTicket).filter(
+        ExternalAuthBindTicket.id == row.id,
+        ExternalAuthBindTicket.consumed_at.is_(None),
+        ExternalAuthBindTicket.expires_at >= now,
+    ).update({ExternalAuthBindTicket.consumed_at: now}, synchronize_session=False)
+    if consumed != 1:
+        db.rollback()
+        raise BizError("统一认证绑定凭证无效或已过期")
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise BizError("Kai 身份绑定冲突", status_code=409) from exc
+    db.refresh(identity)
+    return identity
 
 
 def append_return_params(return_url: str, **params: str) -> str:

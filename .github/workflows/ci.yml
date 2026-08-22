@@ -42,7 +42,7 @@ jobs:
         env:
           API_ORIGIN: https://wod.kai.com
 
-  mobile:
+  ios:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,12 +50,28 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/mobile/package-lock.json
-      - run: npm ci --prefix apps/mobile
-      - run: npm --prefix apps/mobile audit --audit-level=high
-      - run: npm run check:mobile
-      - run: npm run test:mobile
-      - run: npm run build:mobile:h5
-      - run: npm run build:mobile:app
+          cache-dependency-path: apps/ios/package-lock.json
+      - run: npm ci --prefix apps/ios
+      - run: npm --prefix apps/ios audit --audit-level=high
+      - run: npm run check:ios
+      - run: npm run test:ios
+      - run: npm --prefix apps/ios run test:i18n
+      - run: npm run build:ios:app
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/android/package-lock.json
+      - run: npm ci --prefix apps/android
+      - run: npm --prefix apps/android audit --audit-level=high
+      - run: npm run check:android
+      - run: npm run test:android
+      - run: npm --prefix apps/android run test:i18n
+      - run: npm run build:android:app
       - run: node packages/api-contracts/check-mobile-api.mjs
       - run: node packages/api-contracts/check-client-boundaries.mjs

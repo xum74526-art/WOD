@@ -1,6 +1,6 @@
 # Android 开发、预览与打包
 
-Android 与 iOS 共用 `apps/mobile` 中的 uni-app、Vue 3 和 TypeScript 源码，不维护第二套页面。平台差异只放在条件编译或能力判断中。
+Android 客户端位于 `apps/android`，正式 applicationId 为 `com.kai.wod`。它与 iOS 使用同一 OpenAPI 和业务状态，但拥有独立的 Android manifest、回跳和发布配置。
 
 ## 本机已经安装的环境
 
@@ -18,13 +18,13 @@ Android 与 iOS 共用 `apps/mobile` 中的 uni-app、Vue 3 和 TypeScript 源�
 在仓库根目录执行：
 
 ```bash
-npm ci --prefix apps/mobile
-npm run check:mobile
-npm run test:mobile
-npm run build:mobile:app
+npm ci --prefix apps/android
+npm run check:android
+npm run test:android
+npm run build:android:app
 ```
 
-生成的双平台业务资源位于 `apps/mobile/dist/build/app`。这不是独立 APK；它供 HBuilderX 调试基座或原生打包使用。
+生成的 Android 业务资源位于 `apps/android/dist/build/app`。这不是独立 APK；它供 HBuilderX 调试基座或原生打包使用。
 
 ## 启动本机 Android 模拟器
 
@@ -41,11 +41,11 @@ export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
   -no-snapshot -gpu host
 ```
 
-等待 `adb shell getprop sys.boot_completed` 返回 `1` 后，在 HBuilderX 中导入 `apps/mobile`，选择“运行 → 运行到手机或模拟器 → Android”。也可以使用命令行：
+等待 `adb shell getprop sys.boot_completed` 返回 `1` 后，在 HBuilderX 中导入 `apps/android`，选择“运行 → 运行到手机或模拟器 → Android”。也可以使用命令行：
 
 ```bash
 /Applications/HBuilderX.app/Contents/MacOS/cli launch app-android \
-  --project "$PWD/apps/mobile" \
+  --project "$PWD/apps/android" \
   --deviceId emulator-5554 \
   --playground standard \
   --native-log true
@@ -55,20 +55,22 @@ export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
 
 ## API 地址
 
-复制 `apps/mobile/.env.example` 为被 Git 忽略的 `.env.local`，设置设备能够访问的地址：
+复制 `apps/android/.env.example` 为被 Git 忽略的 `.env.local`。原生包只接受以 `/api`
+结尾的 HTTPS 地址：
 
 ```dotenv
-VITE_KAI_APP_API_BASE=http://192.168.31.5:8000/api
+VITE_KAI_APP_API_BASE=https://wod.kai.com/api
 ```
 
-局域网调试地址会随网络变化。正式包必须使用 HTTPS API；不要把 `127.0.0.1` 用作真机地址。
+如需连接本地后端，应先提供受信任的 HTTPS 测试域名或隧道；不要把 `127.0.0.1` 或明文
+HTTP 用作真机地址。
 
 ## 生成正式 APK 或 AAB
 
 目前仓库刻意未保存发布身份材料，因此只能运行调试基座。正式打包前由项目所有者登录自己的 DCloud 账号，并提供和配置：
 
 1. DCloud AppID；
-2. 唯一且长期不变的 Android applicationId，替换示例 `com.example.kai`；
+2. 唯一且长期不变的 Android applicationId：`com.kai.wod`；
 3. 自有 keystore、别名和密码；
 4. 正式 HTTPS API；
 5. 版本名与递增的 versionCode。

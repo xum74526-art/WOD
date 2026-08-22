@@ -1,0 +1,59 @@
+{
+    "name" : "KAI",
+    "appid" : "__UNI__47CF9D3",
+    "description" : "AI 算力资产管理 App",
+    "locale" : "zh-Hans",
+    "versionName" : "1.0.4",
+    "versionCode" : "104",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "darkmode" : true,
+        "safearea" : {
+            "background" : "#FFFFFF",
+            "backgroundDark" : "#0A0E14",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        },
+        "uniStatistics" : {
+            "enable" : false
+        },
+        "distribute" : {
+            "icons" : {
+                "ios" : {
+                    "appstore" : "static/logo/logo.png",
+                    "ipad" : {
+                        "app" : "static/logo/logo-144.png",
+                        "app@2x" : "static/logo/logo-192.png"
+                    },
+                    "iphone" : {
+                        "app@2x" : "static/logo/logo-96.png",
+                        "app@3x" : "static/logo/logo-144.png"
+                    }
+                }
+            },
+            "ios" : {
+                "appid" : "com.kai.wod",
+                "dSYMs" : false,
+                "urltypes" : "kai"
+            }
+        }
+    },
+    "h5" : {
+        "title" : "KAI iOS Preview",
+        "router" : {
+            "mode" : "history",
+            "base" : "/"
+        },
+        "devServer" : {
+            "port" : 9000,
+            "proxy" : {
+                "/api" : {
+                    "target" : "https://wod.kai.com",
+                    "changeOrigin" : true
+                }
+            }
+        }
+    }
+}

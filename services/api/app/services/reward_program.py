@@ -1,8 +1,8 @@
 """Reward-program mode and ledger naming.
 
-The closed-test mode credits *test card-hours* only.  It is deliberately
+The in-app reward mode credits nonwithdrawable card-hours only. It is deliberately
 separate from the future live settlement switch so historical synthetic
-reward rows never become spendable merely because the closed test is enabled.
+reward rows never become spendable merely because the in-app program is enabled.
 """
 
 from app.core.config import settings
@@ -53,7 +53,7 @@ def active_reward_ledger_types(kind: str) -> tuple[str, ...]:
 
 
 def ledger_filter_types(public_type: str) -> tuple[str, ...] | None:
-    """Map the stable public filter to live and closed-test ledger rows."""
+    """Map the stable public filter to live and legacy in-app ledger rows."""
     for kind, live_type in _LIVE_LEDGER_TYPES.items():
         if public_type == live_type:
             return live_type, _TEST_LEDGER_TYPES[kind]

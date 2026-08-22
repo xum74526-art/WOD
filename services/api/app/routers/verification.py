@@ -13,7 +13,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.core.sensitive import mask_id_card, protect, reveal, sensitive_capability_enabled
 from app.db.session import get_db
 from app.models.user import User
@@ -29,6 +29,7 @@ from app.services.id_card_ocr import (
     OcrPrecheckResult,
     run_identity_precheck,
 )
+from app.services.auth_session import normalize_platform
 from app.utils.id_card_util import validate_id_card, extract_gender, extract_birthday
 from app.utils.response import BizError, success
 
@@ -195,6 +196,7 @@ def _ocr_result_values(result: OcrPrecheckResult) -> dict:
             detail, ensure_ascii=False, separators=(",", ":"),
         )),
         "ocr_updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
+        "last_modified_platform": "system",
     }
 
 
@@ -245,7 +247,13 @@ def get_status(user: User = Depends(get_current_user), db: Session = Depends(get
 
 
 @router.post("")
-def submit(data: VerificationIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def submit(
+    data: VerificationIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    source_platform = normalize_platform(platform)
     _require_ocr_security()
     if data.sensitive_consent is not True:
         raise BizError("请先单独同意身份证敏感信息用于本地文字识别和人工审核", status_code=400)
@@ -277,12 +285,15 @@ def submit(data: VerificationIn, user: User = Depends(get_current_user), db: Ses
         existing.status = "pending"
         existing.reject_reason = None
         existing.consent_at = consent_at
+        existing.last_modified_platform = source_platform
     else:
         v = Verification(
             user_id=user.id, real_name=data.real_name, id_card=protect(id_card),
             status="pending", ocr_status=OCR_STATUS_NOT_STARTED,
             ocr_input_token=secrets.token_hex(32),
             consent_at=consent_at,
+            created_platform=source_platform,
+            last_modified_platform=source_platform,
         )
         db.add(v)
     db.commit()
@@ -305,6 +316,7 @@ async def upload_id_photo(
     back: UploadFile | None = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     """上传身份证照片。文件保存在私有目录，不提供公开静态 URL。"""
     if not front and not back:
@@ -317,6 +329,7 @@ async def upload_id_photo(
         raise BizError("您已通过实名认证")
     if not v.consent_at:
         raise BizError("请重新提交认证信息并单独同意敏感信息处理后再上传", status_code=400)
+    v.last_modified_platform = normalize_platform(platform)
 
     async def prepare_one(upload: UploadFile, side: str) -> tuple[str, bytes, str]:
         content = await upload.read(settings.ID_PHOTO_MAX_BYTES + 1)

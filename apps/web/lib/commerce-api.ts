@@ -1,4 +1,5 @@
 import { apiEnvelopeRequest, apiRequest, publicApiEnvelopeRequest, type ApiEnvelope } from "@/lib/api";
+import { hourlyOrderBody, webRequestId } from "@/lib/web-business-contract";
 
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
@@ -112,9 +113,13 @@ export type Order = {
   price_unit: string;
   quantity: number;
   purchase_type?: "usage" | "holding";
-  cycle_days?: number;
+  purchase_hours?: number | null;
+  cycle_days?: number | null;
   end_at?: string | null;
   remaining_days?: number;
+  remaining_hours?: number | null;
+  created_platform?: string;
+  last_modified_platform?: string;
   snapshot: {
     payment_mode?: "local_placeholder" | "pingxx";
     pricing_semantics?: string;
@@ -164,6 +169,9 @@ export type PublicProduct = {
   purchasable: boolean;
   purchase_unavailable_reason: string | null;
   cycle: number[];
+  purchase_unit: "hour" | "day" | string;
+  purchase_hour_options: number[];
+  billing_unit: string;
   image_url: string | null;
   market_source: string;
 };
@@ -354,8 +362,22 @@ export function cancelOrder(scope: "account" | "supplier", id: number, version: 
 export function startOrderDelivery(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/start-delivery`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function markOrderDelivered(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/mark-delivered`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function completeOrder(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/complete`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
-export function renewOrder(id: number, cycleDays: number) { return apiRequest<Order>(`/api/v1/account/orders/${id}/renew`, { method: "POST", body: JSON.stringify({ cycle_days: cycleDays }) }); }
-export function createDirectOrder(input: { product_id: number; quantity: number; cycle_days: number; purchase_type: "usage" | "holding" }) { return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", { method: "POST", headers: { "Idempotency-Key": `wod-order-${crypto.randomUUID()}` }, body: JSON.stringify(input) }); }
+export function renewOrder(id: number, hours: number) {
+  const clientRequestId = webRequestId("renew", crypto.randomUUID());
+  return apiRequest<Order>(`/api/v1/account/orders/${id}/renew`, {
+    method: "POST",
+    headers: { "Idempotency-Key": clientRequestId },
+    body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
+  });
+}
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage" | "holding" }) {
+  const clientRequestId = webRequestId("order", crypto.randomUUID());
+  return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
+    method: "POST",
+    headers: { "Idempotency-Key": clientRequestId },
+    body: JSON.stringify({ ...input, ...hourlyOrderBody(input.hours, clientRequestId) }),
+  });
+}
 
 export function listSshKeys() { return apiEnvelopeRequest<SshKey[], { private_keys_accepted: false; usage: "server_login_only" }>("/api/v1/account/ssh-keys"); }
 export function createSshKey(input: { name: string; public_key: string }) { return apiRequest<SshKey>("/api/v1/account/ssh-keys", { method: "POST", body: JSON.stringify(input) }); }

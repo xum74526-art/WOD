@@ -26,6 +26,12 @@ class InviteRecord(Base):
     invitee_phone: Mapped[str] = mapped_column(String(16))  # 脱敏手机号
     status: Mapped[str] = mapped_column(String(16), default="registered")  # registered/ordered/rewarded
     reward_amount: Mapped[float] = mapped_column(default=0)  # 邀请人获得的卡时奖励
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     ordered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # 首单完成时间
     rewarded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # 奖励发放时间

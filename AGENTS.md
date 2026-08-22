@@ -20,8 +20,8 @@
 
 - `services/api` 是唯一业务后端，也是唯一可以读取或写入数据库的应用。
 - Web 浏览器只能调用同源 `/api/v1/*`；Next.js BFF 再转发到 FastAPI。
-- iOS、Android 和 Mobile H5 共用 `apps/mobile`；原生端默认调用
-  `https://wod.kai.com/api`。
+- iOS 位于 `apps/ios`，Android 位于 `apps/android`；两端使用同一 OpenAPI
+  契约并默认调用 `https://wod.kai.com/api`，不得各自发明业务状态。
 - 普通本地 Web 联调也通过 `API_ORIGIN=https://wod.kai.com` 使用云端数据，不复制线上
   SQLite 文件，不在前端增加数据库配置。
 - FastAPI OpenAPI 是 HTTP 契约的唯一来源。不能在 Web 或 Mobile 中独立发明订单、支付、
@@ -37,7 +37,8 @@
 | 数据模型或业务规则 | `services/api/app/models`、`schemas`、`services` | router、迁移、测试、OpenAPI |
 | HTTP 接口 | `services/api/app/routers` | OpenAPI 快照、Web/Mobile 调用方 |
 | Web 页面或 BFF | `apps/web` | 同源 Cookie、canonical 路径、Web 测试 |
-| iOS/Android/H5 | `apps/mobile` | 共享实现、条件编译、Mobile 测试 |
+| iOS | `apps/ios` | iOS 回跳、权限、App 测试 |
+| Android | `apps/android` | `com.kai.wod`、Android 回跳、App 测试 |
 | 反向代理或服务 | `infra` | `systemd-analyze verify`、nginx 检查、部署文档 |
 | 契约检查 | `packages/api-contracts` | 重新导出 OpenAPI，不手改快照 |
 
@@ -51,7 +52,8 @@ uni-app 条件编译，不复制整套页面。新增兼容层必须注明旧调
 python3.12 -m venv services/api/.venv
 services/api/.venv/bin/python -m pip install -r services/api/requirements-dev.txt
 npm ci --prefix apps/web
-npm ci --prefix apps/mobile
+npm ci --prefix apps/ios
+npm ci --prefix apps/android
 
 # API 路由或 schema 变化后
 npm run export:openapi

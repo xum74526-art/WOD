@@ -5,29 +5,32 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from threading import Condition
 import time
-from types import SimpleNamespace
 from typing import Callable, Iterable, TypeVar
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
+from app.integrations.kai_pricing import (
+    KaiPricingError,
+    get_aggregated_candles,
+    get_exact_product_candles,
+    get_ranking_metrics,
+)
 from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
+from app.models.product import Product
 from app.services.gpu_catalog import canonicalize_gpu, gpu_variant_aliases, normalize_gpu_variant
 from app.services.market_freshness import CURRENT_SOURCE_STATES, HOT_SOURCE_STATES, source_state as _source_state
 from app.services.market_sync import _without_outliers, utcnow
-from app.services.market_history_sync import (
-    HistorySelection,
-    history_source_status,
-    select_market_history,
-    select_market_history_bulk,
-)
+from app.services.market_history_sync import HistorySelection, select_market_history, select_market_history_bulk
+from app.services.region_mapper import map_region
 from app.utils.response import BizError, success
 
 
 router = APIRouter(prefix="/api/market", tags=["market"])
-SOURCE_NAMES = {"wod": "WOD", "vast": "Vast.ai", "autodl": "AutoDL"}
+SOURCE_NAMES = {"kai": "KAI Pricing"}
 # A rolling seven-day change needs real observations at both ends of a window.
 # Two endpoint dates spanning six full days are published as sparse/limited;
 # seven distinct observed UTC dates are required for verified/full coverage.
@@ -94,6 +97,26 @@ class _MarketResponseCache:
 _MARKET_RESPONSE_CACHE = _MarketResponseCache()
 
 
+def _source_refresh_seconds(source: str) -> int | None:
+    value = settings.KAI_PRICING_REFRESH_SECONDS if source == "kai" else None
+    return max(int(value), 1) if value is not None else None
+
+
+def _next_market_refresh_seconds(sources: Iterable[str]) -> int:
+    intervals = [
+        interval for source in sources
+        if (interval := _source_refresh_seconds(source)) is not None
+    ]
+    return min(intervals) if intervals else max(int(settings.KAI_PRICING_REFRESH_SECONDS), 1)
+
+
+def _kai_sources(sources: str) -> set[str]:
+    requested = {part.strip().lower() for part in str(sources or "").split(",") if part.strip()}
+    if requested != {"kai"}:
+        raise BizError("当前行情仅支持 KAI Pricing 数据源", status_code=400)
+    return {"kai"}
+
+
 def _cache_allowed(db: Session) -> bool:
     """Do not let isolated in-memory test databases share process cache data."""
     database = db.get_bind().url.database
@@ -123,6 +146,10 @@ def _public_error_code(message: str | None) -> str | None:
         "rate_limited",
         "upstream_timeout",
         "upstream_error",
+        "upstream_invalid_response",
+        "upstream_response_too_large",
+        "upstream_stale",
+        "history_unavailable",
         "history_credentials_missing",
         "history_credentials_missing_permission",
         "history_rate_limited",
@@ -205,7 +232,13 @@ def _snapshot_out(row: MarketPriceSnapshot, checked_at: datetime | None = None) 
         "median_price_cny": float(row.median_price_cny) if row.median_price_cny is not None else None,
         "max_price_cny": float(row.max_price_cny) if row.max_price_cny is not None else None,
         "sample_count": row.sample_count,
-        "available_gpu_count": row.available_gpu_count,
+        "quote_sample_count": row.sample_count,
+        # KAI publishes quote observations and configuration limits, not live
+        # inventory.  A numeric zero would be just as misleading as a count.
+        "available_gpu_count": None,
+        "inventory_available": None,
+        "sample_semantics": "current_quote_observations_not_inventory",
+        "billing_unit": "GPU_HOUR",
         "fx_rate": float(row.fx_rate) if row.fx_rate is not None else None,
         "fx_source": row.fx_source,
         "fx_date": row.fx_date,
@@ -494,7 +527,7 @@ def _seven_day_metrics(
         })
 
     mode_results: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    source_priority = {"vast": 0, "autodl": 1, "wod": 2}
+    source_priority = {"kai": 0, "autodl": 1, "wod": 2}
     for (model, variant, billing_mode), source_metrics in grouped.items():
         # Keep each provider's price population independent. Pick the strongest
         # observed series instead of taking a median of provider volatilities.
@@ -549,6 +582,8 @@ def _empty_metric() -> dict:
         "change_7d_pct": None,
         "range_low_cny": None,
         "range_high_cny": None,
+        "observed_partial_low_cny": None,
+        "observed_partial_high_cny": None,
         "history_provenance": None,
         "flat_price_observed": False,
     }
@@ -663,6 +698,15 @@ def _historical_metrics(
     }
 
 
+def _kai_history_metrics(identities: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict]:
+    """Return bounded official KAI seven-day metrics without failing the API."""
+
+    try:
+        return get_ranking_metrics(identities)
+    except KaiPricingError:
+        return {}
+
+
 def _history_metric_matches_live_sources(metric: dict | None, live_sources: Iterable[str]) -> bool:
     """Only attach an archive to a currently comparable provider.
 
@@ -676,6 +720,8 @@ def _history_metric_matches_live_sources(metric: dict | None, live_sources: Iter
     provenance = metric.get("history_provenance") or {}
     provider = str(provenance.get("upstream_provider") or "").strip().lower()
     aliases = {
+        "kai pricing": "kai",
+        "kai_pricing": "kai",
         "vast.ai": "vast",
         "vastai": "vast",
         "auto dl": "autodl",
@@ -687,7 +733,11 @@ def _history_metric_matches_live_sources(metric: dict | None, live_sources: Iter
 
 
 def _source_states(db: Session, now: datetime) -> dict[str, str]:
-    return {row.source: _source_state(row, now) for row in db.query(MarketSourceStatus).all() if row.enabled}
+    return {
+        row.source: _source_state(row, now)
+        for row in db.query(MarketSourceStatus).all()
+        if row.enabled and row.source in SOURCE_NAMES
+    }
 
 
 def _current_sources(db: Session, now: datetime) -> set[str]:
@@ -753,8 +803,8 @@ def source_status(db: Session = Depends(get_db)):
             "last_success_at": _iso(row.last_success_at),
             "has_error": bool(row.last_error),
             "error_code": _public_error_code(row.last_error),
-        } for row in rows],
-        "history_items": history_source_status(db),
+        } for row in rows if row.enabled and row.source in SOURCE_NAMES],
+        "history_items": [],
     })
 
 
@@ -777,18 +827,24 @@ def _models_payload(db: Session) -> dict:
             "gpu_variant": variant,
             "sources": [],
             "sample_count": 0,
-            "available_gpu_count": 0,
+            "quote_sample_count": 0,
+            "available_gpu_count": None,
+            "inventory_available": None,
+            "sample_semantics": "current_quote_observations_not_inventory",
+            "billing_unit": "GPU_HOUR",
         })
         if row.source not in item["sources"]:
             item["sources"].append(row.source)
         item["sample_count"] += row.sample_count
-        item["available_gpu_count"] += row.available_gpu_count
-    historical = _historical_metrics(db, now, grouped.keys())
+        item["quote_sample_count"] += row.sample_count
+    kai_metrics = _kai_history_metrics(grouped.keys())
     for key, item in grouped.items():
-        archived = historical.get(key)
-        if not _history_metric_matches_live_sources(archived, item["sources"]):
-            archived = None
-        item.update(archived or metrics.get(key, _empty_metric()))
+        item.update(kai_metrics.get(key) or metrics.get(key, _empty_metric()))
+        item["seven_day_status"] = (
+            "full" if item.get("history_coverage_status") == "complete" and item.get("change_7d_pct") is not None
+            else "partial" if item.get("history_day_count", 0) > 0
+            else "unavailable"
+        )
         states = [source_states.get(source, "pending") for source in item["sources"]]
         item["market_status"] = "live" if states and all(state == "live" for state in states) else "delayed"
     items = sorted(grouped.values(), key=lambda item: (
@@ -809,11 +865,11 @@ def _models_payload(db: Session) -> dict:
 def latest_prices(
     model: str,
     variant: str | None = None,
-    sources: str = "vast,autodl",
+    sources: str = "kai",
     db: Session = Depends(get_db),
 ):
     now = utcnow()
-    allowed_sources = {part.strip() for part in sources.split(",") if part.strip() in SOURCE_NAMES}
+    allowed_sources = _kai_sources(sources)
     source_states = _source_states(db, now)
     current_sources = {source for source in allowed_sources if source_states.get(source) in CURRENT_SOURCE_STATES}
     all_latest = _latest_rows(db)
@@ -830,9 +886,13 @@ def latest_prices(
     items = [_snapshot_out(row, statuses.get(row.source).last_success_at if statuses.get(row.source) else None) for row in rows]
     cny_mins = [float(row.min_price_cny) for row in rows if row.min_price_cny is not None]
     cny_maxes = [float(row.max_price_cny) for row in rows if row.max_price_cny is not None]
+    # Prefer sources that actually contributed this model/variant.  When no
+    # quote exists yet, fall back to the valid requested set, then to the
+    # requested set itself so retry guidance remains source-specific.
+    refresh_sources = {row.source for row in rows} or current_sources or allowed_sources
     return success({
         "server_time": _iso(now),
-        "next_refresh_in": 10,
+        "next_refresh_in": _next_market_refresh_seconds(refresh_sources),
         "gpu_model": canonical_model,
         "gpu_variant": selected_variant,
         "summary": {
@@ -840,7 +900,11 @@ def latest_prices(
             "min_price_cny": min(cny_mins) if cny_mins else None,
             "max_price_cny": max(cny_maxes) if cny_maxes else None,
             "sample_count": sum(row.sample_count for row in rows),
-            "available_gpu_count": sum(row.available_gpu_count for row in rows),
+            "quote_sample_count": sum(row.sample_count for row in rows),
+            "available_gpu_count": None,
+            "inventory_available": None,
+            "sample_semantics": "current_quote_observations_not_inventory",
+            "billing_unit": "GPU_HOUR",
             "source_count": len(rows),
         },
         "items": items,
@@ -854,13 +918,13 @@ def price_history(
     model: str,
     variant: str | None = None,
     range: str = "24h",  # noqa: A002
-    sources: str = "vast,autodl",
+    sources: str = "kai",
     db: Session = Depends(get_db),
 ):
     ranges = {"1h": timedelta(hours=1), "6h": timedelta(hours=6), "24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}
     if range not in ranges:
         raise BizError("不支持的时间范围")
-    allowed_sources = {part.strip() for part in sources.split(",") if part.strip() in SOURCE_NAMES}
+    allowed_sources = _kai_sources(sources)
     all_latest = _latest_rows(db)
     canonical_model = canonicalize_gpu(model) or model
     selected_variant = normalize_gpu_variant(
@@ -930,22 +994,24 @@ def price_candles(
     model: str,
     variant: str | None = None,
     range: str = "24h",  # noqa: A002
-    sources: str = "vast,autodl",
+    sources: str = "kai",
     billing_mode: str = "ondemand",
     db: Session = Depends(get_db),
+    external_product_id: str | None = None,
 ):
-    normalized_sources = tuple(sorted({
-        part.strip() for part in sources.split(",") if part.strip() in SOURCE_NAMES
-    }))
+    normalized_sources = tuple(sorted(_kai_sources(sources)))
     cache_key = (
         "market_candles", model, variant or "", range, normalized_sources, billing_mode,
+        external_product_id or "",
     )
     ttl_seconds = 300 if range in {"7d", "30d"} else 30 if range == "24h" else 8
     payload = _cached_payload(
         db,
         cache_key,
         ttl_seconds,
-        lambda: _price_candles_payload(model, variant, range, sources, billing_mode, db),
+        lambda: _price_candles_payload(
+            model, variant, range, sources, billing_mode, db, external_product_id,
+        ),
     )
     return success(payload)
 
@@ -957,6 +1023,7 @@ def _price_candles_payload(
     sources: str,
     billing_mode: str,
     db: Session,
+    external_product_id: str | None = None,
 ) -> dict:
     """Return observed OHLC candles for the selected GPU market.
 
@@ -977,13 +1044,64 @@ def _price_candles_payload(
     }
     if range not in configs:
         raise BizError("不支持的时间范围")
-    allowed_sources = {part.strip() for part in sources.split(",") if part.strip() in SOURCE_NAMES}
-    if not allowed_sources:
-        raise BizError("请选择有效的数据来源")
+    allowed_sources = _kai_sources(sources)
     duration, candle_seconds, tick_seconds = configs[range]
     canonical_model = canonicalize_gpu(model) or model
     picked_variant = variant if variant is not None else _pick_variant(_latest_rows(db), canonical_model)
     selected_variant = normalize_gpu_variant(canonical_model, picked_variant)
+    if external_product_id and "kai" not in allowed_sources:
+        raise BizError("资源标识只能用于 KAI Pricing 行情", status_code=400)
+    # KAI publishes official historical OHLC per product.  Use that temporal
+    # history directly and never splice it with the old Vast archive or the
+    # current cross-sectional offer snapshots.
+    if "kai" in allowed_sources and billing_mode == "ondemand":
+        try:
+            kai_payload = dict(
+                get_exact_product_candles(
+                    external_product_id, canonical_model, selected_variant, range,
+                )
+                if external_product_id
+                else get_aggregated_candles(canonical_model, selected_variant, range)
+            )
+            kai_payload.update({
+                "server_time": _iso(utcnow()),
+                "billing_mode": billing_mode,
+                "requested_sources": sorted(allowed_sources),
+            })
+            return kai_payload
+        except KaiPricingError as exc:
+            if external_product_id and exc.code == "product_not_found":
+                raise BizError("资源标识不存在或报价已失效", status_code=404)
+            if external_product_id and exc.code == "product_identity_mismatch":
+                raise BizError("资源标识与请求的 GPU 型号不匹配", status_code=400)
+            allowed_sources.discard("kai")
+            if not allowed_sources:
+                return {
+                    "server_time": _iso(utcnow()),
+                    "gpu_model": canonical_model,
+                    "gpu_variant": selected_variant,
+                    "billing_mode": billing_mode,
+                    "range": range,
+                    "requested_sources": ["kai"],
+                    "selected_source": None,
+                    "history_status": "unavailable",
+                    "curve_status": "unavailable",
+                    "coverage_class": "unavailable",
+                    "history_coverage_status": "unavailable",
+                    "coverage_day_count": 0,
+                    "coverage_span_hours": 0,
+                    "data_quality": None,
+                    "provenance": {
+                        "kind": "official_historical_ohlc_unavailable",
+                        "upstream_provider": "kai",
+                        "error_code": _public_error_code(exc.code),
+                        "live_component_included": False,
+                    },
+                    "latest_live_price_cny": None,
+                    "latest_live_observed_at": None,
+                    "latest_live_comparable_to_history": None,
+                    "candles": [],
+                }
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
     since = utcnow() - duration
     rows = db.query(
@@ -1016,7 +1134,7 @@ def _price_candles_payload(
     rows_by_source: dict[str, list] = defaultdict(list)
     for row in all_live_rows:
         rows_by_source[row.source].append(row)
-    source_priority = {"vast": 3, "autodl": 2, "wod": 1}
+    source_priority = {"kai": 3, "autodl": 2, "wod": 1}
     selected_live_source = max(
         rows_by_source,
         key=lambda source: (
@@ -1079,67 +1197,6 @@ def _price_candles_payload(
     latest_live_observed_at = _iso(
         max((row.observed_at for row in latest_by_source.values()), default=None)
     )
-    archive_selected = False
-    # Seven-day Vast charts use one complete attributed archive. The current
-    # live value is returned separately because its offer population differs
-    # from the archive and is therefore not a comparable candle.
-    if range == "7d" and "vast" in allowed_sources:
-        selected = select_market_history(db, canonical_model, selected_variant, since, utcnow(), billing_mode)
-        if selected is not None and selected.points:
-            archive_rows = [SimpleNamespace(
-                source=point.dataset_source,
-                observed_at=point.observed_at,
-                median_price_cny=point.representative_price_cny,
-                sample_count=max(point.sample_count, 1),
-            ) for point in selected.points]
-            archive_rows.sort(key=lambda row: row.observed_at)
-            archive_days, archive_span, archive_count = coverage(archive_rows)
-            live_score = (
-                coverage_day_count >= MIN_RANGE_DAYS and coverage_span_hours >= MIN_RANGE_SPAN_HOURS,
-                len({Decimal(row.median_price_cny) for row in live_rows if row.median_price_cny is not None}) > 1,
-                coverage_span_hours,
-                coverage_day_count,
-                len(live_rows),
-            )
-            archive_score = (
-                selected.available,
-                len({Decimal(row.median_price_cny) for row in archive_rows if row.median_price_cny is not None}) > 1,
-                archive_span,
-                archive_days,
-                archive_count,
-            )
-            # Prefer a complete licensed archive. If both are partial, choose
-            # the series with the broader real time coverage. Never splice the
-            # two populations together merely to make a longer-looking line.
-            if archive_count >= 1 and archive_score > live_score:
-                archive_selected = True
-                candle_rows = archive_rows
-                coverage_day_count = archive_days
-                coverage_span_hours = archive_span
-                history_status = (
-                    "available"
-                    if selected.available
-                    else "partial_history"
-                    if archive_count >= 2
-                    else "single_observation"
-                )
-                coverage_status = (
-                    "complete"
-                    if selected.available and archive_days >= MIN_RANGE_DAYS
-                    else "sparse_window"
-                    if selected.available
-                    else "partial"
-                    if archive_count >= 2
-                    else "single"
-                )
-                provenance = dict(selected.provenance or {})
-                components = [
-                    f"{selected.points[0].dataset_source}:{selected.points[0].upstream_provider}"
-                ] if selected.points else []
-                provenance["components"] = components
-                provenance["live_component_included"] = False
-                data_quality = provenance.get("coverage_quality", provenance.get("kind"))
-                selected_live_source = selected.points[0].upstream_provider if selected.points else selected_live_source
     candles = _build_market_candles(candle_rows, candle_seconds, tick_seconds)
     curve_status = (
         "full"
@@ -1172,11 +1229,7 @@ def _price_candles_payload(
         "provenance": provenance,
         "latest_live_price_cny": latest_live_price_cny,
         "latest_live_observed_at": latest_live_observed_at,
-        "latest_live_comparable_to_history": (
-            False if archive_selected and latest_live_price_cny is not None
-            else True if latest_live_price_cny is not None
-            else None
-        ),
+        "latest_live_comparable_to_history": True if latest_live_price_cny is not None else None,
         "candles": candles,
     }
 
@@ -1201,29 +1254,65 @@ def _ranking_payload(db: Session) -> dict:
     comparison: dict[tuple[str, str], list[MarketPriceSnapshot]] = defaultdict(list)
     for model, variant, row in _latest_normalized_rows(_comparison_rows(db, now, current_sources)):
         comparison[(model, variant)].append(row)
-    historical = _historical_metrics(db, now, grouped.keys())
+    kai_metrics = _kai_history_metrics(grouped.keys())
+    cutoff = now - timedelta(seconds=max(int(settings.PRODUCT_OFFER_MAX_AGE_SECONDS), 60))
+    product_regions: dict[tuple[str, str], set[str]] = defaultdict(set)
+    product_locations: dict[tuple[str, str], set[str]] = defaultdict(set)
+    listed_quote_counts: Counter = Counter()
+    for product in db.query(Product).filter(
+        Product.market_source == "kai",
+        Product.status == "on",
+        Product.price_updated_at.isnot(None),
+        Product.price_updated_at >= cutoff,
+    ).all():
+        product_model = canonicalize_gpu(product.gpu_model) or product.gpu_model
+        product_variant = normalize_gpu_variant(product_model, product.memory)
+        identity = (product_model, product_variant)
+        product_regions[identity].add(map_region(product.city, product.country_code)[0])
+        location = str(product.city or "").strip()
+        if location:
+            product_locations[identity].add(location)
+        listed_quote_counts[identity] += 1
     items = []
     for (model, variant), rows in grouped.items():
         current = _weighted_median(rows)
         old_rows = comparison.get((model, variant), [])
         old_price = _weighted_median(old_rows)
         change = round((current / old_price - 1) * 100, 2) if current is not None and old_price else None
-        archived = historical.get((model, variant))
-        row_sources = [row.source for row in rows]
-        if not _history_metric_matches_live_sources(archived, row_sources):
-            archived = None
-        metric = archived or metrics.get((model, variant), _empty_metric())
+        metric = kai_metrics.get((model, variant)) or metrics.get((model, variant), _empty_metric())
+        min_values = [float(row.min_price_cny) for row in rows if row.min_price_cny is not None]
+        max_values = [float(row.max_price_cny) for row in rows if row.max_price_cny is not None]
+        p25_values = [float(row.p25_price) for row in rows if row.currency == "CNY"]
+        p75_values = [float(row.p75_price) for row in rows if row.currency == "CNY"]
+        seven_day_status = (
+            "full" if metric.get("history_coverage_status") == "complete" and metric.get("change_7d_pct") is not None
+            else "partial" if metric.get("history_day_count", 0) > 0
+            else "unavailable"
+        )
+        quote_sample_count = sum(row.sample_count for row in rows)
         items.append({
             "gpu_model": model,
             "gpu_variant": variant,
             "median_price_cny": current,
+            "min_price_cny": min(min_values) if min_values else None,
+            "max_price_cny": max(max_values) if max_values else None,
+            "p25_price_cny": min(p25_values) if p25_values else None,
+            "p75_price_cny": max(p75_values) if p75_values else None,
             "change_24h": change,
             **metric,
-            "sample_count": sum(row.sample_count for row in rows),
-            "available_gpu_count": sum(row.available_gpu_count for row in rows),
-            "source_count": len(rows),
-            "sources": [row.source for row in rows],
-            "market_status": "live" if all(source_states.get(row.source) == "live" for row in rows) else "delayed",
+            "seven_day_status": seven_day_status,
+            "sample_count": quote_sample_count,
+            "quote_sample_count": quote_sample_count,
+            "listed_quote_count": listed_quote_counts[(model, variant)],
+            "region_count": len(product_regions[(model, variant)]),
+            "location_count": len(product_locations[(model, variant)]),
+            "available_gpu_count": None,
+            "inventory_available": None,
+            "sample_semantics": "current_quote_observations_not_inventory",
+            "billing_unit": "GPU_HOUR",
+            "source_count": 1,
+            "sources": ["kai"],
+            "market_status": source_states.get("kai", "unavailable"),
             "hot_eligible": metric["volatility_7d"] is not None,
         })
     items.sort(key=lambda item: (
@@ -1231,8 +1320,16 @@ def _ranking_payload(db: Session) -> dict:
         item["volatility_quality"] != "verified",
         -(item["volatility_7d"] or 0),
         -abs(item["change_24h"] or 0),
-        -item["sample_count"],
+        -item["quote_sample_count"],
+        -item["region_count"],
         item["gpu_model"],
         item["gpu_variant"],
     ))
-    return {"server_time": _iso(now), "items": items, "source_states": source_states}
+    return {
+        "server_time": _iso(now),
+        "items": items,
+        "source_states": source_states,
+        "source": "kai",
+        "billing_unit": "GPU_HOUR",
+        "sample_semantics": "current_quote_observations_not_inventory",
+    }

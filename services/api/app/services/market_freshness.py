@@ -35,6 +35,11 @@ def source_state(item: MarketSourceStatus, now: datetime) -> str:
 
 
 def product_market_source(product) -> str:
+    explicit = str(getattr(product, "market_source", "") or "").strip().lower()
+    if explicit:
+        return explicit
+    # Compatibility for databases that have not yet run init_db.  Startup
+    # persists this inference; runtime decisions then use the explicit field.
     if product.source_price is None:
         return "wod"
     if str(product.source_currency or "").upper() == "USD":

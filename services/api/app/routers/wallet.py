@@ -91,7 +91,7 @@ def withdraw(data: WithdrawInV2, user: User = Depends(get_current_user), db: Ses
     # as a non-mutating tombstone so no stale APK can bypass review, freezing,
     # receipt evidence, or the independent finance allow-list.
     raise BizError(
-        "封闭测试卡时不能通过旧版即时提现；请更新客户端后提交人工审核申请",
+        "旧版即时提现入口已停用；请更新客户端后提交人工审核申请",
         status_code=410,
     )
 
@@ -118,10 +118,10 @@ def ledger_list(
         output["type"] = public_reward_type(output["type"])
         if not settings.REVENUE_SETTLEMENT_ENABLED and output["type"] == "revenue":
             output["type"] = "test_revenue"
-            output["remark"] = "历史测试收益（不计入当前可用余额）"
+            output["remark"] = "历史未结算收益（不计入当前可用余额）"
         elif not settings.REWARD_SERVICE_ENABLED and output["type"] in LEGACY_REWARD_TYPES and item.type in LEGACY_REWARD_TYPES:
             output["type"] = "test_reward"
-            output["remark"] = "历史测试奖励（不计入当前可用余额或权益）"
+            output["remark"] = "历史不可用奖励（不计入当前可用余额或权益）"
         output_items.append(output)
     return success({
         "total": total,

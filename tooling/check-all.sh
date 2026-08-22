@@ -21,14 +21,18 @@ else
   exit 1
 fi
 
-if [ -d "$repo_root/apps/mobile/node_modules" ]; then
-  npm --prefix "$repo_root/apps/mobile" run type-check
-  npm --prefix "$repo_root/apps/mobile" test
-  node "$repo_root/packages/api-contracts/check-mobile-api.mjs"
-  node "$repo_root/packages/api-contracts/check-client-boundaries.mjs"
-else
-  echo "Mobile dependencies not installed; run npm ci --prefix apps/mobile" >&2
-  exit 1
-fi
+for client in ios android; do
+  if [ -d "$repo_root/apps/$client/node_modules" ]; then
+    npm --prefix "$repo_root/apps/$client" run type-check
+    npm --prefix "$repo_root/apps/$client" test
+    npm --prefix "$repo_root/apps/$client" run test:i18n
+    npm --prefix "$repo_root/apps/$client" run build:app
+  else
+    echo "$client dependencies not installed; run npm ci --prefix apps/$client" >&2
+    exit 1
+  fi
+done
+node "$repo_root/packages/api-contracts/check-mobile-api.mjs"
+node "$repo_root/packages/api-contracts/check-client-boundaries.mjs"
 
 echo "All available project checks passed."

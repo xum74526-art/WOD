@@ -34,6 +34,12 @@ class PaymentOrder(Base):
     card_hours: Mapped[Decimal] = mapped_column(Numeric(18, 6))
     card_hour_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6))
     checkout_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     provider_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)

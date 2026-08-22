@@ -43,6 +43,12 @@ class WithdrawalOrder(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     paid_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.config import settings
+from app.utils.response import BizError
 from app.models.market_price import MarketHistoryPoint, MarketPriceSnapshot
 from app.routers.market import _historical_metric, price_candles
 from app.services.gpu_catalog import gpu_variant_aliases, normalize_gpu_variant
@@ -68,16 +68,14 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual(rows[0]["representative_price_cny"], Decimal("2.450000"))
         self.assertEqual(rows[0]["data_quality"], "official")
 
-    def test_vast_401_is_reduced_to_safe_permission_error(self):
-        with patch.object(settings, "VAST_API_KEY", "not-a-real-key"):
-            with self.assertRaises(HistorySourceFailure) as captured:
-                _fetch_vast_official(
-                    _Client(_Response(401)),
-                    datetime(2026, 8, 11),
-                    datetime(2026, 8, 18),
-                )
-        self.assertEqual(captured.exception.code, "history_credentials_missing_permission")
-        self.assertNotIn("not-a-real-key", str(captured.exception))
+    def test_vast_history_fetch_is_retired_before_any_network_access(self):
+        with self.assertRaises(HistorySourceFailure) as captured:
+            _fetch_vast_official(
+                _Client(_Response(200, {"unexpected": "must not be read"})),
+                datetime(2026, 8, 11),
+                datetime(2026, 8, 18),
+            )
+        self.assertEqual(captured.exception.code, "history_source_disabled")
 
     def test_hf_parser_filters_exact_vast_ondemand_rows_and_counts_gpus_once(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -170,7 +168,7 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual(selected.provenance["upstream_provider"], "runpod")
         db.close()
 
-    def test_live_quote_is_reported_separately_and_never_changes_history_metric_or_candles(self):
+    def test_kai_official_candles_are_not_spliced_with_legacy_vast_history(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketHistoryPoint.__table__.create(engine)
         MarketPriceSnapshot.__table__.create(engine)
@@ -199,22 +197,42 @@ class MarketHistorySyncTests(unittest.TestCase):
         ))
         db.commit()
 
-        with patch("app.routers.market.utcnow", return_value=now):
+        official_payload = {
+            "gpu_model": "RTX4090", "gpu_variant": "24GB", "range": "7d",
+            "bucket_seconds": 14400, "tick_seconds": 14400,
+            "method": "kai_official_ohlc_cross_region_robust_median",
+            "is_interpolated": False, "selected_source": "kai",
+            "history_status": "available", "curve_status": "full", "coverage_class": "full",
+            "history_coverage_status": "complete", "coverage_day_count": 7,
+            "coverage_span_hours": 144.0, "data_quality": "official_historical_ohlc",
+            "provenance": {"upstream_provider": "kai", "live_component_included": False},
+            "latest_live_price_cny": 2.06, "latest_live_observed_at": "2026-08-18T08:00:00Z",
+            "latest_live_comparable_to_history": True,
+            "candles": [{
+                "start_time": "2026-08-11T08:00:00Z", "end_time": "2026-08-11T12:00:00Z",
+                "open_price_cny": 2.0, "high_price_cny": 2.1, "low_price_cny": 1.9,
+                "close_price_cny": 2.05, "sample_count": 1, "observation_count": 1,
+                "sources": ["kai"],
+            }],
+        }
+        with patch("app.routers.market.utcnow", return_value=now), patch(
+            "app.routers.market.get_aggregated_candles", return_value=official_payload,
+        ):
             metric = _historical_metric(db, now, "RTX4090", "24GB")
-            payload = price_candles("RTX4090", "24GB", "7d", "vast", "ondemand", db)["data"]
+            payload = price_candles("RTX4090", "24GB", "7d", "kai", "ondemand", db)["data"]
 
         self.assertEqual(metric["change_7d_pct"], 3.0)
         self.assertEqual(metric["range_low_cny"], 2.0)
         self.assertEqual(metric["range_high_cny"], 2.06)
         self.assertEqual(payload["history_status"], "available")
         self.assertEqual(payload["curve_status"], "full")
-        self.assertEqual(payload["latest_live_price_cny"], 99.0)
-        self.assertFalse(payload["latest_live_comparable_to_history"])
+        self.assertEqual(payload["latest_live_price_cny"], 2.06)
+        self.assertTrue(payload["latest_live_comparable_to_history"])
         self.assertLess(max(candle["high_price_cny"] for candle in payload["candles"]), 3)
-        self.assertNotIn("vast", {source for candle in payload["candles"] for source in candle["sources"]})
+        self.assertEqual({source for candle in payload["candles"] for source in candle["sources"]}, {"kai"})
         db.close()
 
-    def test_partial_direct_observations_still_return_a_real_curve(self):
+    def test_retired_autodl_cannot_be_selected_for_market_curve(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketHistoryPoint.__table__.create(engine)
         MarketPriceSnapshot.__table__.create(engine)
@@ -224,7 +242,7 @@ class MarketHistorySyncTests(unittest.TestCase):
             value = Decimal("1") + Decimal(index) / Decimal("100")
             observed = now - timedelta(hours=hours)
             db.add(MarketPriceSnapshot(
-                source="vast", gpu_model="RTX5060", gpu_variant="8GB", billing_mode="ondemand", currency="USD",
+                source="autodl", gpu_model="RTX5060", gpu_variant="8GB", billing_mode="ondemand", currency="CNY",
                 min_price=value, p25_price=value, median_price=value, p75_price=value, max_price=value,
                 min_price_cny=value, median_price_cny=value, max_price_cny=value, sample_count=2,
                 available_gpu_count=2, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
@@ -232,17 +250,11 @@ class MarketHistorySyncTests(unittest.TestCase):
             ))
         db.commit()
 
-        with patch("app.routers.market.utcnow", return_value=now):
-            payload = price_candles("RTX5060", "8GB", "7d", "vast", "ondemand", db)["data"]
-
-        self.assertEqual(payload["history_status"], "partial_history")
-        self.assertEqual(payload["curve_status"], "partial")
-        self.assertEqual(payload["history_coverage_status"], "partial")
-        self.assertGreaterEqual(len(payload["candles"]), 4)
-        self.assertTrue(payload["latest_live_comparable_to_history"])
+        with patch("app.routers.market.utcnow", return_value=now), self.assertRaises(BizError):
+            price_candles("RTX5060", "8GB", "7d", "autodl", "ondemand", db)
         db.close()
 
-    def test_single_real_observation_is_not_duplicated_or_reported_as_zero_change(self):
+    def test_retired_source_single_observation_is_not_exposed(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketHistoryPoint.__table__.create(engine)
         MarketPriceSnapshot.__table__.create(engine)
@@ -250,7 +262,7 @@ class MarketHistorySyncTests(unittest.TestCase):
         now = datetime(2026, 8, 18, 8, 0)
         value = Decimal("1.25")
         db.add(MarketPriceSnapshot(
-            source="vast", gpu_model="RTX5060TI", gpu_variant="16GB", billing_mode="ondemand", currency="USD",
+            source="autodl", gpu_model="RTX5060TI", gpu_variant="16GB", billing_mode="ondemand", currency="CNY",
             min_price=value, p25_price=value, median_price=value, p75_price=value, max_price=value,
             min_price_cny=value, median_price_cny=value, max_price_cny=value, sample_count=2,
             available_gpu_count=2, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
@@ -258,14 +270,8 @@ class MarketHistorySyncTests(unittest.TestCase):
         ))
         db.commit()
 
-        with patch("app.routers.market.utcnow", return_value=now):
-            payload = price_candles("RTX5060TI", "16GB", "7d", "vast", "ondemand", db)["data"]
-
-        self.assertEqual(payload["history_status"], "single_observation")
-        self.assertEqual(payload["history_coverage_status"], "single")
-        self.assertEqual(payload["curve_status"], "single")
-        self.assertEqual(len(payload["candles"]), 1)
-        self.assertNotIn("change_7d_pct", payload)
+        with patch("app.routers.market.utcnow", return_value=now), self.assertRaises(BizError):
+            price_candles("RTX5060TI", "16GB", "7d", "autodl", "ondemand", db)
         db.close()
 
     def test_h200_140_and_141_labels_resolve_to_one_documented_alias(self):
@@ -298,30 +304,27 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual(selected.day_count, 2)
         db.close()
 
-    def test_multi_source_request_selects_one_real_provider_series_without_blending(self):
+    def test_mixed_retired_market_sources_are_rejected(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketHistoryPoint.__table__.create(engine)
         MarketPriceSnapshot.__table__.create(engine)
         db = sessionmaker(bind=engine)()
         now = datetime(2026, 8, 18, 8, 0)
-        for source, base in (("vast", Decimal("1")), ("autodl", Decimal("10"))):
+        for source, base in (("wod", Decimal("1")), ("autodl", Decimal("10"))):
             for index, hours in enumerate((18, 12, 6, 0)):
                 value = base + Decimal(index) / Decimal("100")
                 observed = now - timedelta(hours=hours)
                 db.add(MarketPriceSnapshot(
                     source=source, gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
-                    currency="USD" if source == "vast" else "CNY", min_price=value, p25_price=value,
+                    currency="CNY", min_price=value, p25_price=value,
                     median_price=value, p75_price=value, max_price=value, min_price_cny=value,
                     median_price_cny=value, max_price_cny=value, sample_count=2, available_gpu_count=2,
                     fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18", data_quality="verified",
                     signature=f"{source}-{index}", observed_at=observed, fetched_at=observed,
                 ))
         db.commit()
-        with patch("app.routers.market.utcnow", return_value=now):
-            payload = price_candles("RTX4090", "24GB", "24h", "vast,autodl", "ondemand", db)["data"]
-        self.assertEqual(payload["selected_source"], "vast")
-        self.assertEqual({source for candle in payload["candles"] for source in candle["sources"]}, {"vast"})
-        self.assertLess(max(candle["high_price_cny"] for candle in payload["candles"]), 2)
+        with patch("app.routers.market.utcnow", return_value=now), self.assertRaises(BizError):
+            price_candles("RTX4090", "24GB", "24h", "wod,autodl", "ondemand", db)
         db.close()
 
     def test_sparse_external_series_remains_real_and_chartable_but_limited(self):

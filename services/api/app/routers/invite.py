@@ -19,6 +19,7 @@ from app.services.reward_program import (
     reward_mode,
     reward_program_enabled,
 )
+from app.services.auth_session import normalize_platform
 from app.utils.response import success
 
 router = APIRouter(prefix="/api/invite", tags=["invite"])
@@ -57,17 +58,26 @@ def _mask_phone(phone: str | None) -> str:
     return "未绑定手机号"
 
 
-def create_invite_relationship(user: User, inviter_id: int, db: Session) -> InviteRecord:
+def create_invite_relationship(
+    user: User,
+    inviter_id: int,
+    db: Session,
+    *,
+    platform: str = "legacy",
+) -> InviteRecord:
     """Persist the relationship without granting anything to an unverified phone."""
     existing = db.query(InviteRecord).filter(InviteRecord.invitee_id == user.id).first()
     if existing:
         return existing
+    source_platform = normalize_platform(platform)
     record = InviteRecord(
         inviter_id=inviter_id,
         invitee_id=user.id,
         invitee_phone=_mask_phone(user.phone),
         status="registered" if user.phone_bound else "unverified",
         reward_amount=0,
+        created_platform=source_platform,
+        last_modified_platform=source_platform,
     )
     db.add(record)
     if user.phone_bound:
@@ -82,6 +92,7 @@ def _promote_verified_relationship(user: User, record: InviteRecord, db: Session
     if not user.phone_bound or record.status != "unverified":
         return
     record.status = "registered"
+    record.last_modified_platform = "system"
     code = db.query(InviteCode).filter(InviteCode.user_id == record.inviter_id).first()
     if code:
         qualified = db.query(InviteRecord).filter(
@@ -100,7 +111,7 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
         return Decimal("0")
     record = db.query(InviteRecord).filter(InviteRecord.invitee_id == user_id).first()
     if not record:
-        record = create_invite_relationship(user, user.invited_by, db)
+        record = create_invite_relationship(user, user.invited_by, db, platform="system")
     _promote_verified_relationship(user, record, db)
     if not user.phone_bound or record.status not in ("registered", "ordered"):
         return Decimal("0")
@@ -137,6 +148,7 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
     wallet = db.query(Wallet).filter(Wallet.user_id == record.inviter_id).with_for_update().first()
     if reward <= 0 or not wallet:
         record.status = "ordered"
+        record.last_modified_platform = "system"
         record.ordered_at = datetime.now(timezone.utc)
         return Decimal("0")
 
@@ -155,6 +167,7 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
     record.reward_amount = float(reward)
     record.ordered_at = order.start_at
     record.rewarded_at = datetime.now(timezone.utc)
+    record.last_modified_platform = "system"
     db.flush()
     return reward
 

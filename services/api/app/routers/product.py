@@ -1,4 +1,6 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, or_
@@ -9,11 +11,12 @@ from app.db.session import get_db
 from app.models.market_price import MarketSourceStatus
 from app.models.product import Product
 from app.schemas.product import ProductOut
-from app.services.purchase_cycles import available_purchase_cycles
+from app.services.purchase_cycles import PURCHASE_HOUR_OPTIONS, available_purchase_cycles
 from app.services.market_freshness import CURRENT_SOURCE_STATES, product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.product_purchase import product_purchase_availability
-from app.services.region_mapper import REGIONS
+from app.services.gpu_catalog import canonicalize_gpu, normalize_gpu_variant
+from app.services.region_mapper import REGIONS, map_region
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/products", tags=["product"])
@@ -27,36 +30,37 @@ CATEGORY_MAP = {
     "vgpu": ["vGPU32", "vGPU48"],
 }
 
+KAI_PUBLIC_DESCRIPTION = (
+    "KAI Pricing 当前卡时报价；可购数量为平台人工履约额度，"
+    "上游数量仅表示单次最大可配置量，不是实时库存"
+)
+
 
 def _market_source_states(db: Session) -> dict[str, str]:
     now = utcnow()
     return {
         row.source: source_state(row, now)
         for row in db.query(MarketSourceStatus).all()
-        if row.enabled
+        if row.enabled and row.source == "kai"
     }
 
 
 def _current_product_query(db: Session, source_states: dict[str, str] | None = None):
     states = source_states if source_states is not None else _market_source_states(db)
     cutoff = utcnow() - timedelta(seconds=max(settings.PRODUCT_OFFER_MAX_AGE_SECONDS, 60))
-    source_filters = [Product.source_price.is_(None)]
-    # A provider's last successful snapshot remains truthful during the short
-    # ``delayed`` grace window. Keep those reference cards visible instead of
-    # collapsing the catalogue to WOD-only listings; _product_out still marks
-    # them delayed, zeroes stock and disables purchase. Stale/unavailable
-    # sources remain excluded.
-    if states.get("autodl") in CURRENT_SOURCE_STATES:
+    # First-party merchant rows remain in the catalogue. KAI is the only
+    # third-party source allowed to contribute current product cards.
+    legacy_untyped = or_(Product.market_source.is_(None), Product.market_source == "")
+    source_filters = [or_(
+        Product.market_source == "wod",
+        and_(legacy_untyped, Product.source_price.is_(None)),
+    )]
+    if states.get("kai") in CURRENT_SOURCE_STATES:
         source_filters.append(and_(
-            Product.source_price.isnot(None),
-            Product.source_currency == "CNY",
-            Product.price_updated_at >= cutoff,
-        ))
-    if states.get("vast") in CURRENT_SOURCE_STATES:
-        source_filters.append(and_(
-            Product.source_price.isnot(None),
-            Product.source_currency == "USD",
-            Product.price_updated_at >= cutoff,
+                Product.market_source == "kai",
+                Product.source_price.isnot(None),
+                Product.price_updated_at.isnot(None),
+                Product.price_updated_at >= cutoff,
         ))
     return db.query(Product).filter(Product.status == "on", or_(*source_filters))
 
@@ -67,14 +71,57 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
     # Keep revenue blank until a verified metering/settlement source is wired.
     out["daily_revenue"] = None
     out["revenue_estimate_available"] = False
-    out["cycle"] = available_purchase_cycles(p.cycle)
     source = product_market_source(p)
+    if source == "kai":
+        # Some deployed databases still contain the former rollout wording.
+        # The API is the compatibility boundary: never expose stale copy even
+        # before the next catalogue synchronization updates stored rows.
+        out["desc"] = KAI_PUBLIC_DESCRIPTION
+        cny_price = Decimal(str(p.price or 0))
+        rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
+        out["cycle"] = []
+        out["billing_unit"] = "GPU_HOUR"
+        out["price_currency"] = "CNY"
+        out["price_cny_per_gpu_hour"] = float(cny_price)
+        out["price_card_hours_per_gpu_hour"] = (
+            float((cny_price / rate).quantize(Decimal("0.000001"))) if rate > 0 else None
+        )
+        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["purchase_unit"] = "hour"
+        out["purchase_hour_options"] = list(PURCHASE_HOUR_OPTIONS)
+    else:
+        out["cycle"] = available_purchase_cycles(p.cycle)
+        out["billing_unit"] = "GPU_HOUR"
+        out["price_currency"] = "CARD_HOUR"
+        out["price_cny_per_gpu_hour"] = float(Decimal(str(p.price or 0)) * Decimal(str(settings.CARD_HOUR_RMB_RATE)))
+        out["price_card_hours_per_gpu_hour"] = float(p.price or 0)
+        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["purchase_unit"] = "day"
+        out["purchase_hour_options"] = []
     states = source_states if source_states is not None else (_market_source_states(db) if db else {})
     market_state = product_market_state(p, states, utcnow(), settings.PRODUCT_OFFER_MAX_AGE_SECONDS)
     reported_stock = max(int(p.stock or 0), 0)
+    if source == "kai" and p.platform_stock_cap is not None:
+        reported_stock = min(reported_stock, max(int(p.platform_stock_cap), 0))
     out["stock"] = reported_stock if market_state == "live" else 0
-    out["reported_stock"] = reported_stock
+    out["reported_stock"] = None if source == "kai" else reported_stock
     out["market_source"] = source
+    out["stock_semantics"] = (
+        "platform_manual_fulfillment_allocation" if source == "kai" else p.stock_semantics
+    )
+    out["max_configurable_quantity"] = (
+        max(int(p.source_max_configurable_quantity or 0), 0) or None
+        if source == "kai"
+        else None
+    )
+    out["source_max_configurable_quantity"] = (
+        max(int(p.source_max_configurable_quantity or 0), 0) or None
+        if source == "kai" else None
+    )
+    out["platform_stock_cap"] = (
+        max(int(p.platform_stock_cap or 0), 0) if source == "kai" else None
+    )
+    out["platform_stock_remaining"] = reported_stock if source == "kai" else None
     out["market_source_status"] = market_state
     out["is_market_current"] = market_state == "live"
     # Legacy SQLite migrations stored ``reliability`` as TEXT and some rows use
@@ -88,11 +135,17 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
     out["tags"] = []
     out["supplier_id"] = p.supplier_id
     purchasable, unavailable_reason = product_purchase_availability(p, db) if db else (False, None)
-    out["purchasable"] = purchasable and market_state == "live" and reported_stock > 0
+    effective_purchase_capacity = reported_stock
+    if source == "kai":
+        effective_purchase_capacity = min(
+            effective_purchase_capacity,
+            max(int(p.source_max_configurable_quantity or 0), 0),
+        )
+    out["purchasable"] = purchasable and market_state == "live" and effective_purchase_capacity > 0
     out["purchase_unavailable_reason"] = (
         unavailable_reason
         if not purchasable
-        else ("当前无可售库存" if reported_stock <= 0 else ("报价已过期或来源暂不可用" if market_state != "live" else None))
+        else ("当前无可售额度" if effective_purchase_capacity <= 0 else ("报价已过期或来源暂不可用" if market_state != "live" else None))
     )
     # 关联供应商名
     if p.supplier_id and db:
@@ -148,57 +201,149 @@ def filters(db: Session = Depends(get_db)):
 
 @router.get("/quote/overview")
 def quote_overview(db: Session = Depends(get_db)):
-    """Legacy product overview using current cards only.
-
-    The old ``PriceHistory`` table has no source, memory or billing identity,
-    so its cross-product percentage cannot truthfully be called a 24-hour
-    change.  Keep the compatibility endpoint, but return an explicit null
-    change and direct clients to ``/api/market/ranking`` for verified history.
-    """
-    current_products = _current_product_query(db).all()
+    """KAI-only current cross-section; observations are not inventory."""
+    current_products = _current_product_query(db).filter(Product.market_source == "kai").all()
     grouped = {}
     for product in current_products:
-        grouped.setdefault((product.gpu_model, product.memory), []).append(product)
+        model = canonicalize_gpu(product.gpu_model) or product.gpu_model
+        variant = normalize_gpu_variant(model, product.memory)
+        grouped.setdefault((model, variant), []).append(product)
     ranking = []
     for (gpu_model, memory), products in grouped.items():
-        prices = [float(p.price) for p in products]
-        min_price = min(prices)
-        avg_price = round(sum(prices) / len(prices), 4)
-        total_stock = sum((int(p.stock) if p.stock is not None else 0) for p in products)
+        prices = sorted(Decimal(str(p.price)) for p in products if Decimal(str(p.price or 0)) > 0)
+        if not prices:
+            continue
+        midpoint = len(prices) // 2
+        median = (
+            (prices[midpoint - 1] + prices[midpoint]) / Decimal("2")
+            if len(prices) % 2 == 0 else prices[midpoint]
+        )
         ranking.append({
             "gpu_model": gpu_model,
             "gpu_variant": memory,
             "name": products[0].name,
-            "min_price": min_price,
-            "avg_price": avg_price,
-            "total_stock": total_stock,
-            "supplier_count": len(set(p.supplier_id for p in products if p.supplier_id)),
+            "median_price_cny": float(median),
+            "min_price_cny": float(min(prices)),
+            "max_price_cny": float(max(prices)),
+            "quote_sample_count": len(prices),
+            "region_count": len({map_region(p.city, p.country_code)[0] for p in products}),
             "change": None,
             "change_status": "use_market_ranking",
+            "source": "kai",
+            "billing_unit": "GPU_HOUR",
+            "sample_semantics": "current_quote_observations_not_inventory",
         })
-    ranking.sort(key=lambda x: x["min_price"])
-    return success({"ranking": ranking[:20]})
+    ranking.sort(key=lambda item: (item["median_price_cny"], item["gpu_model"], item["gpu_variant"]))
+    return success({
+        "ranking": ranking[:20],
+        "source": "kai",
+        "billing_unit": "GPU_HOUR",
+        "sample_semantics": "current_quote_observations_not_inventory",
+    })
+
+
+def _decimal_percentile(values: list[Decimal], ratio: Decimal) -> Decimal:
+    ordered = sorted(values)
+    if not ordered:
+        return Decimal("0")
+    if len(ordered) == 1:
+        return ordered[0]
+    position = Decimal(len(ordered) - 1) * ratio
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - Decimal(lower)
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
 @router.get("/quote/regional")
-def quote_regional(db: Session = Depends(get_db)):
-    """区域价差：按region_name聚合"""
-    from collections import defaultdict
-    products = _current_product_query(db).all()
-    by_region = defaultdict(list)
-    for p in products:
-        rn = p.region_name or "未知"
-        by_region[rn].append(float(p.price))
-    result = []
-    for region, prices in by_region.items():
-        result.append({
-            "region": region,
-            "avg_price": round(sum(prices) / len(prices), 4),
-            "min_price": min(prices),
-            "count": len(prices),
+def quote_regional(
+    model: str | None = None,
+    variant: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Compare one exact KAI model/VRAM identity across published regions.
+
+    Omitting ``model`` selects the identity observed in the most distinct
+    normalized regions, then the largest quote count, then lexical identity.
+    This deterministic fallback never averages prices from different GPUs.
+    """
+    if variant and not model:
+        raise BizError("指定显存时必须同时指定 GPU 型号", status_code=400)
+    source_states = _market_source_states(db)
+    products = _current_product_query(db, source_states).filter(Product.market_source == "kai").all()
+    identities: dict[tuple[str, str], list[Product]] = defaultdict(list)
+    for product in products:
+        canonical_model = canonicalize_gpu(product.gpu_model) or product.gpu_model
+        canonical_variant = normalize_gpu_variant(canonical_model, product.memory)
+        identities[(canonical_model, canonical_variant)].append(product)
+
+    requested_model = canonicalize_gpu(model) or str(model or "").strip()
+    requested_variant = normalize_gpu_variant(requested_model, variant) if requested_model and variant else ""
+    candidates = [
+        (identity, rows) for identity, rows in identities.items()
+        if (not requested_model or identity[0] == requested_model)
+        and (not requested_variant or identity[1] == requested_variant)
+    ]
+    candidates.sort(key=lambda item: (
+        -len({map_region(row.city, row.country_code)[0] for row in item[1]}),
+        -len(item[1]),
+        item[0][0],
+        item[0][1],
+    ))
+    if not candidates:
+        return success({
+            "gpu_model": requested_model or None,
+            "gpu_variant": requested_variant or None,
+            "source": "kai",
+            "billing_unit": "GPU_HOUR",
+            "region_count": 0,
+            "regions": [],
+            "market_status": source_states.get("kai", "unavailable"),
+            "sample_semantics": "current_quote_observations_not_inventory",
         })
-    result.sort(key=lambda x: x["avg_price"])
-    return success({"regions": result})
+
+    (selected_model, selected_variant), selected_products = candidates[0]
+    by_region: dict[tuple[str, str], list[Product]] = defaultdict(list)
+    for product in selected_products:
+        by_region[map_region(product.city, product.country_code)].append(product)
+
+    result = []
+    for (region_code, region_name), rows in by_region.items():
+        values = sorted(Decimal(str(row.price)) for row in rows if Decimal(str(row.price or 0)) > 0)
+        if not values:
+            continue
+        median = _decimal_percentile(values, Decimal("0.5"))
+        observed_at = max((row.price_updated_at for row in rows if row.price_updated_at), default=None)
+        result.append({
+            "region_code": region_code,
+            "region": region_name,
+            "median_price_cny": float(median),
+            "min_price_cny": float(min(values)),
+            "max_price_cny": float(max(values)),
+            "p25_price_cny": float(_decimal_percentile(values, Decimal("0.25"))),
+            "p75_price_cny": float(_decimal_percentile(values, Decimal("0.75"))),
+            "quote_sample_count": len(values),
+            "location_count": len({str(row.city or "").strip() for row in rows if str(row.city or "").strip()}),
+            "observed_at": observed_at.isoformat(timespec="seconds") + "Z" if observed_at else None,
+        })
+    result.sort(key=lambda item: (item["median_price_cny"], item["region"], item["region_code"]))
+    lowest = result[0]["median_price_cny"] if result else None
+    for item in result:
+        item["relative_to_lowest_pct"] = (
+            round((item["median_price_cny"] / lowest - 1) * 100, 2) if lowest and lowest > 0 else None
+        )
+        item["is_lowest"] = item["median_price_cny"] == lowest if lowest is not None else False
+    return success({
+        "gpu_model": selected_model,
+        "gpu_variant": selected_variant,
+        "source": "kai",
+        "billing_unit": "GPU_HOUR",
+        "region_count": len(result),
+        "regions": result,
+        "market_status": source_states.get("kai", "unavailable"),
+        "selection": "requested_identity" if requested_model else "most_region_coverage_then_quote_count",
+        "sample_semantics": "current_quote_observations_not_inventory",
+    })
 
 
 @router.get("/{pid}")

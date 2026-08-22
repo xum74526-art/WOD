@@ -1,6 +1,6 @@
 # KAI
 
-KAI 是一个 monorepo：一个 FastAPI 业务后端、一个 Next.js Web，以及一套同时生成 iOS/Android 的 uni-app Mobile。
+KAI 是一个 monorepo：一个 FastAPI 业务后端、一个 Next.js Web，以及分别发布的 iOS、Android 客户端。
 
 ## 架构
 
@@ -12,7 +12,7 @@ iOS / Android ─────────────────────┘
 
 - `services/api` 是唯一业务后端和数据模型。
 - `apps/web` 不连接数据库；BFF 使用 HttpOnly Cookie 保存会话并转发到 FastAPI。
-- `apps/mobile` 是一套 Vue 3/uni-app 源码，分别生成 iOS 和 Android，不维护两套页面。
+- `apps/ios` 与 `apps/android` 分别承载两个 App；两端共享同一 OpenAPI 契约和业务状态定义。
 - `packages/api-contracts` 保存从 FastAPI 导出的 OpenAPI 快照并检查 Mobile 请求。
 - `infra` 只保留当前 systemd/nginx 部署文件；运行数据和发布包不进 Git。
 
@@ -35,7 +35,8 @@ iOS / Android ─────────────────────┘
 | 目录 | 职责 |
 |---|---|
 | `apps/web` | Next.js Web 和同源 BFF |
-| `apps/mobile` | uni-app iOS/Android 共享源码 |
+| `apps/ios` | uni-app iOS 客户端 |
+| `apps/android` | uni-app Android 客户端，正式包名 `com.kai.wod` |
 | `services/api` | 唯一 FastAPI 后端 |
 | `packages/api-contracts` | OpenAPI 快照和契约检查 |
 | `infra` | systemd、nginx 和环境变量示例 |
@@ -51,13 +52,16 @@ iOS / Android ─────────────────────┘
 npm ci --prefix apps/web
 API_ORIGIN=https://wod.kai.com npm --prefix apps/web run dev
 
-# Mobile H5（可选，另一终端）
-npm ci --prefix apps/mobile
-npm --prefix apps/mobile run dev:h5
+# iOS/Android 界面预览（可选，分别使用 9000/9001）
+npm ci --prefix apps/ios
+npm ci --prefix apps/android
+npm --prefix apps/ios run dev:h5
+npm --prefix apps/android run dev:h5
 ```
 
 - Web：`http://127.0.0.1:9100`
-- Mobile H5：`http://127.0.0.1:9000`
+- iOS H5 预览：`http://127.0.0.1:9000`
+- Android H5 预览：`http://127.0.0.1:9001`
 - 云端 API 文档：`https://wod.kai.com/docs`
 - Web 健康检查：`http://127.0.0.1:9100/api/v1/health`
 
@@ -70,7 +74,7 @@ npm run export:openapi
 npm run check:all
 ```
 
-`check:all` 会运行 API 编译和单元测试、OpenAPI 快照一致性、Web 测试/类型检查/生产构建、Mobile 测试/类型检查，以及客户端边界检查。
+`check:all` 会运行 API 编译和单元测试、OpenAPI 快照一致性、Web 测试/类型检查/生产构建、iOS/Android 测试与类型检查，以及客户端边界检查。
 
 ## 推荐协作流程
 
@@ -92,7 +96,7 @@ git diff --check
 ## 开发原则
 
 1. 业务数据只能由 `services/api` 写入。
-2. Web 和 Mobile 可以有各自的 ViewModel，但不重新定义订单、支付、钱包等状态。
-3. iOS/Android 差异只放在条件编译或平台适配层。
+2. Web、iOS 和 Android 可以有各自的 ViewModel，但不重新定义订单、支付、钱包等状态。
+3. iOS/Android 的平台差异只处理系统能力；业务字段必须与同一 OpenAPI 一致。
 4. 禁止在生产服务器直接修改源码；发布必须对应一个 Git 提交。
 5. 密钥、数据库、上传文件、签名资料和构建产物不进 Git。

@@ -27,5 +27,11 @@ class Verification(Base):
     # workers may write a result only while this token still matches.
     ocr_input_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

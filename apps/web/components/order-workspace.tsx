@@ -37,7 +37,7 @@ const filters: Array<[OrderStatus | "", string]> = [
 
 const eventLabels: Record<string, string> = {
   created_from_accepted_quote: "买家接受报价并创建订单",
-  direct_order_created: "买家从商家商品创建测试订单",
+  direct_order_created: "买家从商家商品创建订单",
   ssh_access_authorized: "Agent 已下发买家 SSH 公钥",
   ssh_access_queued: "SSH 公钥授权命令已进入队列",
   lease_renewed: "买家已延长服务器租期",
@@ -59,15 +59,20 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [renewalCycles, setRenewalCycles] = useState<number[]>([30]);
-  const [renewalCycle, setRenewalCycle] = useState(30);
+  const [renewalHours, setRenewalHours] = useState<number[]>([24]);
+  const [renewalHour, setRenewalHour] = useState(24);
 
   const loadDetail = useCallback(async (id: number) => {
     const order = await getOrder(scope, id);
     setDetail(order);
     setSelectedId(id);
     if (scope === "account" && order.product_id && order.available_actions.includes("renew")) {
-      try { const product = (await getPublicProduct(order.product_id)).data; const cycles = product.cycle?.length ? product.cycle : [30]; setRenewalCycles(cycles); setRenewalCycle(cycles.includes(30) ? 30 : cycles[0]); } catch { setRenewalCycles([30]); setRenewalCycle(30); }
+      try {
+        const product = (await getPublicProduct(order.product_id)).data;
+        const hours = product.purchase_hour_options?.length ? product.purchase_hour_options : [24];
+        setRenewalHours(hours);
+        setRenewalHour(hours.includes(24) ? 24 : hours[0]);
+      } catch { setRenewalHours([24]); setRenewalHour(24); }
     }
   }, [scope]);
 
@@ -121,8 +126,13 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   function orderSpec(order: Order) { return order.snapshot.product?.gpu_model || order.snapshot.request?.gpu_model || "服务器"; }
   function orderReference(order: Order) { return order.snapshot.product?.resource_no || order.snapshot.request?.request_no || order.order_no; }
   function paymentCopy(order: Order) {
-    if (order.payment_status !== "paid") return { title: "等待手机端钱包处理", body: "余额与冻结金额以手机端统一账本为准。" };
-    return { title: "手机端钱包已冻结订单金额", body: "商家交付并经买家确认后，订单状态会写回同一数据库。" };
+    if (order.payment_status !== "paid") return { title: "等待统一钱包处理", body: "余额与冻结金额以统一账本为准。" };
+    return { title: "统一钱包已冻结订单金额", body: "商家交付并经买家确认后，订单状态会写回同一数据库。" };
+  }
+  function durationCopy(order: Order) {
+    if (order.purchase_hours) return `${order.purchase_hours} 小时`;
+    if (order.cycle_days) return `${order.cycle_days} 天（历史订单）`;
+    return order.duration_hours ? `${order.duration_hours} 小时` : "";
   }
 
   return <section className="workspace-page commerce-workspace order-workspace">
@@ -134,10 +144,10 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
       <div className="order-dossier">{detail ? <>
         <header><div><p>{detail.order_no} · V{detail.version}</p><h2>{orderTitle(detail)}</h2><span>{orderReference(detail)} · {orderSpec(detail)} × {detail.quantity}</span></div><b className={`status-chip status-chip--${detail.status}`}>{orderStatusLabel[detail.status]}</b></header>
         {detail.order_source === "direct" && <div className={`sandbox-order-banner sandbox-order-banner--${detail.payment_status}`}><ShieldCheck size={18}/><div><strong>服务器租赁订单 · {paymentCopy(detail).title}</strong><span>{paymentCopy(detail).body}</span></div></div>}
-        <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "商家"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{detail.duration_hours ? "租用周期" : "创建时间"}</small><strong>{detail.duration_hours ? `${detail.duration_hours} 小时` : formatDate(detail.created_at)}</strong></div></div>
+        <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "商家"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
         <section className="confirmation-grid"><div className={detail.buyer_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家确认</small><strong>{detail.buyer_confirmed_at ? formatDate(detail.buyer_confirmed_at) : "等待确认"}</strong></span></div><div className={detail.supplier_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>商家确认</small><strong>{detail.supplier_confirmed_at ? formatDate(detail.supplier_confirmed_at) : "等待确认"}</strong></span></div></section>
         {detail.delivery_note && <div className="delivery-note"><Package size={18} /><div><strong>最近交付说明</strong><p>{detail.delivery_note}</p></div></div>}
-        {detail.available_actions.includes("renew") && <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_days ?? 0} 天后到期</span></header><div>{renewalCycles.map((cycle) => <button type="button" className={renewalCycle === cycle ? "active" : ""} key={cycle} onClick={() => setRenewalCycle(cycle)}>{cycle >= 365 && cycle % 365 === 0 ? `${cycle / 365} 年` : cycle >= 30 && cycle % 30 === 0 ? `${cycle / 30} 个月` : `${cycle} 天`}</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用手机端钱包续费 ${renewalCycle} 天？`)) void act("renew", () => renewOrder(detail.id, renewalCycle), `已续费 ${renewalCycle} 天`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>}
+        {detail.available_actions.includes("renew") && <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><div>{renewalHours.map((hours) => <button type="button" className={renewalHour === hours ? "active" : ""} key={hours} onClick={() => setRenewalHour(hours)}>{hours} 小时</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用统一钱包续费 ${renewalHour} 小时？`)) void act("renew", () => renewOrder(detail.id, renewalHour), `已续费 ${renewalHour} 小时`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>}
         <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events?.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>
         <footer className="order-actions">
           {detail.available_actions.includes("confirm") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("confirm", () => confirmOrder(scope, detail.id, detail.version, "确认资源与交付计划"), "订单已确认") }><CheckCircle size={16} />{busy === "confirm" ? "确认中…" : "确认接单"}</button>}

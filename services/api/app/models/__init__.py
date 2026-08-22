@@ -3,6 +3,7 @@ from app.models.product import Product
 from app.models.wallet import Wallet
 from app.models.asset import Asset
 from app.models.order import Order
+from app.models.order_renewal import OrderRenewal
 from app.models.ledger import Ledger
 from app.models.revenue import Revenue
 from app.models.notification import Notification, NotificationPreference
@@ -18,9 +19,10 @@ from app.models.community import Comment, ContentIngestRun, ContentSource, Follo
 from app.models.price_history import PriceHistory
 from app.models.market_price import MarketHistoryPoint, MarketHistorySourceStatus, MarketPriceSnapshot, MarketSourceStatus
 from app.models.buy_request import BuyRequest, BuyRequestQuote
-from app.models.external_identity import ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity
+from app.models.auth_session import AuthSession
+from app.models.external_identity import ExternalAuthBindTicket, ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity
 from app.models.support import SupportConversation, SupportMessage, SupportTicket
 from app.models.payment import PaymentOrder
 from app.models.withdrawal import FinanceAuditLog, PaymentInstructionGrant, PayoutReceipt, WithdrawalOrder
 
-__all__ = ["User", "Product", "Wallet", "Asset", "Order", "Ledger", "Revenue", "Notification", "NotificationPreference", "Verification", "BankCard", "InviteCode", "Coupon", "Address", "OfflinePurchase", "ComputeOnboarding", "Supplier", "Post", "Comment", "Like", "Follow", "ContentSource", "ContentIngestRun", "PriceHistory", "MarketPriceSnapshot", "MarketSourceStatus", "MarketHistoryPoint", "MarketHistorySourceStatus", "BuyRequest", "BuyRequestQuote", "ExternalIdentity", "ExternalAuthFlow", "ExternalAuthTicket", "SupportConversation", "SupportMessage", "SupportTicket", "PaymentOrder", "WithdrawalOrder", "PayoutReceipt", "PaymentInstructionGrant", "FinanceAuditLog"]
+__all__ = ["User", "Product", "Wallet", "Asset", "Order", "OrderRenewal", "Ledger", "Revenue", "Notification", "NotificationPreference", "Verification", "BankCard", "InviteCode", "Coupon", "Address", "OfflinePurchase", "ComputeOnboarding", "Supplier", "Post", "Comment", "Like", "Follow", "ContentSource", "ContentIngestRun", "PriceHistory", "MarketPriceSnapshot", "MarketSourceStatus", "MarketHistoryPoint", "MarketHistorySourceStatus", "BuyRequest", "BuyRequestQuote", "AuthSession", "ExternalIdentity", "ExternalAuthFlow", "ExternalAuthTicket", "ExternalAuthBindTicket", "SupportConversation", "SupportMessage", "SupportTicket", "PaymentOrder", "WithdrawalOrder", "PayoutReceipt", "PaymentInstructionGrant", "FinanceAuditLog"]

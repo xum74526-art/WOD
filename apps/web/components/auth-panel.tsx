@@ -54,7 +54,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     if (kaiError) {
       const errors: Record<string, string> = {
         access_denied: "已取消 Kai 授权",
-        account_not_found: "该 Kai 身份尚未注册，请先创建账号",
+        identity_not_bound: "该 Kai 身份尚未绑定，请先使用手机号登录，再到账户设置中绑定",
         identity_conflict: "Kai 身份与现有账号冲突，请联系支持",
         missing_code: "Kai 未返回有效授权信息",
         invalid_issuer: "Kai 身份签发方无效",
@@ -140,9 +140,9 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         <button type="button" role="tab" data-state={method === "password" ? "active" : "inactive"} aria-selected={method === "password"} onClick={() => setMethod("password")}>
           <Key size={16}/>{t("auth.phone", "手机号")}
         </button>
-        <button type="button" role="tab" data-state={method === "kai" ? "active" : "inactive"} aria-selected={method === "kai"} onClick={() => setMethod("kai")}>
+        {!isRegister && <button type="button" role="tab" data-state={method === "kai" ? "active" : "inactive"} aria-selected={method === "kai"} onClick={() => setMethod("kai")}>
           <ShieldCheck size={16}/>{t("auth.kai", "Kai 统一认证")}
-        </button>
+        </button>}
       </div>
 
       <form className="auth-form auth-form--email" onSubmit={submit}>
@@ -188,9 +188,9 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         ) : (
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
-            <h2>{isRegister ? (locale === "en" ? "Create account with Kai" : "使用 Kai 创建账号") : (locale === "en" ? "Continue with Kai" : "使用 Kai 继续")}</h2>
+            <h2>{locale === "en" ? "Sign in with a linked Kai identity" : "使用已绑定的 Kai 身份登录"}</h2>
             <p>{locale === "en" ? "北斗 kai receives only the verified identity result and never reads or stores your Kai password." : "北斗 kai 只接收统一身份结果，不会读取或保存你的 Kai 密码。"}</p>
-            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false ? (locale === "en" ? "Kai client credentials are not configured" : "管理员尚未配置 Kai 客户端凭据") : (locale === "en" ? "You will verify with Kai and return securely" : "将前往 Kai 完成身份验证，然后安全返回")}</span></div>
+            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false ? (locale === "en" ? "Kai client credentials are not configured" : "管理员尚未配置 Kai 客户端凭据") : (locale === "en" ? "Unlinked identities must sign in by phone first, then link from account settings" : "未绑定身份需先用手机号登录，再在账户设置中绑定")}</span></div>
           </div>
         )}
         {isRegister && (
@@ -208,7 +208,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           </Callout.Root>
         )}
         <Button className="auth-submit" type="submit" size="3" disabled={submitting || (method === "kai" && kaiConfigured === false)}>
-          {submitting ? t("auth.processing", "正在处理…") : method === "kai" ? (isRegister ? (locale === "en" ? "Create account with Kai" : "使用 Kai 创建账号") : (locale === "en" ? "Continue with Kai" : "使用 Kai 继续")) : (isRegister ? t("auth.register", "创建账号") : t("auth.login", "登录"))}
+          {submitting ? t("auth.processing", "正在处理…") : method === "kai" ? (locale === "en" ? "Sign in with Kai" : "使用 Kai 登录") : (isRegister ? t("auth.register", "创建账号") : t("auth.login", "登录"))}
         </Button>
         <div className="auth-security-note"><LockKey size={15}/><span>{locale === "en" ? `${method === "kai" ? "Authorization code + PKCE" : "Encrypted password verification"} · Session lasts up to 2 hours` : `${method === "kai" ? "授权码 + PKCE 保护" : "密码加密验证"} · 登录状态最长保留 2 小时`}</span><CheckCircle size={14}/></div>
       </form>

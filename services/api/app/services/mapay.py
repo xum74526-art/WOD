@@ -26,6 +26,7 @@ from app.models.payment import PaymentOrder
 from app.models.wallet import Wallet
 from app.services.notification_service import create_notification
 from app.utils.response import BizError
+from app.services.auth_session import normalize_platform
 
 
 PROVIDER = "mapay"
@@ -267,6 +268,7 @@ def _persist_order_expiry(
         {
             PaymentOrder.status: "expired",
             PaymentOrder.failure_reason: "支付时限已结束；如已付款请查询支付平台状态",
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -287,6 +289,7 @@ def expire_pending_payment_orders(db: Session, *, now: datetime | None = None) -
         {
             PaymentOrder.status: "expired",
             PaymentOrder.failure_reason: "支付时限已结束；如已付款请查询支付平台状态",
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -299,6 +302,7 @@ def create_recharge_order(
     amount_cny: Decimal,
     *,
     payment_type: str | None,
+    created_platform: str = "legacy",
 ) -> dict:
     if not provider_configured():
         raise BizError("码支付V2尚未完成密钥配置", status_code=503)
@@ -313,6 +317,7 @@ def create_recharge_order(
         raise BizError("卡时兑换率配置无效", status_code=503)
 
     token = secrets.token_urlsafe(32)
+    platform = normalize_platform(created_platform)
     order = PaymentOrder(
         order_no=f"WODR{datetime.now():%Y%m%d%H%M%S}{secrets.token_hex(4).upper()}",
         user_id=user_id,
@@ -323,6 +328,8 @@ def create_recharge_order(
         card_hours=(amount / rate).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
         card_hour_rate=rate,
         checkout_token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        created_platform=platform,
+        last_modified_platform=platform,
         expires_at=utc_now() + timedelta(
             seconds=checkout_ttl_seconds()
         ),
@@ -527,6 +534,7 @@ def _record_success_for_review(
         PaymentOrder.provider_status: SUCCESS_STATUS,
         PaymentOrder.status: status,
         PaymentOrder.failure_reason: reason[:160],
+        PaymentOrder.last_modified_platform: "system",
     }
     if provider_paid_at is not None:
         updates[PaymentOrder.paid_at] = provider_paid_at
@@ -604,6 +612,7 @@ def credit_verified_payment(
         PaymentOrder.failure_reason: None,
         PaymentOrder.paid_at: paid_at or now,
         PaymentOrder.credited_at: now,
+        PaymentOrder.last_modified_platform: "system",
     }, synchronize_session=False)
     if claimed == 0:
         db.rollback()
@@ -657,6 +666,7 @@ def handle_notification(db: Session, params: dict) -> bool:
         raise BizError("充值订单不存在", status_code=404)
     status = str(params.get("trade_status") or "")
     order.provider_status = status[:64]
+    order.last_modified_platform = "system"
     if status != SUCCESS_STATUS:
         if status in FINAL_PROVIDER_FAILURES and order.credited_at is None:
             order.status = "failed"
@@ -750,6 +760,7 @@ def query_provider_and_reconcile(db: Session, order: PaymentOrder) -> dict:
         credit_verified_payment(db, order, normalized, observed_at=utc_now())
     else:
         order.provider_status = str(payload.get("status") or "0")
+        order.last_modified_platform = "system"
         if order.status not in {"review", "late_paid_review"}:
             _expire_order_if_due(order)
         db.commit()

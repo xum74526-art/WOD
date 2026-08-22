@@ -243,13 +243,15 @@ class SecurityStateTests(unittest.TestCase):
     def test_live_external_usage_and_holding_orders_reserve_full_amount_until_delivery(self):
         now = datetime.now()
         self.db.add(MarketSourceStatus(
-            source="vast", enabled=True, status="ok", refresh_seconds=30,
+            source="kai", enabled=True, status="ok", refresh_seconds=300,
             sample_count=1, last_attempt_at=now, last_success_at=now,
         ))
         external = Product(
-            name="Vast RTX 4090", gpu_model="RTX4090", memory="24GB",
-            price=Decimal("0.01"), source_price=Decimal("0.0014"), source_currency="USD",
-            price_updated_at=now, cycle=[30], stock=9, status="on",
+            name="KAI RTX 4090", gpu_model="RTX4090", memory="24GB",
+            price=Decimal("0.1002"), source_price=Decimal("0.1002"), source_currency="CNY",
+            price_updated_at=now, cycle=[], stock=9, status="on",
+            market_source="kai", external_product_id="security-kai-4090",
+            source_max_configurable_quantity=9, platform_stock_cap=9,
         )
         local = Product(
             name="WOD 使用资源", gpu_model="RTX4090", memory="24GB",
@@ -259,7 +261,7 @@ class SecurityStateTests(unittest.TestCase):
         self.db.add_all([external, local])
         self.db.commit()
         external_result = create_order(OrderCreateIn(
-            product_id=external.id, cycle_days=30, purchase_type="usage",
+            product_id=external.id, hours=72, purchase_type="usage",
             client_request_id="external-usage-0001",
         ), self.user, self.db)
         holding_result = create_order(OrderCreateIn(

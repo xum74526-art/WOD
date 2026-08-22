@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.payment import RechargePaymentCreateIn
@@ -16,6 +16,7 @@ from app.services.mapay import (
     get_owned_order,
 )
 from app.utils.response import BizError, success
+from app.services.auth_session import normalize_platform
 
 
 router = APIRouter(prefix="/api/payments/mapay", tags=["payment"])
@@ -31,6 +32,7 @@ def create_payment(
     data: RechargePaymentCreateIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     return success(
         create_recharge_order(
@@ -38,6 +40,7 @@ def create_payment(
             user.id,
             data.amount_cny,
             payment_type=data.payment_type,
+            created_platform=normalize_platform(platform),
         )
     )
 

@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    # Stable public client identifiers mapped to server-owned source labels.
+    # Clients submit only an identifier; arbitrary platform headers are never
+    # used for attribution. Unknown identifiers are rejected, while omitted
+    # identifiers remain "legacy" during the installed-client transition.
+    AUTH_CLIENT_PLATFORM_MAP: str = "web=web,ios=ios,android=android,admin=admin"
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:9000"
     # Sensitive fields are encrypted at rest. Set a dedicated Fernet key in
     # production; local development falls back to a key derived from SECRET_KEY.
@@ -36,7 +41,7 @@ class Settings(BaseSettings):
     # Recharge, bank-card verification, and payout are separate capabilities.
     # Enabling the MaPay collection gateway must never silently enable either
     # bank-card collection or money transfers.
-    # Closed-test manual bank-card review and payout workflow.  These switches
+    # Internal manual bank-card review and payout workflow. These switches
     # are intentionally independent from collection gateways and future
     # automated payout providers.  Both default to off so a deployment cannot
     # begin collecting card details or accepting withdrawal requests merely by
@@ -100,7 +105,7 @@ class Settings(BaseSettings):
     # Registration/invite/consumer/supplier rebates remain disabled until an
     # auditable verification and settlement policy is connected.
     REWARD_SERVICE_ENABLED: bool = False
-    # Closed-test card-hour rewards are spendable only inside WOD and remain
+    # In-app card-hour rewards are spendable only inside WOD and remain
     # non-withdrawable while PAYMENT_SERVICE_ENABLED is false.  They use
     # dedicated ledger types so legacy synthetic rewards stay excluded.
     CLOSED_TEST_REWARD_ENABLED: bool = False
@@ -108,38 +113,32 @@ class Settings(BaseSettings):
     # stays explicitly unavailable until deployment enables a provider.
     PUSH_SERVICE_ENABLED: bool = False
     PUSH_PROVIDER: str = ""
-    VAST_API_KEY: str = ""
-    VAST_API_BASE_URL: str = "https://console.vast.ai/api/v0"
-    USD_CNY_RATE: float = 7.2
-    AUTODL_TOKEN: str = ""
-    AUTODL_API_BASE_URL: str = "https://api.autodl.com"
+    # KAI Pricing is the only active third-party market source.  It publishes
+    # native CNY prices per GPU-hour and does not require provider credentials.
+    KAI_PRICING_API_BASE_URL: str = "https://pricing.kai.com"
+    KAI_PRICING_REFRESH_SECONDS: int = 300
+    KAI_PRICING_HTTP_TIMEOUT: float = 10.0
+    KAI_PRICING_MAX_RESPONSE_BYTES: int = 2 * 1024 * 1024
+    KAI_CANDLE_HTTP_TIMEOUT: float = 6.0
+    KAI_CANDLE_TOTAL_TIMEOUT: float = 15.0
+    KAI_CANDLE_MAX_RESPONSE_BYTES: int = 1024 * 1024
+    KAI_CANDLE_MAX_TOTAL_BYTES: int = 6 * 1024 * 1024
+    KAI_CANDLE_MAX_PRODUCTS: int = 8
+    KAI_RANKING_MAX_PRODUCTS: int = 24
+    KAI_CANDLE_MAX_WORKERS: int = 4
+    KAI_CANDLE_CACHE_SECONDS: int = 300
+    # KAI exposes a maximum configurable GPU count, not live inventory.  This
+    # separate cap is the only stock that the manual fulfilment workflow may
+    # reserve and restore.
+    KAI_CLOSED_TEST_INITIAL_STOCK: int = 3
     MARKET_SYNC_SECONDS: int = 10
-    VAST_MARKET_REFRESH_SECONDS: int = 30
-    AUTODL_MARKET_REFRESH_SECONDS: int = 60
-    WOD_MARKET_REFRESH_SECONDS: int = 10
     MARKET_HISTORY_DAYS: int = 30
     MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 3600
-    # Real seven-day market history. The official Vast endpoint is attempted
-    # first; the public CC BY 4.0 dataset is an attributed fallback/backfill.
-    # Downloads happen only in a scheduled background job, never in API
-    # request handlers.
-    MARKET_HISTORY_SYNC_ENABLED: bool = True
-    MARKET_HISTORY_REFRESH_SECONDS: int = 21600
-    MARKET_HISTORY_BACKFILL_DAYS: int = 10
-    MARKET_HISTORY_HTTP_TIMEOUT: float = 20.0
-    MARKET_HISTORY_CACHE_ROOT: str = ""
-    MARKET_HISTORY_MAX_FILE_BYTES: int = 5 * 1024 * 1024
-    MARKET_HISTORY_MAX_REFRESH_BYTES: int = 25 * 1024 * 1024
-    MARKET_HISTORY_MIN_EXTERNAL_SAMPLES_PER_DAY: int = 3
-    MARKET_HISTORY_HF_DATASET: str = "afhubbard/gpu-prices"
-    MARKET_HISTORY_HF_LICENSE: str = "CC BY 4.0"
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
-    # Authenticated users allowed to fulfil provider-backed closed-test orders.
+    # Authenticated users allowed to fulfil KAI-backed manually delivered orders.
     # Use comma-separated numeric user IDs.  An empty value means that external
     # orders can be purchased and cancelled, but only remain pending delivery.
     PLATFORM_FULFILLMENT_USER_IDS: str = ""
-    FX_API_URL: str = "https://api.frankfurter.dev/v2/rate/USD/CNY?providers=ECB"
-    FX_REFRESH_SECONDS: int = 21600
     # Support AI adapter. Empty provider/key keeps the built-in FAQ and durable
     # ticket service fully usable in truthful "self_service" mode.
     AI_PROVIDER: str = ""
@@ -174,7 +173,10 @@ class Settings(BaseSettings):
     KAI_AUTH_TICKET_TTL_SECONDS: int = 120
     KAI_AUTH_HTTP_TIMEOUT: float = 10.0
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Ignore retired Vast/AutoDL keys that may remain temporarily in a private
+    # deployment environment during a rolling upgrade.  No runtime code reads
+    # those keys and new configuration documents do not expose them.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 settings = Settings()

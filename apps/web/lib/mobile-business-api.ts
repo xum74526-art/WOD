@@ -185,6 +185,8 @@ export type RechargePaymentConfig = {
 
 export type RechargePaymentOrder = {
   order_no: string;
+  provider?: "qixiangpay" | "mapay" | string;
+  channel?: string | null;
   status: "pending" | "paid" | "expired" | "failed" | "review" | "late_paid_review" | string;
   amount_cny: number;
   card_hours: number;
@@ -193,9 +195,20 @@ export type RechargePaymentOrder = {
   remaining_seconds?: number | null;
   can_pay?: boolean;
   can_query?: boolean;
+  can_cancel?: boolean;
   failure_reason?: string | null;
   paid_at?: string | null;
   credited_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type RechargePaymentPage = {
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+  items: RechargePaymentOrder[];
 };
 
 export type WithdrawalOrder = {
@@ -423,8 +436,19 @@ export function getRechargePayment(orderNo: string) {
   return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}`));
 }
 
+export function listRechargePayments(status = "", orderNo = "") {
+  const query = new URLSearchParams({ page: "1", page_size: "50" });
+  if (status) query.set("status", status);
+  if (orderNo) query.set("order_no", orderNo);
+  return apiRequest<RechargePaymentPage>(canonicalApiPath(`/payments/qixiang/orders?${query.toString()}`));
+}
+
 export function queryRechargePayment(orderNo: string) {
   return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/query`), { method: "POST" });
+}
+
+export function cancelRechargePayment(orderNo: string) {
+  return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/cancel`), { method: "POST" });
 }
 
 export function createWithdrawal(input: { amount_card_hours: number; bank_card_id: number; client_request_id: string }) {

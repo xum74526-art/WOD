@@ -1,0 +1,498 @@
+<template>
+  <view class="page">
+    <AppNavBar :title="t('gpuDetail')" />
+    <view v-if="loading && !product" class="detail-state">{{ t('loading') }}</view>
+    <view v-else-if="loadError && !product" class="detail-state detail-error">
+      <text>{{ t('productLoadFailedDesc') }}</text>
+      <view class="retry-button" role="button" @tap="loadProduct">{{ t('retry') }}</view>
+    </view>
+    <scroll-view scroll-y class="body" v-else-if="product">
+      <view v-if="partialLoadError" class="partial-warning">
+        <text>{{ t('partialProductDataUnavailable') }}</text>
+        <text class="partial-retry" role="button" @tap="loadProduct">{{ t('retry') }}</text>
+      </view>
+      <image class="pimage" :src="productImageUrl" mode="aspectFill" @error="productImageFailed = true" />
+      <view class="ph">
+        <text class="pn">{{ localizeProductName(product.name, i18n.lang) }}</text>
+        <text class="pmem">{{ product.memory }}</text>
+      </view>
+      <view class="card price-box">
+        <view class="price-primary">
+          <text class="currency">¥</text>
+          <text class="pp">{{ formatNumber(unitPriceCny) }}</text>
+          <text class="pu">{{ t('perGpuHour') }}</text>
+        </view>
+        <text class="daily muted">{{ formatNumber(unitPriceCardHours) }} {{ t('cardHourPerGpuHour') }}</text>
+      </view>
+      <view class="card specs">
+        <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ product.gpu_model }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_224d9bc8') }}</text><text class="sv">{{ product.memory }}</text></view>
+        <view class="row"><text class="sk">CUDA</text><text class="sv">{{ product.cuda || '-' }}</text></view>
+        <view class="row"><text class="sk">{{ t("region") }}</text><text class="sv">{{ tr(product.region_name || '-') }} {{ localizeRegionName(product.city || '', i18n.lang) }}</text></view>
+        <view class="row"><text class="sk">{{ t(isKaiProduct ? 'kaiFulfillmentAllocation' : 'k_40a4b798') }}</text><text class="sv">{{ product.stock ?? 0 }} {{ t('units') }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_262a2599') }}</text><text class="sv">{{ product.stability != null ? `${formatNumber(product.stability)}%` : '-' }}</text></view>
+        <view v-if="product.market_source && product.market_source !== 'wod'" class="row"><text class="sk">{{ t('marketOfferSource') }}</text><text class="sv">{{ sourceName }}</text></view>
+        <view v-if="product.market_source && product.market_source !== 'wod'" class="row"><text class="sk">{{ t('marketOfferUpdated') }}</text><text class="sv" :class="{ stale: !product.is_market_current }">{{ offerUpdateText }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_f411d0f1') }}</text><text class="sv">{{ sourceDescription }}</text></view>
+      </view>
+
+      <view v-if="!canBuy" class="offer-warning">{{ purchaseUnavailableText }}</view>
+      <view v-else-if="isKaiProduct" class="provider-notice">{{ t('kaiFulfillmentAllocationNotice') }}</view>
+
+      <SectionHeader v-if="product.supplier_name" :title="t('k_bab268d5')" />
+      <view v-if="product.supplier_name" class="card store-link" @tap="goStore">
+        <view class="sl-info">
+          <view class="sl-avatar">{{ supplierName.slice(0, 1).toUpperCase() }}</view>
+          <text class="sl-name">{{ supplierName }}</text>
+        </view>
+        <view class="sl-go">{{ t('进店') }} ›</view>
+      </view>
+      <SectionHeader :title="t('k_31f03d15')" />
+      <view class="card trend-card">
+        <CandlestickChart
+          :candles="candles?.candles || []"
+          :source-note="historySourceText"
+          :history-state="chartHistoryState"
+          :observed-days="chartObservedDays"
+          :reference-price-cny="candles?.latest_live_price_cny ?? product.price"
+          :reference-sample-count="chartReferenceSampleCount"
+          :reference-observed-at="candles?.latest_live_observed_at || product.price_updated_at || ''"
+        />
+      </view>
+      <SectionHeader v-if="canBuy" :title="t('purchaseDurationHours')" />
+      <view v-if="canBuy" class="duration-card">
+        <view class="duration-stepper">
+          <view class="duration-button" :class="{ disabled: hours <= 1 }" role="button" :aria-label="t('decreaseHours')" @tap="changeHours(-1)">−</view>
+          <view class="duration-value-wrap">
+            <input v-model.number="hours" class="duration-input" type="number" @blur="normalizeHours" />
+            <text class="duration-unit">{{ t('hoursUnit') }}</text>
+          </view>
+          <view class="duration-button" :class="{ disabled: hours >= maxPurchaseHours }" role="button" :aria-label="t('increaseHours')" @tap="changeHours(1)">+</view>
+        </view>
+        <scroll-view scroll-x class="hour-presets" :show-scrollbar="false">
+          <view class="hour-preset-track">
+            <view v-for="value in purchaseHourOptions" :key="value" class="hour-preset" :class="{ active: hours === value }" @tap="hours = value">{{ t('hoursValue', { count: value }) }}</view>
+          </view>
+        </scroll-view>
+        <text class="duration-hint">{{ t('hourlyBillingOnly') }}</text>
+      </view>
+      <SectionHeader v-if="canBuy" :title="t('purchaseQuantity')" />
+      <view v-if="canBuy" class="quantity-row">
+        <view>
+          <text class="quantity-label">{{ quantityUnits(quantity) }}</text>
+          <text class="quantity-stock">{{ t(isKaiProduct ? 'kaiAvailableAllocationHint' : 'availableQuantityHint', { count: maxQuantity }) }}</text>
+        </view>
+        <view class="quantity-stepper">
+          <view class="quantity-button" :class="{ disabled: quantity <= 1 }" role="button" :aria-label="t('decreaseQuantity')" @tap="changeQuantity(-1)">−</view>
+          <text class="quantity-value">{{ quantity }}</text>
+          <view class="quantity-button" :class="{ disabled: quantity >= maxQuantity }" role="button" :aria-label="t('increaseQuantity')" @tap="changeQuantity(1)">+</view>
+        </view>
+      </view>
+      <SectionHeader v-if="canBuy" :title="t('purchaseModeLabel')" />
+      <view v-if="canBuy" class="mode-row">
+        <view class="mode-card" :class="{ active: purchaseType === 'usage' }" role="button" @tap="purchaseType = 'usage'">
+          <text class="mode-title">{{ t('usageMode') }}</text>
+          <text class="mode-desc">{{ t('usageDesc') }}</text>
+        </view>
+        <view class="mode-card" :class="{ active: purchaseType === 'holding' }" role="button" @tap="purchaseType = 'holding'">
+          <text class="mode-title">{{ t('holdingMode') }}</text>
+          <text class="mode-desc">{{ t('holdingDesc') }}</text>
+        </view>
+      </view>
+      <view v-if="canBuy" class="card fee">
+        <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
+        <view class="row"><text class="sk">{{ t('purchaseDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ t('sshDelivery') }}</text></view>
+        <view class="row" v-if="purchaseType === 'usage' && rebate && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} ({{ formatNumber(estRebateRate) }}%)</text></view>
+        <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
+      </view>
+      <view v-if="canBuy" class="risk">{{ t(purchaseType === 'holding' ? 'holdingRisk' : 'usageRisk') }}</view>
+    </scroll-view>
+    <BottomActionBar v-if="product">
+      <view class="buy-btn" :class="{ disabled: submitting || !canBuy }" @tap="openConfirm">{{ t(submitting ? '处理中...' : (!canBuy ? unavailableActionLabel : (purchaseType === 'holding' ? 'buyHolding' : 'buyUsage'))) }}</view>
+    </BottomActionBar>
+    <ConfirmSheet :visible="showConfirm" :title="t(purchaseType === 'holding' ? 'confirmHoldingPurchase' : 'confirmUsagePurchase')" :desc="product ? `${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(amount)} ${t('cardHour')}` : ''" :confirmText="t('k_936de2c4')" @cancel="showConfirm = false" @confirm="onBuy">
+      <view v-if="isKaiProduct" class="provider-notice">{{ t('kaiFulfillmentAllocationNotice') }}</view>
+      <view class="confirm-fee">
+        <text>{{ t('k_99b6bb88') }}</text>
+        <text class="cf-val up">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text>
+      </view>
+      <view v-if="purchaseType === 'usage' && estRebate > 0" class="confirm-fee">
+        <text>{{ t('estimatedExpiryRebate') }}</text>
+        <text class="cf-val">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text>
+      </view>
+    </ConfirmSheet>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+import { getProduct, type Product } from '@/api/gpu'
+import { getMarketCandles, type MarketCandles, type MarketCandlesParams } from '@/api/market'
+import { createOrder } from '@/api/order'
+import { getWallet } from '@/api/wallet'
+import { getRebateSummary, type RebateSummary } from '@/api/user'
+import { formatNumber, fmtCardHours, toCardHours } from '@/utils/format'
+import AppNavBar from '@/components/AppNavBar.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
+import CandlestickChart from '@/components/CandlestickChart.vue'
+import BottomActionBar from '@/components/BottomActionBar.vue'
+import ConfirmSheet from '@/components/ConfirmSheet.vue'
+import { navigateTo as nav } from '@/utils/nav'
+import { useI18nStore } from '@/store/i18n'
+import { localizeRegionName } from '@/utils/region-name'
+import { localizePersonName, localizeProductName } from '@/utils/localize-content'
+import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
+import { estimateUsageExpiryRebate } from '@/utils/product-rebate'
+import {
+  historyProvenanceLabel,
+  localizeMarketSourceText,
+  marketHistoryDisplayState,
+  marketObservedDayCount,
+  marketSourceDisplayName,
+} from '@/utils/market-history'
+
+const i18n = useI18nStore()
+const { t, tr } = i18n
+const product = ref<Awaited<ReturnType<typeof getProduct>> | null>(null)
+const candles = ref<MarketCandles | null>(null)
+const hours = ref(24)
+const quantity = ref(1)
+const purchaseType = ref<'usage' | 'holding'>('usage')
+const wallet = ref<number | null>(null)
+const rebate = ref<RebateSummary | null>(null)
+const showConfirm = ref(false)
+const submitting = ref(false)
+const loading = ref(false)
+const loadError = ref(false)
+const partialLoadError = ref(false)
+const productImageFailed = ref(false)
+const pid = ref(0)
+const pendingRequestId = ref('')
+const pendingRequestSignature = ref('')
+let candleTimer: ReturnType<typeof setInterval> | null = null
+const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168, 720]
+const supplierName = computed(() => localizePersonName(product.value?.supplier_name || '', i18n.lang))
+const productImageUrl = computed(() => productImageFailed.value
+  ? fallbackProductImage(product.value?.gpu_model)
+  : resolveProductImage(product.value?.image_url, product.value?.gpu_model))
+const purchaseHourOptions = computed(() => {
+  const values = product.value?.purchase_hour_options || []
+  return [...new Set(values.length ? values : DEFAULT_PURCHASE_HOURS)]
+    .map((value) => Math.floor(Number(value)))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 720)
+    .sort((a, b) => a - b)
+})
+const maxPurchaseHours = computed(() => Math.max(...purchaseHourOptions.value, 720))
+const unitPriceCny = computed(() => Number(product.value?.price_cny_per_gpu_hour ?? product.value?.price ?? 0))
+const unitPriceCardHours = computed(() => Number(product.value?.price_card_hours_per_gpu_hour ?? toCardHours(unitPriceCny.value)))
+const maxQuantity = computed(() => {
+  const stock = Number(product.value?.stock || 0)
+  const remaining = Math.max(0, Math.floor(stock))
+  if (product.value?.market_source === 'kai') {
+    const sourceOrderLimit = Math.max(0, Math.floor(Number(product.value.source_max_configurable_quantity || 0)))
+    return Math.min(remaining, sourceOrderLimit)
+  }
+  return Math.min(remaining, 99)
+})
+const canBuy = computed(() => Boolean(product.value?.market_source === 'kai' && product.value?.purchasable === true && maxQuantity.value > 0))
+const isKaiProduct = computed(() => product.value?.market_source === 'kai')
+const purchaseUnavailableText = computed(() => {
+  if (product.value?.market_source && product.value.market_source !== 'kai') return t('retiredMarketSourceUnavailable')
+  if (maxQuantity.value <= 0) return t(isKaiProduct.value ? 'kaiAllocationUnavailable' : 'noStockAvailable')
+  if (product.value?.is_market_current === false) return t('marketOfferUnavailable')
+  return t('wodListingUnavailable')
+})
+const unavailableActionLabel = computed(() => {
+  if (isKaiProduct.value && maxQuantity.value <= 0) return 'kaiAllocationUnavailableShort'
+  return product.value?.market_source !== 'kai' ? 'retiredMarketSourceUnavailableShort' : 'marketOfferUnavailableShort'
+})
+const sourceName = computed(() => {
+  return marketSourceDisplayName(product.value?.market_source || 'wod', t)
+})
+const sourceDescription = computed(() => isKaiProduct.value
+  ? t('kaiProductDescription')
+  : localizeMarketSourceText(tr(product.value?.desc || '-'), t))
+const chartHistoryState = computed(() => marketHistoryDisplayState(candles.value))
+const chartObservedDays = computed(() => marketObservedDayCount(candles.value))
+const chartReferenceSampleCount = computed(() => {
+  const rows = candles.value?.candles || []
+  return rows[rows.length - 1]?.sample_count || (product.value?.market_source ? 1 : 0)
+})
+const historySourceText = computed(() => historyProvenanceLabel(candles.value?.provenance, t))
+function parseApiDate(value: string) {
+  // SQLite/FastAPI may serialize UTC datetimes without an explicit zone.
+  // Treat those values as UTC so Android/H5 do not display them eight hours
+  // behind in China; preserve values that already carry Z or an offset.
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`
+  return new Date(normalized)
+}
+const offerUpdateText = computed(() => {
+  if (!product.value?.price_updated_at) return t('notUpdated')
+  const formatted = parseApiDate(product.value.price_updated_at).toLocaleString()
+  return product.value.is_market_current ? formatted : `${formatted} · ${t(product.value.market_source_status === 'unavailable' ? 'sourceUnavailable' : 'staleData')}`
+})
+
+function productCandleParams(current: Product): MarketCandlesParams | undefined {
+  if (current.market_source !== 'kai') return undefined
+  const externalProductId = String(current.external_product_id || '').trim()
+  return externalProductId ? { external_product_id: externalProductId } : undefined
+}
+
+onLoad((opts) => {
+  pid.value = Number(opts?.id || 0)
+  loadProduct()
+})
+onShow(() => {
+  startCandleTimer()
+  void refreshProductState()
+})
+onHide(stopCandleTimer)
+onUnload(stopCandleTimer)
+
+async function loadProduct() {
+  if (loading.value) return
+  if (!pid.value) {
+    loadError.value = true
+    return
+  }
+  loading.value = true
+  loadError.value = false
+  partialLoadError.value = false
+  productImageFailed.value = false
+  product.value = null
+  candles.value = null
+  wallet.value = null
+  rebate.value = null
+
+  const [productResult] = await Promise.allSettled([getProduct(pid.value)])
+
+  if (productResult.status === 'rejected') {
+    loadError.value = true
+    loading.value = false
+    return
+  }
+
+  product.value = productResult.value
+  const source = product.value.market_source || 'wod'
+  // Only the current KAI transport may create a live market request. Retired
+  // source names remain visible on historical records without being queried.
+  const candleRequest = source === 'kai'
+    ? getMarketCandles(
+      product.value.gpu_model,
+      product.value.memory || '',
+      '7d',
+      [source],
+      false,
+      'ondemand',
+      productCandleParams(product.value),
+    )
+    : Promise.resolve<MarketCandles | null>(null)
+  const [candleResult, walletResult, rebateResult] = await Promise.allSettled([
+    candleRequest,
+    getWallet(),
+    getRebateSummary(),
+  ])
+  if (candleResult.status === 'fulfilled' && candleResult.value) candles.value = candleResult.value
+  if (walletResult.status === 'fulfilled') wallet.value = walletResult.value.balance
+  if (rebateResult.status === 'fulfilled') rebate.value = rebateResult.value
+  partialLoadError.value = candleResult.status === 'rejected'
+    || walletResult.status === 'rejected'
+    || rebateResult.status === 'rejected'
+  if (!purchaseHourOptions.value.includes(hours.value)) {
+    hours.value = purchaseHourOptions.value[0] || 1
+  }
+  loading.value = false
+}
+
+async function refreshProductState() {
+  // Provider quotes and purchase eligibility can change while this page is
+  // kept alive in the navigation stack. Refresh the product on every return so
+  // an old "reference only" state cannot remain after the source recovers.
+  if (!pid.value || !product.value || loading.value) return
+  try {
+    product.value = await getProduct(pid.value)
+    quantity.value = Math.min(Math.max(quantity.value, 1), Math.max(maxQuantity.value, 1))
+  } catch {
+    // Keep the last successfully loaded detail during a transient refresh.
+  }
+}
+
+async function refreshCandles(silent = true) {
+  const current = product.value
+  if (!current) return
+  const source = current.market_source || 'wod'
+  if (source !== 'kai') return
+  try {
+    candles.value = await getMarketCandles(
+      current.gpu_model,
+      current.memory || '',
+      '7d',
+      [source],
+      silent,
+      'ondemand',
+      productCandleParams(current),
+    )
+  } catch {
+    // Keep the last verified candles during a transient refresh failure.
+  }
+}
+
+function startCandleTimer() {
+  stopCandleTimer()
+  candleTimer = setInterval(() => refreshCandles(true), 10000)
+}
+
+function stopCandleTimer() {
+  if (candleTimer) clearInterval(candleTimer)
+  candleTimer = null
+}
+
+const amount = computed(() => unitPriceCardHours.value * hours.value * quantity.value)
+
+function clampHours(value: number): number {
+  if (!Number.isFinite(value)) return 1
+  return Math.max(1, Math.min(Math.floor(value), maxPurchaseHours.value))
+}
+function changeHours(delta: number) {
+  hours.value = clampHours(hours.value + delta)
+}
+function normalizeHours() {
+  hours.value = clampHours(hours.value)
+}
+
+function changeQuantity(delta: number) {
+  if (!canBuy.value) return
+  quantity.value = Math.max(1, Math.min(quantity.value + delta, maxQuantity.value))
+}
+function quantityUnits(count: number) {
+  if (i18n.lang === 'en') return `${count} ${count === 1 ? 'GPU' : 'GPUs'}`
+  return t('quantityUnits', { count })
+}
+
+const rebateEstimate = computed(() => estimateUsageExpiryRebate(
+  amount.value,
+  purchaseType.value,
+  Boolean(rebate.value?.rewards_enabled),
+  Number(rebate.value?.month_spent ?? 0),
+  Number(rebate.value?.minimum_order_amount ?? Number.NaN),
+  rebate.value?.tiers ?? [],
+))
+const estRebateRate = computed(() => rebateEstimate.value.ratePercent)
+const estRebate = computed(() => rebateEstimate.value.amount)
+
+async function onBuy() {
+  showConfirm.value = false
+  if (submitting.value || !canBuy.value) return
+  submitting.value = true
+  try {
+    const created = await createOrder(pid.value, hours.value, purchaseType.value, quantity.value, ensureRequestId())
+    pendingRequestId.value = ''
+    pendingRequestSignature.value = ''
+    uni.showToast({ title: t('购买成功'), icon: 'success' })
+    setTimeout(() => nav(`/pages/order/detail?id=${created.id}`), 800)
+  } catch {
+    /* request toast */
+  }
+  submitting.value = false
+}
+
+function openConfirm() {
+  if (!canBuy.value) {
+    uni.showToast({ title: purchaseUnavailableText.value, icon: 'none' })
+    return
+  }
+  ensureRequestId()
+  showConfirm.value = true
+}
+
+function ensureRequestId() {
+  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType.value}`
+  if (!pendingRequestId.value || pendingRequestSignature.value !== signature) {
+    pendingRequestSignature.value = signature
+    pendingRequestId.value = `wod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+  }
+  return pendingRequestId.value
+}
+
+function goStore() {
+  if (product.value?.supplier_id) {
+    nav('/pages/store/index?id=' + product.value.supplier_id)
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.page { min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; }
+.body { flex: 1; padding: 0 32rpx 160rpx; }
+.detail-state { flex: 1; min-height: 420rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24rpx; padding: 48rpx 32rpx; color: var(--text-sub); font-size: 26rpx; text-align: center; line-height: 1.6; }
+.detail-error { color: var(--text-sub); }
+.retry-button { min-width: 180rpx; min-height: 72rpx; display: flex; align-items: center; justify-content: center; padding: 0 28rpx; color: var(--primary); border: 1rpx solid var(--primary); border-radius: var(--radius); font-weight: 700; }
+.partial-warning { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 20rpx 24rpx; margin: 24rpx 0 0; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 23rpx; line-height: 1.5; }
+.partial-retry { flex-shrink: 0; min-height: 64rpx; display: flex; align-items: center; color: var(--primary); font-weight: 700; }
+.pimage { width: 100%; height: 320rpx; background: var(--divider); border-radius: var(--radius); margin: 24rpx 0; display: block; }
+.ph { display: flex; justify-content: space-between; align-items: center; padding: 24rpx 0 32rpx; }
+.pn { color: var(--text); font-size: 44rpx; font-weight: 700; }
+.pmem { color: var(--primary); font-size: 24rpx; background: var(--primary-soft); padding: 6rpx 18rpx; border-radius: var(--radius); }
+.card { background: var(--card); border-radius: var(--radius); border: 1rpx solid var(--border); }
+.trend-card { padding: 12rpx 12rpx 4rpx; overflow: hidden; }
+.history-empty { padding: 72rpx 28rpx; color: var(--text-sub); font-size: 24rpx; text-align: center; }
+.price-box { padding: 40rpx 32rpx; margin-bottom: 24rpx; background: var(--card); border: none; box-shadow: 0 4rpx 24rpx var(--card-border); }
+.price-primary { display: flex; align-items: baseline; gap: 8rpx; }
+.currency { color: var(--text-sub); font-size: 28rpx; font-weight: 700; }
+.pp { color: var(--text); font-size: 56rpx; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pu { color: var(--text-sub); font-size: 26rpx; }
+.daily { display: block; color: var(--up); font-size: 26rpx; margin-top: 12rpx; }
+.daily.muted { color: var(--text-sub); }
+.specs { padding: 8rpx 32rpx; margin-bottom: 24rpx; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 28rpx 0; border-bottom: 1rpx solid var(--divider); }
+.row:last-child { border-bottom: none; }
+.sk { color: var(--text-sub); font-size: 28rpx; }
+.sv { color: var(--text); font-size: 28rpx; font-variant-numeric: tabular-nums; }
+.sv.stale { color: var(--down); }
+.up { color: var(--up); }
+.offer-warning { color: var(--down); background: rgba(217, 72, 72, 0.08); border: 1rpx solid rgba(217, 72, 72, 0.22); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
+.provider-notice { color: var(--text-sub); background: var(--primary-soft); border: 1rpx solid var(--card-border); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
+.duration-card { margin-bottom: 24rpx; padding: 24rpx; background: var(--card); border: 1rpx solid var(--border); border-radius: var(--radius); }
+.duration-stepper { display: grid; grid-template-columns: 76rpx minmax(0, 1fr) 76rpx; align-items: stretch; border: 1rpx solid var(--border); border-radius: 12rpx; overflow: hidden; }
+.duration-button { min-height: 76rpx; display: flex; align-items: center; justify-content: center; color: var(--primary); background: var(--primary-soft); font-size: 36rpx; font-weight: 650; }
+.duration-button:active { transform: scale(0.97); }
+.duration-button.disabled { color: var(--text-dim); background: var(--bg-2); }
+.duration-value-wrap { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 10rpx; padding: 0 16rpx; background: var(--card); }
+.duration-input { width: 150rpx; height: 76rpx; color: var(--text); text-align: right; font-size: 32rpx; font-weight: 750; font-variant-numeric: tabular-nums; }
+.duration-unit { color: var(--text-sub); font-size: 23rpx; }
+.hour-presets { width: 100%; white-space: nowrap; margin-top: 18rpx; }
+.hour-preset-track { display: inline-flex; gap: 12rpx; padding-right: 8rpx; }
+.hour-preset { min-height: 58rpx; display: flex; align-items: center; justify-content: center; padding: 0 22rpx; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 12rpx; font-size: 22rpx; font-variant-numeric: tabular-nums; }
+.hour-preset.active { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); font-weight: 700; }
+.duration-hint { display: block; margin-top: 16rpx; color: var(--text-sub); font-size: 21rpx; line-height: 1.5; }
+.quantity-row { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; padding: 22rpx 24rpx; margin-bottom: 24rpx; background: var(--card); border: 1rpx solid var(--border); border-radius: var(--radius); }
+.quantity-label { display: block; color: var(--text); font-size: 28rpx; font-weight: 650; font-variant-numeric: tabular-nums; }
+.quantity-stock { display: block; color: var(--text-sub); font-size: 21rpx; margin-top: 6rpx; }
+.quantity-stepper { display: grid; grid-template-columns: 64rpx 72rpx 64rpx; align-items: center; border: 1rpx solid var(--border); border-radius: 12rpx; overflow: hidden; }
+.quantity-button { height: 64rpx; display: flex; align-items: center; justify-content: center; color: var(--primary); background: var(--primary-soft); font-size: 34rpx; font-weight: 600; }
+.quantity-button:active { transform: scale(0.96); }
+.quantity-button.disabled { color: var(--text-dim); background: var(--bg-2); }
+.quantity-value { color: var(--text); text-align: center; font-size: 28rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mode-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-bottom: 24rpx; }
+.mode-card { min-width: 0; padding: 24rpx; border: 2rpx solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8rpx; background: var(--card); }
+.mode-card:active { transform: scale(0.98); }
+.mode-card.active { border-color: var(--primary); background: var(--primary-soft); }
+.mode-title { color: var(--text); font-size: 28rpx; font-weight: 700; }
+.mode-card.active .mode-title { color: var(--primary); }
+.mode-desc { color: var(--text-sub); font-size: 22rpx; line-height: 1.5; }
+.fee { padding: 8rpx 32rpx; margin-bottom: 24rpx; }
+.risk { color: var(--text-dim); font-size: 24rpx; padding: 16rpx 8rpx; line-height: 1.6; }
+.buy-btn { background: var(--primary); color: #fff; text-align: center; padding: 28rpx 0; border-radius: var(--radius); font-size: 32rpx; font-weight: 600; }
+.buy-btn.disabled { opacity: 0.5; }
+.confirm-fee { display: flex; justify-content: space-between; align-items: center; padding: 16rpx 0; }
+.cf-val { font-size: 40rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.store-link { display: flex; align-items: center; justify-content: space-between; padding: 28rpx 32rpx; margin-bottom: 24rpx; }
+.sl-info { display: flex; align-items: center; gap: 20rpx; }
+.sl-avatar { width: 64rpx; height: 64rpx; border-radius: 32rpx; background: linear-gradient(135deg, var(--primary), var(--primary)); color: #fff; font-size: 28rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sl-name { color: var(--text); font-size: 30rpx; font-weight: 600; }
+.sl-go { color: var(--primary); font-size: 26rpx; }
+</style>

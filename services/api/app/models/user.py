@@ -13,7 +13,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64))
     phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     # False means WOD has not verified ownership by SMS. Kai-only accounts use
-    # an internal value; closed-test phone sign-ups keep the entered number only
+    # an internal value; unverified phone sign-ups keep the entered number only
     # as a login identifier. API serializers hide it while this flag is false.
     phone_bound: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     password: Mapped[str] = mapped_column(String(255))
@@ -21,4 +21,11 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default="personal")  # personal / supplier
     supplier_status: Mapped[str] = mapped_column(String(16), default="none")  # none / pending / approved / rejected
     invited_by: Mapped[int | None] = mapped_column(nullable=True)  # 邀请人 user_id
+    # Immutable audit origin captured from the authenticated/registered client.
+    # This is an observability field only; authorization must continue to use
+    # role/allow-list checks because public native client identifiers can be
+    # copied by an attacker.
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

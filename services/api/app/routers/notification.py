@@ -36,7 +36,7 @@ def list_notifications(
 ):
     if type_filter and type_filter not in VALID_NOTIFICATION_TYPES:
         raise BizError("不支持的通知类型")
-    # Existing closed-test accounts receive one factual service-state message,
+    # Existing accounts receive one factual service-state message,
     # so the inbox works without fabricated order or revenue records.
     ensure_inbox_welcome(db, user.id)
     db.commit()

@@ -21,12 +21,12 @@ from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/chat", tags=["support"])
 
-SYSTEM_PROMPT = """You are the WOD compute-platform support assistant.
+SYSTEM_PROMPT = """You are the KAI compute-platform support assistant.
 Only answer from these verified product facts:
-- During closed testing, a current quote explicitly marked Purchasable can create
-  a test order, deduct test CH, and wait for manual platform SSH delivery.
-- An external-quote test order is not a purchase on Vast.ai or AutoDL and never
-  represents fiat payment. Listings marked reference-only cannot be ordered.
+- A current KAI Pricing quote explicitly marked Purchasable can create an hourly
+  order, reserve wallet CH, and wait for manual platform SSH delivery.
+- KAI Pricing is the sole active live quote source. Quote observations are not
+  live inventory, and listings marked reference-only cannot be ordered.
 - Real payment, recharge, refund, withdrawal, SMS verification, push delivery,
   and human-agent systems may be unavailable unless the server has configured them.
 - Never claim a payment, payout, human handoff, email, phone, SLA, or feature is

@@ -18,7 +18,12 @@ function filesUnder(relative, extensions = ['.ts', '.tsx', '.vue']) {
 
 const rules = [
   {
-    files: [...filesUnder('apps/mobile/src'), path.join(root, 'apps/mobile/vite.config.ts')],
+    files: [
+      ...filesUnder('apps/ios/src'),
+      path.join(root, 'apps/ios/vite.config.ts'),
+      ...filesUnder('apps/android/src'),
+      path.join(root, 'apps/android/vite.config.ts'),
+    ],
     patterns: [
       ['VITE_WOD_APP_API_BASE', 'legacy mobile API environment alias'],
       ['WOD_H5_API_TARGET', 'legacy H5 API environment alias'],
@@ -56,4 +61,4 @@ if (violations.length) {
   process.exit(1)
 }
 
-console.log('Client boundary check passed: Web and Mobile use the canonical cloud API boundary.')
+console.log('Client boundary check passed: Web, iOS and Android use the canonical cloud API boundary.')

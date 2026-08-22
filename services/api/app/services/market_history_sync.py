@@ -36,7 +36,7 @@ from app.services.gpu_catalog import (
     memory_variant_from_text,
     normalize_gpu_variant,
 )
-from app.services.market_sync import _percentile, _without_outliers, get_usd_cny_rate, utcnow
+from app.services.market_sync import _percentile, _without_outliers, utcnow
 
 
 OFFICIAL_SOURCE = "vast_official_history"
@@ -46,6 +46,15 @@ HF_PAGE_URL = "https://huggingface.co/datasets/afhubbard/gpu-prices"
 OFFICIAL_URL = "https://console.vast.ai/api/v0/metrics/gpu/history/"
 MIN_COVERAGE_DAYS = 7
 MIN_COVERAGE_SPAN_HOURS = 6 * 24
+# Frozen read-only defaults for parsing/selecting already stored legacy data.
+# They are deliberately not deployment settings and no downloader is active.
+LEGACY_CACHE_ROOT = ""
+LEGACY_MAX_FILE_BYTES = 5 * 1024 * 1024
+LEGACY_MAX_REFRESH_BYTES = 25 * 1024 * 1024
+LEGACY_BACKFILL_DAYS = 10
+LEGACY_MIN_EXTERNAL_SAMPLES_PER_DAY = 3
+LEGACY_HF_DATASET = "afhubbard/gpu-prices"
+LEGACY_HF_LICENSE = "CC BY 4.0"
 
 # Vast's aggregate endpoint identifies the board model but currently omits a
 # VRAM field for some rows. Only deterministic vendor configurations are
@@ -83,7 +92,7 @@ class HistorySelection:
 
 
 def _cache_root() -> Path:
-    configured = settings.MARKET_HISTORY_CACHE_ROOT.strip()
+    configured = LEGACY_CACHE_ROOT
     if configured:
         return Path(configured).expanduser().resolve()
     if settings.UPLOAD_ROOT.strip():
@@ -132,13 +141,7 @@ def _median(values: Iterable[Decimal]) -> Decimal:
 
 
 def _fx_rate() -> tuple[Decimal, str, str]:
-    try:
-        return get_usd_cny_rate()
-    except Exception:  # noqa: BLE001 - fallback is explicit in stored provenance
-        rate = Decimal(str(settings.USD_CNY_RATE))
-        if rate <= 0:
-            raise HistorySourceFailure("fx_rate_unavailable")
-        return rate, "configured USD/CNY fallback", utcnow().date().isoformat()
+    raise HistorySourceFailure("history_source_disabled")
 
 
 def _status(db: Session, source: str) -> MarketHistorySourceStatus:
@@ -147,7 +150,7 @@ def _status(db: Session, source: str) -> MarketHistorySourceStatus:
         row = MarketHistorySourceStatus(
             source=source,
             upstream_provider="vast",
-            refresh_seconds=max(settings.MARKET_HISTORY_REFRESH_SECONDS, 300),
+            refresh_seconds=21600,
         )
         db.add(row)
         db.flush()
@@ -155,9 +158,11 @@ def _status(db: Session, source: str) -> MarketHistorySourceStatus:
 
 
 def _due(db: Session, source: str, force: bool) -> bool:
+    row = _status(db, source)
+    if not row.enabled:
+        return False
     if force:
         return True
-    row = _status(db, source)
     if not row.last_attempt_at:
         return True
     return utcnow() - row.last_attempt_at >= timedelta(seconds=max(row.refresh_seconds, 300))
@@ -362,35 +367,7 @@ def parse_vast_official_history(payload: dict[str, Any], collected_at: datetime,
 
 
 def _fetch_vast_official(client: httpx.Client, start: datetime, end: datetime) -> tuple[list[dict[str, Any]], str | None]:
-    if not settings.VAST_API_KEY:
-        raise HistorySourceFailure("history_credentials_missing")
-    response = client.get(
-        f"{settings.VAST_API_BASE_URL.rstrip('/')}/metrics/gpu/history/",
-        headers={"Authorization": f"Bearer {settings.VAST_API_KEY}"},
-        params={
-            "gpu_name": "all",
-            "verified": "yes",
-            "hosting_type": "all",
-            "num_gpus": "all",
-            "start": int(start.replace(tzinfo=timezone.utc).timestamp()),
-            "end": int(end.replace(tzinfo=timezone.utc).timestamp()),
-            "step": 3600,
-        },
-    )
-    if response.status_code in (401, 403):
-        raise HistorySourceFailure("history_credentials_missing_permission")
-    if response.status_code == 429:
-        raise HistorySourceFailure("history_rate_limited")
-    if response.status_code >= 400:
-        raise HistorySourceFailure("history_upstream_error")
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise HistorySourceFailure("history_invalid_response") from exc
-    rows = parse_vast_official_history(payload, utcnow(), _fx_rate())
-    if not rows:
-        raise HistorySourceFailure("history_empty_or_missing_vram")
-    return rows, response.headers.get("etag")
+    raise HistorySourceFailure("history_source_disabled")
 
 
 def _hf_api_dataset(dataset: str) -> str:
@@ -419,7 +396,7 @@ def _valid_parquet(path: Path, expected_size: int | None = None) -> bool:
 
 
 def _download_file(client: httpx.Client, url: str, target: Path, expected_size: int) -> int:
-    if expected_size <= 0 or expected_size > settings.MARKET_HISTORY_MAX_FILE_BYTES:
+    if expected_size <= 0 or expected_size > LEGACY_MAX_FILE_BYTES:
         raise HistorySourceFailure("history_file_size_rejected")
     if _valid_parquet(target, expected_size):
         return 0
@@ -432,7 +409,7 @@ def _download_file(client: httpx.Client, url: str, target: Path, expected_size: 
             with temporary.open("wb") as stream:
                 for chunk in response.iter_bytes(64 * 1024):
                     written += len(chunk)
-                    if written > settings.MARKET_HISTORY_MAX_FILE_BYTES:
+                    if written > LEGACY_MAX_FILE_BYTES:
                         raise HistorySourceFailure("history_file_size_rejected")
                     stream.write(chunk)
         if written != expected_size or not _valid_parquet(temporary, expected_size):
@@ -447,7 +424,7 @@ def _download_file(client: httpx.Client, url: str, target: Path, expected_size: 
 def _cached_files() -> list[Path]:
     root = _cache_root()
     files = [path for path in root.glob("dt=*/snapshot_*.parquet") if _valid_parquet(path)]
-    return sorted(files)[-max(settings.MARKET_HISTORY_BACKFILL_DAYS * 2, 14):]
+    return sorted(files)[-max(LEGACY_BACKFILL_DAYS * 2, 14):]
 
 
 def _cache_manifest() -> dict[str, Any]:
@@ -465,9 +442,9 @@ def _write_cache_manifest(revision: str, files: list[Path]) -> None:
     path = root / "manifest.json"
     temporary = root / "manifest.json.part"
     payload = {
-        "dataset": settings.MARKET_HISTORY_HF_DATASET,
+        "dataset": LEGACY_HF_DATASET,
         "revision": revision,
-        "license": settings.MARKET_HISTORY_HF_LICENSE,
+        "license": LEGACY_HF_LICENSE,
         "refreshed_at": utcnow().isoformat(timespec="seconds") + "Z",
         "files": [item.relative_to(root).as_posix() for item in files],
     }
@@ -476,7 +453,7 @@ def _write_cache_manifest(revision: str, files: list[Path]) -> None:
 
 
 def _refresh_hf_cache(client: httpx.Client, end: datetime) -> tuple[list[Path], str, bool]:
-    dataset = settings.MARKET_HISTORY_HF_DATASET
+    dataset = LEGACY_HF_DATASET
     try:
         repository = client.get(_hf_api_dataset(dataset))
         repository.raise_for_status()
@@ -493,7 +470,7 @@ def _refresh_hf_cache(client: httpx.Client, end: datetime) -> tuple[list[Path], 
             if value <= end.date():
                 dates.append((value, item["path"]))
         dates.sort()
-        selected = dates[-max(settings.MARKET_HISTORY_BACKFILL_DAYS, 7):]
+        selected = dates[-max(LEGACY_BACKFILL_DAYS, 7):]
         if len(selected) < MIN_COVERAGE_DAYS:
             raise HistorySourceFailure("history_partition_coverage_insufficient")
 
@@ -504,12 +481,12 @@ def _refresh_hf_cache(client: httpx.Client, end: datetime) -> tuple[list[Path], 
             for item in response.json():
                 match = _PARQUET_FILE.fullmatch(str(item.get("path") or ""))
                 size = int(item.get("size") or 0)
-                if match and 0 < size <= settings.MARKET_HISTORY_MAX_FILE_BYTES:
+                if match and 0 < size <= LEGACY_MAX_FILE_BYTES:
                     entries.append({"path": item["path"], "date": match.group(1), "filename": match.group(2), "size": size})
         if not entries:
             raise HistorySourceFailure("history_no_parquet_files")
         expected_new = sum(entry["size"] for entry in entries)
-        if expected_new > settings.MARKET_HISTORY_MAX_REFRESH_BYTES:
+        if expected_new > LEGACY_MAX_REFRESH_BYTES:
             raise HistorySourceFailure("history_refresh_size_rejected")
 
         files: list[Path] = []
@@ -525,7 +502,7 @@ def _refresh_hf_cache(client: httpx.Client, end: datetime) -> tuple[list[Path], 
                 target,
                 entry["size"],
             )
-            if downloaded > settings.MARKET_HISTORY_MAX_REFRESH_BYTES:
+            if downloaded > LEGACY_MAX_REFRESH_BYTES:
                 raise HistorySourceFailure("history_refresh_size_rejected")
             files.append(target)
         files = sorted(files)
@@ -605,7 +582,7 @@ def parse_hf_parquet(
         grouped[(str(filename), provider, observed_at, model, variant)].append((price, max(int(gpu_count), 1)))
 
     fx_rate, fx_source, fx_date = fx
-    dataset = settings.MARKET_HISTORY_HF_DATASET
+    dataset = LEGACY_HF_DATASET
     points: list[dict[str, Any]] = []
     cache = _cache_root()
     for (filename, provider, observed_at, model, variant), observations in grouped.items():
@@ -658,7 +635,7 @@ def parse_hf_parquet(
                 else f"{provider}_cross_listing_iqr_median_per_gpu_hour"
             ),
             "source_url": source_url,
-            "license_name": settings.MARKET_HISTORY_HF_LICENSE,
+            "license_name": LEGACY_HF_LICENSE,
             "dataset_version": revision,
             "observed_at": observed_at,
             "collected_at": collected_at,
@@ -675,7 +652,7 @@ def _set_success(db: Session, source: str, rows: list[dict[str, Any]], version: 
     state.dataset_version = version
     if source == HF_SOURCE:
         state.upstream_provider = "multi_provider"
-        state.license_name = settings.MARKET_HISTORY_HF_LICENSE
+        state.license_name = LEGACY_HF_LICENSE
         state.source_url = HF_PAGE_URL
     else:
         state.upstream_provider = "vast"
@@ -690,58 +667,8 @@ def _set_error(db: Session, source: str, code: str) -> None:
 
 
 def sync_market_history(force: bool = False) -> list[dict[str, Any]]:
-    """Refresh official and attributed fallback history outside request paths."""
-    if not settings.MARKET_HISTORY_SYNC_ENABLED:
-        return [{"status": "disabled"}]
-    if not _SYNC_LOCK.acquire(blocking=False):
-        return [{"status": "already_running"}]
-    db = SessionLocal()
-    results: list[dict[str, Any]] = []
-    now = utcnow()
-    start = now - timedelta(days=max(settings.MARKET_HISTORY_BACKFILL_DAYS, 7))
-    try:
-        timeout = httpx.Timeout(settings.MARKET_HISTORY_HTTP_TIMEOUT, connect=min(settings.MARKET_HISTORY_HTTP_TIMEOUT, 10))
-        with httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": "WOD-Market-History/1.0"}) as client:
-            if _due(db, OFFICIAL_SOURCE, force):
-                state = _status(db, OFFICIAL_SOURCE)
-                state.last_attempt_at = now
-                db.commit()
-                try:
-                    rows, version = _fetch_vast_official(client, start, now)
-                    inserted = _store_points(db, rows)
-                    _set_success(db, OFFICIAL_SOURCE, rows, version)
-                    db.commit()
-                    results.append({"source": OFFICIAL_SOURCE, "inserted": inserted, "samples": len(rows)})
-                except HistorySourceFailure as exc:
-                    db.rollback()
-                    _set_error(db, OFFICIAL_SOURCE, exc.code)
-                    _status(db, OFFICIAL_SOURCE).last_attempt_at = now
-                    db.commit()
-                    results.append({"source": OFFICIAL_SOURCE, "error_code": exc.code})
-
-            if _due(db, HF_SOURCE, force):
-                state = _status(db, HF_SOURCE)
-                state.last_attempt_at = now
-                db.commit()
-                try:
-                    files, revision, cached = _refresh_hf_cache(client, now)
-                    rows = parse_hf_parquet(files, revision, utcnow(), _fx_rate())
-                    if not rows:
-                        raise HistorySourceFailure("history_empty")
-                    inserted = _store_points(db, rows)
-                    _set_success(db, HF_SOURCE, rows, revision, cached)
-                    db.commit()
-                    results.append({"source": HF_SOURCE, "inserted": inserted, "samples": len(rows), "cached": cached})
-                except HistorySourceFailure as exc:
-                    db.rollback()
-                    _set_error(db, HF_SOURCE, exc.code)
-                    _status(db, HF_SOURCE).last_attempt_at = now
-                    db.commit()
-                    results.append({"source": HF_SOURCE, "error_code": exc.code})
-        return results
-    finally:
-        db.close()
-        _SYNC_LOCK.release()
+    """Retained API surface for old operators; KAI-only mode never downloads it."""
+    return [{"status": "disabled", "reason": "kai_only_market"}]
 
 
 def _provenance(point: MarketHistoryPoint, components: list[str] | None = None) -> dict[str, Any]:
@@ -776,7 +703,7 @@ def _selection(points: list[MarketHistoryPoint]) -> HistorySelection:
     quality_kind = ordered[-1].data_quality if ordered else ""
     complete_daily_coverage = len(daily) >= MIN_COVERAGE_DAYS
     strong_listing_support = min_daily_samples >= max(
-        settings.MARKET_HISTORY_MIN_EXTERNAL_SAMPLES_PER_DAY,
+        LEGACY_MIN_EXTERNAL_SAMPLES_PER_DAY,
         1,
     )
     # A seven-day endpoint change needs observations on both ends of a window,
@@ -941,4 +868,6 @@ def history_source_status(db: Session) -> list[dict[str, Any]]:
         "dataset_version": row.dataset_version,
         "license": row.license_name,
         "source_url": row.source_url,
-    } for row in db.query(MarketHistorySourceStatus).order_by(MarketHistorySourceStatus.source.asc()).all()]
+    } for row in db.query(MarketHistorySourceStatus).filter(
+        MarketHistorySourceStatus.enabled.is_(True)
+    ).order_by(MarketHistorySourceStatus.source.asc()).all()]

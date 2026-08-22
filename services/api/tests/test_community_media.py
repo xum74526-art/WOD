@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.db.base import Base
 from app.db.session import get_db
 from app.models import User  # noqa: F401
@@ -69,6 +69,7 @@ class CommunityMediaTests(unittest.TestCase):
 
         app.dependency_overrides[get_db] = db_override
         app.dependency_overrides[get_current_user] = lambda: self.user
+        app.dependency_overrides[get_current_platform] = lambda: "legacy"
         self.client = TestClient(app)
 
     def tearDown(self):

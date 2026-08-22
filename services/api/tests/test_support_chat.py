@@ -11,7 +11,7 @@ from app.db.base import Base
 from app.models import SupportConversation, SupportMessage, SupportTicket, User  # noqa: F401
 from app.routers.chat import chat, create_support_ticket, get_support_session
 from app.schemas.support import SupportMessageIn, SupportTicketIn
-from app.services.support import match_faq
+from app.services.support import FAQ_ANSWERS, match_faq
 from app.utils.response import BizError
 
 
@@ -45,7 +45,7 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
             second = await chat(request, self.user, self.db)
 
         self.assertEqual(first["data"]["service_mode"], "self_service")
-        self.assertIn("测试订单", first["data"]["reply"])
+        self.assertIn("KAI 报价", first["data"]["reply"])
         self.assertFalse(first["data"]["can_create_ticket"])
         self.assertEqual(first["data"]["message"]["id"], second["data"]["message"]["id"])
         self.assertEqual(self.db.query(SupportConversation).filter_by(user_id=self.user.id).count(), 1)
@@ -102,6 +102,15 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
             SupportTicketIn(conversation_id=1, subject=" ", description="test")
         self.assertEqual(match_faq("How can I withdraw to my bank card?", "en").topic, "withdrawal")
         self.assertEqual(match_faq("设备托管怎么审核", "zh").topic, "hosting")
+
+    def test_public_faq_matches_active_payment_and_market_contract(self):
+        combined = "\n".join(f"{item.zh}\n{item.en}" for item in FAQ_ANSWERS).lower()
+        self.assertNotIn("封闭测试", combined)
+        self.assertNotIn("closed testing", combined)
+        self.assertNotIn("vast.ai", combined)
+        self.assertNotIn("autodl", combined)
+        self.assertIn("kai pricing", combined)
+        self.assertIn("server-verified callback", combined)
 
 
 if __name__ == "__main__":

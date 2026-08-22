@@ -12,11 +12,13 @@ class RegisterIn(BaseModel):
     invite_code: str | None = None
     captcha_key: str = Field(..., min_length=1)
     captcha_code: str = Field(..., min_length=1)
+    client_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class LoginIn(BaseModel):
     phone: str = Field(..., pattern=r"^1\d{10}$")
     password: str = Field(..., min_length=1, max_length=64)
+    client_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class UserOut(OrmModel):

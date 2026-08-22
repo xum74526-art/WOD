@@ -1,72 +1,96 @@
 import unittest
+from datetime import datetime
+from decimal import Decimal
 from unittest.mock import patch
 
-from app.services.offer_sync import _autodl_groups, sync_offers
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.models.product import Product
+from app.services.offer_sync import _upsert_kai_products, sync_offers
 
 
 class OfferSyncTests(unittest.TestCase):
-    def test_provider_failures_do_not_short_circuit_other_provider(self):
+    def test_sync_calls_only_kai_provider(self):
         with patch(
-            "app.services.offer_sync._sync_autodl_products",
-            side_effect=RuntimeError("credentials_missing"),
-        ) as autodl, patch(
-            "app.services.offer_sync._sync_vast_products",
+            "app.services.offer_sync._sync_kai_products",
             return_value={"status": "live", "upserted": 3},
-        ) as vast:
+        ) as kai:
             result = sync_offers()
 
-        autodl.assert_called_once_with()
-        vast.assert_called_once_with()
-        self.assertEqual(result["autodl"]["error_code"], "credentials_missing")
-        self.assertEqual(result["vast"], {"status": "live", "upserted": 3})
+        kai.assert_called_once_with()
+        self.assertEqual(result, {"kai": {"status": "live", "upserted": 3}})
 
-    def test_autodl_products_keep_model_and_memory_variants_separate(self):
-        gib = 1024 ** 3
-        groups = _autodl_groups([
-            {
-                "gpu_name": "RTX 4090",
-                "gpu_idle_num": 2,
-                "payg_price": 1000,
-                "gpu_memory": 24 * gib,
-                "region_name": "华北",
-            },
-            {
-                "gpu_name": "RTX 4090D",
-                "gpu_idle_num": 1,
-                "payg_price": 900,
-                "gpu_memory": 24 * gib,
-                "region_name": "华东",
-            },
-            {
-                "gpu_name": "RTX 4090",
-                "gpu_idle_num": 5,
-                "payg_price": 1100,
-                "gpu_memory": 24 * gib,
-                "region_name": "华东",
-            },
-            {
-                "gpu_name": "A100-PCIE-40GB",
-                "gpu_idle_num": 3,
-                "payg_price": 2000,
-                "gpu_memory": 40 * gib,
-                "region_name": "华南",
-            },
-            {
-                "gpu_name": "A100-SXM4-80GB",
-                "gpu_idle_num": 4,
-                "payg_price": 3000,
-                "gpu_memory": 80 * gib,
-                "region_name": "华南",
-            },
-        ])
+    def test_kai_sync_soft_disables_missing_and_legacy_vast_without_deleting(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Product.__table__.create(engine)
+        factory = sessionmaker(bind=engine)
+        with factory() as db:
+            db.add_all([
+                Product(
+                    name="Old KAI", gpu_model="RTX4090", memory="24GB", price=Decimal("2"),
+                    market_source="kai", external_product_id="old-kai", source_price=Decimal("2"),
+                    source_currency="CNY", stock=2, status="on",
+                ),
+                Product(
+                    name="Legacy Vast", gpu_model="RTX4090", memory="24GB", price=Decimal("2"),
+                    market_source="vast", external_product_id="old-vast", source_price=Decimal("0.2"),
+                    source_currency="USD", stock=2, status="on",
+                ),
+                Product(
+                    name="Legacy AutoDL", gpu_model="RTX4090", memory="24GB", price=Decimal("2"),
+                    market_source="autodl", external_product_id="old-autodl", source_price=Decimal("2"),
+                    source_currency="CNY", stock=2, status="on",
+                ),
+            ])
+            db.commit()
 
-        self.assertIn(("RTX4090", "24GB", "华北"), groups)
-        self.assertIn(("RTX4090", "24GB", "华东"), groups)
-        self.assertEqual(groups[("RTX4090", "24GB", "华北")]["stock"], 2)
-        self.assertEqual(groups[("RTX4090", "24GB", "华东")]["stock"], 5)
-        self.assertIn(("RTX4090D", "24GB", "华东"), groups)
-        self.assertIn(("A100", "40GB", "华南"), groups)
-        self.assertIn(("A100", "80GB", "华南"), groups)
+        current = [{
+            "external_product_id": "kai-current", "gpu_model": "RTX4090",
+            "gpu_variant": "24GB", "display_name": "RTX 4090 24GB",
+            "region": "CN-East", "price_cny": Decimal("2.5"),
+            "max_configurable_quantity": 4, "observed_at": datetime(2026, 8, 21, 4),
+        }]
+        with patch("app.services.offer_sync.SessionLocal", factory):
+            self.assertEqual(_upsert_kai_products(current), 1)
+            self.assertEqual(_upsert_kai_products(current), 1)
+
+        with factory() as db:
+            created = db.query(Product).filter(Product.external_product_id == "kai-current").one()
+            self.assertEqual(created.stock, 3)
+            self.assertEqual(created.platform_stock_cap, 3)
+            self.assertEqual(created.source_max_configurable_quantity, 4)
+            self.assertEqual(created.cycle, [])
+
+        # A market refresh updates the source maximum but must not replenish
+        # consumed platform test allocation.
+        with factory() as db:
+            created = db.query(Product).filter(Product.external_product_id == "kai-current").one()
+            created.stock = 1
+            db.commit()
+        current[0]["max_configurable_quantity"] = 6
+        with patch("app.services.offer_sync.SessionLocal", factory):
+            self.assertEqual(_upsert_kai_products(current), 1)
+
+        with factory() as db:
+            self.assertEqual(db.query(Product).count(), 4)
+            created = db.query(Product).filter(Product.external_product_id == "kai-current").one()
+            self.assertEqual(created.stock, 1)
+            self.assertEqual(created.platform_stock_cap, 3)
+            self.assertEqual(created.source_max_configurable_quantity, 6)
+            self.assertEqual(
+                created.stock_semantics,
+                "platform_closed_test_manual_fulfillment_allocation",
+            )
+            self.assertIn("平台人工履约额度", created.desc)
+            self.assertIn("不是实时库存", created.desc)
+            old_kai = db.query(Product).filter(Product.external_product_id == "old-kai").one()
+            old_vast = db.query(Product).filter(Product.external_product_id == "old-vast").one()
+            old_autodl = db.query(Product).filter(Product.external_product_id == "old-autodl").one()
+            self.assertEqual((old_kai.status, old_kai.stock), ("off", 2))
+            self.assertEqual((old_vast.status, old_vast.stock), ("off", 0))
+            self.assertEqual((old_autodl.status, old_autodl.stock), ("off", 0))
 
 
 if __name__ == "__main__":

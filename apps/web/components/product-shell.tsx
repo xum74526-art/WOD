@@ -34,7 +34,6 @@ import { Brand } from "@/components/brand";
 import { UiSettings } from "@/components/ui-settings";
 import { ApiError, getCurrentUser, type AuthUser } from "@/lib/api";
 import { loginHref } from "@/lib/auth-navigation";
-import { getFinanceAccess } from "@/lib/mobile-finance-api";
 import { useI18n } from "@/components/locale-root";
 
 type WorkspaceVariant = "account" | "supplier" | "admin";
@@ -86,13 +85,14 @@ const supplierNav = [
 
 const adminNav = [
   { label: "运营总览", href: "/admin", icon: House },
+  { label: "端口数据", href: "/admin/data", icon: UsersThree },
   { label: "实名认证", href: "/admin/kyc", icon: IdentificationCard },
   { label: "银行卡复核", href: "/admin/bank-cards", icon: Bank },
   { label: "提现结算", href: "/admin/withdrawals", icon: Coins },
 ];
 
 const englishNavigation: Record<string, string> = {
-  "买家总览": "Buyer Overview", "算力市场": "Compute Market", "个人资产": "My Assets", "设备托管": "Device Hosting", "采购订单": "Orders", "求购与报价": "Requests & Quotes", "钱包与流水": "Wallet & Ledger", "收益与返佣": "Earnings & Rebates", "优惠券": "Coupons", "邀请记录": "Referrals", "银行卡": "Bank Cards", "实名认证": "Identity Verification", "通知中心": "Notifications", "在线客服": "Support", "地址管理": "Addresses", "账户设置": "Account Settings", "账户总览": "Account Overview", "账户资料": "Account Profile", "站内通知": "Notifications", "经营总览": "Operations Overview", "算力商品": "Compute Products", "交付订单": "Delivery Orders", "收益与提现": "Revenue & Withdrawals", "经营统计": "Analytics", "商家返佣": "Supplier Rebates", "商家资料": "Supplier Profile", "运营总览": "Admin Overview", "银行卡复核": "Bank Card Review", "提现结算": "Withdrawal Settlement",
+  "买家总览": "Buyer Overview", "算力市场": "Compute Market", "个人资产": "My Assets", "设备托管": "Device Hosting", "采购订单": "Orders", "求购与报价": "Requests & Quotes", "钱包与流水": "Wallet & Ledger", "收益与返佣": "Earnings & Rebates", "优惠券": "Coupons", "邀请记录": "Referrals", "银行卡": "Bank Cards", "实名认证": "Identity Verification", "通知中心": "Notifications", "在线客服": "Support", "地址管理": "Addresses", "账户设置": "Account Settings", "账户总览": "Account Overview", "账户资料": "Account Profile", "站内通知": "Notifications", "经营总览": "Operations Overview", "算力商品": "Compute Products", "交付订单": "Delivery Orders", "收益与提现": "Revenue & Withdrawals", "经营统计": "Analytics", "商家返佣": "Supplier Rebates", "商家资料": "Supplier Profile", "运营总览": "Admin Overview", "端口数据": "Platform Data", "银行卡复核": "Bank Card Review", "提现结算": "Withdrawal Settlement",
 };
 
 function redirectForRole(user: AuthUser, variant: WorkspaceVariant) {
@@ -113,11 +113,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
     let active = true;
     getCurrentUser().then(async ({ user: current }) => {
       if (!active) return;
-      if (variant === "admin") {
-        const access = await getFinanceAccess();
-        if (!active) return;
-        if (!access.is_finance_admin) { window.location.replace("/"); return; }
-      }
+      if (variant === "admin" && current.role !== "admin") { window.location.replace("/"); return; }
       const destination = redirectForRole(current, variant);
       if (destination) {
         window.location.replace(destination);

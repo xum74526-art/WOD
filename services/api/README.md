@@ -44,9 +44,17 @@ docker build -t kai-api .
 
 - 数据库：由 `DATABASE_URL` 指定。
 - 上传：`UPLOAD_ROOT`，包含头像、社区媒体、身份证照片和打款凭证。
-- 行情下载缓存：`MARKET_HISTORY_CACHE_ROOT`；为空时使用应用默认私有缓存目录。
 
-数据库、上传和缓存均不应进入源码仓库。身份证与财务凭证目录应限制为服务账户可读。
+数据库和上传均不应进入源码仓库。身份证与财务凭证目录应限制为服务账户可读。
+
+## 行情与购买规则
+
+- `https://pricing.kai.com` 是唯一实时行情源，价格单位为 CNY/GPU-hour。
+- Vast/AutoDL 不再运行采集器或下载任务；已有来源标识、历史快照和订单仍保留用于审计。
+- KAI 商品使用显式 `market_source` 与 `external_product_id`，上游最大可配置数量不等同实时库存。
+- 新 KAI 订单只接受 `hours`（1–720 的整数）；`cycle_days` 仅用于历史 WOD 日周期订单。
+- 下单与续费使用客户端请求号保证幂等，金额、结束时间和续费审计均由后端计算。
+- `created_platform`/`last_modified_platform` 来自服务端认证会话，不接受客户端自报平台。
 
 ## 测试
 

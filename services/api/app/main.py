@@ -11,11 +11,10 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_cors_origins, settings
 from app.core.sensitive import assert_sensitive_capabilities_secure
-from app.routers import address, asset, auth, bank_card, buy_request, chat, community, coupon, finance, invite, market, notification, offline_purchase, onboarding, order, payment, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
+from app.routers import address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, invite, market, notification, offline_purchase, onboarding, order, payment, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
 from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
-from app.services.market_history_sync import sync_market_history
 from app.services.rebate_settle import settle_rebate
 from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
 from app.services.notification_service import sync_operational_notifications
@@ -46,16 +45,6 @@ async def lifespan(app: FastAPI):
         max_instances=1,
     )
     scheduler.add_job(cleanup_market_history, "interval", hours=6, id="cleanup_market_history", replace_existing=True)
-    if settings.MARKET_HISTORY_SYNC_ENABLED:
-        scheduler.add_job(
-            sync_market_history,
-            "interval",
-            seconds=max(settings.MARKET_HISTORY_REFRESH_SECONDS, 300),
-            id="sync_market_history",
-            replace_existing=True,
-            coalesce=True,
-            max_instances=1,
-        )
     scheduler.add_job(settle_rebate, "interval", seconds=300, id="settle_rebate")
     # First-party inbox event synchronization. This does not claim or require
     # native OS push delivery; each event is idempotent through a dedupe key.
@@ -89,15 +78,6 @@ async def lifespan(app: FastAPI):
         kwargs={"force": True},
         replace_existing=True,
     )
-    if settings.MARKET_HISTORY_SYNC_ENABLED:
-        scheduler.add_job(
-            sync_market_history,
-            "date",
-            run_date=datetime.now(community_timezone) + timedelta(seconds=5),
-            id="market_history_startup_sync",
-            kwargs={"force": True},
-            replace_existing=True,
-        )
     scheduler.add_job(
         sync_operational_notifications,
         "date",
@@ -177,6 +157,7 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(user.router)
 app.include_router(product.router)
 app.include_router(market.router)

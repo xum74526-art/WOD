@@ -1,0 +1,65 @@
+{
+    "name" : "KAI",
+    "appid" : "__UNI__47CF9D3",
+    "description" : "AI 算力资产管理 App",
+    "locale" : "zh-Hans",
+    "versionName" : "1.0.4",
+    "versionCode" : "104",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "darkmode" : true,
+        "safearea" : {
+            "background" : "#FFFFFF",
+            "backgroundDark" : "#0A0E14",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        },
+        "uniStatistics" : {
+            "enable" : false
+        },
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.kai.wod",
+                "schemes" : "kai",
+                "minSdkVersion" : 23,
+                "targetSdkVersion" : 36,
+                "abiFilters" : [ "arm64-v8a", "armeabi-v7a" ],
+                "usesCleartextTraffic" : false,
+                "permissionPhoneState" : {
+                    "request" : "none"
+                },
+                "excludePermissions" : [
+                    "<uses-permission android:name=\"android.permission.INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_PHONE_STATE\"/>"
+                ]
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "static/logo/logo-72.png",
+                    "xhdpi" : "static/logo/logo-96.png",
+                    "xxhdpi" : "static/logo/logo-144.png",
+                    "xxxhdpi" : "static/logo/logo-192.png"
+                }
+            }
+        }
+    },
+    "h5" : {
+        "title" : "KAI Android Preview",
+        "router" : {
+            "mode" : "history",
+            "base" : "/"
+        },
+        "devServer" : {
+            "port" : 9001,
+            "proxy" : {
+                "/api" : {
+                    "target" : "https://wod.kai.com",
+                    "changeOrigin" : true
+                }
+            }
+        }
+    }
+}

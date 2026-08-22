@@ -31,8 +31,10 @@ class RebateCoreTests(unittest.TestCase):
         self.original_live = settings.REWARD_SERVICE_ENABLED
         self.original_test = settings.CLOSED_TEST_REWARD_ENABLED
         self.original_payment = settings.PAYMENT_SERVICE_ENABLED
+        self.original_revenue_settlement = settings.REVENUE_SETTLEMENT_ENABLED
         settings.REWARD_SERVICE_ENABLED = False
         settings.CLOSED_TEST_REWARD_ENABLED = True
+        settings.REVENUE_SETTLEMENT_ENABLED = False
 
         self.inviter = User(
             phone="13900000051", username="邀请人", password="!", phone_bound=True,
@@ -86,6 +88,7 @@ class RebateCoreTests(unittest.TestCase):
         settings.REWARD_SERVICE_ENABLED = self.original_live
         settings.CLOSED_TEST_REWARD_ENABLED = self.original_test
         settings.PAYMENT_SERVICE_ENABLED = self.original_payment
+        settings.REVENUE_SETTLEMENT_ENABLED = self.original_revenue_settlement
         self.db.close()
 
     def _complete_order(self) -> int:
@@ -154,6 +157,36 @@ class RebateCoreTests(unittest.TestCase):
         self.assertEqual([row["type"] for row in supplier_rows], ["supplier_rebate"])
         self.assertEqual([row["type"] for row in invite_rows], ["invite_reward"])
 
+    def test_legacy_ledger_rows_use_neutral_public_copy(self):
+        wallet = self.db.query(Wallet).filter(Wallet.user_id == self.buyer.id).one()
+        self.db.add_all([
+            Ledger(
+                user_id=self.buyer.id,
+                wallet_id=wallet.id,
+                type="revenue",
+                direction="in",
+                amount=Decimal("1"),
+                balance_after=wallet.balance,
+                remark="legacy revenue",
+            ),
+            Ledger(
+                user_id=self.buyer.id,
+                wallet_id=wallet.id,
+                type="rebate",
+                direction="in",
+                amount=Decimal("2"),
+                balance_after=wallet.balance,
+                remark="legacy reward",
+            ),
+        ])
+        self.db.commit()
+
+        rows = ledger_list(None, 1, 20, self.buyer, self.db)["data"]["items"]
+        remarks = {row["type"]: row["remark"] for row in rows}
+        self.assertEqual(remarks["test_revenue"], "历史未结算收益（不计入当前可用余额）")
+        self.assertEqual(remarks["test_reward"], "历史不可用奖励（不计入当前可用余额或权益）")
+        self.assertNotIn("测试", "".join(remarks.values()))
+
     def test_unverified_relationship_is_visible_but_never_rewarded(self):
         relation = self.db.query(InviteRecord).filter(InviteRecord.invitee_id == self.buyer.id).one()
         self.buyer.phone_bound = False
@@ -194,7 +227,7 @@ class RebateCoreTests(unittest.TestCase):
 
     def test_closed_test_card_hours_are_never_withdrawable(self):
         settings.PAYMENT_SERVICE_ENABLED = True
-        with self.assertRaisesRegex(Exception, "封闭测试卡时"):
+        with self.assertRaisesRegex(Exception, "旧版即时提现入口已停用"):
             withdraw(WithdrawInV2(amount=1, bank_card_id=1), self.inviter, self.db)
 
     def test_merchant_cannot_generate_rewards_by_buying_own_listing(self):

@@ -541,16 +541,52 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "KaiBindStartIn": {
+        "properties": {
+          "return_url": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Url"
+          }
+        },
+        "title": "KaiBindStartIn",
+        "type": "object"
+      },
       "KaiStartIn": {
         "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
           "intent": {
             "default": "login",
+            "enum": [
+              "login",
+              "register"
+            ],
             "title": "Intent",
             "type": "string"
           },
           "return_url": {
             "anyOf": [
               {
+                "maxLength": 1024,
                 "type": "string"
               },
               {
@@ -566,6 +602,8 @@
       "KaiTicketIn": {
         "properties": {
           "ticket": {
+            "maxLength": 256,
+            "minLength": 20,
             "title": "Ticket",
             "type": "string"
           }
@@ -578,6 +616,19 @@
       },
       "LoginIn": {
         "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
           "password": {
             "maxLength": 64,
             "minLength": 1,
@@ -773,9 +824,30 @@
             "title": "Client Request Id"
           },
           "cycle_days": {
-            "default": 30,
-            "title": "Cycle Days",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Days"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "maximum": 720.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
           },
           "product_id": {
             "title": "Product Id",
@@ -805,6 +877,47 @@
           "product_id"
         ],
         "title": "OrderCreateIn",
+        "type": "object"
+      },
+      "OrderRenewIn": {
+        "properties": {
+          "client_request_id": {
+            "maxLength": 64,
+            "minLength": 12,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "cycle_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Days"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "maximum": 720.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          }
+        },
+        "required": [
+          "client_request_id"
+        ],
+        "title": "OrderRenewIn",
         "type": "object"
       },
       "PostCreateIn": {
@@ -1037,6 +1150,19 @@
             "minLength": 1,
             "title": "Captcha Key",
             "type": "string"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
           },
           "invite_code": {
             "anyOf": [
@@ -1872,6 +1998,396 @@
         ]
       }
     },
+    "/api/admin/orders": {
+      "get": {
+        "operationId": "orders_api_admin_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_no",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order No"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Orders",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/overview": {
+      "get": {
+        "operationId": "overview_api_admin_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Overview",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/recharge-orders": {
+      "get": {
+        "operationId": "recharge_orders_api_admin_recharge_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_no",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order No"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Recharge Orders",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "operationId": "users_api_admin_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/assets": {
       "get": {
         "operationId": "my_assets_api_assets_get",
@@ -2029,6 +2545,94 @@
           }
         },
         "summary": "Get Captcha",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/kai/bind/exchange": {
+      "post": {
+        "operationId": "kai_bind_exchange_api_auth_kai_bind_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KaiTicketIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Kai Bind Exchange",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/kai/bind/start": {
+      "post": {
+        "operationId": "kai_bind_start_api_auth_kai_bind_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KaiBindStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Kai Bind Start",
         "tags": [
           "auth"
         ]
@@ -2211,6 +2815,30 @@
           }
         },
         "summary": "Kai Start",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/kai/status": {
+      "get": {
+        "operationId": "kai_status_api_auth_kai_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Kai Status",
         "tags": [
           "auth"
         ]
@@ -3635,6 +4263,29 @@
               "title": "Page Size",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
           }
         ],
         "responses": {
@@ -3786,6 +4437,29 @@
               "default": 20,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
             }
           }
         ],
@@ -4012,6 +4686,29 @@
               "default": 20,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
             }
           }
         ],
@@ -4522,7 +5219,7 @@
             "name": "sources",
             "required": false,
             "schema": {
-              "default": "vast,autodl",
+              "default": "kai",
               "title": "Sources",
               "type": "string"
             }
@@ -4535,6 +5232,22 @@
               "default": "ondemand",
               "title": "Billing Mode",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "external_product_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "External Product Id"
             }
           }
         ],
@@ -4608,7 +5321,7 @@
             "name": "sources",
             "required": false,
             "schema": {
-              "default": "vast,autodl",
+              "default": "kai",
               "title": "Sources",
               "type": "string"
             }
@@ -4674,7 +5387,7 @@
             "name": "sources",
             "required": false,
             "schema": {
-              "default": "vast,autodl",
+              "default": "kai",
               "title": "Sources",
               "type": "string"
             }
@@ -5425,7 +6138,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OrderCreateIn"
+                "$ref": "#/components/schemas/OrderRenewIn"
               }
             }
           },
@@ -6254,7 +6967,7 @@
     },
     "/api/products/quote/overview": {
       "get": {
-        "description": "Legacy product overview using current cards only.\n\nThe old ``PriceHistory`` table has no source, memory or billing identity,\nso its cross-product percentage cannot truthfully be called a 24-hour\nchange.  Keep the compatibility endpoint, but return an explicit null\nchange and direct clients to ``/api/market/ranking`` for verified history.",
+        "description": "KAI-only current cross-section; observations are not inventory.",
         "operationId": "quote_overview_api_products_quote_overview_get",
         "responses": {
           "200": {
@@ -6274,8 +6987,42 @@
     },
     "/api/products/quote/regional": {
       "get": {
-        "description": "区域价差：按region_name聚合",
+        "description": "Compare one exact KAI model/VRAM identity across published regions.\n\nOmitting ``model`` selects the identity observed in the most distinct\nnormalized regions, then the largest quote count, then lexical identity.\nThis deterministic fallback never averages prices from different GPUs.",
         "operationId": "quote_regional_api_products_quote_regional_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model"
+            }
+          },
+          {
+            "in": "query",
+            "name": "variant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Variant"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6284,6 +7031,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Quote Regional",

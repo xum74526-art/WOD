@@ -156,6 +156,30 @@ export function kaiWebAuthorizationUrl(intent: "login" | "register", returnTo: s
   return `${apiBaseUrl}/api/v1/auth/kai/start?${query.toString()}`;
 }
 
+export type KaiBindingStatus = {
+  bound: boolean;
+  provider: string | null;
+  issuer: string | null;
+};
+
+export function getKaiBindingStatus() {
+  return apiRequest<KaiBindingStatus>("/api/v1/canonical/auth/kai/status");
+}
+
+export function startKaiBinding() {
+  return apiRequest<{ authorization_url: string }>("/api/v1/auth/kai/bind/start", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function exchangeKaiBindingTicket(ticket: string) {
+  return apiRequest<KaiBindingStatus & { user: AuthUser }>("/api/v1/auth/kai/bind/exchange", {
+    method: "POST",
+    body: JSON.stringify({ ticket }),
+  });
+}
+
 export function requestPasswordReset(email: string) {
   return apiRequest<{ accepted: boolean }>("/api/v1/auth/email/password-reset/request", { method: "POST", body: JSON.stringify({ email }) });
 }

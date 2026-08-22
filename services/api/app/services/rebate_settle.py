@@ -1,7 +1,7 @@
 """Consumer rebate calculation and expiry settlement.
 
-Only confirmed usage orders participate. Closed-test rewards are card-hours
-that can be reused for test purchases, never fiat and never withdrawable while
+Only confirmed usage orders participate. In-app rewards are card-hours
+that can be reused for eligible purchases, never fiat and never withdrawable while
 the payment service is disabled.
 """
 

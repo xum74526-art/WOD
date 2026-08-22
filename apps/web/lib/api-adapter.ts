@@ -177,10 +177,10 @@ async function proxyCommunityMedia(request: NextRequest, userId: string, filenam
   return new NextResponse(response.body, { status: response.status, headers: outgoing });
 }
 
-async function proxyCheckout(request: NextRequest, token: string) {
+async function proxyCheckout(request: NextRequest, provider: "mapay" | "qixiang", token: string) {
   let response: Response;
   try {
-    response = await fetch(`${resolveApiOrigin()}/api/payments/mapay/checkout/${encodeURIComponent(token)}`, {
+    response = await fetch(`${resolveApiOrigin()}/api/payments/${provider}/checkout/${encodeURIComponent(token)}`, {
       headers: { Accept: "text/html" },
       cache: "no-store",
       redirect: "manual",
@@ -188,6 +188,20 @@ async function proxyCheckout(request: NextRequest, token: string) {
     });
   } catch {
     return new NextResponse("支付页面暂时无法打开", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  const location = response.headers.get("location");
+  if (response.status >= 300 && response.status < 400 && location) {
+    let destination: URL;
+    try { destination = new URL(location); }
+    catch { return apiError("支付平台返回了无效收银台地址", 502); }
+    if (destination.protocol !== "https:" || destination.username || destination.password) {
+      return apiError("支付平台返回了无效收银台地址", 502);
+    }
+    const redirect = NextResponse.redirect(destination, response.status);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    redirect.headers.set("Referrer-Policy", "no-referrer");
+    redirect.headers.set("X-Content-Type-Options", "nosniff");
+    return redirect;
   }
   return new NextResponse(response.body, {
     status: response.status,
@@ -205,8 +219,13 @@ function product(value: unknown) {
   const item = object(value);
   const memory = text(item.memory);
   const memoryGb = number(memory.match(/\d+(?:\.\d+)?/)?.[0]);
-  const price = number(item.price);
+  const price = number(item.price_cny_per_gpu_hour, number(item.price));
+  const walletPrice = number(item.price_card_hours_per_gpu_hour, price);
   const stock = number(item.stock);
+  const purchaseUnit = text(item.purchase_unit, text(item.market_source) === "kai" ? "hour" : "day");
+  const hourOptions = Array.isArray(item.purchase_hour_options)
+    ? item.purchase_hour_options.map((entry) => number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0)
+    : [];
   return {
     id: number(item.id),
     supplier_id: number(item.supplier_id),
@@ -220,18 +239,21 @@ function product(value: unknown) {
     ram_gb: null,
     disk_gb: null,
     bandwidth_mbps: null,
-    unit_price_ch: price,
+    unit_price_ch: walletPrice,
     price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
     total_quantity: number(item.reported_stock, stock),
     available_quantity: stock,
-    source_name: text(item.supplier_name, text(item.market_source, "北斗 kai")),
+    source_name: text(item.supplier_name, text(item.market_source) === "kai" ? "KAI Pricing" : "北斗 kai"),
     source_observed_at: text(item.price_updated_at) || null,
     server_online: Boolean(item.purchasable),
     purchasable: Boolean(item.purchasable),
     purchase_unavailable_reason: text(item.purchase_unavailable_reason) || null,
-    cycle: Array.isArray(item.cycle) ? item.cycle.map((entry) => number(entry)).filter(Boolean) : [30],
+    cycle: Array.isArray(item.cycle) ? item.cycle.map((entry) => number(entry)).filter(Boolean) : [],
+    purchase_unit: purchaseUnit,
+    purchase_hour_options: hourOptions,
+    billing_unit: text(item.billing_unit, "GPU_HOUR"),
     image_url: text(item.image_url) || null,
-    market_source: text(item.market_source, "wod"),
+    market_source: text(item.market_source, "kai"),
   };
 }
 
@@ -287,12 +309,16 @@ function mapOrderStatus(status: string) {
 
 function order(value: unknown, supplierView = false) {
   const item = object(value);
+  const cycleDays = item.cycle_days == null ? null : number(item.cycle_days);
+  const purchaseHours = item.purchase_hours == null
+    ? (item.purchase_unit === "hour" && item.duration_hours != null ? number(item.duration_hours) : null)
+    : number(item.purchase_hours);
   const mappedStatus = mapOrderStatus(text(item.status));
   const supplierName = text(item.supplier_name, "北斗 kai 商家");
   const available: string[] = [];
   if (!supplierView && item.status === "delivering") available.push("complete");
   if (!supplierView && item.status === "paid") available.push("cancel");
-  if (!supplierView && ["completed", "running"].includes(text(item.status)) && text(item.purchase_type, "usage") === "usage") available.push("renew");
+  if (!supplierView && purchaseHours != null && ["completed", "running"].includes(text(item.status)) && text(item.purchase_type, "usage") === "usage") available.push("renew");
   if (supplierView && item.status === "paid") available.push("mark_delivered");
   return {
     id: number(item.id),
@@ -306,15 +332,19 @@ function order(value: unknown, supplierView = false) {
     order_source: "direct",
     environment: "live",
     payment_status: ["paid", "delivering", "completed", "running"].includes(text(item.status)) ? "paid" : "pending",
-    duration_hours: number(item.cycle_days) * 24,
-    amount: number(item.amount).toFixed(4),
-    currency: "CNY",
-    price_unit: "订单总额",
+    duration_hours: purchaseHours ?? (cycleDays == null ? null : cycleDays * 24),
+    purchase_hours: purchaseHours,
+    amount: number(item.amount_card_hours, number(item.amount)).toFixed(4),
+    currency: "CARD_HOURS",
+    price_unit: "order_total",
     quantity: number(item.quantity, 1),
     purchase_type: text(item.purchase_type, "usage"),
-    cycle_days: number(item.cycle_days),
+    cycle_days: cycleDays,
     end_at: text(item.end_at) || null,
     remaining_days: number(item.remaining_days),
+    remaining_hours: item.remaining_hours == null ? null : number(item.remaining_hours),
+    created_platform: text(item.created_platform, "legacy"),
+    last_modified_platform: text(item.last_modified_platform, "legacy"),
     snapshot: {
       payment_mode: "mobile_wallet",
       product: {
@@ -380,7 +410,7 @@ async function marketSummary(request: NextRequest) {
   const withHistory = await Promise.all(entries.map(async (entry) => {
     const model = text(entry.gpu_model);
     const variant = text(entry.gpu_variant);
-    const query = new URLSearchParams({ model, range: "30d", sources: "wod,vast,autodl" });
+    const query = new URLSearchParams({ model, range: "30d", sources: "kai" });
     if (variant) query.set("variant", variant);
     const historyResult = await upstream(request, "/api/market/prices/history", { query, auth: false });
     const historyData = historyResult.ok ? object(historyResult.body.data) : {};
@@ -424,15 +454,19 @@ async function marketSummary(request: NextRequest) {
 }
 
 async function accountSummary(request: NextRequest) {
-  const [profileResult, ordersResult, assetsResult] = await Promise.all([
+  const [profileResult, ordersResult, assetsResult, walletResult, verificationResult] = await Promise.all([
     upstream(request, "/api/user/profile"),
     upstream(request, "/api/orders"),
     upstream(request, "/api/assets"),
+    upstream(request, "/api/wallet"),
+    upstream(request, "/api/verification"),
   ]);
   if (!profileResult.ok) return upstreamFailure(profileResult);
   const profile = authUser(profileResult.body.data);
   const orders = ordersResult.ok && Array.isArray(ordersResult.body.data) ? ordersResult.body.data : [];
   const assets = assetsResult.ok ? array(object(assetsResult.body.data).items) : [];
+  const wallet = walletResult.ok ? object(walletResult.body.data) : {};
+  const verification = verificationResult.ok ? object(verificationResult.body.data) : {};
   return apiSuccess({
     user: profile,
     metrics: {
@@ -442,7 +476,10 @@ async function accountSummary(request: NextRequest) {
       open_requests: 0,
     },
     supplier_status: profile.supplier_status,
-    services: { payment: false, kyc: false },
+    services: {
+      payment: Boolean(wallet.payment_service_enabled || wallet.recharge_service_enabled),
+      kyc: text(verification.status) === "verified",
+    },
   });
 }
 
@@ -459,8 +496,8 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   const path = requestedPath.startsWith("mobile/")
     ? `canonical/${requestedPath.slice("mobile/".length)}`
     : requestedPath;
-  const checkout = path.match(/^canonical\/payments\/mapay\/checkout\/([A-Za-z0-9_-]+)$/);
-  if (checkout && request.method === "GET") return proxyCheckout(request, checkout[1]);
+  const checkout = path.match(/^canonical\/payments\/(mapay|qixiang)\/checkout\/([A-Za-z0-9_-]+)$/);
+  if (checkout && request.method === "GET") return proxyCheckout(request, checkout[1] as "mapay" | "qixiang", checkout[2]);
   const avatar = path.match(/^canonical\/user\/avatars\/(avatar_\d+\.(?:jpg|png|webp))$/);
   if (avatar && request.method === "GET") return proxyAvatar(request, avatar[1]);
   const communityMedia = path.match(/^canonical\/uploads\/community\/([1-9]\d*)\/([0-9a-f]{32}\.(?:jpg|png|webp|mp4|webm))$/);
@@ -511,7 +548,8 @@ export async function handleApi(request: NextRequest, segments: string[]) {
       captcha_key: text(body.captcha_key),
       captcha_code: text(body.captcha_code),
       invite_code: text(body.invite_code) || undefined,
-    } : { phone: text(body.identifier).trim(), password: text(body.password) };
+      client_id: "web",
+    } : { phone: text(body.identifier).trim(), password: text(body.password), client_id: "web" };
     const result = await upstream(request, register ? "/api/auth/register" : "/api/auth/login", {
       method: "POST", body: payload, auth: false,
     });
@@ -544,7 +582,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const result = await upstream(request, "/api/auth/kai/start", {
       method: "POST",
       auth: false,
-      body: { intent, return_url: `${publicOrigin(request)}/login` },
+      body: { intent, return_url: `${publicOrigin(request)}/login`, client_id: "web" },
     });
     if (!result.ok) return upstreamFailure(result);
     const authorizationUrl = text(object(result.body.data).authorization_url);
@@ -575,6 +613,18 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     });
     return response;
   }
+  if (path === "auth/kai/bind/start" && request.method === "POST") {
+    const result = await upstream(request, "/api/auth/kai/bind/start", {
+      method: "POST", body: { return_url: `${publicOrigin(request)}/account/settings` },
+    });
+    return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
+  }
+  if (path === "auth/kai/bind/exchange" && request.method === "POST") {
+    const result = await upstream(request, "/api/auth/kai/bind/exchange", {
+      method: "POST", body: { ticket: text(body.ticket) },
+    });
+    return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
+  }
   if (path === "public/products" && request.method === "GET") {
     const result = await upstream(request, "/api/products", { query: request.nextUrl.searchParams, auth: false });
     if (!result.ok) return upstreamFailure(result);
@@ -596,7 +646,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
       body: {
         product_id: number(body.product_id),
         quantity: number(body.quantity, 1),
-        cycle_days: number(body.cycle_days, 30),
+        hours: number(body.hours),
         purchase_type: text(body.purchase_type, "usage"),
         client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64) || undefined,
       },
@@ -623,7 +673,13 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     }
     if (id && action && request.method === "POST") {
       const upstreamAction = action === "complete" ? "confirm" : action;
-      const result = await upstream(request, `/api/orders/${id}/${upstreamAction}`, { method: "POST", body: action === "renew" ? { product_id: 0, cycle_days: number(body.cycle_days, 30) } : undefined });
+      const result = await upstream(request, `/api/orders/${id}/${upstreamAction}`, {
+        method: "POST",
+        body: action === "renew" ? {
+          hours: number(body.hours),
+          client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64),
+        } : undefined,
+      });
       if (!result.ok) return upstreamFailure(result);
       const detail = await upstream(request, `/api/orders/${id}`);
       return detail.ok ? apiSuccess(order(detail.body.data)) : apiSuccess(result.body.data);

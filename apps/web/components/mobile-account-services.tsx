@@ -50,7 +50,7 @@ function RevenueWorkspace() {
       <section className="mobile-rebate-panel"><header><Gift size={20}/><div><small>REBATE PROGRESS</small><h2>返佣进度</h2></div></header><strong>{amount(rebate?.pending_rebate)}</strong><span>待结算返佣（卡时）</span><p>{rebate?.next_tier_hint || "当前没有新的阶梯提示"}</p><footer>{rebate?.rewards_enabled ? `奖励模式：${rebate.reward_mode}` : "返佣服务暂未启用"}</footer></section>
     </div>
     <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>REVENUE LEDGER</small><h2>收益记录</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.id}><span><strong>+{amount(row.amount)} 卡时</strong><small>资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无收益记录</div>}</section>
-    {!summary?.revenue_settlement_enabled && <div className="workspace-service-note">真实收益结算当前未启用；历史测试收益为 {amount(summary?.historical_test_total)} 卡时。</div>}
+        {!summary?.revenue_settlement_enabled && <div className="workspace-service-note">当前收益统计仅包含已确认结算记录；未结算历史记录为 {amount(summary?.historical_test_total)} 卡时。</div>}
   </>;
 }
 

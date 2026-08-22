@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import finance_admin_user_ids, get_current_user, require_finance_admin
+from app.core.deps import finance_admin_user_ids, get_current_platform, get_current_user, require_finance_admin
 from app.core.sensitive import (
     mask_id_card,
     reveal as reveal_sensitive_value,
@@ -39,6 +39,7 @@ from app.services.manual_payout import (
 )
 from app.routers.verification import ocr_public_summary
 from app.utils.response import BizError, success
+from app.services.auth_session import AuditPlatform, normalize_platform
 
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
@@ -116,6 +117,8 @@ def _verification_out(db: Session, row: Verification) -> dict:
         "front_photo_uploaded": bool(row.front_photo),
         "back_photo_uploaded": bool(row.back_photo),
         "consent_recorded": bool(row.consent_at),
+        "created_platform": row.created_platform or "legacy",
+        "last_modified_platform": row.last_modified_platform or "legacy",
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
@@ -128,6 +131,7 @@ def verification_list(
     status_filter: str | None = "pending",
     page: int = 1,
     page_size: int = 20,
+    platform: AuditPlatform | None = None,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
 ):
@@ -137,6 +141,8 @@ def verification_list(
     query = db.query(Verification)
     if status_filter:
         query = query.filter(Verification.status == status_filter)
+    if platform:
+        query = query.filter(Verification.created_platform == platform)
     total = query.count()
     rows = query.order_by(Verification.created_at.asc(), Verification.id.asc()).offset(
         (page - 1) * page_size
@@ -171,6 +177,7 @@ def verification_review(
     data: FinanceReviewIn,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     row = _verification(db, verification_id)
     _assert_not_self(actor, row.user_id)
@@ -191,6 +198,7 @@ def verification_review(
         row.status = "rejected"
         row.reject_reason = reason
         action = "verification.reject"
+    row.last_modified_platform = normalize_platform(platform)
     record_audit(db, actor.id, action, "verification", row.id, {
         "reason": data.reason,
         "ocr_status_at_review": row.ocr_status or "not_started",
@@ -253,6 +261,8 @@ def _bank_card_out(db: Session, card: BankCard) -> dict:
         "bank_verified": False,
         "reject_reason": card.review_reason,
         "reviewed_at": card.reviewed_at,
+        "created_platform": card.created_platform or "legacy",
+        "last_modified_platform": card.last_modified_platform or "legacy",
         "created_at": card.created_at,
     }
 
@@ -262,6 +272,7 @@ def bank_card_list(
     status_filter: str | None = "registered",
     page: int = 1,
     page_size: int = 20,
+    platform: AuditPlatform | None = None,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
 ):
@@ -274,6 +285,8 @@ def bank_card_list(
         query = query.filter(BankCard.status.in_(REGISTERED_CARD_STATUSES))
     elif status_filter:
         query = query.filter(BankCard.status == status_filter)
+    if platform:
+        query = query.filter(BankCard.created_platform == platform)
     total = query.count()
     rows = query.order_by(BankCard.created_at.asc(), BankCard.id.asc()).offset(
         (page - 1) * page_size
@@ -289,6 +302,7 @@ def bank_card_review(
     data: FinanceReviewIn,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     if not sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED):
         raise BizError("银行卡登记复核尚未启用", status_code=503)
@@ -328,6 +342,7 @@ def bank_card_review(
         action = "bank_card.reject"
     card.reviewed_by = actor.id
     card.reviewed_at = _utcnow()
+    card.last_modified_platform = normalize_platform(platform)
     record_audit(db, actor.id, action, "bank_card", card.id, {"reason": data.reason})
     db.commit()
     db.refresh(card)
@@ -353,6 +368,7 @@ def withdrawal_list(
     status_filter: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    platform: AuditPlatform | None = None,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
 ):
@@ -362,6 +378,8 @@ def withdrawal_list(
     query = db.query(WithdrawalOrder)
     if status_filter:
         query = query.filter(WithdrawalOrder.status == status_filter)
+    if platform:
+        query = query.filter(WithdrawalOrder.created_platform == platform)
     total = query.count()
     rows = query.order_by(WithdrawalOrder.created_at.desc(), WithdrawalOrder.id.desc()).offset(
         (page - 1) * page_size
@@ -389,12 +407,13 @@ def withdrawal_approve(
     data: ApproveWithdrawalIn,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
         raise BizError("人工提现尚未启用", status_code=503)
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
-    approve_withdrawal(db, order, actor, data.note)
+    approve_withdrawal(db, order, actor, data.note, platform=normalize_platform(platform))
     db.refresh(order)
     return success(_finance_order_out(db, order))
 
@@ -405,10 +424,11 @@ def withdrawal_reject(
     data: RejectWithdrawalIn,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
-    reject_withdrawal(db, order, actor, data.reason)
+    reject_withdrawal(db, order, actor, data.reason, platform=normalize_platform(platform))
     db.refresh(order)
     return success(_finance_order_out(db, order))
 
@@ -419,10 +439,11 @@ def withdrawal_failed(
     data: FailedWithdrawalIn,
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
-    fail_withdrawal(db, order, actor, data.reason)
+    fail_withdrawal(db, order, actor, data.reason, platform=normalize_platform(platform))
     db.refresh(order)
     return success(_finance_order_out(db, order))
 
@@ -489,6 +510,7 @@ async def withdrawal_mark_paid(
     reveal_token: str = Form(...),
     actor: User = Depends(require_finance_admin),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
         raise BizError("人工提现尚未启用", status_code=503)
@@ -516,6 +538,7 @@ async def withdrawal_mark_paid(
             paid_at=paid_at,
             payee_confirmed=payee_confirmed,
             reveal_token=reveal_token,
+            platform=normalize_platform(platform),
         )
     except Exception:
         if path.is_file():

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.asset import Asset
 from app.models.order import Order
-from app.services.mapay import expire_pending_payment_orders
+from app.services.qixiangpay import expire_pending_payment_orders
 
 
 def expire_due():
@@ -20,6 +20,7 @@ def expire_due():
         ).all()
         for o in orders:
             o.status = "done"
+            o.last_modified_platform = "system"
 
         assets = db.query(Asset).filter(
             Asset.status == "active",

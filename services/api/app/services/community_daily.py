@@ -861,6 +861,8 @@ def _save_candidate(db: Session, user: User, candidate: Candidate, batch: str) -
         content=content_zh,
         content_en=content_en,
         topic=candidate.topic_zh,
+        created_platform="system",
+        last_modified_platform="system",
         topic_en=candidate.topic_en,
         origin=candidate.origin,
         content_type=candidate.content_type,

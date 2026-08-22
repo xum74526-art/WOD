@@ -41,6 +41,12 @@ class Post(Base):
     likes: Mapped[int] = mapped_column(Integer, default=0)
     comments: Mapped[int] = mapped_column(Integer, default=0)
     shares: Mapped[int] = mapped_column(Integer, default=0)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -51,6 +57,9 @@ class Comment(Base):
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     content: Mapped[str] = mapped_column(Text)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -60,6 +69,9 @@ class Like(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -69,6 +81,9 @@ class Follow(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 关注者
     following_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 被关注者
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

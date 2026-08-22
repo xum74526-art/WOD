@@ -11,30 +11,20 @@ import json
 from threading import Lock
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.integrations.kai_pricing import KaiPricingError, fetch_price_batch, normalized_current_quotes
 from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
-from app.models.product import Product
-from app.services.gpu_catalog import (
-    canonicalize_gpu,
-    memory_variant_from_text,
-    normalize_gpu_variant,
-)
 
 
 _SYNC_LOCK = Lock()
-_FX_LOCK = Lock()
-_FX_CACHE: dict[str, Any] = {}
-_SOURCE_LOCKS = {source: Lock() for source in ("wod", "vast", "autodl")}
-_MARKET_EXECUTOR = ThreadPoolExecutor(max_workers=3, thread_name_prefix="market-source")
+_SOURCE_LOCKS = {"kai": Lock()}
+_MARKET_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-kai")
 
 SOURCE_INTERVALS = {
-    "wod": settings.WOD_MARKET_REFRESH_SECONDS,
-    "vast": settings.VAST_MARKET_REFRESH_SECONDS,
-    "autodl": settings.AUTODL_MARKET_REFRESH_SECONDS,
+    "kai": settings.KAI_PRICING_REFRESH_SECONDS,
 }
 
 
@@ -67,127 +57,23 @@ def _without_outliers(values: list[Decimal]) -> list[Decimal]:
     return filtered or values
 
 
-def get_usd_cny_rate() -> tuple[Decimal, str, str]:
-    now = utcnow()
-    with _FX_LOCK:
-        cached_at = _FX_CACHE.get("fetched_at")
-        if cached_at and now - cached_at < timedelta(seconds=settings.FX_REFRESH_SECONDS):
-            return _FX_CACHE["rate"], _FX_CACHE["source"], _FX_CACHE["date"]
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
-            response = client.get(settings.FX_API_URL)
-            response.raise_for_status()
-            payload = response.json()
-        rate = Decimal(str(payload["rate"]))
-        if rate <= 0:
-            raise ValueError("invalid USD/CNY reference rate")
-        result = {
-            "rate": rate,
-            "source": "ECB via Frankfurter",
-            "date": str(payload.get("date") or ""),
-            "fetched_at": now,
-        }
-        _FX_CACHE.clear()
-        _FX_CACHE.update(result)
-        return rate, result["source"], result["date"]
+def _collect_kai() -> tuple[list[dict[str, Any]], datetime]:
+    """Collect KAI's current cross-section using its own publication time.
 
+    ``gpuCountOptions`` is intentionally not copied to ``available``: it is a
+    configuration limit, not a live inventory count.
+    """
 
-def _collect_wod(db: Session) -> list[dict[str, Any]]:
-    products = db.query(Product).filter(
-        Product.status == "on",
-        Product.stock > 0,
-        Product.supplier_id.isnot(None),
-        Product.source_price.is_(None),
-    ).all()
-    rows = []
-    for product in products:
-        model = canonicalize_gpu(product.gpu_model) or canonicalize_gpu(product.name)
-        price = Decimal(str(product.price or 0))
-        if not model or price <= 0:
-            continue
-        rows.append({
-            "gpu_model": model,
-            "gpu_variant": normalize_gpu_variant(model, memory_variant_from_text(product.memory)),
-            "price": price,
-            "currency": "CNY",
-            "billing_mode": "wod_listing",
-            "available": max(int(product.stock or 0), 0),
-        })
-    return rows
-
-
-def _collect_autodl() -> list[dict[str, Any]]:
-    if not settings.AUTODL_TOKEN:
-        raise RuntimeError("missing AUTODL_TOKEN")
-    headers = {"Authorization": settings.AUTODL_TOKEN, "Content-Type": "application/json"}
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
-        response = client.post(
-            f"{settings.AUTODL_API_BASE_URL.rstrip('/')}/api/v1/machine/list",
-            headers=headers,
-            json={"page_index": 1, "page_size": 500, "charge_type": "payg"},
-        )
-        response.raise_for_status()
-        payload = response.json()
-    if payload.get("code") != "Success":
-        raise RuntimeError(str(payload.get("msg") or payload.get("code") or "AutoDL request failed"))
-    rows = []
-    for offer in payload.get("data", {}).get("list", []):
-        model = canonicalize_gpu(offer.get("gpu_name"))
-        idle = int(offer.get("gpu_idle_num") or 0)
-        price = Decimal(str(offer.get("payg_price") or 0)) / Decimal("1000")
-        if not model or idle <= 0 or price <= 0:
-            continue
-        memory_bytes = Decimal(str(offer.get("gpu_memory") or 0))
-        memory_gb = memory_bytes / Decimal(1024 ** 3) if memory_bytes > 0 else Decimal("0")
-        rows.append({
-            "gpu_model": model,
-            "gpu_variant": normalize_gpu_variant(model, float(memory_gb)),
-            "price": price,
-            "currency": "CNY",
-            "billing_mode": "ondemand",
-            "available": idle,
-        })
-    return rows
-
-
-def _collect_vast() -> list[dict[str, Any]]:
-    if not settings.VAST_API_KEY:
-        raise RuntimeError("missing VAST_API_KEY")
-    headers = {"Authorization": f"Bearer {settings.VAST_API_KEY}", "Content-Type": "application/json"}
-    body = {
-        "limit": 500,
-        "type": "ondemand",
-        "verified": {"eq": True},
-        "rentable": {"eq": True},
-        "rented": {"eq": False},
-    }
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
-        response = client.post(
-            f"{settings.VAST_API_BASE_URL.rstrip('/')}/bundles",
-            headers=headers,
-            json=body,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    rows = []
-    for offer in payload.get("offers", []):
-        model = canonicalize_gpu(offer.get("gpu_name"))
-        gpu_count = int(offer.get("num_gpus") or 0)
-        total_price = Decimal(str(offer.get("dph_total") or 0))
-        if not model or gpu_count <= 0 or total_price <= 0:
-            continue
-        memory_mb = Decimal(str(offer.get("gpu_ram") or 0))
-        rows.append({
-            "gpu_model": model,
-            "gpu_variant": normalize_gpu_variant(
-                model,
-                float(memory_mb / Decimal(1024)) if memory_mb > 0 else None,
-            ),
-            "price": total_price / Decimal(gpu_count),
-            "currency": "USD",
-            "billing_mode": "ondemand",
-            "available": gpu_count,
-        })
-    return rows
+    batch = fetch_price_batch()
+    rows = [{
+        "gpu_model": item["gpu_model"],
+        "gpu_variant": item["gpu_variant"],
+        "price": item["price_cny"],
+        "currency": "CNY",
+        "billing_mode": "ondemand",
+        "available": 0,
+    } for item in normalized_current_quotes(batch)]
+    return rows, batch.observed_at
 
 
 def _signature(payload: dict[str, Any]) -> str:
@@ -196,15 +82,11 @@ def _signature(payload: dict[str, Any]) -> str:
 
 
 def _aggregate_and_store(db: Session, source: str, rows: list[dict[str, Any]], observed_at: datetime) -> tuple[int, int]:
+    if source != "kai":
+        raise ValueError("market_source_retired")
     grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         grouped[(row["gpu_model"], row["gpu_variant"], row["billing_mode"], row["currency"])].append(row)
-
-    fx_rate: Decimal | None = None
-    fx_source: str | None = None
-    fx_date: str | None = None
-    if any(key[3] == "USD" for key in grouped):
-        fx_rate, fx_source, fx_date = get_usd_cny_rate()
 
     inserted = 0
     accepted_samples = 0
@@ -219,9 +101,13 @@ def _aggregate_and_store(db: Session, source: str, rows: list[dict[str, Any]], o
         median_price = _percentile(values, Decimal("0.5"))
         p75_price = _percentile(values, Decimal("0.75"))
         max_price = max(values)
-        group_fx = Decimal("1") if currency == "CNY" else fx_rate
-        group_fx_source = "CNY native" if currency == "CNY" else fx_source
-        group_fx_date = observed_at.date().isoformat() if currency == "CNY" else fx_date
+        if currency != "CNY":
+            # KAI publishes native CNY. Rejecting another currency prevents a
+            # retired provider row from being reintroduced through this path.
+            continue
+        group_fx = Decimal("1")
+        group_fx_source = "CNY native"
+        group_fx_date = observed_at.date().isoformat()
         payload = {
             "source": source,
             "gpu_model": model,
@@ -278,17 +164,11 @@ def _status(db: Session, source: str) -> MarketSourceStatus:
 
 
 def _sync_error_code(exc: Exception) -> str:
+    if isinstance(exc, KaiPricingError):
+        return exc.code
     message = str(exc).lower()
     if "missing" in message and ("token" in message or "api_key" in message or "credential" in message):
         return "credentials_missing"
-    if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code
-        if status in (401, 403):
-            return "authentication_failed"
-        if status == 429:
-            return "rate_limited"
-    if isinstance(exc, httpx.TimeoutException):
-        return "upstream_timeout"
     return "upstream_error"
 
 
@@ -316,16 +196,13 @@ def _sync_source(source: str, force: bool) -> dict[str, Any]:
         state.enabled = True
         db.commit()
 
-        if source == "wod":
-            rows = _collect_wod(db)
-        elif source == "vast":
-            rows = _collect_vast()
-        elif source == "autodl":
-            rows = _collect_autodl()
+        observed_at = now
+        if source == "kai":
+            rows, observed_at = _collect_kai()
         else:
             raise ValueError(f"unknown source: {source}")
 
-        inserted, samples = _aggregate_and_store(db, source, rows, now)
+        inserted, samples = _aggregate_and_store(db, source, rows, observed_at)
         state = _status(db, source)
         state.status = "ok" if samples else "empty"
         state.sample_count = samples
@@ -354,7 +231,7 @@ def sync_market(force: bool = False) -> list[dict[str, Any]]:
     if not _SYNC_LOCK.acquire(blocking=False):
         return [{"status": "already_running"}]
     try:
-        return [_sync_source(source, force) for source in ("wod", "vast", "autodl")]
+        return [_sync_source("kai", force)]
     finally:
         _SYNC_LOCK.release()
 
@@ -362,9 +239,8 @@ def sync_market(force: bool = False) -> list[dict[str, Any]]:
 def dispatch_market_sync() -> list[str]:
     """Schedule independent collectors and return immediately to the scheduler."""
     scheduled = []
-    for source in ("wod", "vast", "autodl"):
-        _MARKET_EXECUTOR.submit(_sync_source, source, False)
-        scheduled.append(source)
+    _MARKET_EXECUTOR.submit(_sync_source, "kai", False)
+    scheduled.append("kai")
     return scheduled
 
 

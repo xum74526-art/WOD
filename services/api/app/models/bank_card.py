@@ -7,7 +7,7 @@ from app.db.base import Base
 
 
 # ``active`` and ``pending_review`` are historical states from the first
-# closed-test workflow.  Neither state represented verification by a bank.
+# internal manual workflow. Neither state represented verification by a bank.
 # Keep them eligible during the transition, but expose them as ``registered``
 # and never as bank-verified.
 REGISTERED_CARD_STATUSES = ("registered", "pending_review", "active")
@@ -38,6 +38,12 @@ class BankCard(Base):
     review_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    last_modified_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

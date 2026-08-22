@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.core.sensitive import (
     fingerprint,
     mask_bank_card,
@@ -21,6 +21,7 @@ from app.models.withdrawal import WithdrawalOrder
 from app.schemas.bank_card import BankCardIn
 from app.utils.bank_util import luhn_check, detect_bank, validate_phone
 from app.utils.response import BizError, success
+from app.services.auth_session import normalize_platform
 
 router = APIRouter(prefix="/api/bank-cards", tags=["bank-card"])
 
@@ -69,7 +70,12 @@ def bank_card_config(user: User = Depends(get_current_user)):
 
 
 @router.post("")
-def add_card(data: BankCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_card(
+    data: BankCardIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     if not sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED):
         raise BizError("银行卡登记服务尚未启用", status_code=503)
     # 1. 卡号Luhn校验
@@ -113,12 +119,15 @@ def add_card(data: BankCardIn, user: User = Depends(get_current_user), db: Sessi
         BankCard.status.in_(REGISTERED_CARD_STATUSES),
         BankCard.is_default.is_(True),
     ).first()
+    source_platform = normalize_platform(platform)
     c = BankCard(
         user_id=user.id, bank_name=bank_name, card_number=protect(normalized_number),
         holder=data.holder, phone=protect(data.phone),
         is_default=bool((data.is_default or not has_default) and not has_default),
         card_fingerprint=card_fingerprint, status="registered",
         verification_mode="format_only",
+        created_platform=source_platform,
+        last_modified_platform=source_platform,
     )
     db.add(c)
     try:
@@ -131,7 +140,12 @@ def add_card(data: BankCardIn, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.post("/{cid}/default")
-def set_default(cid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def set_default(
+    cid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     c = db.query(BankCard).filter(
         BankCard.id == cid,
         BankCard.user_id == user.id,
@@ -141,12 +155,18 @@ def set_default(cid: int, user: User = Depends(get_current_user), db: Session = 
         raise BizError("仅已登记且未停用的银行卡可设为默认卡", status_code=404)
     db.query(BankCard).filter(BankCard.user_id == user.id).update({"is_default": False})
     c.is_default = True
+    c.last_modified_platform = normalize_platform(platform)
     db.commit()
     return success({"id": cid, "is_default": True})
 
 
 @router.delete("/{cid}")
-def delete_card(cid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_card(
+    cid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
     c = db.query(BankCard).filter(BankCard.id == cid, BankCard.user_id == user.id).first()
     if not c:
         raise BizError("银行卡不存在", status_code=404)
@@ -160,5 +180,6 @@ def delete_card(cid: int, user: User = Depends(get_current_user), db: Session = 
     c.is_default = False
     c.review_reason = "用户解绑"
     c.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    c.last_modified_platform = normalize_platform(platform)
     db.commit()
     return success({"id": cid, "deleted": True, "status": "disabled"})

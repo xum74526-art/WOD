@@ -23,6 +23,7 @@ from app.models.payment import PaymentOrder
 from app.models.wallet import Wallet
 from app.services.notification_service import create_notification
 from app.utils.response import BizError
+from app.services.auth_session import normalize_platform
 
 
 PROVIDER = "qixiangpay"
@@ -263,6 +264,7 @@ def _persist_order_expiry(
         {
             PaymentOrder.status: "expired",
             PaymentOrder.failure_reason: "支付时限已结束；如已付款请查询支付平台状态",
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -283,6 +285,7 @@ def expire_pending_payment_orders(db: Session, *, now: datetime | None = None) -
         {
             PaymentOrder.status: "expired",
             PaymentOrder.failure_reason: "支付时限已结束；如已付款请查询支付平台状态",
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -295,6 +298,7 @@ def create_recharge_order(
     amount_cny: Decimal,
     *,
     payment_type: str | None,
+    created_platform: str = "legacy",
 ) -> dict:
     if not provider_configured():
         raise BizError("七相支付尚未完成配置", status_code=503)
@@ -309,6 +313,7 @@ def create_recharge_order(
         raise BizError("卡时兑换率配置无效", status_code=503)
 
     token = secrets.token_urlsafe(32)
+    platform = normalize_platform(created_platform)
     order = PaymentOrder(
         order_no=f"KAIQ{datetime.now():%Y%m%d%H%M%S}{secrets.token_hex(4).upper()}",
         user_id=user_id,
@@ -319,6 +324,8 @@ def create_recharge_order(
         card_hours=(amount / rate).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
         card_hour_rate=rate,
         checkout_token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        created_platform=platform,
+        last_modified_platform=platform,
         expires_at=utc_now() + timedelta(seconds=checkout_ttl_seconds()),
     )
     db.add(order)
@@ -533,6 +540,7 @@ def _mark_create_unknown(db: Session, order: PaymentOrder) -> None:
                 "支付平台下单结果尚未确认；为避免重复创建上游订单，"
                 "本订单不会再次提交，请返回重新发起"
             ),
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -855,6 +863,7 @@ def _record_success_for_review(
         PaymentOrder.status: status,
         PaymentOrder.checkout_started_at: None,
         PaymentOrder.failure_reason: reason[:160],
+        PaymentOrder.last_modified_platform: "system",
     }
     if provider_paid_at is not None:
         updates[PaymentOrder.paid_at] = provider_paid_at
@@ -923,6 +932,7 @@ def credit_verified_payment(
             PaymentOrder.failure_reason: None,
             PaymentOrder.paid_at: paid_at or now,
             PaymentOrder.credited_at: now,
+            PaymentOrder.last_modified_platform: "system",
         },
         synchronize_session=False,
     )
@@ -1047,6 +1057,7 @@ def handle_notification(db: Session, params: dict) -> bool:
         updates = {
             PaymentOrder.provider_trade_no: trade_no,
             PaymentOrder.provider_status: status[:64],
+            PaymentOrder.last_modified_platform: "system",
         }
         if order.expires_at <= utc_now():
             updates.update({
@@ -1121,6 +1132,7 @@ def query_provider_and_reconcile(db: Session, order: PaymentOrder) -> dict:
         updates = {
             PaymentOrder.provider_trade_no: trade_no,
             PaymentOrder.provider_status: "0",
+            PaymentOrder.last_modified_platform: "system",
         }
         if order.expires_at <= utc_now():
             updates.update({
@@ -1148,9 +1160,15 @@ def query_provider_and_reconcile(db: Session, order: PaymentOrder) -> dict:
     return _payment_out(current)
 
 
-def cancel_recharge_order(db: Session, order: PaymentOrder) -> dict:
+def cancel_recharge_order(
+    db: Session,
+    order: PaymentOrder,
+    *,
+    platform: str = "legacy",
+) -> dict:
     """Locally cancel an expired order after a fresh provider unpaid query."""
     _require_provider_order(order)
+    modified_platform = normalize_platform(platform)
     if order.status == "canceled" and order.credited_at is None:
         return _payment_out(order)
     if order.credited_at is not None or order.status == "paid":
@@ -1198,6 +1216,7 @@ def cancel_recharge_order(db: Session, order: PaymentOrder) -> dict:
                 PaymentOrder.failure_reason: (
                     "本地充值订单已取消；未向七相支付创建上游订单"
                 ),
+                PaymentOrder.last_modified_platform: modified_platform,
             },
             synchronize_session=False,
         )
@@ -1244,6 +1263,7 @@ def cancel_recharge_order(db: Session, order: PaymentOrder) -> dict:
             {
                 PaymentOrder.provider_trade_no: trade_no,
                 PaymentOrder.provider_status: "0",
+                PaymentOrder.last_modified_platform: "system",
             },
             synchronize_session=False,
         )
@@ -1284,6 +1304,7 @@ def cancel_recharge_order(db: Session, order: PaymentOrder) -> dict:
                 "用户在支付时限结束后取消；七相支付查询确认未支付。"
                 "平台未提供商户主动关闭接口"
             ),
+            PaymentOrder.last_modified_platform: modified_platform,
         },
         synchronize_session=False,
     )

@@ -7,16 +7,52 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models.market_price import MarketPriceSnapshot
+from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
 from app.models.product import Product
+from app.utils.response import BizError
 from app.services.gpu_catalog import canonicalize_gpu, memory_variant_from_gb, memory_variant_from_text
-from app.routers.market import _build_market_candles, _history_metric_matches_live_sources, _public_error_code, _range_volatility, _seven_day_metrics, _source_range_metric, _source_state
-from app.routers.product import _current_product_query, _product_out, price_trend
+from app.routers.market import _build_market_candles, _history_metric_matches_live_sources, _public_error_code, _range_volatility, _seven_day_metrics, _source_range_metric, _source_state, latest_prices
+from app.core.config import settings
+from app.routers.product import _current_product_query, _product_out, price_trend, quote_regional
 from app.services.market_freshness import product_market_state
+from app.services.region_mapper import map_region
 from app.services.market_sync import _aggregate_and_store, _percentile, _without_outliers
 
 
 class MarketDataTests(unittest.TestCase):
+    def test_latest_prices_reports_selected_source_refresh_interval(self):
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketSourceStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now()
+
+        db.add(MarketSourceStatus(
+            source="kai", enabled=True, status="ok", refresh_seconds=1,
+            sample_count=1, last_attempt_at=now, last_success_at=now,
+        ))
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="RTX4090", gpu_variant="24GB",
+            billing_mode="ondemand", currency="CNY",
+            min_price=Decimal("2"), p25_price=Decimal("2"),
+            median_price=Decimal("2"), p75_price=Decimal("2"), max_price=Decimal("2"),
+            min_price_cny=Decimal("2"), median_price_cny=Decimal("2"),
+            max_price_cny=Decimal("2"), sample_count=1, available_gpu_count=0,
+            signature="refresh-kai", observed_at=now, fetched_at=now,
+        ))
+        db.commit()
+
+        result = latest_prices("RTX4090", "24GB", "kai", db)["data"]
+        self.assertEqual(result["next_refresh_in"], settings.KAI_PRICING_REFRESH_SECONDS)
+        self.assertEqual(result["summary"]["quote_sample_count"], 1)
+        self.assertIsNone(result["summary"]["inventory_available"])
+        for retired in ("autodl", "vast", "wod", "kai,autodl"):
+            with self.assertRaises(BizError):
+                latest_prices("RTX4090", "24GB", retired, db)
+        db.close()
+
     def test_archived_change_requires_the_same_live_provider(self):
         vast_history = {"history_provenance": {"upstream_provider": "vast"}}
         autodl_history = {"history_provenance": {"upstream_provider": "autodl"}}
@@ -40,6 +76,28 @@ class MarketDataTests(unittest.TestCase):
         output = _product_out(product, source_states={})
         self.assertIsNone(output["stability"])
 
+    def test_kai_product_output_neutralizes_legacy_rollout_description(self):
+        product = Product(
+            id=2,
+            name="RTX 4090",
+            gpu_model="RTX4090",
+            memory="24GB",
+            price=Decimal("2.50"),
+            status="on",
+            stock=1,
+            market_source="kai",
+            desc="KAI Pricing 当前卡时报价；数量为平台封闭测试人工履约额度",
+        )
+        output = _product_out(product, source_states={})
+        self.assertIn("平台人工履约额度", output["desc"])
+        self.assertNotIn("封闭测试", output["desc"])
+        self.assertNotIn("closed_test", output["desc"].lower())
+        self.assertEqual(
+            output["stock_semantics"],
+            "platform_manual_fulfillment_allocation",
+        )
+        self.assertNotIn("closed_test", output["stock_semantics"].lower())
+
     def test_gpu_names_are_normalized_without_merging_distinct_models(self):
         self.assertEqual(canonicalize_gpu("NVIDIA GeForce RTX 4090"), "RTX4090")
         self.assertEqual(canonicalize_gpu("RTX 4090D"), "RTX4090D")
@@ -52,6 +110,12 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(memory_variant_from_gb(31.84), "32GB")
         self.assertEqual(memory_variant_from_text("80 GB HBM3"), "80GB")
         self.assertEqual(memory_variant_from_text("unknown"), "")
+
+    def test_kai_compact_region_codes_are_mapped_without_composition_bias(self):
+        self.assertEqual(map_region("CN-East"), ("east_china", "华东"))
+        self.assertEqual(map_region("CN-Northeast"), ("northeast_china", "东北"))
+        self.assertEqual(map_region("US-West"), ("north_america", "北美"))
+        self.assertEqual(map_region("EU-Central"), ("europe", "欧洲"))
 
     def test_market_percentiles_use_observed_values(self):
         values = [Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4")]
@@ -175,7 +239,7 @@ class MarketDataTests(unittest.TestCase):
         rows = [offer("RTX4090", "ondemand", price) for price in ("1.0", "1.1", "1.2", "50")]
         rows += [offer("RTX4090", "reserved", price) for price in ("10", "11")]
         rows += [offer("RTX3090", "ondemand", "20")]
-        inserted, _ = _aggregate_and_store(db, "vast", rows, observed_at)
+        inserted, _ = _aggregate_and_store(db, "kai", rows, observed_at)
         db.commit()
 
         self.assertEqual(inserted, 3)
@@ -187,6 +251,17 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(snapshots[("RTX4090", "ondemand")].median_price_cny, Decimal("1.100000"))
         self.assertEqual(snapshots[("RTX4090", "reserved")].median_price_cny, Decimal("10.500000"))
         self.assertEqual(snapshots[("RTX3090", "ondemand")].median_price_cny, Decimal("20.000000"))
+        db.close()
+
+    def test_retired_provider_cannot_write_new_market_snapshots(self):
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        MarketPriceSnapshot.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        with self.assertRaises(ValueError):
+            _aggregate_and_store(db, "autodl", [], datetime(2026, 8, 21))
+        self.assertEqual(db.query(MarketPriceSnapshot).count(), 0)
         db.close()
 
     def test_range_volatility_uses_observed_prices(self):
@@ -289,7 +364,7 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(_source_state(unavailable, now), "unavailable")
 
     def test_source_errors_are_exposed_only_as_sanitized_codes(self):
-        self.assertEqual(_public_error_code("missing VAST_API_KEY"), "credentials_missing")
+        self.assertEqual(_public_error_code("missing provider credential"), "credentials_missing")
         self.assertEqual(_public_error_code("401 Unauthorized"), "authentication_failed")
         self.assertEqual(_public_error_code("authentication_failed"), "authentication_failed")
         self.assertEqual(_public_error_code("429 rate limit"), "rate_limited")
@@ -309,7 +384,7 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(product_market_state(expired, {"vast": "live"}, now, 900), "stale")
         self.assertEqual(product_market_state(current, {"vast": "unavailable"}, now, 900), "unavailable")
 
-    def test_recent_delayed_offers_remain_visible_but_stale_sources_are_hidden(self):
+    def test_kai_and_first_party_wod_remain_visible_while_retired_sources_are_hidden(self):
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -319,7 +394,7 @@ class MarketDataTests(unittest.TestCase):
         db = sessionmaker(bind=engine)()
         observed_at = datetime.now() - timedelta(minutes=1)
 
-        def product(name: str, currency: str | None):
+        def product(name: str, source: str, currency: str | None):
             return Product(
                 name=name,
                 gpu_model="RTX4090",
@@ -327,6 +402,7 @@ class MarketDataTests(unittest.TestCase):
                 price=Decimal("1.5"),
                 source_price=Decimal("1") if currency else None,
                 source_currency=currency,
+                market_source=source,
                 price_updated_at=observed_at if currency else None,
                 stock=2,
                 reliability=99,
@@ -334,16 +410,62 @@ class MarketDataTests(unittest.TestCase):
             )
 
         db.add_all([
-            product("Vast offer", "USD"),
-            product("AutoDL offer", "CNY"),
-            product("WOD listing", None),
+            product("KAI offer", "kai", "CNY"),
+            product("Vast offer", "vast", "USD"),
+            product("AutoDL offer", "autodl", "CNY"),
+            product("WOD listing", "wod", None),
         ])
         db.commit()
 
-        delayed = _current_product_query(db, {"vast": "delayed", "autodl": "delayed"}).all()
-        self.assertEqual({item.name for item in delayed}, {"Vast offer", "AutoDL offer", "WOD listing"})
-        stale = _current_product_query(db, {"vast": "stale", "autodl": "unavailable"}).all()
-        self.assertEqual([item.name for item in stale], ["WOD listing"])
+        delayed = _current_product_query(db, {"kai": "delayed"}).all()
+        self.assertEqual({item.name for item in delayed}, {"KAI offer", "WOD listing"})
+        unavailable = _current_product_query(db, {"kai": "unavailable"}).all()
+        self.assertEqual([item.name for item in unavailable], ["WOD listing"])
+        db.close()
+
+    def test_regional_quote_compares_one_exact_kai_identity_only(self):
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Product.__table__.create(engine)
+        MarketSourceStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now()
+        db.add(MarketSourceStatus(
+            source="kai", enabled=True, status="ok", refresh_seconds=30,
+            sample_count=4, last_attempt_at=now, last_success_at=now,
+        ))
+
+        def product(model: str, memory: str, city: str, price: str, external_id: str):
+            return Product(
+                name=f"{model} {memory} {city}", gpu_model=model, memory=memory,
+                price=Decimal(price), source_price=Decimal(price), source_currency="CNY",
+                market_source="kai", external_product_id=external_id, city=city,
+                price_updated_at=now, stock=1, reliability=99, status="on",
+            )
+
+        db.add_all([
+            product("RTX4090", "24GB", "中国大陆-华北", "2.00", "north-a"),
+            product("RTX4090", "24GB", "中国大陆-华北", "2.20", "north-b"),
+            product("RTX4090", "24GB", "中国大陆-华东", "3.00", "east-a"),
+            # Must not distort the overseas comparison for RTX4090.
+            product("H200", "141GB", "欧洲", "25.00", "europe-h200"),
+        ])
+        db.commit()
+
+        data = quote_regional("RTX 4090", "24 GB", db)["data"]
+        self.assertEqual((data["gpu_model"], data["gpu_variant"]), ("RTX4090", "24GB"))
+        self.assertEqual(data["source"], "kai")
+        self.assertEqual(data["region_count"], 2)
+        self.assertEqual({item["region"] for item in data["regions"]}, {"华北", "华东"})
+        north = next(item for item in data["regions"] if item["region"] == "华北")
+        east = next(item for item in data["regions"] if item["region"] == "华东")
+        self.assertEqual(north["median_price_cny"], 2.1)
+        self.assertEqual(north["quote_sample_count"], 2)
+        self.assertEqual(east["relative_to_lowest_pct"], 42.86)
+        self.assertEqual(data["sample_semantics"], "current_quote_observations_not_inventory")
         db.close()
 
     def test_seven_day_metric_keeps_billing_modes_separate(self):
@@ -414,11 +536,11 @@ class MarketDataTests(unittest.TestCase):
         }
         start = datetime(2026, 8, 10, 0, 0)
 
-        self.assertEqual(_aggregate_and_store(db, "autodl", [row], start)[0], 1)
+        self.assertEqual(_aggregate_and_store(db, "kai", [row], start)[0], 1)
         db.commit()
-        self.assertEqual(_aggregate_and_store(db, "autodl", [row], start + timedelta(minutes=30))[0], 0)
+        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(minutes=30))[0], 0)
         db.commit()
-        self.assertEqual(_aggregate_and_store(db, "autodl", [row], start + timedelta(hours=1))[0], 1)
+        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(hours=1))[0], 1)
         db.commit()
         self.assertEqual(db.query(MarketPriceSnapshot).count(), 2)
         db.close()

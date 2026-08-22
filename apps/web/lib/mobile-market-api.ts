@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api";
 import { canonicalApiPath } from "@/lib/canonical-api";
+import { kaiPricingQuery } from "@/lib/web-business-contract";
 
 
 export type MobileMarketModel = {
@@ -63,28 +64,22 @@ export type MobileMarketSource = {
   error_code: string | null;
 };
 
-function query(input: Record<string, string>) {
-  return new URLSearchParams(input).toString();
-}
-
 export function getMobileMarketModels() {
   return apiRequest<{ server_time: string; items: MobileMarketModel[] }>(canonicalApiPath("/market/models"));
 }
 
 export function getMobileLatestMarket(model: MobileMarketModel) {
-  return apiRequest<MobileLatestMarket>(canonicalApiPath(`/market/prices/latest?${query({
+  return apiRequest<MobileLatestMarket>(canonicalApiPath(`/market/prices/latest?${kaiPricingQuery({
     model: model.gpu_model,
     variant: model.gpu_variant,
-    sources: model.sources.join(","),
   })}`));
 }
 
 export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "30d") {
-  return apiRequest<MobileMarketCandles>(canonicalApiPath(`/market/prices/candles?${query({
+  return apiRequest<MobileMarketCandles>(canonicalApiPath(`/market/prices/candles?${kaiPricingQuery({
     model: model.gpu_model,
     variant: model.gpu_variant,
     range,
-    sources: model.sources.join(","),
     billing_mode: "ondemand",
   })}`));
 }
