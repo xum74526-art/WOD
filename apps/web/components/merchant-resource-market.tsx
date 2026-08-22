@@ -11,22 +11,24 @@ import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName }
 
 type ViewerRole = AuthUser["role"] | "guest" | "loading";
 
-export function MerchantResourceMarket({ limit }: { limit?: number }) {
+export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: number; initialRows?: PublicProduct[] | null }) {
   const { locale, t } = useI18n();
-  const [rows, setRows] = useState<PublicProduct[]>([]);
+  const [rows, setRows] = useState<PublicProduct[]>(initialRows ?? []);
   const [viewerRole, setViewerRole] = useState<ViewerRole>("loading");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialRows === null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    listPublicProducts()
-      .then((result) => setRows(result.data))
-      .catch((reason) => setError(errorMessage(reason)))
-      .finally(() => setLoading(false));
+    if (initialRows === null) {
+      listPublicProducts()
+        .then((result) => setRows(result.data))
+        .catch((reason) => setError(errorMessage(reason)))
+        .finally(() => setLoading(false));
+    }
     getCurrentUser()
       .then(({ user }) => setViewerRole(user.role))
       .catch(() => setViewerRole("guest"));
-  }, []);
+  }, [initialRows]);
 
   const displayRows = typeof limit === "number" ? rows.slice(0, limit) : rows;
 

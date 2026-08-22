@@ -131,9 +131,18 @@ class Settings(BaseSettings):
     # separate cap is the only stock that the manual fulfilment workflow may
     # reserve and restore.
     KAI_CLOSED_TEST_INITIAL_STOCK: int = 3
+    # The API is the sole market-database writer. External collectors submit
+    # normalized batches through an authenticated internal endpoint.
+    MARKET_INGESTION_ENABLED: bool = False
+    MARKET_INGESTION_TOKEN: str = ""
+    VAST_STALE_SECONDS: int = 1800
+    VAST_DELETE_AFTER_HOURS: int = 48
+    VAST_HISTORY_DAYS: int = 90
     MARKET_SYNC_SECONDS: int = 10
     MARKET_HISTORY_DAYS: int = 30
     MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 3600
+    MARKET_CANDLE_SYNC_SECONDS: int = 300
+    MARKET_CANDLE_HISTORY_DAYS: int = 100
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
     # Authenticated users allowed to fulfil KAI-backed manually delivered orders.
     # Use comma-separated numeric user IDs.  An empty value means that external
@@ -173,9 +182,8 @@ class Settings(BaseSettings):
     KAI_AUTH_TICKET_TTL_SECONDS: int = 120
     KAI_AUTH_HTTP_TIMEOUT: float = 10.0
 
-    # Ignore retired Vast/AutoDL keys that may remain temporarily in a private
-    # deployment environment during a rolling upgrade.  No runtime code reads
-    # those keys and new configuration documents do not expose them.
+    # Ignore retired AutoDL keys that may remain temporarily in a private
+    # deployment environment during a rolling upgrade.
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

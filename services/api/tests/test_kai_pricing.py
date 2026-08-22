@@ -141,6 +141,40 @@ class KaiPricingTests(unittest.TestCase):
         self.assertGreater(first["candles"][0]["high_price_cny"], first["candles"][0]["low_price_cny"])
         self.assertTrue(all(item["sources"] == ["kai"] for item in first["candles"]))
 
+    def test_ninety_day_candles_request_three_official_months(self):
+        batch = self.batch([quote()])
+        candles = []
+        for index in range(91):
+            observed = self.now - timedelta(days=90) + timedelta(days=index)
+            base = Decimal("2.0") + Decimal(index) / Decimal("100")
+            candles.append({
+                "asOf": observed.isoformat() + "Z",
+                "open": str(base), "high": str(base + Decimal("0.08")),
+                "low": str(base - Decimal("0.04")), "close": str(base + Decimal("0.02")),
+            })
+        payload = {
+            "data": {
+                "productId": "kai-4090-a", "currency": "CNY", "unit": "GPU_HOUR",
+                "interval": "1d", "months": 3, "candles": candles,
+            },
+            "meta": {
+                "asOf": self.now.isoformat() + "Z", "dataVersion": 2,
+                "count": len(candles), "interval": "1d", "intervalMs": 86_400_000,
+                "months": 3,
+                "from": (self.now - timedelta(days=93)).isoformat() + "Z",
+                "to": self.now.isoformat() + "Z",
+            },
+        }
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 4000),
+        ) as fetch:
+            value = get_aggregated_candles("RTX4090", "24GB", "90d")
+
+        self.assertEqual(fetch.call_args.args[2], 3)
+        self.assertEqual(value["range"], "90d")
+        self.assertEqual(value["coverage_class"], "full")
+        self.assertEqual(len(value["candles"]), 91)
+
     def test_exact_product_candles_match_identity_and_live_price(self):
         batch = self.batch([quote()])
         candles = []
@@ -184,7 +218,7 @@ class KaiPricingTests(unittest.TestCase):
             "price_cny": Decimal("2.5"), "max_configurable_quantity": 1,
         } for index in range(20)]
 
-        def history(product_id, interval, *, deadline=None):
+        def history(product_id, interval, _months=1, *, deadline=None):
             candles = []
             for index in range(43):
                 observed = self.now - timedelta(days=7) + timedelta(hours=4 * index)
@@ -526,7 +560,7 @@ class KaiPricingTests(unittest.TestCase):
     def test_one_slow_region_keeps_fast_official_region_and_executor_is_bounded(self):
         rows = [quote("product-a"), quote("product-b")]
 
-        def history(product_id, _interval, *, deadline=None):
+        def history(product_id, _interval, _months=1, *, deadline=None):
             if product_id == "product-a":
                 time.sleep(0.18)
                 raise KaiPricingError("upstream_timeout")
@@ -548,7 +582,7 @@ class KaiPricingTests(unittest.TestCase):
         def run_with(delays):
             clear_caches()
 
-            def history(product_id, _interval, *, deadline=None):
+            def history(product_id, _interval, _months=1, *, deadline=None):
                 time.sleep(delays[product_id])
                 base = {"product-a": "2.0", "product-b": "2.4", "product-c": "2.8"}[product_id]
                 return self.history_payload(product_id, base=base), 1000

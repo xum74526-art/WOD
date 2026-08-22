@@ -12,6 +12,14 @@ else
   exit 1
 fi
 
+if [ -x "$repo_root/services/collector/.venv/bin/python" ]; then
+  (cd "$repo_root/services/collector" && .venv/bin/python -m compileall -q collector)
+  (cd "$repo_root/services/collector" && .venv/bin/python -m unittest discover -s tests -p 'test_*.py')
+else
+  echo "Collector dependencies not installed; run the setup in README.md" >&2
+  exit 1
+fi
+
 if [ -d "$repo_root/apps/web/node_modules" ]; then
   npm --prefix "$repo_root/apps/web" run type-check
   npm --prefix "$repo_root/apps/web" test

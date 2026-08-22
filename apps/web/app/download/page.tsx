@@ -12,7 +12,7 @@ const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim();
 
 export default function DownloadPage() {
   return (
-    <div className="site-page download-page">
+    <div className="site-page public-v2 download-page">
       <SiteHeader />
       <main className="download-page__main">
         <header className="download-hero">

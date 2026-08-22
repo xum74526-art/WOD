@@ -609,12 +609,13 @@ def _without_outliers(values: list[Decimal]) -> list[Decimal]:
 
 
 _RANGE_CONFIG = {
-    "1h": (timedelta(hours=1), "1h", 3600),
-    "6h": (timedelta(hours=6), "1h", 3600),
-    "24h": (timedelta(hours=24), "1h", 3600),
+    "1h": (timedelta(hours=1), "1h", 3600, 1),
+    "6h": (timedelta(hours=6), "1h", 3600, 1),
+    "24h": (timedelta(hours=24), "1h", 3600, 1),
     # Seven days always comes from KAI's official historical 4-hour OHLC.
-    "7d": (timedelta(days=7), "4h", 4 * 3600),
-    "30d": (timedelta(days=30), "1d", 24 * 3600),
+    "7d": (timedelta(days=7), "4h", 4 * 3600, 1),
+    "30d": (timedelta(days=30), "1d", 24 * 3600, 1),
+    "90d": (timedelta(days=90), "1d", 24 * 3600, 3),
 }
 
 
@@ -675,12 +676,13 @@ def _upstream_gpu_model_filters(model: str, variant: str) -> tuple[str, ...]:
 def _fetch_product_candles(
     product_id: str,
     interval: str,
+    months: int = 1,
     *,
     deadline: float | None = None,
 ) -> tuple[dict[str, Any], int]:
     encoded = quote(product_id, safe="")
     return _get_json(
-        f"/v1/prices/{encoded}/candles?months=1&interval={interval}",
+        f"/v1/prices/{encoded}/candles?months={max(1, int(months))}&interval={interval}",
         timeout=settings.KAI_CANDLE_HTTP_TIMEOUT,
         max_bytes=settings.KAI_CANDLE_MAX_RESPONSE_BYTES,
         deadline=deadline,
@@ -695,6 +697,7 @@ def _parse_complete_candle_series(
     until: datetime,
     interval_seconds: int,
     expected_interval: str,
+    expected_months: int = 1,
 ) -> KaiCandleSeries | None:
     data = payload.get("data")
     meta = payload.get("meta")
@@ -718,8 +721,8 @@ def _parse_complete_candle_series(
     except (TypeError, ValueError, KaiPricingError):
         return None
     if (
-        data_months != 1
-        or meta_months != 1
+        data_months != expected_months
+        or meta_months != expected_months
         or meta_interval_ms != interval_seconds * 1000
         or data_version < 1
         or meta_from >= meta_to
@@ -802,7 +805,7 @@ def _aggregate_kai_candles(
 ) -> dict[str, Any]:
     if range_name not in _RANGE_CONFIG:
         raise KaiPricingError("unsupported_range")
-    duration, interval, interval_seconds = _RANGE_CONFIG[range_name]
+    duration, interval, interval_seconds, months = _RANGE_CONFIG[range_name]
     filters = _upstream_gpu_model_filters(model, variant)
     if not filters:
         raise KaiPricingError("history_unavailable")
@@ -825,6 +828,7 @@ def _aggregate_kai_candles(
             _fetch_product_candles,
             item["external_product_id"],
             interval,
+            months,
             deadline=deadline,
         ): item
         for item in candidates
@@ -851,6 +855,7 @@ def _aggregate_kai_candles(
                 until=until,
                 interval_seconds=interval_seconds,
                 expected_interval=interval,
+                expected_months=months,
             )
             if series:
                 selected.append((candidate, series))
@@ -1002,7 +1007,7 @@ def _load_exact_product_candles(
         raise KaiPricingError("product_not_found")
     canonical_model = canonicalize_gpu(model) or model
     canonical_variant = normalize_gpu_variant(canonical_model, variant)
-    duration, interval, interval_seconds = _RANGE_CONFIG[range_name]
+    duration, interval, interval_seconds, months = _RANGE_CONFIG[range_name]
     batch = fetch_price_batch(product_ids=(product_id,), deadline=deadline)
     if time.monotonic() >= deadline:
         raise KaiPricingError("upstream_timeout")
@@ -1016,7 +1021,7 @@ def _load_exact_product_candles(
     if (product["gpu_model"], product["gpu_variant"]) != (canonical_model, canonical_variant):
         raise KaiPricingError("product_identity_mismatch")
 
-    payload, _ = _fetch_product_candles(product_id, interval, deadline=deadline)
+    payload, _ = _fetch_product_candles(product_id, interval, months, deadline=deadline)
     since = batch.observed_at - duration
     series = _parse_complete_candle_series(
         payload,
@@ -1025,6 +1030,7 @@ def _load_exact_product_candles(
         until=batch.observed_at,
         interval_seconds=interval_seconds,
         expected_interval=interval,
+        expected_months=months,
     )
     if not series:
         raise KaiPricingError("history_unavailable")
@@ -1147,7 +1153,7 @@ def _load_ranking_metrics(
     if not candidates:
         return {}
 
-    duration, interval, interval_seconds = _RANGE_CONFIG["7d"]
+    duration, interval, interval_seconds, months = _RANGE_CONFIG["7d"]
     until = batch.observed_at
     since = until - duration
     futures = {
@@ -1155,6 +1161,7 @@ def _load_ranking_metrics(
             _fetch_product_candles,
             item["external_product_id"],
             interval,
+            months,
             deadline=deadline,
         ): item
         for item in candidates
@@ -1183,6 +1190,7 @@ def _load_ranking_metrics(
                 until=until,
                 interval_seconds=interval_seconds,
                 expected_interval=interval,
+                expected_months=months,
             )
         except KaiPricingError:
             continue

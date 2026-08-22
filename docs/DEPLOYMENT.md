@@ -27,10 +27,11 @@
 ## 服务
 
 - `infra/kai-api.service`：FastAPI，默认监听 `127.0.0.1:8000`。
+- `infra/kai-collector.service`：可选外部数据采集进程，只访问本机 FastAPI 内部接口。
 - `infra/kai-frontend.service`：Next.js standalone，默认监听 `127.0.0.1:3000`。
 - `infra/kai-nginx.conf`：`/api` 转 FastAPI，`/api/v1` 转 Next.js BFF，其余转 Web。
 
-API 运行配置从 `infra/api.env.example` 复制，Web 运行配置从 `infra/web.env.example` 复制。真实密钥只能保存在服务器的受限文件中。
+API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collector.env.example` 复制，Web 从 `infra/web.env.example` 复制。API 与 Collector 使用同一个独立 ingestion token；真实密钥只能保存在服务器的受限文件中。
 
 ## 发布流程
 
@@ -44,7 +45,7 @@ API 运行配置从 `infra/api.env.example` 复制，Web 运行配置从 `infra/
    `/home/ubuntu/wod-releases/<commit>/`，不要覆盖当前 release。
 6. 在未使用的本机端口启动新 release，检查 `/api/v1/health` 和至少一个只读业务接口。
 7. 原子更新 `/home/ubuntu/wod/frontend-release` 软链接，安装并校验仓库中的 systemd 文件，
-   然后重启 API/Web。
+   然后重启 API/Collector/Web。
 8. 检查本机和公网首页、`/health`、`/api/v1/health`、关键只读接口与服务日志。
 9. 确认稳定后清理源码目录内的 `node_modules`、`.next` 等可重建产物；至少保留当前和上一
    个稳定 release，不删除运行数据库、上传目录或未经确认的备份。
@@ -59,7 +60,7 @@ Web standalone 必须在 Linux 上构建，不要把 macOS 产生的原生 Node 
 git -C /home/ubuntu/wod status --short --branch
 git -C /home/ubuntu/wod rev-parse HEAD
 readlink /home/ubuntu/wod/frontend-release
-systemctl is-active kai-api.service kai-frontend.service
+systemctl is-active kai-api.service kai-collector.service kai-frontend.service
 curl --fail --silent --show-error http://127.0.0.1:8000/health
 curl --fail --silent --show-error http://127.0.0.1:3000/api/v1/health
 curl --fail --silent --show-error https://wod.kai.com/health
@@ -69,7 +70,7 @@ curl --fail --silent --show-error https://wod.kai.com/api/v1/health
 再检查近期日志，确认没有持续异常或重启循环：
 
 ```bash
-journalctl -u kai-api.service -u kai-frontend.service --since "15 minutes ago" --no-pager
+journalctl -u kai-api.service -u kai-collector.service -u kai-frontend.service --since "15 minutes ago" --no-pager
 ```
 
 日志中如果可能包含个人信息、Token 或支付参数，只在服务器上查看，不复制到公开渠道。
@@ -78,7 +79,7 @@ journalctl -u kai-api.service -u kai-frontend.service --since "15 minutes ago" -
 
 1. 停止继续发布并记录失败提交；
 2. 将 `frontend-release` 软链接切回上一个已经验收的 release；
-3. 重启 `kai-frontend.service` 并执行全部健康检查；
+3. 重启 `kai-collector.service` 和 `kai-frontend.service` 并执行全部健康检查；
 4. API 代码回滚必须使用 Git 中的已知稳定提交，不在服务器手改文件；
 5. 只有数据库迁移确认向后不兼容且恢复方案经过评审时才恢复数据库备份；不要用旧数据库
    覆盖仍在写入的生产库；

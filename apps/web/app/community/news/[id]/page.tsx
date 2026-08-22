@@ -6,5 +6,5 @@ export const metadata: Metadata = { title: "资讯详情", description: "北斗 
 
 export default async function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <div className="site-page"><SiteHeader /><main className="news-detail-page"><NewsDetail articleId={id} /></main></div>;
+  return <div className="site-page public-v2"><SiteHeader /><main className="news-detail-page"><NewsDetail articleId={id} /></main></div>;
 }

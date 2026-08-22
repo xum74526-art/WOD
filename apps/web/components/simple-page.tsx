@@ -16,7 +16,7 @@ type SimplePageProps = {
 export function SimplePage({ title, description, titleEn, descriptionEn }: SimplePageProps) {
   const { locale } = useI18n();
   return (
-    <div className="site-page">
+    <div className="site-page public-v2 information-page">
       <SiteHeader />
       <main className="public-data-page kai-simple-page">
         <header><p className="hero-eyebrow">北斗 kai / INFORMATION</p><h1>{locale === "en" ? titleEn || title : title}</h1><p>{locale === "en" ? descriptionEn || description : description}</p></header>

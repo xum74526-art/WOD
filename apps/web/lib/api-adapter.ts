@@ -45,6 +45,14 @@ function apiSuccess(data: unknown, meta: JsonObject = {}, status = 200) {
   });
 }
 
+function publicApiSuccess(data: unknown, meta: JsonObject = {}, maxAge = 10) {
+  return NextResponse.json({ data, meta }, {
+    headers: {
+      "Cache-Control": `public, max-age=${maxAge}, s-maxage=${Math.max(maxAge, 30)}, stale-while-revalidate=120`,
+    },
+  });
+}
+
 function isMutation(method: string) {
   return !["GET", "HEAD", "OPTIONS"].includes(method);
 }
@@ -380,7 +388,7 @@ function modelMemory(model: string, variant: string) {
 }
 
 async function marketRanking(request: NextRequest) {
-  const ranking = await upstream(request, "/api/market/ranking", { auth: false });
+  const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
   if (!ranking.ok) return upstreamFailure(ranking);
   const rankingData = object(ranking.body.data);
   const entries = array(rankingData.items).slice(0, 12).map((entry) => ({
@@ -395,7 +403,7 @@ async function marketRanking(request: NextRequest) {
     history_point_count: number(entry.history_point_count),
     market_status: text(entry.market_status),
   }));
-  return apiSuccess(entries, {
+  return publicApiSuccess(entries, {
     observed_at: text(rankingData.server_time),
     count: entries.length,
     source: "canonical-api",
@@ -403,29 +411,24 @@ async function marketRanking(request: NextRequest) {
 }
 
 async function marketSummary(request: NextRequest) {
-  const ranking = await upstream(request, "/api/market/ranking", { auth: false });
+  const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
   if (!ranking.ok) return upstreamFailure(ranking);
   const rankingData = object(ranking.body.data);
   const entries = array(rankingData.items).slice(0, 12);
   const withHistory = await Promise.all(entries.map(async (entry) => {
     const model = text(entry.gpu_model);
     const variant = text(entry.gpu_variant);
-    const query = new URLSearchParams({ model, range: "30d", sources: "kai" });
+    const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
     if (variant) query.set("variant", variant);
-    const historyResult = await upstream(request, "/api/market/prices/history", { query, auth: false });
-    const historyData = historyResult.ok ? object(historyResult.body.data) : {};
-    const byDay = new Map<string, number[]>();
-    for (const series of array(historyData.series)) {
-      for (const point of array(series.points)) {
-        const date = text(point.time).slice(0, 10);
-        const price = number(point.price_cny, NaN);
-        if (date && Number.isFinite(price) && price > 0) byDay.set(date, [...(byDay.get(date) || []), price]);
-      }
-    }
-    const history = [...byDay.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([date, prices]) => ({
-      date,
-      median: prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)],
-    }));
+    const candleResult = await upstream(request, "/api/market/prices/candles", { query, auth: false, revalidate: 120 });
+    const candleData = candleResult.ok ? object(candleResult.body.data) : {};
+    const history = array(candleData.candles)
+      .map((candle) => ({
+        date: text(candle.start_time).slice(0, 10),
+        median: number(candle.close_price_cny, NaN),
+      }))
+      .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
+      .sort((a, b) => b.date.localeCompare(a.date));
     const current = number(entry.median_price_cny);
     return {
       gpu_model: variant ? `${model} ${variant}`.trim() : model,
@@ -445,7 +448,7 @@ async function marketSummary(request: NextRequest) {
       reliability: text(entry.market_status) === "live" ? 100 : 0,
     };
   }));
-  return apiSuccess(withHistory, {
+  return publicApiSuccess(withHistory, {
     observed_at: text(rankingData.server_time),
     history_updated_at: text(rankingData.server_time),
     count: withHistory.length,
@@ -626,15 +629,15 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
   }
   if (path === "public/products" && request.method === "GET") {
-    const result = await upstream(request, "/api/products", { query: request.nextUrl.searchParams, auth: false });
+    const result = await upstream(request, "/api/products", { query: request.nextUrl.searchParams, auth: false, revalidate: 15 });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
-    return apiSuccess((page.data as unknown[]).map(product), { ...page.meta, count: page.meta.total, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" });
+    return publicApiSuccess((page.data as unknown[]).map(product), { ...page.meta, count: page.meta.total, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);
   if (productMatch && request.method === "GET") {
-    const result = await upstream(request, `/api/products/${productMatch[1]}`, { auth: false });
-    return result.ok ? apiSuccess(product(result.body.data), { real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }) : upstreamFailure(result);
+    const result = await upstream(request, `/api/products/${productMatch[1]}`, { auth: false, revalidate: 10 });
+    return result.ok ? publicApiSuccess(product(result.body.data), { real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5) : upstreamFailure(result);
   }
   if (path === "public/market/ranking" && request.method === "GET") return marketRanking(request);
   if (path === "public/market/summary" && request.method === "GET") return marketSummary(request);
@@ -854,11 +857,15 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
+    const publicMarketRead = request.method === "GET" && /^market\/(?:models|ranking|sources\/status|prices\/(?:latest|candles|history))$/.test(canonicalPath);
     const result = await upstream(request, `/api/${canonicalPath}`, {
       body: isMutation(request.method) ? body : undefined,
       query: request.nextUrl.searchParams,
+      ...(publicMarketRead ? { auth: false, revalidate: canonicalPath.includes("history") || canonicalPath.includes("candles") ? 120 : 30 } : {}),
     });
-    return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
+    return result.ok
+      ? publicMarketRead ? publicApiSuccess(result.body.data, { source: "canonical-api" }, 10) : apiSuccess(result.body.data, { source: "canonical-api" })
+      : upstreamFailure(result);
   }
 
   return unavailable(path);

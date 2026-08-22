@@ -1,6 +1,6 @@
 # KAI
 
-KAI 是一个 monorepo：一个 FastAPI 业务后端、一个 Next.js Web，以及分别发布的 iOS、Android 客户端。
+KAI 是一个 monorepo：一个 FastAPI 业务后端、一个独立数据采集服务、一个 Next.js Web，以及分别发布的 iOS、Android 客户端。
 
 ## 架构
 
@@ -8,9 +8,14 @@ KAI 是一个 monorepo：一个 FastAPI 业务后端、一个 Next.js Web，以�
 Web Browser ──> Next.js BFF /api/v1/canonical ──┐
                                       ├──> FastAPI /api ──> wod.db
 iOS / Android ─────────────────────┘
+
+External Sources ──> Collector ──> FastAPI /internal/v1/ingestion ──> wod.db
+KAI Pricing ──> Scheduled Candle Agent ──> market_price_candles ──> FastAPI read API
 ```
 
 - `services/api` 是唯一业务后端和数据模型。
+- `services/collector` 获取并标准化外部数据，只能通过 FastAPI 内部接口写入，禁止直连数据库。
+- KAI 官方 OHLC 由 FastAPI 内的定时 Candle Agent 预取并持久化；Web 行情请求只读数据库，不在请求链路访问上游。
 - `apps/web` 不连接数据库；BFF 使用 HttpOnly Cookie 保存会话并转发到 FastAPI。
 - `apps/ios` 与 `apps/android` 分别承载两个 App；两端共享同一 OpenAPI 契约和业务状态定义。
 - `packages/api-contracts` 保存从 FastAPI 导出的 OpenAPI 快照并检查 Mobile 请求。
@@ -38,6 +43,7 @@ iOS / Android ─────────────────────┘
 | `apps/ios` | uni-app iOS 客户端 |
 | `apps/android` | uni-app Android 客户端，正式包名 `com.kai.wod` |
 | `services/api` | 唯一 FastAPI 后端 |
+| `services/collector` | 外部数据采集、标准化和定时提交服务，不访问数据库 |
 | `packages/api-contracts` | OpenAPI 快照和契约检查 |
 | `infra` | systemd、nginx 和环境变量示例 |
 | `tooling` | 全仓检查和本地工具 |

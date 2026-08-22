@@ -5,6 +5,7 @@
   "description": "KAI Web and cross-platform Mobile sharing one canonical API",
   "scripts": {
     "test:api": "cd services/api && .venv/bin/python -m unittest discover -s tests -p 'test_*.py'",
+    "test:collector": "cd services/collector && .venv/bin/python -m unittest discover -s tests -p 'test_*.py'",
     "init:api": "cd services/api && .venv/bin/python init_db.py",
     "export:openapi": "services/api/.venv/bin/python packages/api-contracts/export_openapi.py",
     "check:contracts": "services/api/.venv/bin/python packages/api-contracts/check_openapi.py && node packages/api-contracts/check-mobile-api.mjs && node packages/api-contracts/check-client-boundaries.mjs",

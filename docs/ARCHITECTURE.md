@@ -11,6 +11,7 @@
 | 本地测试 Web | `apps/web` | BFF 转发到 `https://wod.kai.com/api` | 禁止 |
 | iOS | `apps/ios` | `https://wod.kai.com/api` | 禁止 |
 | Android | `apps/android` | `https://wod.kai.com/api` | 禁止 |
+| 数据采集 | `services/collector` | FastAPI `/internal/v1/ingestion/*` | 禁止 |
 | 云端 API | `services/api` | FastAPI `/api/*` | 唯一允许 |
 
 因此，本地 Web、线上 Web 和手机端不需要“同步数据库文件”。它们通过同一个云端 API
@@ -41,6 +42,16 @@ Web Browser
 iOS / Android
   -> FastAPI /api
   -> Database / Uploads
+
+External Sources
+  -> Collector adapters
+  -> FastAPI /internal/v1/ingestion
+  -> Database
+
+KAI Pricing
+  -> Scheduled Candle Agent
+  -> market_price_candles
+  -> FastAPI market read endpoints
 ```
 
 生产域名上的 nginx 路由优先级是：
@@ -50,6 +61,7 @@ iOS / Android
 3. 其余请求到 Next.js 页面。
 
 不要改变前两项的顺序，否则浏览器可能绕过 HttpOnly Cookie 会话边界。
+`/internal/v1/ingestion/*` 不经过公网 nginx 和 Web BFF，只允许受保护的内部网络调用。
 
 Web BFF 只负责以下事情：
 
@@ -79,6 +91,13 @@ services/api/app/
 ```
 
 新业务功能应在 `models/schemas/routers/services` 中使用同一业务名称，避免把所有逻辑放进 `main.py` 或单个巨型 router。
+
+`services/collector` 与 FastAPI 通过版本化批次契约通信。Collector 不导入 ORM、不读取业务密钥、不连接数据库；FastAPI 负责鉴权、严格校验、幂等、事务、当前报价投影和历史快照。当前 Vast 搜索属于变化中的样本，必须标记为 `incremental`，不得冒充完整快照。
+
+KAI 官方历史 OHLC 使用独立的定时 Candle Agent。Agent 是唯一允许访问该历史上游的执行路径，
+结果幂等写入 `market_price_candles`，同步状态写入 `market_candle_sync_status`。公开的
+`/api/market/prices/candles`、排名和 Web BFF 只查询数据库；上游失败时继续返回最后一次成功数据，
+不能在用户请求中回源，也不能把历史 OHLC 写成商品库存或当前报价。
 
 ## 契约与状态所有权
 

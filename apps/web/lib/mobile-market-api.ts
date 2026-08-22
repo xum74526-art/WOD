@@ -75,7 +75,7 @@ export function getMobileLatestMarket(model: MobileMarketModel) {
   })}`));
 }
 
-export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "30d") {
+export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "30d" | "90d") {
   return apiRequest<MobileMarketCandles>(canonicalApiPath(`/market/prices/candles?${kaiPricingQuery({
     model: model.gpu_model,
     variant: model.gpu_variant,

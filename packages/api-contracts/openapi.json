@@ -648,6 +648,671 @@
         "title": "LoginIn",
         "type": "object"
       },
+      "MarketOfferBatchIn": {
+        "properties": {
+          "batch_id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "billing_mode": {
+            "enum": [
+              "on-demand",
+              "bid",
+              "reserved"
+            ],
+            "title": "Billing Mode",
+            "type": "string"
+          },
+          "dataset": {
+            "const": "gpu_offers",
+            "enum": [
+              "gpu_offers"
+            ],
+            "title": "Dataset",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/MarketOfferRecord"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Records",
+            "type": "array"
+          },
+          "refresh_seconds": {
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Refresh Seconds",
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "enum": [
+              "1.0"
+            ],
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source": {
+            "const": "vast",
+            "enum": [
+              "vast"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "sync_mode": {
+            "default": "incremental",
+            "enum": [
+              "incremental",
+              "snapshot"
+            ],
+            "title": "Sync Mode",
+            "type": "string"
+          },
+          "upstream_rate_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Rate Limit"
+          },
+          "upstream_rate_limit_remaining": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Rate Limit Remaining"
+          },
+          "upstream_rate_limit_reset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Rate Limit Reset At"
+          }
+        },
+        "required": [
+          "schema_version",
+          "source",
+          "dataset",
+          "billing_mode",
+          "batch_id",
+          "observed_at",
+          "refresh_seconds",
+          "records"
+        ],
+        "title": "MarketOfferBatchIn",
+        "type": "object"
+      },
+      "MarketOfferBatchResponse": {
+        "properties": {
+          "code": {
+            "const": 0,
+            "default": 0,
+            "enum": [
+              0
+            ],
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MarketOfferBatchResult"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MarketOfferBatchResponse",
+        "type": "object"
+      },
+      "MarketOfferBatchResult": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "duplicate": {
+            "default": false,
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "snapshots": {
+            "title": "Snapshots",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "batch_id",
+          "received",
+          "accepted",
+          "inserted",
+          "updated",
+          "rejected",
+          "stale",
+          "deleted",
+          "snapshots"
+        ],
+        "title": "MarketOfferBatchResult",
+        "type": "object"
+      },
+      "MarketOfferRecord": {
+        "properties": {
+          "compute_capability": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Capability"
+          },
+          "compute_price_hourly": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Compute Price Hourly"
+          },
+          "cpu_arch": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Arch"
+          },
+          "cpu_cores": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Cores"
+          },
+          "cpu_name": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Name"
+          },
+          "cpu_ram_mb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Ram Mb"
+          },
+          "cuda_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cuda Version"
+          },
+          "currency": {
+            "const": "USD",
+            "default": "USD",
+            "enum": [
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "discount_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Rate"
+          },
+          "disk_bandwidth_mbps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Bandwidth Mbps"
+          },
+          "disk_space_gb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Space Gb"
+          },
+          "duration_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Days"
+          },
+          "external_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "External Id",
+            "type": "integer"
+          },
+          "gpu_count": {
+            "maximum": 1024.0,
+            "minimum": 1.0,
+            "title": "Gpu Count",
+            "type": "integer"
+          },
+          "gpu_memory_bandwidth": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Memory Bandwidth"
+          },
+          "gpu_model": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9]+$",
+            "title": "Gpu Model",
+            "type": "string"
+          },
+          "gpu_name": {
+            "maxLength": 96,
+            "minLength": 1,
+            "title": "Gpu Name",
+            "type": "string"
+          },
+          "gpu_ram_mb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Ram Mb"
+          },
+          "gpu_total_ram_mb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Total Ram Mb"
+          },
+          "gpu_variant": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Gpu Variant",
+            "type": "string"
+          },
+          "hosting_type": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hosting Type"
+          },
+          "internet_down_mbps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internet Down Mbps"
+          },
+          "internet_down_price_tb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internet Down Price Tb"
+          },
+          "internet_up_mbps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internet Up Mbps"
+          },
+          "internet_up_price_tb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internet Up Price Tb"
+          },
+          "minimum_bid_hourly": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Bid Hourly"
+          },
+          "nvlink_bandwidth": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nvlink Bandwidth"
+          },
+          "per_gpu_compute_price_hourly": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Per Gpu Compute Price Hourly"
+          },
+          "per_gpu_total_price_hourly": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Per Gpu Total Price Hourly"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "reliability": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reliability"
+          },
+          "rentable": {
+            "default": true,
+            "title": "Rentable",
+            "type": "boolean"
+          },
+          "rented": {
+            "default": false,
+            "title": "Rented",
+            "type": "boolean"
+          },
+          "storage_price_gb_month": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Price Gb Month"
+          },
+          "total_flops": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Flops"
+          },
+          "total_price_hourly": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Total Price Hourly"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification"
+          }
+        },
+        "required": [
+          "external_id",
+          "gpu_name",
+          "gpu_model",
+          "gpu_count",
+          "compute_price_hourly",
+          "total_price_hourly",
+          "per_gpu_compute_price_hourly",
+          "per_gpu_total_price_hourly"
+        ],
+        "title": "MarketOfferRecord",
+        "type": "object"
+      },
       "NotificationPreferenceUpdate": {
         "properties": {
           "device_enabled": {
@@ -1756,6 +2421,10 @@
       }
     },
     "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      },
       "OAuth2PasswordBearer": {
         "flows": {
           "password": {
@@ -8679,6 +9348,52 @@
           }
         },
         "summary": "Health2"
+      }
+    },
+    "/internal/v1/ingestion/market-offers/batches": {
+      "post": {
+        "operationId": "ingest_market_offers_internal_v1_ingestion_market_offers_batches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketOfferBatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketOfferBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ingest Market Offers",
+        "tags": [
+          "internal-ingestion"
+        ]
       }
     }
   }

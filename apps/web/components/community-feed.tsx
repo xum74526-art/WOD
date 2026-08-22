@@ -206,7 +206,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     if (page === 1) void load(); else setPage(1);
   }
 
-  if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>Web 与手机端共用动态、关注、点赞和评论数据。</p><Link href="/login?return_to=/community">登录 北斗 kai</Link></div>;
+  if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>Web 与手机端共用动态、关注、点赞和评论数据。</p><Link href="/login?return_to=/community">登录</Link></div>;
 
   return <section className="mobile-community-feed">
     <div className="community-commandbar">

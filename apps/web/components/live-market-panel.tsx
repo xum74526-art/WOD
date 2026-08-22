@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass } from "@phosphor-icons/react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
 import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource } from "@/lib/mobile-market-api";
@@ -20,14 +20,14 @@ type MarketSummary = {
 };
 type MarketMeta = { observed_at: string; history_updated_at?: string };
 type MarketResponse = { data: MarketSummary[]; meta: MarketMeta };
-type RangeWeeks = 2 | 4 | 8 | 14;
+type RangeDays = 28 | 56 | 90;
 type SortKey = "price" | "day" | "week" | "updated";
 type Direction = "all" | "up" | "down";
 
-const ranges: { value: RangeWeeks; label: string }[] = [
-  { value: 4, label: "4周" },
-  { value: 8, label: "8周" },
-  { value: 14, label: "3个月" },
+const ranges: { value: RangeDays; label: string }[] = [
+  { value: 28, label: "4周" },
+  { value: 56, label: "8周" },
+  { value: 90, label: "3个月" },
 ];
 const PAGE_SIZE = 15;
 
@@ -35,12 +35,28 @@ function validHistory(item: MarketSummary) {
   return item.history.filter((point) => point.median > 0);
 }
 
-function rangePoints(item: MarketSummary, weeks: RangeWeeks) {
-  return validHistory(item).slice(0, weeks).reverse();
+function findMobileModel(models: MobileMarketModel[], label: string) {
+  const selected = label.trim().toLowerCase();
+  return models.find((item) => `${item.gpu_model} ${item.gpu_variant}`.trim().toLowerCase() === selected)
+    ?? models.find((item) => item.gpu_model.trim().toLowerCase() === selected);
 }
 
-function priceStats(item: MarketSummary, weeks: RangeWeeks) {
-  const points = rangePoints(item, weeks);
+function pointsWithinDays<T extends { date: string }>(input: T[], days: number) {
+  const points = [...input]
+    .filter((point) => Number.isFinite(Date.parse(point.date)))
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  const latest = points.at(-1);
+  if (!latest) return points;
+  const cutoff = Date.parse(latest.date) - Math.max(days - 1, 0) * 86_400_000;
+  return points.filter((point) => Date.parse(point.date) >= cutoff);
+}
+
+function rangePoints(item: MarketSummary, days: number) {
+  return pointsWithinDays(validHistory(item), days);
+}
+
+function priceStats(item: MarketSummary, days: number) {
+  const points = rangePoints(item, days);
   const enough = points.length >= 2;
   if (!enough) return { points, enough: false, current: points.at(-1)?.median ?? 0, high: 0, low: 0, median: 0, delta: 0, percent: 0 };
   const values = points.map((point) => point.median);
@@ -71,17 +87,113 @@ function linearPath(points: { x: number; y: number }[]) {
   return points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
 }
 
-function MiniTrend({ item, days, tone }: { item: MarketSummary; days: RangeWeeks; tone: "up" | "down" }) {
-  const stats = priceStats(item, days);
-  if (!stats.enough) return <span className="trend-mini-empty">数据不足</span>;
-  const values = stats.points.map((point) => point.median);
-  const min = Math.min(...values);
-  const range = Math.max(...values) - min || 1;
-  const points = values.map((value, index) => ({ x: (index / Math.max(1, values.length - 1)) * 100, y: 28 - ((value - min) / range) * 23 }));
-  return <svg className={`trend-mini-line is-${tone}`} viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><path d={linearPath(points)} fill="none" stroke={tone === "up" ? "#168866" : "#d84c55"} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg>;
+function visualTrendPoints(values: number[], targetCount = 36) {
+  if (values.length <= targetCount || targetCount < 3) {
+    return values.map((value, index) => ({ index, value }));
+  }
+
+  // Largest-triangle sampling keeps real turning points instead of averaging
+  // away the peaks and valleys that make a price trend readable.
+  const sampled = [{ index: 0, value: values[0] }];
+  const bucketSize = (values.length - 2) / (targetCount - 2);
+  let anchorIndex = 0;
+
+  for (let bucket = 0; bucket < targetCount - 2; bucket += 1) {
+    const averageStart = Math.floor((bucket + 1) * bucketSize) + 1;
+    const averageEnd = Math.min(Math.floor((bucket + 2) * bucketSize) + 1, values.length);
+    const averageEntries = values.slice(averageStart, averageEnd);
+    const averageX = averageEntries.length
+      ? averageStart + (averageEntries.length - 1) / 2
+      : values.length - 1;
+    const averageY = averageEntries.length
+      ? averageEntries.reduce((sum, value) => sum + value, 0) / averageEntries.length
+      : values.at(-1)!;
+
+    const rangeStart = Math.floor(bucket * bucketSize) + 1;
+    const rangeEnd = Math.min(Math.floor((bucket + 1) * bucketSize) + 1, values.length - 1);
+    let selectedIndex = rangeStart;
+    let largestArea = -1;
+
+    for (let index = rangeStart; index < Math.max(rangeStart + 1, rangeEnd); index += 1) {
+      const area = Math.abs(
+        (anchorIndex - averageX) * (values[index] - values[anchorIndex])
+        - (anchorIndex - index) * (averageY - values[anchorIndex]),
+      );
+      if (area > largestArea) {
+        largestArea = area;
+        selectedIndex = index;
+      }
+    }
+
+    sampled.push({ index: selectedIndex, value: values[selectedIndex] });
+    anchorIndex = selectedIndex;
+  }
+
+  sampled.push({ index: values.length - 1, value: values.at(-1)! });
+  return sampled;
 }
 
-function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary; days: RangeWeeks; realCandles?: MobileMarketCandle[] }) {
+function monotonePath(points: { x: number; y: number }[]) {
+  if (points.length < 2) return linearPath(points);
+  const slopes = points.slice(1).map((point, index) => {
+    const previous = points[index];
+    return (point.y - previous.y) / (point.x - previous.x || 1);
+  });
+  const tangents = points.map((_point, index) => {
+    if (index === 0) return slopes[0];
+    if (index === points.length - 1) return slopes.at(-1)!;
+    const before = slopes[index - 1];
+    const after = slopes[index];
+    return before * after <= 0 ? 0 : (2 * before * after) / (before + after);
+  });
+  for (let index = 0; index < slopes.length; index += 1) {
+    if (slopes[index] === 0) {
+      tangents[index] = 0;
+      tangents[index + 1] = 0;
+      continue;
+    }
+    const left = tangents[index] / slopes[index];
+    const right = tangents[index + 1] / slopes[index];
+    const magnitude = Math.hypot(left, right);
+    if (magnitude > 3) {
+      const scale = 3 / magnitude;
+      tangents[index] = scale * left * slopes[index];
+      tangents[index + 1] = scale * right * slopes[index];
+    }
+  }
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const width = point.x - previous.x;
+    return `${path} C ${previous.x + width / 3} ${previous.y + tangents[index] * width / 3}, ${point.x - width / 3} ${point.y - tangents[index + 1] * width / 3}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+}
+
+function MiniTrend({ item, days, tone }: { item: MarketSummary; days: RangeDays; tone: "up" | "down" }) {
+  const stats = priceStats(item, days);
+  if (!stats.enough) return <span className="trend-mini-empty">历史积累中</span>;
+  const rawValues = stats.points.map((point) => point.median);
+  const visualPoints = visualTrendPoints(rawValues);
+  const values = visualPoints.map((point) => point.value);
+  const min = Math.min(...values);
+  const rawRange = Math.max(...values) - min;
+  const padding = Math.max(rawRange * .11, Math.max(...values) * .005, .01);
+  const chartMin = min - padding;
+  const chartRange = rawRange + padding * 2 || 1;
+  const points = visualPoints.map(({ index, value }) => ({
+    x: (index / Math.max(1, rawValues.length - 1)) * 240,
+    y: 54 - ((value - chartMin) / chartRange) * 45,
+  }));
+  const line = monotonePath(points);
+  const fillId = `trend-fill-${item.gpu_model.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+  const area = `${line} L 240 64 L 0 64 Z`;
+  return <svg className={`trend-mini-line is-${tone}`} viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={tone === "up" ? "#0b8f83" : "#d9434f"} stopOpacity=".22" /><stop offset="100%" stopColor={tone === "up" ? "#0b8f83" : "#d9434f"} stopOpacity="0" /></linearGradient></defs>
+    <path className="trend-mini-area" d={area} fill={`url(#${fillId})`} />
+    <path className="trend-mini-stroke" d={line} />
+  </svg>;
+}
+
+function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary; days: RangeDays; realCandles?: MobileMarketCandle[] }) {
   const stats = useMemo(() => priceStats(item, days), [item, days]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   useEffect(() => setActiveIndex(null), [item.gpu_model, days]);
@@ -100,22 +212,27 @@ function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary;
       close: point.median,
     };
   });
-  const candles = realCandles.length > 1 ? realCandles.map((point) => ({
+  const storedCandles = pointsWithinDays(realCandles.map((point) => ({
     date: point.start_time.slice(0, 10),
     median: point.close_price_cny,
     open: point.open_price_cny,
     high: point.high_price_cny,
     low: point.low_price_cny,
     close: point.close_price_cny,
-  })) : fallbackCandles;
+  })), days);
+  const candles = storedCandles.length > 1 ? storedCandles : fallbackCandles;
   const rawMin = Math.min(...candles.map((candle) => candle.low));
   const rawMax = Math.max(...candles.map((candle) => candle.high));
-  const padding = Math.max((rawMax - rawMin) * .16, rawMax * .025, .02);
+  const rawRange = rawMax - rawMin;
+  // Keep the visible range close to the actual market range. A percentage of
+  // the absolute price compresses low-volatility GPU quotes into a flat band.
+  const padding = Math.max(rawRange * .08, rawMax * .001, .01);
   const chartMin = Math.max(0, rawMin - padding);
   const chartMax = rawMax + padding;
   const plot = { left: 54, right: 946, top: 52, bottom: 292 };
   const scaleY = (value: number) => plot.top + ((chartMax - value) / (chartMax - chartMin || 1)) * (plot.bottom - plot.top);
-  const candleWidth = Math.min(34, Math.max(13, ((plot.right - plot.left) / candles.length) * .56));
+  const candleSpacing = (plot.right - plot.left) / candles.length;
+  const candleWidth = Math.min(13, Math.max(3.2, candleSpacing * .62));
   const chartCandles = candles.map((candle, index) => {
     const averageWindow = candles.slice(Math.max(0, index - 3), index + 1);
     const ma4 = averageWindow.reduce((total, entry) => total + entry.close, 0) / averageWindow.length;
@@ -145,20 +262,24 @@ function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary;
   const trendTone = stats.delta > 0 ? "is-up" : stats.delta < 0 ? "is-down" : "is-flat";
 
   return <div className={`trend-main-chart ${trendTone}`} onPointerMove={selectPoint} onPointerLeave={() => setActiveIndex(null)} onPointerDown={selectPoint}>
-    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" role="img" aria-label={`${item.gpu_model} 周价格 K 线`}>
+    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" role="img" aria-label={`${item.gpu_model} 日价格 K 线`}>
       {[0, 1, 2, 3, 4].map((line) => {
         const y = plot.top + ((plot.bottom - plot.top) / 4) * line;
-        return <line className="trend-grid-line" x1={plot.left} x2={plot.right} y1={y} y2={y} key={line} />;
+        const price = chartMax - ((chartMax - chartMin) / 4) * line;
+        return <g className="trend-grid" key={line}>
+          <line className="trend-grid-line" x1={plot.left} x2={plot.right} y1={y} y2={y} />
+          <text className="trend-grid-price" x={plot.right + 10} y={y + 3.5}>{price.toFixed(3)}</text>
+        </g>;
       })}
       <line className="trend-median-line" x1={plot.left} x2={plot.right} y1={scaleY(stats.median)} y2={scaleY(stats.median)} />
       <path className="trend-kline-ma" d={maLine} key={`ma-${item.gpu_model}-${days}`} />
       {chartCandles.map((candle) => {
         const bodyTop = Math.min(candle.openY, candle.closeY);
-        const bodyHeight = Math.max(3.5, Math.abs(candle.closeY - candle.openY));
+        const bodyHeight = Math.max(2.4, Math.abs(candle.closeY - candle.openY));
         return <g className={`trend-candle ${candle.close >= candle.open ? "is-up" : "is-down"}`} key={candle.date}>
           <title>{candle.date} · O {candle.open.toFixed(3)} H {candle.high.toFixed(3)} L {candle.low.toFixed(3)} C {candle.close.toFixed(3)}</title>
           <line className="trend-candle__wick" x1={candle.x} x2={candle.x} y1={candle.highY} y2={candle.lowY} />
-          <rect className="trend-candle__body" x={candle.x - candleWidth / 2} y={bodyHeight === 3.5 ? bodyTop - 1.75 : bodyTop} width={candleWidth} height={bodyHeight} />
+          <rect className="trend-candle__body" x={candle.x - candleWidth / 2} y={bodyHeight === 2.4 ? bodyTop - 1.2 : bodyTop} width={candleWidth} height={bodyHeight} />
         </g>;
       })}
       {activeIndex !== null && <line className="trend-cursor-line" x1={active.x} x2={active.x} y1={plot.top} y2={plot.bottom} />}
@@ -173,7 +294,7 @@ function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary;
     <span className="trend-low-label" style={{ left: `${lowPoint.x / 10}%`, top: `${lowPoint.lowY / 3.3}%` }}>最低 {formatPrice(lowPoint.low)}</span>
     <span className="trend-median-label" style={{ top: `${scaleY(stats.median) / 3.3}%` }}>中位价 {formatPrice(stats.median)}</span>
     {activeIndex !== null && <div className="trend-chart-tooltip" style={{ left: `${Math.max(10, Math.min(90, active.x / 10))}%`, top: `${Math.max(7, active.highY / 3.3 - 6)}%` }}><strong>{formatPrice(active.close)} / GPU·小时</strong><span>开 {active.open.toFixed(3)} · 高 {active.high.toFixed(3)} · 低 {active.low.toFixed(3)} · 收 {active.close.toFixed(3)}</span><span>{new Date(`${active.date}T00:00:00Z`).toLocaleDateString("zh-CN", { timeZone: "UTC" })}</span></div>}
-    <div className="trend-axis-dates"><span>{new Date(`${stats.points[0].date}T00:00:00`).toLocaleDateString("zh-CN")}</span><span>{new Date(`${stats.points.at(-1)!.date}T00:00:00`).toLocaleDateString("zh-CN")}</span></div>
+    <div className="trend-axis-dates"><span>{new Date(`${candles[0].date}T00:00:00`).toLocaleDateString("zh-CN")}</span><span>{new Date(`${candles.at(-1)!.date}T00:00:00`).toLocaleDateString("zh-CN")}</span></div>
   </div>;
 }
 
@@ -182,7 +303,10 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   const [meta, setMeta] = useState<MarketMeta | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
   const [gpuPickerQuery, setGpuPickerQuery] = useState("");
-  const [days, setDays] = useState<RangeWeeks>(14);
+  const [gpuPickerOpen, setGpuPickerOpen] = useState(false);
+  const [gpuPickerDirty, setGpuPickerDirty] = useState(false);
+  const [gpuPickerActive, setGpuPickerActive] = useState(0);
+  const [days, setDays] = useState<RangeDays>(90);
   const [query, setQuery] = useState("");
   const [memory, setMemory] = useState("all");
   const [direction, setDirection] = useState<Direction>("all");
@@ -206,7 +330,7 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
         getMobileMarketModels(),
         getMobileMarketSources(),
       ]);
-      const data = (payload.data ?? []).filter((item) => validHistory(item).length > 1);
+      const data = (payload.data ?? []).filter((item) => item.median_price > 0 || validHistory(item).length > 0);
       setMarkets(data);
       setMeta(payload.meta);
       setMobileModels(modelsPayload.items ?? []);
@@ -222,11 +346,11 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    const model = mobileModels.find((item) => item.gpu_model.toLowerCase() === selectedModel.toLowerCase());
+    const model = findMobileModel(mobileModels, selectedModel);
     if (!model) { setLatest(null); setRealCandles([]); return; }
     let active = true;
     setLiveLoading(true);
-    const range = days <= 4 ? "7d" : "30d";
+    const range = days <= 28 ? "30d" : "90d";
     Promise.all([getMobileLatestMarket(model), getMobileMarketCandles(model, range)])
       .then(([latestPayload, candlePayload]) => {
         if (!active) return;
@@ -241,12 +365,18 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   const memories = useMemo(() => [...new Set(markets.map((item) => item.vram_gb).filter((value): value is number => Boolean(value)))].sort((a, b) => a - b), [markets]);
   const selected = markets.find((item) => item.gpu_model === selectedModel) ?? markets[0];
   const selectedStats = selected ? priceStats(selected, days) : null;
-  const dailyMovers = markets.map((item) => priceStats(item, 2)).filter((stats) => stats.enough);
+  const dailyMovers = markets.map((item) => priceStats(item, 7)).filter((stats) => stats.enough);
   const risingToday = dailyMovers.filter((stats) => stats.delta > 0).length;
   const fallingToday = dailyMovers.filter((stats) => stats.delta < 0).length;
 
   const filtered = useMemo(() => markets.filter((item) => {
-    if (!item.gpu_model.toLowerCase().includes(query.trim().toLowerCase())) return false;
+    const needle = query.trim().toLowerCase();
+    const searchable = [
+      item.gpu_model,
+      item.tier ?? "",
+      item.vram_gb ? `${item.vram_gb}GB` : "",
+    ].join(" ").toLowerCase();
+    if (needle && !searchable.includes(needle)) return false;
     if (memory !== "all" && item.vram_gb !== Number(memory)) return false;
     const change = priceStats(item, days);
     if (direction === "up" && (!change.enough || change.delta <= 0)) return false;
@@ -259,11 +389,29 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   const losers = [...ranked].filter((entry) => entry.stats.delta < 0).sort((a, b) => a.stats.percent - b.stats.percent).slice(0, 5);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
-    const value = (item: MarketSummary) => sortKey === "price" ? priceStats(item, 2).current : sortKey === "day" ? priceStats(item, 2).percent : sortKey === "week" ? priceStats(item, 4).percent : new Date(meta?.history_updated_at ?? meta?.observed_at ?? 0).getTime();
+    const value = (item: MarketSummary) => sortKey === "price" ? priceStats(item, 7).current : sortKey === "day" ? priceStats(item, 7).percent : sortKey === "week" ? priceStats(item, 28).percent : new Date(meta?.history_updated_at ?? meta?.observed_at ?? 0).getTime();
     return (value(a) - value(b)) * (sortAsc ? 1 : -1);
   }), [filtered, sortKey, sortAsc, meta]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageItems = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const gpuPickerOptions = useMemo(() => {
+    const needle = gpuPickerDirty ? gpuPickerQuery.trim().toLowerCase() : "";
+    if (!needle) return markets;
+    const matches = markets.filter((item) => [
+      item.gpu_model,
+      item.tier ?? "",
+      item.vram_gb ? `${item.vram_gb}gb` : "",
+    ].some((value) => value.toLowerCase().includes(needle)));
+    const relevance = (item: MarketSummary) => {
+      const label = item.gpu_model.trim().toLowerCase();
+      const family = label.split(/\s+/)[0];
+      if (label === needle) return 0;
+      if (family === needle) return 1;
+      if (label.startsWith(needle)) return 2;
+      return 3;
+    };
+    return matches.sort((a, b) => relevance(a) - relevance(b) || a.gpu_model.localeCompare(b.gpu_model));
+  }, [gpuPickerDirty, gpuPickerQuery, markets]);
   useEffect(() => setPage(1), [query, memory, direction, days, sortKey, sortAsc]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
@@ -274,12 +422,57 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   const chooseGpu = (model: string, scrollToChart = true) => {
     setSelectedModel(model);
     setGpuPickerQuery(model);
+    setGpuPickerOpen(false);
+    setGpuPickerDirty(false);
+    setGpuPickerActive(0);
     if (scrollToChart) document.getElementById("gpu-main-chart")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const updateGpuPicker = (value: string) => {
     setGpuPickerQuery(value);
-    const match = markets.find((item) => item.gpu_model.toLowerCase() === value.trim().toLowerCase());
-    if (match) chooseGpu(match.gpu_model, false);
+    setGpuPickerOpen(true);
+    setGpuPickerDirty(true);
+    setGpuPickerActive(0);
+  };
+  const commitGpuPicker = () => {
+    if (!gpuPickerDirty) {
+      setGpuPickerQuery(selectedModel);
+      setGpuPickerOpen(false);
+      return;
+    }
+    const needle = gpuPickerQuery.trim().toLowerCase();
+    const exact = markets.find((item) => item.gpu_model.toLowerCase() === needle);
+    const family = gpuPickerOptions.find((item) => item.gpu_model.trim().toLowerCase().split(/\s+/)[0] === needle);
+    const next = exact ?? family ?? (gpuPickerOptions.length === 1 ? gpuPickerOptions[0] : null);
+    if (next) chooseGpu(next.gpu_model, false);
+    else setGpuPickerQuery(selectedModel);
+    setGpuPickerOpen(false);
+    setGpuPickerDirty(false);
+  };
+  const handleGpuPickerKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setGpuPickerOpen(false);
+      setGpuPickerQuery(selectedModel);
+      setGpuPickerDirty(false);
+      return;
+    }
+    if (!gpuPickerOptions.length) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setGpuPickerOpen(true);
+      setGpuPickerActive((current) => {
+        const offset = event.key === "ArrowDown" ? 1 : -1;
+        return (current + offset + gpuPickerOptions.length) % gpuPickerOptions.length;
+      });
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (gpuPickerOpen && gpuPickerOptions.length) {
+        chooseGpu(gpuPickerOptions[gpuPickerActive]?.gpu_model ?? gpuPickerOptions[0].gpu_model, false);
+      } else {
+        commitGpuPicker();
+      }
+    }
   };
 
   if (status === "loading") return <section className="trend-state-panel"><Database size={34} weight="light" /><strong>正在加载算力行情</strong><p>正在读取真实历史价格。</p></section>;
@@ -297,7 +490,7 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
     </section>;
   }
   if (!markets.length) return <section className="trend-state-panel"><ChartLine size={34} weight="light" /><strong>暂无行情数据</strong><p>当前没有足够的真实历史价格。</p></section>;
-  if (featured) return <section className="market-panel trend-home-preview"><div className="market-panel__head"><div><p className="hero-eyebrow">GPU PRICE TRENDS</p><h2>GPU 算力行情</h2><p>观察真实价格变化，再进入市场寻找资源。</p></div><Link href="/market/trends">查看完整行情</Link></div><div>{markets.slice(0, 3).map((item) => { const stats = priceStats(item, 2); return <article key={item.gpu_model}><span><strong>{item.gpu_model}</strong><small>{item.vram_gb ? `${item.vram_gb}GB 显存` : item.tier}</small></span><span><small>当前价格</small><strong>{formatPrice(stats.current)}</strong></span><span className={stats.percent >= 0 ? "is-up" : "is-down"}><small>本周涨跌</small><strong>{stats.enough ? formatChange(stats.percent, "%") : "—"}</strong></span></article>; })}</div></section>;
+  if (featured) return <section className="market-panel trend-home-preview"><div className="market-panel__head"><div><p className="hero-eyebrow">GPU PRICE TRENDS</p><h2>GPU 算力行情</h2><p>观察真实价格变化，再进入市场寻找资源。</p></div><Link href="/market/trends">查看完整行情</Link></div><div>{markets.slice(0, 3).map((item) => { const stats = priceStats(item, 7); return <article key={item.gpu_model}><span><strong>{item.gpu_model}</strong><small>{item.vram_gb ? `${item.vram_gb}GB 显存` : item.tier}</small></span><span><small>当前价格</small><strong>{formatPrice(stats.current)}</strong></span><span className={stats.percent >= 0 ? "is-up" : "is-down"}><small>本周涨跌</small><strong>{stats.enough ? formatChange(stats.percent, "%") : "—"}</strong></span></article>; })}</div></section>;
 
   return <section className="trend-dashboard">
     <div className="trend-overview">
@@ -314,15 +507,78 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
     {selected && selectedStats && <section className="trend-focus" id="gpu-main-chart">
       <header>
         <div className="trend-focus-tools">
-          <label className="trend-focus-gpu-picker">
-            <span>GPU 型号</span>
-            <div><MagnifyingGlass size={18} /><input list="trend-gpu-options" value={gpuPickerQuery} onChange={(event) => updateGpuPicker(event.target.value)} onBlur={() => setGpuPickerQuery(selectedModel)} placeholder="输入 GPU 型号" aria-label="选择要查看的 GPU" />{selected.vram_gb && <em>{selected.vram_gb}GB</em>}</div>
-          </label>
-          <datalist id="trend-gpu-options">{markets.map((item) => <option value={item.gpu_model} key={item.gpu_model}>{item.vram_gb ? `${item.vram_gb}GB 显存` : item.tier}</option>)}</datalist>
-          <div className="trend-focus-period"><span>观察周期</span><div className="trend-ranges" aria-label="时间范围">{ranges.map((range) => <button className={days === range.value ? "is-active" : ""} onClick={() => setDays(range.value)} type="button" key={range.value}>{range.label}</button>)}</div></div>
+          <div
+            className="trend-focus-gpu-picker"
+            onBlur={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              commitGpuPicker();
+            }}
+          >
+            <label htmlFor="trend-gpu-search">主图 GPU</label>
+            <div className={`trend-focus-picker-shell ${gpuPickerOpen ? "is-open" : ""}`}>
+              <MagnifyingGlass size={18} />
+              <input
+                id="trend-gpu-search"
+                value={gpuPickerQuery}
+                onChange={(event) => updateGpuPicker(event.target.value)}
+                onFocus={(event) => {
+                  setGpuPickerOpen(true);
+                  setGpuPickerDirty(false);
+                  setGpuPickerActive(0);
+                  event.currentTarget.select();
+                }}
+                onClick={() => {
+                  if (gpuPickerOpen) return;
+                  setGpuPickerOpen(true);
+                  setGpuPickerDirty(false);
+                  setGpuPickerActive(0);
+                }}
+                onKeyDown={handleGpuPickerKeyDown}
+                placeholder="输入 GPU 型号"
+                role="combobox"
+                aria-label="选择要查看的 GPU"
+                aria-autocomplete="list"
+                aria-expanded={gpuPickerOpen}
+                aria-controls="trend-gpu-options"
+                aria-activedescendant={gpuPickerOpen && gpuPickerOptions.length ? `trend-gpu-option-${gpuPickerActive}` : undefined}
+              />
+              {selected.vram_gb && <em>{selected.vram_gb}GB</em>}
+              <button
+                className="trend-focus-picker-toggle"
+                type="button"
+                aria-label={gpuPickerOpen ? "收起 GPU 选择" : "展开 GPU 选择"}
+                aria-expanded={gpuPickerOpen}
+                onClick={() => setGpuPickerOpen((value) => {
+                  const next = !value;
+                  if (next) {
+                    setGpuPickerDirty(false);
+                    setGpuPickerActive(0);
+                  }
+                  return next;
+                })}
+              ><CaretDown size={15} /></button>
+            </div>
+            {gpuPickerOpen && <div className="trend-focus-gpu-options" id="trend-gpu-options" role="listbox">
+              {gpuPickerOptions.length ? gpuPickerOptions.map((item, index) => <button
+                className={index === gpuPickerActive ? "is-active" : ""}
+                id={`trend-gpu-option-${index}`}
+                type="button"
+                role="option"
+                aria-selected={item.gpu_model === selectedModel}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setGpuPickerActive(index)}
+                onClick={() => chooseGpu(item.gpu_model, false)}
+                key={item.gpu_model}
+              >
+                <span><strong>{item.gpu_model}</strong><small>{item.tier || "GPU 算力型号"}</small></span>
+                <em>{item.vram_gb ? `${item.vram_gb}GB` : "—"}</em>
+              </button>) : <p>没有匹配的 GPU 型号</p>}
+            </div>}
+          </div>
+          <div className="trend-focus-period"><span>观察周期</span><div className="trend-ranges" aria-label="时间范围">{ranges.map((range) => <button className={days === range.value ? "is-active" : ""} aria-pressed={days === range.value} onClick={() => setDays(range.value)} type="button" key={range.value}>{range.label}</button>)}</div></div>
         </div>
         <div className="trend-focus-quote">
-          <div className="trend-current-price"><span>当前实时中位价</span><strong>{latest?.summary.median_price_cny ? formatPrice(latest.summary.median_price_cny) : selectedStats.current ? formatPrice(selectedStats.current) : "数据不足"}</strong><small>{liveLoading ? "正在刷新实时行情" : latest ? `${latest.summary.source_count} 个来源 · ${latest.summary.available_gpu_count} 张可用` : "历史行情兼容模式"}</small></div>
+          <div className="trend-current-price"><span>当前实时中位价</span><strong>{latest?.summary.median_price_cny ? formatPrice(latest.summary.median_price_cny) : selectedStats.current ? formatPrice(selectedStats.current) : "数据不足"}</strong><small>{liveLoading ? "正在刷新实时行情" : latest ? `${latest.summary.source_count} 个来源 · ${latest.summary.available_gpu_count == null ? "库存未披露" : `${latest.summary.available_gpu_count} 张可用`}` : "历史行情兼容模式"}</small></div>
           {selectedStats.enough && <div className={`trend-focus-change ${selectedStats.delta >= 0 ? "is-up" : "is-down"}`}><span>{ranges.find((range) => range.value === days)?.label}涨跌</span><strong>{formatChange(selectedStats.percent, "%")}</strong></div>}
           <Link href={`/market?gpu=${encodeURIComponent(selected.gpu_model)}`}>查看可租资源</Link>
         </div>
@@ -347,13 +603,13 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
       <div className="trend-filters trend-table-filters">
         <label className="trend-search"><MagnifyingGlass size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索完整行情" aria-label="搜索完整行情中的 GPU 型号" /></label>
         <select value={memory} onChange={(event) => setMemory(event.target.value)} aria-label="显存筛选"><option value="all">全部显存</option>{memories.map((value) => <option value={value} key={value}>{value}GB</option>)}</select>
-        <div className="trend-direction" aria-label="涨跌筛选">{([["all", "全部"], ["up", "只看上涨"], ["down", "只看下跌"]] as const).map(([value, label]) => <button className={direction === value ? "is-active" : ""} onClick={() => setDirection(value)} type="button" key={value}>{label}</button>)}</div>
-        <span className="trend-filter-count">当前显示 {sorted.length} 种</span>
+        <div className="trend-direction" aria-label="涨跌筛选">{([["all", "全部"], ["up", "只看上涨"], ["down", "只看下跌"]] as const).map(([value, label]) => <button className={direction === value ? "is-active" : ""} aria-pressed={direction === value} onClick={() => setDirection(value)} type="button" key={value}>{label}</button>)}</div>
+        <span className="trend-filter-count" aria-live="polite">当前显示 {sorted.length} 种</span>
       </div>
       {sorted.length ? <div className="trend-table">
         <div className="trend-table-head"><span>GPU</span><span>显存</span><button onClick={() => changeSort("price")} type="button">当前价 {sortKey === "price" && (sortAsc ? <CaretUp /> : <CaretDown />)}</button><button onClick={() => changeSort("day")} type="button">本周涨跌 {sortKey === "day" && (sortAsc ? <CaretUp /> : <CaretDown />)}</button><button onClick={() => changeSort("week")} type="button">4周涨跌 {sortKey === "week" && (sortAsc ? <CaretUp /> : <CaretDown />)}</button><span>3个月涨跌</span><span>最高价</span><span>最低价</span><button onClick={() => changeSort("updated")} type="button">更新时间 {sortKey === "updated" && (sortAsc ? <CaretUp /> : <CaretDown />)}</button></div>
         <div className="trend-table-body">{pageItems.map((item) => {
-          const day = priceStats(item, 2); const week = priceStats(item, 4); const month = priceStats(item, 14); const current = day.current;
+          const day = priceStats(item, 7); const week = priceStats(item, 28); const month = priceStats(item, 90); const current = day.current;
           return <button className={selectedModel === item.gpu_model ? "is-selected" : ""} type="button" onClick={() => chooseGpu(item.gpu_model)} key={item.gpu_model}><span><strong>{item.gpu_model}</strong><small>{item.tier || "GPU"}</small></span><span data-label="显存">{item.vram_gb ? `${item.vram_gb}GB` : "—"}</span><span data-label="当前价"><strong>{formatPrice(current)}</strong></span><span data-label="本周" className={day.percent >= 0 ? "is-up" : "is-down"}>{day.enough ? formatChange(day.percent, "%") : "—"}</span><span data-label="4周" className={week.percent >= 0 ? "is-up" : "is-down"}>{week.enough ? formatChange(week.percent, "%") : "—"}</span><span data-label="3个月" className={month.percent >= 0 ? "is-up" : "is-down"}>{month.enough ? formatChange(month.percent, "%") : "—"}</span><span data-label="最高价">{month.enough ? formatPrice(month.high) : "—"}</span><span data-label="最低价">{month.enough ? formatPrice(month.low) : "—"}</span><span data-label="更新时间">{new Date(meta?.history_updated_at ?? meta?.observed_at ?? "").toLocaleDateString("zh-CN")}</span></button>;
         })}</div>
         <nav className="trend-pagination" aria-label="GPU 行情分页"><span>第 {page} / {pageCount} 页 · 共 {sorted.length} 种</span><div><button type="button" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((value) => <button className={page === value ? "is-active" : ""} type="button" onClick={() => setPage(value)} aria-label={`第 ${value} 页`} aria-current={page === value ? "page" : undefined} key={value}>{value}</button>)}<button type="button" disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一页</button></div></nav>

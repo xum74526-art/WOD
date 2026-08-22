@@ -238,7 +238,7 @@ input:focus-visible {
 .brand__logo {
   display: block;
   width: 58px;
-  height: 32px;
+  height: auto;
   object-fit: contain;
 }
 
@@ -2461,15 +2461,19 @@ input:focus-visible {
 .trend-dashboard .is-up { color: var(--positive); }
 .trend-dashboard .is-down { color: var(--negative); }
 .trend-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.trend-search { display: flex; align-items: center; width: min(260px, 100%); height: 38px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-soft); background: var(--surface-muted); gap: 7px; }
-.trend-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 11px; }
-.trend-filters select { height: 38px; padding: 0 31px 0 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-muted); background: var(--surface-muted); font-size: 10px; }
-.trend-direction, .trend-ranges { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-muted); }
+.trend-search { box-sizing: border-box; display: flex; align-items: center; width: min(260px, 100%); height: 44px; padding: 0 13px; overflow: hidden; border: 1px solid var(--line); border-radius: 11px; color: var(--text-soft); background: var(--surface-muted); gap: 9px; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+.trend-search:focus-within { border-color: color-mix(in srgb, var(--brand-strong) 58%, var(--line)); background: var(--surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 10%, transparent); }
+.trend-search input, .trend-search input:focus, .trend-search input:focus-visible { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; color: var(--text); background: transparent; box-shadow: none; font-size: 11px; }
+.trend-filters select { height: 44px; padding: 0 34px 0 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--text-muted); background: var(--surface-muted); font-size: 10px; }
+.trend-direction, .trend-ranges { display: flex; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-muted); }
 .trend-ranges { margin-left: auto; }
-.trend-direction button, .trend-ranges button { padding: 7px 10px; border: 0; border-radius: 6px; color: var(--text-soft); background: transparent; font-size: 9px; cursor: pointer; white-space: nowrap; }
-.trend-direction button.is-active, .trend-ranges button.is-active { color: var(--text); background: var(--surface); box-shadow: 0 1px 4px rgba(15, 23, 42, .08); }
-.trend-table-filters { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: color-mix(in srgb, var(--surface-muted) 48%, var(--surface)); }
-.trend-filter-count { margin-left: auto; color: var(--text-soft); font-size: 9px; }
+.trend-direction button, .trend-ranges button { padding: 7px 12px; border: 0; border-radius: 8px; color: var(--text-soft); background: transparent; font-size: 9px; cursor: pointer; white-space: nowrap; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+.trend-direction button.is-active, .trend-ranges button.is-active { color: var(--brand-strong); background: var(--surface); box-shadow: 0 1px 5px rgba(15, 23, 42, .09), inset 0 -2px color-mix(in srgb, var(--brand) 62%, transparent); }
+.trend-table-filters { align-items: center; flex-wrap: nowrap; padding: 13px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: color-mix(in srgb, var(--surface-muted) 48%, var(--surface)); }
+.trend-table-filters .trend-search { flex: 0 1 320px; width: 320px; }
+.trend-table-filters > select { flex: 0 0 150px; }
+.trend-table-filters .trend-direction { flex: 0 0 auto; }
+.trend-filter-count { margin-left: auto; color: var(--text-soft); font-size: 9px; white-space: nowrap; }
 .trend-leaderboards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .trend-mobile-board-tabs { display: none; }
 .trend-leaderboards > section { overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
@@ -2479,17 +2483,21 @@ input:focus-visible {
 .trend-leaderboards header small { color: var(--text-soft); font-size: 9px; }
 .trend-leaderboards section:first-child header svg { color: var(--positive); }
 .trend-leaderboards section:last-child header svg { color: var(--negative); }
-.trend-leaderboards section > div > button { display: grid; width: 100%; min-height: 55px; padding: 8px 15px; border: 0; border-bottom: 1px solid var(--line); grid-template-columns: 25px minmax(110px, 1fr) 92px 88px; align-items: center; gap: 9px; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
+.trend-leaderboards section > div > button { display: grid; width: 100%; min-height: 80px; padding: 9px 15px; border: 0; border-bottom: 1px solid var(--line); grid-template-columns: 25px minmax(110px, 1fr) minmax(160px, 1.55fr) 88px; align-items: center; gap: 12px; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
 .trend-leaderboards section > div > button:last-child { border-bottom: 0; }
 .trend-leaderboards section > div > button:hover { background: var(--surface-muted); }
 .trend-rank { color: var(--text-soft); font-size: 10px; }
 .trend-leaderboards button span > strong, .trend-leaderboards button span > small { display: block; }
 .trend-leaderboards button span > strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .trend-leaderboards button span > small { margin-top: 3px; color: var(--text-soft); font-size: 8px; }
-.trend-mini-line { width: 92px; height: 32px; }
-.trend-mini-line path { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.trend-mini-line.is-up path { stroke: var(--positive); }
-.trend-mini-line.is-down path { stroke: #d84c55; }
+.trend-mini-line { width: 100%; min-width: 160px; height: 64px; overflow: visible; shape-rendering: geometricPrecision; }
+.trend-mini-line .trend-mini-area { stroke: none; opacity: 0; animation: trend-area-reveal .55s ease-out .12s forwards; }
+.trend-mini-line .trend-mini-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; opacity: 0; animation: trend-line-reveal .28s ease-out forwards; }
+.trend-mini-line .trend-mini-stroke { stroke-width: 1.9; }
+.trend-mini-line.is-up .trend-mini-stroke { stroke: #087f79; }
+.trend-mini-line.is-down .trend-mini-stroke { stroke: #c93745; }
+@keyframes trend-line-reveal { to { opacity: 1; } }
+@keyframes trend-area-reveal { to { opacity: 1; } }
 .trend-mini-empty { color: var(--text-soft); font-size: 8px; }
 .trend-move { text-align: right; }
 .trend-move strong { font-size: 10px; }
@@ -2499,22 +2507,40 @@ input:focus-visible {
 .trend-focus-tools, .trend-focus-quote { display: flex; align-items: flex-end; gap: 12px; }
 .trend-focus-tools { min-width: 0; }
 .trend-focus-gpu-picker, .trend-focus-period { min-width: 0; }
-.trend-focus-gpu-picker > span, .trend-focus-period > span, .trend-current-price > span, .trend-focus-change > span { display: block; margin-bottom: 6px; color: var(--text-soft); font-size: 9px; }
-.trend-focus-gpu-picker > div { display: flex; align-items: center; width: 280px; height: 44px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--brand-strong); background: var(--surface-muted); gap: 8px; }
-.trend-focus-gpu-picker input { min-width: 0; width: 100%; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 11px; }
+.trend-focus-gpu-picker { position: relative; z-index: 6; }
+.trend-focus-gpu-picker > label, .trend-focus-period > span, .trend-current-price > span, .trend-focus-change > span { display: block; margin-bottom: 6px; color: var(--text-soft); font-size: 9px; }
+.trend-focus-picker-shell { position: relative; box-sizing: border-box; display: flex; align-items: center; width: 280px; height: 44px; padding: 0 7px 0 13px; overflow: hidden; border: 0; border-radius: 11px; color: var(--brand-strong); background: var(--surface-muted); gap: 9px; transition: box-shadow .16s ease, background .16s ease; }
+.trend-focus-picker-shell::after { position: absolute; z-index: 4; inset: 0; border: 1px solid var(--line); border-radius: inherit; content: ""; pointer-events: none; }
+.trend-focus-picker-shell.is-open { background: var(--surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 10%, transparent); }
+.trend-focus-picker-shell.is-open::after { border-color: color-mix(in srgb, var(--brand-strong) 58%, var(--line)); }
+.trend-focus-gpu-picker input, .trend-focus-gpu-picker input:focus, .trend-focus-gpu-picker input:focus-visible { min-width: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0 !important; border-radius: 0; outline: 0 !important; appearance: none; color: var(--text); background: transparent; box-shadow: none !important; font-size: 11px; }
 .trend-focus-gpu-picker em { padding: 4px 6px; border-radius: 5px; color: var(--text-soft); background: var(--surface); font-size: 8px; font-style: normal; white-space: nowrap; }
-.trend-focus-period .trend-ranges { height: 44px; margin-left: 0; align-items: center; }
+.trend-focus-picker-toggle { display: grid; flex: 0 0 30px; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; place-items: center; color: var(--text-soft); background: transparent; cursor: pointer; }
+.trend-focus-picker-toggle:hover { color: var(--brand-strong); background: var(--brand-soft); }
+.trend-focus-picker-shell.is-open .trend-focus-picker-toggle svg { transform: rotate(180deg); }
+.trend-focus-picker-toggle svg { transition: transform .16s ease; }
+.trend-focus-gpu-options { position: absolute; z-index: 12; top: calc(100% + 7px); left: 0; width: 100%; max-height: 348px; overflow-x: hidden; overflow-y: auto; padding: 5px; border: 1px solid color-mix(in srgb, var(--brand-strong) 30%, var(--line)); border-radius: 11px; background: var(--surface); box-shadow: 0 18px 44px rgba(15, 37, 43, .16); scrollbar-color: color-mix(in srgb, var(--brand) 38%, transparent) transparent; scrollbar-width: thin; }
+.trend-focus-gpu-options button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; padding: 7px 9px; border: 0; border-radius: 7px; color: var(--text); background: transparent; text-align: left; cursor: pointer; gap: 12px; }
+.trend-focus-gpu-options button:hover, .trend-focus-gpu-options button.is-active { background: var(--brand-soft); }
+.trend-focus-gpu-options button[aria-selected="true"] strong { color: var(--brand-strong); }
+.trend-focus-gpu-options button span, .trend-focus-gpu-options button strong, .trend-focus-gpu-options button small { display: block; min-width: 0; }
+.trend-focus-gpu-options button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.trend-focus-gpu-options button small { margin-top: 3px; color: var(--text-soft); font-size: 8px; }
+.trend-focus-gpu-options button em { flex: 0 0 auto; background: var(--surface-muted); }
+.trend-focus-gpu-options > p { margin: 0; padding: 18px 10px; color: var(--text-soft); font-size: 10px; text-align: center; }
+.trend-focus-period .trend-ranges { height: 44px; margin-left: 0; align-items: stretch; }
 .trend-current-price strong { display: block; min-width: 116px; color: var(--text); font-size: 24px; letter-spacing: -.04em; white-space: nowrap; }
 .trend-focus-change strong { display: block; min-width: 68px; font-size: 14px; white-space: nowrap; }
 .trend-focus-quote > a { display: flex; align-items: center; height: 44px; padding: 0 12px; border: 1px solid var(--brand-strong); border-radius: 8px; color: var(--brand-strong); font-size: 9px; font-weight: 650; text-decoration: none; white-space: nowrap; }
 .trend-main-chart { position: relative; height: 370px; margin: 18px 22px 0; cursor: crosshair; touch-action: pan-y; }
 .trend-main-chart > svg { width: 100%; height: 330px; overflow: visible; }
-.trend-grid-line { stroke: color-mix(in srgb, var(--line) 72%, transparent); stroke-width: .7; vector-effect: non-scaling-stroke; }
+.trend-grid-line { stroke: color-mix(in srgb, var(--line) 78%, transparent); stroke-width: .7; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+.trend-grid-price { fill: var(--text-soft); font-family: var(--font-mono); font-size: 8px; font-variant-numeric: tabular-nums; }
 .trend-median-line { stroke: color-mix(in srgb, var(--text-soft) 45%, transparent); stroke-width: .8; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .trend-kline-ma { fill: none; stroke: #d99115; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .trend-candle { color: var(--positive); }
 .trend-candle.is-down { color: var(--negative); }
-.trend-candle__wick { stroke: currentColor; stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.trend-candle__wick { stroke: currentColor; stroke-width: 1.05; vector-effect: non-scaling-stroke; }
 .trend-candle__body { fill: currentColor; }
 .trend-cursor-line { stroke: var(--brand-strong); stroke-width: .8; stroke-dasharray: 4 3; opacity: .48; vector-effect: non-scaling-stroke; }
 .trend-high-label, .trend-low-label { position: absolute; padding: 3px 6px; border-radius: 5px; background: var(--surface); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); font-size: 8px; pointer-events: none; transform: translate(-50%, -115%); white-space: nowrap; }
@@ -2604,25 +2630,27 @@ input:focus-visible {
 .trend-overview strong.is-time { font-size: 22px; }
 .trend-overview small { font-size: 10px; }
 .trend-filters { min-height: 64px; padding: 12px 14px; }
-.trend-search { height: 42px; }
+.trend-search { height: 44px; }
 .trend-search input { font-size: 13px; }
-.trend-filters select { height: 42px; font-size: 12px; }
+.trend-filters select { height: 44px; font-size: 12px; }
+.trend-select-shell select { height: 100%; }
 .trend-direction button, .trend-ranges button { min-height: 34px; padding: 8px 12px; font-size: 11px; }
+.trend-filter-count { font-size: 11px; }
 .trend-leaderboards { gap: 16px; }
 .trend-leaderboards header { min-height: 60px; padding: 0 19px; }
 .trend-leaderboards header h2 { font-size: 17px; }
 .trend-leaderboards header small { font-size: 11px; }
-.trend-leaderboards section > div > button { min-height: 67px; padding: 10px 18px; grid-template-columns: 28px minmax(120px, 1fr) 104px 98px; }
+.trend-leaderboards section > div > button { min-height: 88px; padding: 12px 18px; grid-template-columns: 28px minmax(120px, 1fr) minmax(168px, 1.6fr) 98px; }
 .trend-rank { font-family: var(--font-mono); font-size: 12px; }
 .trend-leaderboards button span > strong { font-size: 14px; }
 .trend-leaderboards button span > small { margin-top: 4px; font-family: var(--font-mono); font-size: 11px; }
-.trend-mini-line { width: 104px; height: 36px; }
+.trend-mini-line { min-width: 168px; height: 68px; }
 .trend-move strong { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
 .trend-list-empty { font-size: 13px; }
 .trend-focus { border-radius: 17px; box-shadow: 0 18px 50px rgba(15, 37, 43, .055); }
 .trend-focus > header { padding: 18px 22px; gap: 24px; }
-.trend-focus-gpu-picker > span, .trend-focus-period > span, .trend-current-price > span, .trend-focus-change > span { margin-bottom: 7px; font-size: 11px; }
-.trend-focus-gpu-picker > div { width: 300px; }
+.trend-focus-gpu-picker > label, .trend-focus-period > span, .trend-current-price > span, .trend-focus-change > span { margin-bottom: 7px; font-size: 11px; }
+.trend-focus-picker-shell { width: 300px; }
 .trend-focus-gpu-picker input { font-size: 13px; }
 .trend-focus-gpu-picker em { font-size: 10px; }
 .trend-current-price strong { font-family: var(--font-mono); font-size: 26px; font-variant-numeric: tabular-nums; }
@@ -2656,6 +2684,7 @@ input:focus-visible {
   .trend-focus > header { align-items: stretch; flex-direction: column; }
   .trend-focus-tools { width: 100%; }
   .trend-focus-quote { justify-content: flex-end; }
+  .trend-table-filters { flex-wrap: wrap; }
 }
 
 @media (max-width: 900px) {
@@ -2665,7 +2694,7 @@ input:focus-visible {
   .trend-ranges { width: 100%; overflow-x: auto; margin-left: 0; }
   .trend-ranges button { flex: 1 0 auto; }
   .trend-focus-gpu-picker { flex: 1; }
-  .trend-focus-gpu-picker > div { width: 100%; }
+  .trend-focus-picker-shell { width: 100%; }
   .trend-focus-period .trend-ranges { width: auto; }
   .trend-leaderboards { grid-template-columns: 1fr; }
 }
@@ -2676,7 +2705,7 @@ input:focus-visible {
   .trend-overview strong { font-size: 20px; }
   .trend-focus > header { gap: 17px; padding: 16px; }
   .trend-focus-tools { align-items: stretch; flex-direction: column; }
-  .trend-focus-gpu-picker > div { width: 100%; }
+  .trend-focus-picker-shell { width: 100%; }
   .trend-focus-period .trend-ranges { width: 100%; }
   .trend-focus-quote { align-items: flex-end; justify-content: space-between; flex-wrap: wrap; }
   .trend-current-price { flex: 1; }
@@ -2684,6 +2713,8 @@ input:focus-visible {
   .trend-search { width: 100%; }
   .trend-direction { width: 100%; }
   .trend-direction button { flex: 1; }
+  .trend-table-filters { align-items: stretch; flex-direction: column; padding: 15px; }
+  .trend-table-filters .trend-search, .trend-table-filters > select, .trend-table-filters .trend-direction { flex: none; width: 100%; }
   .trend-filter-count { width: 100%; margin-left: 0; }
   .trend-mobile-board-tabs { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-muted); }
   .trend-mobile-board-tabs button { flex: 1; padding: 8px; border: 0; border-radius: 6px; color: var(--text-soft); background: transparent; font-size: 10px; }
@@ -2711,6 +2742,21 @@ input:focus-visible {
   .trend-pagination { min-width: 0; align-items: flex-start; flex-direction: column; gap: 10px; }
   .trend-pagination > div { width: 100%; overflow-x: auto; padding-bottom: 2px; }
   .trend-pagination button { flex: 0 0 auto; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .trend-mini-line.is-up .trend-mini-stroke { stroke: #4bd6bb; }
+  .trend-mini-line.is-down .trend-mini-stroke { stroke: #ff6973; }
+}
+
+html.dark .trend-mini-line.is-up .trend-mini-stroke,
+html[data-color-mode="dark"] .trend-mini-line.is-up .trend-mini-stroke { stroke: #69d1cb; }
+html.dark .trend-mini-line.is-down .trend-mini-stroke,
+html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { stroke: #ff8d86; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trend-mini-line .trend-mini-area { opacity: 1; animation: none; }
+  .trend-mini-line .trend-mini-stroke { opacity: 1; animation: none; }
 }
 
 /* Compute market v1 */

@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { ArrowRight, ChartLine, Database } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import { apiBaseUrl, readApiError } from "@/lib/api";
+import { publicApiEnvelopeRequest } from "@/lib/api";
 import { useI18n } from "@/components/locale-root";
 import { getMobileMarketCandles, type MobileMarketModel } from "@/lib/mobile-market-api";
+import type { InitialGpuTrend } from "@/lib/public-data";
 
-type PricePoint = { date: string; median: number };
+type PricePoint = {
+  date: string;
+  median: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+};
 type MarketSummary = {
   gpu_model: string;
   gpu_slug: string;
@@ -28,12 +36,12 @@ type MarketResponse = {
   }>;
   meta: { observed_at?: string };
 };
-type RangeWeeks = 4 | 8 | 14;
+type RangeDays = 28 | 56 | 90;
 
-const ranges: { value: RangeWeeks; label: string }[] = [
-  { value: 4, label: "4W" },
-  { value: 8, label: "8W" },
-  { value: 14, label: "3M" },
+const ranges: { value: RangeDays; label: string }[] = [
+  { value: 28, label: "4W" },
+  { value: 56, label: "8W" },
+  { value: 90, label: "3M" },
 ];
 const chart = { width: 720, left: 34, right: 650, top: 24, bottom: 254 };
 
@@ -50,25 +58,22 @@ function formatDate(value: string, locale: "zh-CN" | "en") {
   });
 }
 
-export function GpuDailyTrendChart() {
+export function GpuDailyTrendChart({ initialData = null }: { initialData?: InitialGpuTrend | null }) {
   const { locale } = useI18n();
-  const [market, setMarket] = useState<MarketSummary | null>(null);
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [weeks, setWeeks] = useState<RangeWeeks>(14);
+  const [market, setMarket] = useState<MarketSummary | null>(initialData?.market ?? null);
+  const [updatedAt, setUpdatedAt] = useState(initialData?.updated_at ?? "");
+  const [days, setDays] = useState<RangeDays>(90);
   const [activeDate, setActiveDate] = useState("");
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(initialData ? "ready" : "loading");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const controller = new AbortController();
+    if (initialData) return;
+    let active = true;
     async function loadMarket() {
       try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/public/market/ranking`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(await readApiError(response));
-        const payload = await response.json() as MarketResponse;
+        const payload = await publicApiEnvelopeRequest<MarketResponse["data"], MarketResponse["meta"]>("/api/v1/public/market/ranking", 30_000);
+        if (!active) return;
         const ranked = (payload.data ?? []).filter((item) => item.median_price_cny > 0);
         const withHistory = ranked.filter((item) => item.history_point_count >= 2 || item.history_day_count >= 2);
         const selected = withHistory.find((item) => item.gpu_model.toUpperCase().includes("H100")) ?? withHistory[0] ?? ranked[0];
@@ -81,8 +86,16 @@ export function GpuDailyTrendChart() {
           available_gpu_count: selected.available_gpu_count,
           market_status: selected.market_status,
         };
-        const candlePayload = await getMobileMarketCandles(model, "30d");
-        const history = (candlePayload.candles ?? []).map((point) => ({ date: point.start_time, median: point.close_price_cny }));
+        const candlePayload = await getMobileMarketCandles(model, "90d");
+        if (!active) return;
+        const history = (candlePayload.candles ?? []).map((point) => ({
+          date: point.start_time,
+          median: point.close_price_cny,
+          open: point.open_price_cny,
+          high: point.high_price_cny,
+          low: point.low_price_cny,
+          close: point.close_price_cny,
+        }));
         if (history.length < 2) throw new Error(locale === "en" ? "GPU price history is still accumulating" : "GPU 历史价格仍在积累");
         setMarket({
           gpu_model: `${selected.gpu_model} ${selected.gpu_variant}`.trim(),
@@ -93,40 +106,45 @@ export function GpuDailyTrendChart() {
         setUpdatedAt(candlePayload.server_time ?? payload.meta?.observed_at ?? "");
         setStatus("ready");
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (!active) return;
         setMessage(error instanceof Error ? error.message : locale === "en" ? "Failed to load market data" : "行情读取失败");
         setStatus("error");
       }
     }
     void loadMarket();
-    return () => controller.abort();
-  }, [locale]);
+    return () => { active = false; };
+  }, [initialData, locale]);
 
   const plot = useMemo(() => {
-    const points = (market?.history ?? [])
+    const history = (market?.history ?? [])
       .filter((point) => point.date && point.median > 0)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-weeks);
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const latestTimestamp = Date.parse(history.at(-1)?.date ?? "");
+    const cutoff = latestTimestamp - (days - 1) * 86_400_000;
+    const points = history.filter((point) => Date.parse(point.date) >= cutoff);
     if (points.length < 2) return null;
     const candles = points.map((point, index) => {
-      const open = index === 0 ? point.median : points[index - 1].median;
+      const close = point.close && point.close > 0 ? point.close : point.median;
+      const previousClose = index === 0 ? close : (points[index - 1].close || points[index - 1].median);
+      const open = point.open && point.open > 0 ? point.open : previousClose;
       return {
         date: point.date,
         open,
-        high: Math.max(open, point.median),
-        low: Math.min(open, point.median),
-        close: point.median,
+        high: Math.max(point.high || open, open, close),
+        low: Math.min(point.low || close, open, close),
+        close,
       };
     });
     const rawMin = Math.min(...candles.map((candle) => candle.low));
     const rawMax = Math.max(...candles.map((candle) => candle.high));
-    const padding = Math.max((rawMax - rawMin) * .18, rawMax * .025, .02);
+    const rawRange = rawMax - rawMin;
+    const padding = Math.max(rawRange * .08, rawMax * .001, .01);
     const min = Math.max(0, rawMin - padding);
     const max = rawMax + padding;
     const plotWidth = chart.right - chart.left;
     const xFor = (index: number) => chart.left + ((index + .5) / candles.length) * plotWidth;
     const yFor = (price: number) => chart.top + ((max - price) / (max - min || 1)) * (chart.bottom - chart.top);
-    const candleWidth = Math.min(24, Math.max(10, (plotWidth / candles.length) * .64));
+    const candleWidth = Math.min(13, Math.max(3.2, (plotWidth / candles.length) * .62));
     const coordinates = candles.map((candle, index) => {
       const averageWindow = candles.slice(Math.max(0, index - 3), index + 1);
       const ma4 = averageWindow.reduce((total, item) => total + item.close, 0) / averageWindow.length;
@@ -149,7 +167,7 @@ export function GpuDailyTrendChart() {
       candles, coordinates, candleWidth, maLine, min, max, rawMin, rawMax, first, latest, delta,
       percent: first.open ? (delta / first.open) * 100 : 0,
     };
-  }, [market, weeks]);
+  }, [market, days]);
 
   if (status !== "ready" || !market || !plot) {
     return <section className="gpu-kline-card gpu-trend-state" aria-live="polite">
@@ -169,7 +187,7 @@ export function GpuDailyTrendChart() {
       <header className="gpu-kline-card__head">
         <div>
           <span className="gpu-kline-eyebrow"><i /> GPU RENTAL CANDLE INDEX</span>
-          <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "weekly price candles" : "周价格 K 线"}</h2>
+          <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "daily price candles" : "日价格 K 线"}</h2>
           <p>{locale === "en" ? "Mobile backend market median" : "手机端后端行情中位价"} · CNY / GPU·h</p>
         </div>
         <span className="gpu-kline-simulated gpu-trend-source">{locale === "en" ? "Mobile data" : "手机端数据"}</span>
@@ -182,8 +200,8 @@ export function GpuDailyTrendChart() {
         </b>
         <nav aria-label={locale === "en" ? "Chart range" : "K 线周期"}>
           {ranges.map((range) => <button
-            className={weeks === range.value ? "active" : ""}
-            onClick={() => { setWeeks(range.value); setActiveDate(""); }}
+            className={days === range.value ? "active" : ""}
+            onClick={() => { setDays(range.value); setActiveDate(""); }}
             type="button"
             key={range.value}
           >{range.label}</button>)}
@@ -191,14 +209,14 @@ export function GpuDailyTrendChart() {
       </div>
 
       <div className="gpu-kline-legend">
-        <span className="candle">{locale === "en" ? "Weekly candles" : "周 K 线"}</span>
+        <span className="candle">{locale === "en" ? "Daily candles" : "日 K 线"}</span>
         <span className="average">MA4 {formatPrice(active.ma4)}</span>
         <span className="volume">{market.provider_count} {locale === "en" ? (market.provider_count === 1 ? "provider" : "providers") : "家供应商"}</span>
         <span className="gpu-kline-ohlc">{formatDate(active.date, locale)} · O {formatPrice(active.open)} H {formatPrice(active.high)} L {formatPrice(active.low)} C {formatPrice(active.close)}</span>
       </div>
 
       <div className="gpu-kline-plot gpu-candlestick-plot" onMouseLeave={() => setActiveDate("")}>
-        <svg viewBox={`0 0 ${chart.width} 300`} role="img" aria-label={locale === "en" ? `${market.gpu_model} weekly price candles for the last three months` : `${market.gpu_model} 最近三个月周价格变化 K 线`}>
+        <svg viewBox={`0 0 ${chart.width} 300`} role="img" aria-label={locale === "en" ? `${market.gpu_model} daily price candles for the selected period` : `${market.gpu_model} 所选周期日价格 K 线`}>
           {[0, 1, 2, 3, 4].map((line) => {
             const price = plot.max - ((plot.max - plot.min) / 4) * line;
             const y = chart.top + ((chart.bottom - chart.top) / 4) * line;
@@ -210,16 +228,16 @@ export function GpuDailyTrendChart() {
           <path className="gpu-kline-ma" d={plot.maLine} />
           {plot.coordinates.map((point) => {
             const bodyTop = Math.min(point.openY, point.closeY);
-            const bodyHeight = Math.max(3.2, Math.abs(point.closeY - point.openY));
+            const bodyHeight = Math.max(2.4, Math.abs(point.closeY - point.openY));
             return <g
               className={`gpu-candle ${point.close >= point.open ? "is-up" : "is-down"}`}
               key={point.date}
               onMouseEnter={() => setActiveDate(point.date)}
               onClick={() => setActiveDate(point.date)}
             >
-              <title>{point.date} · O {formatPrice(point.open)} H {formatPrice(point.high)} L {formatPrice(point.low)} C {formatPrice(point.close)}</title>
+              <title>{`${point.date} · O ${formatPrice(point.open)} H ${formatPrice(point.high)} L ${formatPrice(point.low)} C ${formatPrice(point.close)}`}</title>
               <line className="gpu-candle__wick" x1={point.x} y1={point.highY} x2={point.x} y2={point.lowY} />
-              <rect className="gpu-candle__body" x={point.x - plot.candleWidth / 2} y={bodyHeight === 3.2 ? bodyTop - 1.6 : bodyTop} width={plot.candleWidth} height={bodyHeight} rx="1" />
+              <rect className="gpu-candle__body" x={point.x - plot.candleWidth / 2} y={bodyHeight === 2.4 ? bodyTop - 1.2 : bodyTop} width={plot.candleWidth} height={bodyHeight} rx=".5" />
             </g>;
           })}
           {activeDate && <line className="gpu-kline-crosshair" x1={active.x} y1={chart.top} x2={active.x} y2={chart.bottom} />}

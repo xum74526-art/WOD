@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.utils.response import BizError
-from app.models.market_price import MarketHistoryPoint, MarketPriceSnapshot
+from app.models.market_price import MarketCandleSyncStatus, MarketHistoryPoint, MarketPriceCandle, MarketPriceSnapshot
 from app.routers.market import _historical_metric, price_candles
 from app.services.gpu_catalog import gpu_variant_aliases, normalize_gpu_variant
 from app.services.market_history_sync import (
@@ -172,6 +172,8 @@ class MarketHistorySyncTests(unittest.TestCase):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketHistoryPoint.__table__.create(engine)
         MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
         db = sessionmaker(bind=engine)()
         start = datetime(2026, 8, 11, 8, 0)
         now = datetime(2026, 8, 18, 8, 0)
@@ -195,29 +197,32 @@ class MarketHistorySyncTests(unittest.TestCase):
             available_gpu_count=10, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
             data_quality="verified", signature="live", observed_at=now, fetched_at=now,
         ))
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand", currency="CNY",
+            min_price=Decimal("2.06"), p25_price=Decimal("2.06"), median_price=Decimal("2.06"),
+            p75_price=Decimal("2.06"), max_price=Decimal("2.06"), min_price_cny=Decimal("2.06"),
+            median_price_cny=Decimal("2.06"), max_price_cny=Decimal("2.06"), sample_count=1,
+            available_gpu_count=0, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="kai-live", observed_at=now, fetched_at=now,
+        ))
+        for day in range(7):
+            candle_open = Decimal("2.0") + Decimal(day) / Decimal("100")
+            candle_close = candle_open + Decimal("0.005")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
+                start_time=start + timedelta(days=day), end_time=start + timedelta(days=day + 1),
+                open_price_cny=candle_open, high_price_cny=candle_close + Decimal("0.05"),
+                low_price_cny=candle_open - Decimal("0.05"), close_price_cny=candle_close,
+                sample_count=1, observation_count=1, method="official_ohlc", data_quality="official",
+                source_version="v1", signature=f"stored-candle-{day}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.add(MarketCandleSyncStatus(
+            source="kai", status="ok", refresh_seconds=300, model_count=1, candle_count=7,
+            last_attempt_at=now, last_success_at=now,
+        ))
         db.commit()
-
-        official_payload = {
-            "gpu_model": "RTX4090", "gpu_variant": "24GB", "range": "7d",
-            "bucket_seconds": 14400, "tick_seconds": 14400,
-            "method": "kai_official_ohlc_cross_region_robust_median",
-            "is_interpolated": False, "selected_source": "kai",
-            "history_status": "available", "curve_status": "full", "coverage_class": "full",
-            "history_coverage_status": "complete", "coverage_day_count": 7,
-            "coverage_span_hours": 144.0, "data_quality": "official_historical_ohlc",
-            "provenance": {"upstream_provider": "kai", "live_component_included": False},
-            "latest_live_price_cny": 2.06, "latest_live_observed_at": "2026-08-18T08:00:00Z",
-            "latest_live_comparable_to_history": True,
-            "candles": [{
-                "start_time": "2026-08-11T08:00:00Z", "end_time": "2026-08-11T12:00:00Z",
-                "open_price_cny": 2.0, "high_price_cny": 2.1, "low_price_cny": 1.9,
-                "close_price_cny": 2.05, "sample_count": 1, "observation_count": 1,
-                "sources": ["kai"],
-            }],
-        }
-        with patch("app.routers.market.utcnow", return_value=now), patch(
-            "app.routers.market.get_aggregated_candles", return_value=official_payload,
-        ):
+        with patch("app.routers.market.utcnow", return_value=now):
             metric = _historical_metric(db, now, "RTX4090", "24GB")
             payload = price_candles("RTX4090", "24GB", "7d", "kai", "ondemand", db)["data"]
 

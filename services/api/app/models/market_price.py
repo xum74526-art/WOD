@@ -65,6 +65,62 @@ class MarketSourceStatus(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class MarketPriceCandle(Base):
+    """Official OHLC history cached by the scheduled market-data worker.
+
+    Public request handlers only read this table. Network access belongs to
+    the worker so an upstream outage cannot erase the last valid chart.
+    """
+
+    __tablename__ = "market_price_candles"
+    __table_args__ = (
+        UniqueConstraint(
+            "source", "gpu_model", "gpu_variant", "billing_mode", "start_time",
+            name="uq_market_price_candle_identity",
+        ),
+        Index(
+            "ix_market_price_candle_series",
+            "source", "gpu_model", "gpu_variant", "billing_mode", "start_time",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(24), index=True)
+    gpu_model: Mapped[str] = mapped_column(String(64), index=True)
+    gpu_variant: Mapped[str] = mapped_column(String(64), default="", index=True)
+    billing_mode: Mapped[str] = mapped_column(String(24), default="ondemand", index=True)
+    start_time: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_time: Mapped[datetime] = mapped_column(DateTime)
+    open_price_cny: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    high_price_cny: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    low_price_cny: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    close_price_cny: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    observation_count: Mapped[int] = mapped_column(Integer, default=0)
+    method: Mapped[str] = mapped_column(String(96))
+    data_quality: Mapped[str] = mapped_column(String(32), default="official")
+    source_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    signature: Mapped[str] = mapped_column(String(64), index=True)
+    source_observed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class MarketCandleSyncStatus(Base):
+    __tablename__ = "market_candle_sync_status"
+
+    source: Mapped[str] = mapped_column(String(24), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending")
+    refresh_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    model_count: Mapped[int] = mapped_column(Integer, default=0)
+    candle_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class MarketHistoryPoint(Base):
     """An attributed historical market-index observation.
 

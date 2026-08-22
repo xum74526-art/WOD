@@ -5,5 +5,5 @@ import { SiteHeader } from "@/components/site-header";
 export default async function StorePage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id <= 0) notFound();
-  return <div className="site-page"><SiteHeader/><main className="public-data-page"><MobileStoreDetail id={id}/></main></div>;
+  return <div className="site-page public-v2"><SiteHeader/><main className="public-data-page"><MobileStoreDetail id={id}/></main></div>;
 }

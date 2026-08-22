@@ -15,6 +15,8 @@
 ```bash
 python3.12 -m venv services/api/.venv
 services/api/.venv/bin/python -m pip install -r services/api/requirements-dev.txt
+python3.12 -m venv services/collector/.venv
+services/collector/.venv/bin/python -m pip install -r services/collector/requirements.txt
 npm ci --prefix apps/web
 npm ci --prefix apps/ios
 npm ci --prefix apps/android
@@ -31,6 +33,29 @@ npm ci --prefix apps/android
 ```
 
 API 健康检查是 `http://127.0.0.1:8000/health`，OpenAPI 页面是 `http://127.0.0.1:8000/docs`。
+
+## 启动外部数据采集（可选）
+
+复制 `services/collector/.env.example` 为私有 `.env`，并为 Collector 与 FastAPI 配置同一个独立 ingestion token。确认来源授权后，可单次同步或启动独立调度进程：
+
+```bash
+(cd services/collector && .venv/bin/python -m collector sync all)
+(cd services/collector && .venv/bin/python -m collector run)
+```
+
+Collector 只调用 `/internal/v1/ingestion/market-offers/batches`，不得连接 SQLite/PostgreSQL。该内部接口不得代理到公网。
+
+## 同步官方行情 K 线
+
+FastAPI 启动后会运行独立的 Candle Agent，默认每 300 秒获取最近 90 天 KAI 官方 OHLC 并幂等写入
+`market_price_candles`，并在 `market_candle_sync_status` 记录最后成功时间。公开行情接口只读这些
+数据库记录。首次初始化后可手动执行一次同步，避免等待启动任务：
+
+```bash
+(cd services/api && .venv/bin/python -c 'from app.services.market_candle_sync import sync_market_candles; print(sync_market_candles(force=True))')
+```
+
+同步周期和保留期分别由 `MARKET_CANDLE_SYNC_SECONDS`、`MARKET_CANDLE_HISTORY_DAYS` 控制；默认保留 100 天。
 
 ## 启动 Web（默认联调云端数据）
 

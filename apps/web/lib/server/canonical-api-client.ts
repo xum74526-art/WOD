@@ -25,6 +25,7 @@ type RequestOptions = {
   body?: unknown;
   query?: URLSearchParams;
   auth?: boolean;
+  revalidate?: number;
 };
 
 function envelope(value: unknown): CanonicalEnvelope {
@@ -66,13 +67,16 @@ export async function callCanonicalApi(
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   if (body !== undefined) headers.set("Content-Type", "application/json");
   const query = options.query?.toString();
+  const method = options.method || request.method;
+  const cacheable = options.auth === false && method === "GET" && typeof options.revalidate === "number" && options.revalidate > 0;
   let response: Response;
   try {
     response = await fetch(`${resolveApiOrigin()}${path}${query ? `?${query}` : ""}`, {
-      method: options.method || request.method,
+      method,
       headers,
       body,
-      cache: "no-store",
+      cache: cacheable ? "force-cache" : "no-store",
+      ...(cacheable ? { next: { revalidate: options.revalidate } } : {}),
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),
     });

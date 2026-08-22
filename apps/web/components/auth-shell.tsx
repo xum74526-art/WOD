@@ -20,7 +20,7 @@ export function AuthShell({ mode }: AuthShellProps) {
       : { kicker: "ACCOUNT SECURITY", title: t("auth.intro.forgot", "找回北斗 kai 账号"), description: locale === "en" ? "Update your sign-in credentials and continue managing compute resources and leases." : "通过注册邮箱更新登录凭证，继续管理算力资源和租约。" };
 
   return (
-    <div className="site-page auth-page">
+    <div className="site-page public-v2 auth-page">
       <SiteHeader authMode="guest" />
       <main className="auth-page__main">
         <section className="auth-page__intro" aria-label={locale === "en" ? "北斗 kai account roles" : "北斗 kai 账号用途"}>

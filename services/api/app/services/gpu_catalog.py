@@ -22,7 +22,7 @@ def canonicalize_gpu(name: str | None) -> str | None:
     if raw in _EXACT_ALIASES:
         return _EXACT_ALIASES[raw]
 
-    for model in ("H200", "H100", "H800", "H20", "A100", "A800", "A6000", "A5000", "A4000", "A40", "A30", "A10", "L40S", "L40", "V100", "T4"):
+    for model in ("B300", "B200", "H200", "H100", "H800", "H20", "A100", "A800", "A6000", "A5000", "A4000", "A40", "A30", "A10", "L40S", "L40", "V100", "T4"):
         if re.search(rf"(^|[^A-Z0-9]){re.escape(model)}([^A-Z0-9]|$)", raw):
             return model
 

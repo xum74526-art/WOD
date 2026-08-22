@@ -13,13 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.integrations.kai_pricing import (
-    KaiPricingError,
-    get_aggregated_candles,
-    get_exact_product_candles,
-    get_ranking_metrics,
-)
-from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
+from app.models.market_price import MarketCandleSyncStatus, MarketPriceCandle, MarketPriceSnapshot, MarketSourceStatus
 from app.models.product import Product
 from app.services.gpu_catalog import canonicalize_gpu, gpu_variant_aliases, normalize_gpu_variant
 from app.services.market_freshness import CURRENT_SOURCE_STATES, HOT_SOURCE_STATES, source_state as _source_state
@@ -698,13 +692,77 @@ def _historical_metrics(
     }
 
 
-def _kai_history_metrics(identities: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict]:
-    """Return bounded official KAI seven-day metrics without failing the API."""
+def _kai_history_metrics(
+    db: Session,
+    identities: Iterable[tuple[str, str]],
+) -> dict[tuple[str, str], dict]:
+    """Build ranking metrics from worker-cached official candles only."""
 
-    try:
-        return get_ranking_metrics(identities)
-    except KaiPricingError:
+    requested = {
+        (canonicalize_gpu(model) or model, normalize_gpu_variant(canonicalize_gpu(model) or model, variant))
+        for model, variant in identities
+    }
+    if not requested:
         return {}
+    models = {model for model, _ in requested}
+    rows = db.query(MarketPriceCandle).filter(
+        MarketPriceCandle.source == "kai",
+        MarketPriceCandle.billing_mode == "ondemand",
+        MarketPriceCandle.gpu_model.in_(models),
+    ).order_by(MarketPriceCandle.start_time.asc()).all()
+    grouped: dict[tuple[str, str], list[MarketPriceCandle]] = defaultdict(list)
+    for row in rows:
+        identity = (
+            canonicalize_gpu(row.gpu_model) or row.gpu_model,
+            normalize_gpu_variant(canonicalize_gpu(row.gpu_model) or row.gpu_model, row.gpu_variant),
+        )
+        if identity in requested:
+            grouped[identity].append(row)
+    result: dict[tuple[str, str], dict] = {}
+    for identity, series in grouped.items():
+        selected = series[-7:]
+        if not selected:
+            continue
+        first = Decimal(selected[0].open_price_cny)
+        last = Decimal(selected[-1].close_price_cny)
+        lows = [Decimal(row.low_price_cny) for row in selected]
+        highs = [Decimal(row.high_price_cny) for row in selected]
+        closes = [Decimal(row.close_price_cny) for row in selected]
+        median_close = _median(_without_outliers(closes))
+        day_count = len({row.start_time.date() for row in selected})
+        span_hours = max((selected[-1].end_time - selected[0].start_time).total_seconds() / 3600, 0.0)
+        complete = day_count >= MIN_RANGE_DAYS and span_hours >= MIN_RANGE_SPAN_HOURS
+        change = float((last / first - Decimal("1")) * Decimal("100")) if complete and first > 0 else None
+        volatility = float((max(highs) - min(lows)) / median_close * Decimal("100")) if complete and median_close > 0 else None
+        result[identity] = {
+            "volatility_7d": round(volatility, 2) if volatility is not None else None,
+            "volatility_status": "available" if complete else "insufficient_history",
+            "volatility_quality": "verified" if complete else "limited_sample",
+            "history_day_count": day_count,
+            "history_point_count": len(selected),
+            "history_span_hours": round(span_hours, 1),
+            "history_min_daily_sample_count": min((row.sample_count for row in selected), default=0),
+            "history_bucket_count": len(selected),
+            "history_coverage_status": "complete" if complete else "partial",
+            "volatility_source_count": 1,
+            "volatility_sources": ["kai"],
+            "volatility_billing_mode": "ondemand",
+            "volatility_method": "stored_official_ohlc_high_low_range_over_median_close",
+            "change_7d_pct": round(change, 2) if change is not None else None,
+            "range_low_cny": float(min(lows)) if complete else None,
+            "range_high_cny": float(max(highs)) if complete else None,
+            "observed_partial_low_cny": float(min(lows)),
+            "observed_partial_high_cny": float(max(highs)),
+            "flat_price_observed": min(lows) == max(highs),
+            "history_provenance": {
+                "kind": "official_historical_ohlc",
+                "dataset_source": "market_price_candles",
+                "upstream_provider": "kai",
+                "collection_mode": "scheduled_database_agent",
+                "live_component_included": False,
+            },
+        }
+    return result
 
 
 def _history_metric_matches_live_sources(metric: dict | None, live_sources: Iterable[str]) -> bool:
@@ -837,7 +895,7 @@ def _models_payload(db: Session) -> dict:
             item["sources"].append(row.source)
         item["sample_count"] += row.sample_count
         item["quote_sample_count"] += row.sample_count
-    kai_metrics = _kai_history_metrics(grouped.keys())
+    kai_metrics = _kai_history_metrics(db, grouped.keys())
     for key, item in grouped.items():
         item.update(kai_metrics.get(key) or metrics.get(key, _empty_metric()))
         item["seven_day_status"] = (
@@ -1004,7 +1062,7 @@ def price_candles(
         "market_candles", model, variant or "", range, normalized_sources, billing_mode,
         external_product_id or "",
     )
-    ttl_seconds = 300 if range in {"7d", "30d"} else 30 if range == "24h" else 8
+    ttl_seconds = 300 if range in {"7d", "30d", "90d"} else 30 if range == "24h" else 8
     payload = _cached_payload(
         db,
         cache_key,
@@ -1014,6 +1072,84 @@ def price_candles(
         ),
     )
     return success(payload)
+
+
+def _stored_kai_candle_payload(
+    db: Session,
+    model: str,
+    variant: str,
+    range_name: str,
+    duration: timedelta,
+) -> dict | None:
+    variant_filters = gpu_variant_aliases(model, variant)
+    stored = db.query(MarketPriceCandle).filter(
+        MarketPriceCandle.source == "kai",
+        MarketPriceCandle.gpu_model == model,
+        MarketPriceCandle.gpu_variant.in_(variant_filters),
+        MarketPriceCandle.billing_mode == "ondemand",
+    ).order_by(MarketPriceCandle.start_time.asc()).all()
+    if not stored:
+        return None
+    anchor = stored[-1].end_time
+    rows = [row for row in stored if row.start_time >= anchor - duration]
+    if not rows:
+        return None
+    day_count = len({row.start_time.date() for row in rows})
+    span_hours = max((rows[-1].end_time - rows[0].start_time).total_seconds() / 3600, 0.0)
+    expected_days = {"7d": 7, "30d": 28, "90d": 84}.get(range_name, 1)
+    complete = day_count >= expected_days
+    sync_state = db.query(MarketCandleSyncStatus).filter(MarketCandleSyncStatus.source == "kai").one_or_none()
+    latest_live = db.query(MarketPriceSnapshot).filter(
+        MarketPriceSnapshot.source == "kai",
+        MarketPriceSnapshot.gpu_model == model,
+        MarketPriceSnapshot.gpu_variant.in_(variant_filters),
+        MarketPriceSnapshot.billing_mode == "ondemand",
+        MarketPriceSnapshot.median_price_cny.isnot(None),
+    ).order_by(MarketPriceSnapshot.observed_at.desc()).first()
+    return {
+        "server_time": _iso(utcnow()),
+        "gpu_model": model,
+        "gpu_variant": variant,
+        "billing_mode": "ondemand",
+        "range": range_name,
+        "bucket_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
+        "tick_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
+        "method": rows[-1].method,
+        "is_interpolated": False,
+        "requested_sources": ["kai"],
+        "selected_source": "kai",
+        "history_status": "available" if len(rows) >= 2 else "single_observation",
+        "curve_status": "full" if complete else "partial",
+        "coverage_class": "full" if complete else "partial",
+        "history_coverage_status": "complete" if complete else "partial",
+        "coverage_day_count": day_count,
+        "coverage_span_hours": round(span_hours, 1),
+        "data_quality": rows[-1].data_quality,
+        "provenance": {
+            "kind": "stored_official_historical_ohlc",
+            "dataset_source": "market_price_candles",
+            "upstream_provider": "kai",
+            "collection_mode": "scheduled_database_agent",
+            "source_version": rows[-1].source_version,
+            "source_observed_at": _iso(rows[-1].source_observed_at),
+            "last_database_sync_at": _iso(sync_state.last_success_at) if sync_state else None,
+            "live_component_included": False,
+        },
+        "latest_live_price_cny": float(latest_live.median_price_cny) if latest_live else None,
+        "latest_live_observed_at": _iso(latest_live.observed_at) if latest_live else None,
+        "latest_live_comparable_to_history": True if latest_live else None,
+        "candles": [{
+            "start_time": _iso(row.start_time),
+            "end_time": _iso(row.end_time),
+            "open_price_cny": float(row.open_price_cny),
+            "high_price_cny": float(row.high_price_cny),
+            "low_price_cny": float(row.low_price_cny),
+            "close_price_cny": float(row.close_price_cny),
+            "sample_count": row.sample_count,
+            "observation_count": row.observation_count,
+            "sources": ["kai"],
+        } for row in rows],
+    }
 
 
 def _price_candles_payload(
@@ -1041,6 +1177,7 @@ def _price_candles_payload(
         # produce truthful red/green OHLC bodies without inventing movement.
         "7d": (timedelta(days=7), 24 * 60 * 60, 60 * 60),
         "30d": (timedelta(days=30), 24 * 60 * 60, 4 * 60 * 60),
+        "90d": (timedelta(days=90), 24 * 60 * 60, 4 * 60 * 60),
     }
     if range not in configs:
         raise BizError("不支持的时间范围")
@@ -1049,59 +1186,23 @@ def _price_candles_payload(
     canonical_model = canonicalize_gpu(model) or model
     picked_variant = variant if variant is not None else _pick_variant(_latest_rows(db), canonical_model)
     selected_variant = normalize_gpu_variant(canonical_model, picked_variant)
-    if external_product_id and "kai" not in allowed_sources:
-        raise BizError("资源标识只能用于 KAI Pricing 行情", status_code=400)
-    # KAI publishes official historical OHLC per product.  Use that temporal
-    # history directly and never splice it with the old Vast archive or the
-    # current cross-sectional offer snapshots.
-    if "kai" in allowed_sources and billing_mode == "ondemand":
-        try:
-            kai_payload = dict(
-                get_exact_product_candles(
-                    external_product_id, canonical_model, selected_variant, range,
-                )
-                if external_product_id
-                else get_aggregated_candles(canonical_model, selected_variant, range)
-            )
-            kai_payload.update({
-                "server_time": _iso(utcnow()),
-                "billing_mode": billing_mode,
-                "requested_sources": sorted(allowed_sources),
-            })
-            return kai_payload
-        except KaiPricingError as exc:
-            if external_product_id and exc.code == "product_not_found":
-                raise BizError("资源标识不存在或报价已失效", status_code=404)
-            if external_product_id and exc.code == "product_identity_mismatch":
-                raise BizError("资源标识与请求的 GPU 型号不匹配", status_code=400)
-            allowed_sources.discard("kai")
-            if not allowed_sources:
-                return {
-                    "server_time": _iso(utcnow()),
-                    "gpu_model": canonical_model,
-                    "gpu_variant": selected_variant,
-                    "billing_mode": billing_mode,
-                    "range": range,
-                    "requested_sources": ["kai"],
-                    "selected_source": None,
-                    "history_status": "unavailable",
-                    "curve_status": "unavailable",
-                    "coverage_class": "unavailable",
-                    "history_coverage_status": "unavailable",
-                    "coverage_day_count": 0,
-                    "coverage_span_hours": 0,
-                    "data_quality": None,
-                    "provenance": {
-                        "kind": "official_historical_ohlc_unavailable",
-                        "upstream_provider": "kai",
-                        "error_code": _public_error_code(exc.code),
-                        "live_component_included": False,
-                    },
-                    "latest_live_price_cny": None,
-                    "latest_live_observed_at": None,
-                    "latest_live_comparable_to_history": None,
-                    "candles": [],
-                }
+    if external_product_id:
+        product = db.query(Product).filter(
+            Product.market_source == "kai",
+            Product.external_product_id == external_product_id,
+        ).one_or_none()
+        if product is None:
+            raise BizError("资源标识不存在或报价已失效", status_code=404)
+        product_model = canonicalize_gpu(product.gpu_model) or product.gpu_model
+        product_variant = normalize_gpu_variant(product_model, product.memory)
+        if product_model != canonical_model or product_variant != selected_variant:
+            raise BizError("资源标识与请求的 GPU 型号不匹配", status_code=400)
+    if "kai" in allowed_sources and billing_mode == "ondemand" and range in {"7d", "30d", "90d"}:
+        stored_payload = _stored_kai_candle_payload(
+            db, canonical_model, selected_variant, range, duration,
+        )
+        if stored_payload is not None:
+            return stored_payload
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
     since = utcnow() - duration
     rows = db.query(
@@ -1254,7 +1355,7 @@ def _ranking_payload(db: Session) -> dict:
     comparison: dict[tuple[str, str], list[MarketPriceSnapshot]] = defaultdict(list)
     for model, variant, row in _latest_normalized_rows(_comparison_rows(db, now, current_sources)):
         comparison[(model, variant)].append(row)
-    kai_metrics = _kai_history_metrics(grouped.keys())
+    kai_metrics = _kai_history_metrics(db, grouped.keys())
     cutoff = now - timedelta(seconds=max(int(settings.PRODUCT_OFFER_MAX_AGE_SECONDS), 60))
     product_regions: dict[tuple[str, str], set[str]] = defaultdict(set)
     product_locations: dict[tuple[str, str], set[str]] = defaultdict(set)

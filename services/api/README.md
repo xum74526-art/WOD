@@ -49,12 +49,37 @@ docker build -t kai-api .
 
 ## 行情与购买规则
 
-- `https://pricing.kai.com` 是唯一实时行情源，价格单位为 CNY/GPU-hour。
-- Vast/AutoDL 不再运行采集器或下载任务；已有来源标识、历史快照和订单仍保留用于审计。
+- `https://pricing.kai.com` 是唯一参与商品目录和下单的实时行情源，价格单位为 CNY/GPU-hour。
+- 官方历史 OHLC 由定时 Candle Agent 预取到 `market_price_candles`；公开行情接口只读数据库，上游失败时保留最后成功数据。
+- Vast.ai 授权报价只写入 `vast_offers`、`vast_price_snapshots` 和 `vast_sync_status` 参考表，不创建商品、不代表平台库存，也不参与下单。
+- AutoDL 不再运行采集器或下载任务；已有来源标识、历史快照和订单仍保留用于审计。
 - KAI 商品使用显式 `market_source` 与 `external_product_id`，上游最大可配置数量不等同实时库存。
 - 新 KAI 订单只接受 `hours`（1–720 的整数）；`cycle_days` 仅用于历史 WOD 日周期订单。
 - 下单与续费使用客户端请求号保证幂等，金额、结束时间和续费审计均由后端计算。
 - `created_platform`/`last_modified_platform` 来自服务端认证会话，不接受客户端自报平台。
+
+### Vast.ai 授权参考行情
+
+FastAPI 只负责接收标准批次和写数据库。配置独立内部服务令牌：
+
+```dotenv
+MARKET_INGESTION_ENABLED=true
+MARKET_INGESTION_TOKEN=<独立随机密钥>
+```
+
+Collector 位于 `services/collector`，不导入 ORM、不连接数据库。它通过固定接口提交标准化批次：
+
+```text
+POST /internal/v1/ingestion/market-offers/batches
+```
+
+接口使用 Bearer 服务令牌、Pydantic 严格校验和持久 `batch_id` 幂等；同一个批次重复提交不会重复写入，复用批次号提交不同内容会返回 409。批次中的报价、快照、同步状态和审计记录在同一个数据库事务内提交。
+
+按需报价默认每 10 分钟、竞价每 5 分钟、预留报价每 30 分钟采集。失联报价 30 分钟后标记无效，48 小时后删除；聚合历史默认保留 90 天。API 限流或同步失败时保留上次成功数据。
+
+KAI K 线同步与 Vast Collector 相互独立。默认每 5 分钟更新一次、请求 90 天官方历史并保留 100 天；它不创建商品，
+也不把历史价格视为库存。`/api/market/prices/candles` 的
+`provenance.dataset_source=market_price_candles` 表示响应来自数据库缓存。
 
 ## 测试
 

@@ -5,7 +5,7 @@
 
 ## 已通过的工程门禁
 
-- FastAPI 是唯一数据库访问者；Web、H5、iOS 和 Android 不包含数据库配置。
+- FastAPI 是唯一数据库访问者；Collector、Web、H5、iOS 和 Android 不包含数据库配置。
 - Web 以 HttpOnly Cookie + `/api/v1/canonical/*` BFF 访问云端 API。
 - 原生 App 只接受以 `/api` 结尾的 HTTPS 地址，默认为 `https://wod.kai.com/api`。
 - FastAPI OpenAPI 是唯一 HTTP 契约，CI 会拒绝过期快照、旧客户端路由和客户端数据库配置。
@@ -25,6 +25,7 @@ git diff --check
 | 门禁 | 通过标准 |
 |---|---|
 | API | 编译、单元测试和 OpenAPI 快照通过 |
+| Collector | 编译、适配器/内部接入契约测试通过，源码不包含数据库配置 |
 | Web | 单元测试、TypeScript 检查和 production build 通过 |
 | Mobile | 单元测试、TypeScript 检查及 API 边界检查通过 |
 | 移动端构建 | CI 的 H5 和 App production build 通过 |
@@ -55,6 +56,7 @@ git diff --check
 - [ ] 生产密钥、OAuth 回跳、支付回调和域名证书仍有效；
 - [ ] 数据库备份完成并确认备份文件非空、权限受限；
 - [ ] 支付相关改动已在沙箱或授权环境验证幂等和验签；
+- [ ] 启用外部数据采集前已确认来源授权，内部 ingestion token 独立生成且接口未暴露到公网；
 - [ ] 值班人员知道本次发布版本、观察指标和回滚版本。
 
 ## 发布后人工清单
@@ -62,7 +64,7 @@ git diff --check
 - [ ] 本机和公网 `/health`、`/api/v1/health` 正常；
 - [ ] 首页、登录、市场、行情、社区和资产关键页面可访问；
 - [ ] 本地测试 Web、线上 Web 与 Mobile 的同一接口返回一致业务数据；
-- [ ] API/Web 服务 active，日志没有持续异常或重启循环；
+- [ ] API/Collector/Web 服务 active，日志没有持续异常或重启循环；
 - [ ] 磁盘、数据库、上传目录和备份目录容量正常；
 - [ ] 记录实际发布提交和可回滚 release 目录。
 

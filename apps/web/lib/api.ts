@@ -60,6 +60,36 @@ export type ApiEnvelope<T, M extends Record<string, unknown> = Record<string, un
 
 const publicEnvelopeCache = new Map<string, { expiresAt: number; value: ApiEnvelope<unknown> }>();
 const publicEnvelopeRequests = new Map<string, Promise<ApiEnvelope<unknown>>>();
+let currentUserCache: { expiresAt: number; value: { user: AuthUser } } | null = null;
+let currentUserFailure: { expiresAt: number; error: unknown } | null = null;
+let currentUserRequest: Promise<{ user: AuthUser }> | null = null;
+
+function publicStorageKey(path: string) {
+  return `kai-public-data:v1:${path}`;
+}
+
+function readStoredPublicEnvelope(path: string) {
+  try {
+    const raw = window.sessionStorage.getItem(publicStorageKey(path));
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as { expiresAt?: number; value?: ApiEnvelope<unknown> };
+    if (!stored.expiresAt || stored.expiresAt <= Date.now() || !stored.value) {
+      window.sessionStorage.removeItem(publicStorageKey(path));
+      return null;
+    }
+    return { expiresAt: stored.expiresAt, value: stored.value };
+  } catch {
+    return null;
+  }
+}
+
+function storePublicEnvelope(path: string, entry: { expiresAt: number; value: ApiEnvelope<unknown> }) {
+  try {
+    window.sessionStorage.setItem(publicStorageKey(path), JSON.stringify(entry));
+  } catch {
+    // The in-memory cache remains available when storage is disabled or full.
+  }
+}
 
 export async function apiEnvelopeRequest<T, M extends Record<string, unknown> = Record<string, unknown>>(
   path: string,
@@ -102,11 +132,20 @@ export function publicApiEnvelopeRequest<T, M extends Record<string, unknown> = 
   if (!force && cached && cached.expiresAt > Date.now()) {
     return Promise.resolve(cached.value as ApiEnvelope<T, M>);
   }
+  if (!force) {
+    const stored = readStoredPublicEnvelope(path);
+    if (stored) {
+      publicEnvelopeCache.set(path, stored);
+      return Promise.resolve(stored.value as ApiEnvelope<T, M>);
+    }
+  }
   const active = publicEnvelopeRequests.get(path);
   if (active) return active as Promise<ApiEnvelope<T, M>>;
   const pending = apiEnvelopeRequest<T, M>(path, { cache: force ? "reload" : "default" })
     .then((value) => {
-      publicEnvelopeCache.set(path, { expiresAt: Date.now() + maxAgeMs, value: value as ApiEnvelope<unknown> });
+      const entry = { expiresAt: Date.now() + maxAgeMs, value: value as ApiEnvelope<unknown> };
+      publicEnvelopeCache.set(path, entry);
+      storePublicEnvelope(path, entry);
       return value;
     })
     .finally(() => {
@@ -199,11 +238,32 @@ export function confirmEmailVerification(token: string) {
   });
 }
 
-export function getCurrentUser() {
-  return apiRequest<{ user: AuthUser }>("/api/v1/auth/me");
+export function getCurrentUser(force = false) {
+  if (typeof window === "undefined") return apiRequest<{ user: AuthUser }>("/api/v1/auth/me");
+  if (!force && currentUserCache && currentUserCache.expiresAt > Date.now()) return Promise.resolve(currentUserCache.value);
+  if (!force && currentUserFailure && currentUserFailure.expiresAt > Date.now()) return Promise.reject(currentUserFailure.error);
+  if (currentUserRequest) return currentUserRequest;
+  const pending = apiRequest<{ user: AuthUser }>("/api/v1/auth/me")
+    .then((value) => {
+      currentUserCache = { expiresAt: Date.now() + 30_000, value };
+      currentUserFailure = null;
+      return value;
+    })
+    .catch((error) => {
+      currentUserCache = null;
+      currentUserFailure = { expiresAt: Date.now() + 5_000, error };
+      throw error;
+    })
+    .finally(() => {
+      if (currentUserRequest === pending) currentUserRequest = null;
+    });
+  currentUserRequest = pending;
+  return pending;
 }
 
 export function logoutCurrentUser() {
+  currentUserCache = null;
+  currentUserFailure = null;
   return apiRequest<{ logged_out: boolean }>("/api/v1/auth/logout", { method: "POST" });
 }
 

@@ -4,7 +4,8 @@ import { ArrowRight, ChartLineUp, Warning } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/components/locale-root";
-import { apiBaseUrl, readApiError } from "@/lib/api";
+import { publicApiEnvelopeRequest } from "@/lib/api";
+import type { PublicMarketRanking } from "@/lib/public-data";
 
 type PulseMarket = {
   gpu_model: string;
@@ -15,35 +16,31 @@ type PulseMarket = {
 };
 
 type PulseResponse = {
-  data?: PulseMarket[];
+  data: PulseMarket[];
   meta?: { observed_at?: string };
 };
 
-export function MarketPulseRail() {
+export function MarketPulseRail({ initialData = null }: { initialData?: PublicMarketRanking | null }) {
   const { locale } = useI18n();
-  const [markets, setMarkets] = useState<PulseMarket[]>([]);
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price_cny > 0).slice(0, 4);
+  const [markets, setMarkets] = useState<PulseMarket[]>(initialMarkets);
+  const [updatedAt, setUpdatedAt] = useState(initialData?.meta.observed_at ?? "");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(initialMarkets.length ? "ready" : "loading");
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${apiBaseUrl}/api/v1/public/market/ranking`, { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(await readApiError(response));
-        return response.json() as Promise<PulseResponse>;
-      })
+    if (initialMarkets.length) return;
+    let active = true;
+    publicApiEnvelopeRequest<PulseResponse["data"], NonNullable<PulseResponse["meta"]>>("/api/v1/public/market/ranking", 30_000)
       .then((payload) => {
+        if (!active) return;
         const available = (payload.data ?? []).filter((item) => item.median_price_cny > 0).slice(0, 4);
         setMarkets(available);
         setUpdatedAt(payload.meta?.observed_at ?? "");
         setStatus(available.length ? "ready" : "error");
       })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setStatus("error");
-      });
-    return () => controller.abort();
-  }, []);
+      .catch(() => { if (active) setStatus("error"); });
+    return () => { active = false; };
+  }, [initialMarkets.length]);
 
   return <section className={`market-pulse-rail market-pulse-rail--${status}`} aria-label={locale === "en" ? "GPU market pulse" : "GPU 市场快照"} aria-live="polite">
     <header>

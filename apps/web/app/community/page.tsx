@@ -13,7 +13,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Se
   const value = (key: string) => typeof params[key] === "string" ? params[key] : undefined;
   const page = Math.max(1, Number.parseInt(value("page") ?? "1", 10) || 1);
   return (
-    <div className="site-page">
+    <div className="site-page public-v2 community-public-page">
       <SiteHeader />
       <main className="public-data-page community-page">
         <header className="community-hero">

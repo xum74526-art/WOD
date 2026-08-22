@@ -53,13 +53,7 @@
             "base" : "/"
         },
         "devServer" : {
-            "port" : 9001,
-            "proxy" : {
-                "/api" : {
-                    "target" : "https://wod.kai.com",
-                    "changeOrigin" : true
-                }
-            }
+            "port" : 9001
         }
     }
 }
