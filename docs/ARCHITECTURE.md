@@ -1,5 +1,21 @@
 # 系统架构
 
+本文是代码评审时的架构基线。若实现与本文冲突，应先修正实现或在评审中明确更新本文，
+不能通过增加临时兼容层同时保留两套业务逻辑。
+
+## 核心结论
+
+| 运行端 | 源码 | 对外请求入口 | 数据库访问 |
+|---|---|---|---|
+| 线上 Web | `apps/web` | 同源 `/api/v1/canonical/*` | 禁止 |
+| 本地测试 Web | `apps/web` | BFF 转发到 `https://wod.kai.com/api` | 禁止 |
+| iOS/Android | `apps/mobile` | `https://wod.kai.com/api` | 禁止 |
+| Mobile H5 | `apps/mobile` | 同源 `/api` | 禁止 |
+| 云端 API | `services/api` | FastAPI `/api/*` | 唯一允许 |
+
+因此，本地 Web、线上 Web 和手机端不需要“同步数据库文件”。它们通过同一个云端 API
+读写同一个数据库，接口响应才是客户端的数据来源。
+
 ## 客户端与后端
 
 KAI 有三个发布目标，但只有两套前端源码：
@@ -26,6 +42,14 @@ iOS / Android
   -> FastAPI /api
   -> Database / Uploads
 ```
+
+生产域名上的 nginx 路由优先级是：
+
+1. `/api/v1/*` 到 Next.js BFF；
+2. `/api/*`、`/health`、`/docs` 到 FastAPI；
+3. 其余请求到 Next.js 页面。
+
+不要改变前两项的顺序，否则浏览器可能绕过 HttpOnly Cookie 会话边界。
 
 Web BFF 只负责以下事情：
 
@@ -65,6 +89,26 @@ services/api/app/
 - 本地 Web 联调也把 `API_ORIGIN` 指向云端 API，因此与线上 Web 和 App 读写同一数据库。
 - 订单、支付、钱包、商家审核等状态枚举由后端定义。
 
+后端 router 或 schema 变化时必须执行：
+
+```bash
+npm run export:openapi
+npm run check:contracts
+```
+
+`packages/api-contracts/openapi.json` 是生成物，不手工编辑。契约检查同时禁止客户端出现
+数据库配置、废弃 API 基地址和新增旧路由调用。
+
+## 登录与支付边界
+
+- Web 登录凭据由 BFF 保存到 HttpOnly、SameSite Cookie，浏览器 JavaScript 不持有后端
+  Token。
+- 原生 App 通过系统浏览器完成 KAI OAuth，回跳地址必须在 KAI Auth、App manifest 和 API
+  环境变量中保持一致。
+- 当前支付路由是 `/api/payments/qixiang/*`，支付状态最终以服务端验签后的回调或主动查单为准，
+  不能以客户端跳转成功作为入账依据。
+- 支付密钥只存在于云端 API 环境文件，不进入 Web、Mobile 或 Git。
+
 ## 兼容层治理
 
 兼容代码只能出现在明确的边界，并必须有保留原因：
@@ -76,6 +120,21 @@ services/api/app/
 页面差异、旧环境变量、开发默认值不得继续新增兼容层。
 `check-client-boundaries.mjs` 和 OpenAPI 一致性检查在 CI 中强制这些边界。
 
+新增兼容层必须同时记录：旧调用方、为何不能立即迁移、覆盖测试、停止使用的判断方式和计划
+删除版本。没有这些信息的兼容分支不应合并。
+
 ## 平台差异
 
 默认先在 `apps/mobile` 共享实现。当且仅当能力确实不同时，使用 uni-app 条件编译或独立平台适配文件。不因为视觉小差异复制整个页面。
+
+## 常见修改的影响范围
+
+| 修改 | 至少检查 |
+|---|---|
+| 新增业务字段 | model、schema、service、迁移/初始化、OpenAPI、两端显示 |
+| 新增 API | router、鉴权、service 测试、OpenAPI、Web/Mobile 调用 |
+| 修改登录 | KAI Auth 配置、回跳白名单、Cookie/Token、安全测试 |
+| 修改支付 | 下单、验签、回调幂等、查单、超时、旧订单兼容 |
+| 修改 Web BFF | 同源限制、Cookie、错误映射、canonical 路径测试 |
+| 修改 Mobile API 层 | HTTPS `/api` 基地址、登录过期、上传、契约检查 |
+| 修改 nginx/systemd | 路由优先级、权限、健康检查、回滚流程 |
