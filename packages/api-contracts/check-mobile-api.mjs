@@ -12,10 +12,10 @@ const mobileRoot = path.join(root, 'apps', 'mobile', 'src')
 
 const apiRoutes = []
 for (const [route, operations] of Object.entries(openapi.paths)) {
-  if (!route.startsWith('/api/v1/')) continue
+  if (!route.startsWith('/api/')) continue
   for (const method of Object.keys(operations)) {
     if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue
-    const relative = route.slice('/api/v1'.length)
+    const relative = route.slice('/api'.length)
     const expression = relative
       .split('/')
       .map(segment => /^\{[^}]+\}$/.test(segment) ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -71,7 +71,7 @@ function inspect(file) {
   function visit(node) {
     if (ts.isCallExpression(node)) {
       const callee = ts.isIdentifier(node.expression) ? node.expression.text : ''
-      if (['request', 'requestEnvelope', 'upload'].includes(callee) && node.arguments.length) {
+      if (['request', 'requestEnvelope', 'upload', 'download'].includes(callee) && node.arguments.length) {
         const options = node.arguments[0]
         if (!ts.isObjectLiteralExpression(options)) {
           violations.push({ ...location(node), reason: `${callee} options must be an inline object` })
@@ -90,7 +90,7 @@ function inspect(file) {
             }
           }
           if (!url) violations.push({ ...location(node), reason: `${callee} URL must be a static relative path` })
-          else if (!url.startsWith('/')) violations.push({ ...location(node), reason: `${callee} URL must use the centralized /api/v1 base` })
+          else if (!url.startsWith('/')) violations.push({ ...location(node), reason: `${callee} URL must be relative to the centralized /api base` })
           else if (methodIsDynamic) violations.push({ ...location(node), reason: `${callee} method must be statically auditable` })
           else calls.push({ ...location(node), method: method.toUpperCase(), url: url.split('?')[0] })
         }
@@ -126,4 +126,4 @@ if (missing.length || violations.length) {
   process.exit(1)
 }
 
-console.log(`Mobile API contract check passed: ${calls.length} request(s) use canonical /api/v1 routes.`)
+console.log(`Mobile API contract check passed: ${calls.length} request(s) use canonical /api routes.`)

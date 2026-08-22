@@ -8,7 +8,7 @@ import {
   listMobileSupplierDevices,
   updateMobileSupplierDevice,
   type MobileSupplierDevice,
-} from "@/lib/mobile-api";
+} from "@/lib/supplier-api";
 import { errorMessage } from "@/lib/commerce-ui";
 
 const blank = {

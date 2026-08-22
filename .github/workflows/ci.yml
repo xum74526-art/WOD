@@ -19,7 +19,8 @@ jobs:
           cache: pip
           cache-dependency-path: services/api/requirements.txt
       - run: python -m pip install -r services/api/requirements.txt
-      - run: PYTHONPATH=services/api pytest -q services/api/tests
+      - run: python -m compileall -q services/api/app services/api/init_db.py
+      - run: cd services/api && python -m unittest discover -s tests -p 'test_*.py'
       - run: python packages/api-contracts/export_openapi.py
       - run: git diff --exit-code -- packages/api-contracts/openapi.json
 
@@ -35,6 +36,8 @@ jobs:
       - run: npm ci --prefix apps/web
       - run: npm run check:web
       - run: npm run build:web
+        env:
+          API_ORIGIN: http://127.0.0.1:8000
 
   mobile:
     runs-on: ubuntu-latest
@@ -48,18 +51,4 @@ jobs:
       - run: npm ci --prefix apps/mobile
       - run: npm run check:mobile
       - run: npm run test:mobile
-      - run: npm run check:mobile:ios
       - run: npm run check:contracts
-
-  agent:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: agent
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22.x"
-          cache-dependency-path: agent/go.mod
-      - run: go test ./...

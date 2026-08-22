@@ -3,23 +3,30 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    AGENT_ARTIFACT_ROOT=/opt/kai-agent
+    UPLOAD_ROOT=/data/uploads
+
 WORKDIR /app
 
-RUN groupadd --system --gid 1001 kai && useradd --system --uid 1001 --gid kai --home-dir /app kai
-COPY services/api/requirements.txt ./
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --retries 20 --timeout 120 -r requirements.txt
-COPY services/api/alembic.ini ./
-COPY services/api/migrations ./migrations
-COPY services/api/app ./app
-COPY services/api/data/getdeploying_public_index.json /opt/kai-bootstrap/getdeploying_public_index.json
-COPY services/api/docker/entrypoint.sh /usr/local/bin/kai-backend-entrypoint
-COPY agent /opt/kai-agent
-RUN chmod 0755 /usr/local/bin/kai-backend-entrypoint && chown -R kai:kai /app /opt/kai-agent
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tzdata \
+        tesseract-ocr \
+        tesseract-ocr-chi-sim \
+        tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 
-USER kai
-EXPOSE 8100
-ENTRYPOINT ["/usr/local/bin/kai-backend-entrypoint"]
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/ready', timeout=3)"
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8100", "--proxy-headers", "--forwarded-allow-ips=*"]
+COPY requirements.txt ./
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
+
+COPY app ./app
+COPY init_db.py ./init_db.py
+COPY docker-entrypoint.sh /usr/local/bin/kai-api-entrypoint
+
+RUN chmod 0755 /usr/local/bin/kai-api-entrypoint \
+    && mkdir -p /data/uploads/avatars /data/uploads/id_cards
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/kai-api-entrypoint"]

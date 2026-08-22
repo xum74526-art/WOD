@@ -1,188 +1,212 @@
-import asyncio
-import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import FastAPI, Request, Response
-from fastapi.exceptions import RequestValidationError
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import HTTPException as FastAPIHTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 
-from app.config import cors_origins, settings
-from app.health import database_readiness
-from app.email_scheduler import email_scheduler
-from app.news_scheduler import news_scheduler
-from app.market_snapshot_scheduler import market_snapshot_scheduler
-from app.observability import (
-    ObservabilityMiddleware,
-    configure_application_logging,
-    render_prometheus_metrics,
-)
-from app.responses import fail, ok
-from app.routers import (
-    account,
-    agents,
-    admin_suppliers,
-    auth,
-    buy_requests,
-    comments,
-    integrations,
-    internal_modules,
-    kyc_reviews,
-    news,
-    orders,
-    placeholders,
-    public,
-    quotes,
-    resources,
-    server_rentals,
-    settlements,
-    security_sessions,
-)
-from app.security import ApiError
-
-
-configure_application_logging()
-logger = logging.getLogger("app.system")
+from app.core.config import get_cors_origins, settings
+from app.core.sensitive import assert_sensitive_capabilities_secure
+from app.routers import address, asset, auth, bank_card, buy_request, chat, community, coupon, finance, invite, market, notification, offline_purchase, onboarding, order, payment, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
+from app.services.lifecycle import expire_due
+from app.services.offer_sync import sync_offers
+from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
+from app.services.market_history_sync import sync_market_history
+from app.services.rebate_settle import settle_rebate
+from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
+from app.services.notification_service import sync_operational_notifications
+from app.utils.response import BizError, error
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    started_here = news_scheduler.start()
-    email_started_here = email_scheduler.start()
-    market_started_here = market_snapshot_scheduler.start()
-    app.state.news_scheduler = news_scheduler
-    app.state.market_snapshot_scheduler = market_snapshot_scheduler
-    logger.info(
-        "application started",
-        extra={
-            "event": "application_started",
-            "scheduler_running": news_scheduler.is_running,
-        },
-    )
+    # Never start PII-bearing capabilities with the source default JWT secret
+    # or without a separate valid Fernet key.
+    assert_sensitive_capabilities_secure()
     try:
-        yield
-    finally:
-        if started_here:
-            await asyncio.to_thread(news_scheduler.stop)
-        if email_started_here:
-            await asyncio.to_thread(email_scheduler.stop)
-        if market_started_here:
-            await asyncio.to_thread(market_snapshot_scheduler.stop)
-        logger.info(
-            "application stopped",
-            extra={
-                "event": "application_stopped",
-                "scheduler_running": news_scheduler.is_running,
-            },
+        community_timezone = ZoneInfo(settings.COMMUNITY_TIMEZONE)
+    except ZoneInfoNotFoundError:
+        community_timezone = timezone(timedelta(hours=8))
+    scheduler = BackgroundScheduler(timezone=community_timezone)
+    # 收益结算：为活跃资产产生每日收益（基于 daily_rate）
+    scheduler.add_job(settle_revenue, "interval", seconds=INTERVAL_SECONDS, id="settle_revenue")
+    scheduler.add_job(expire_due, "interval", seconds=60, id="expire_due")
+    scheduler.add_job(sync_offers, "interval", seconds=300, id="sync_offers")
+    scheduler.add_job(
+        dispatch_market_sync,
+        "interval",
+        seconds=settings.MARKET_SYNC_SECONDS,
+        id="sync_market",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(cleanup_market_history, "interval", hours=6, id="cleanup_market_history", replace_existing=True)
+    if settings.MARKET_HISTORY_SYNC_ENABLED:
+        scheduler.add_job(
+            sync_market_history,
+            "interval",
+            seconds=max(settings.MARKET_HISTORY_REFRESH_SECONDS, 300),
+            id="sync_market_history",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
         )
+    scheduler.add_job(settle_rebate, "interval", seconds=300, id="settle_rebate")
+    # First-party inbox event synchronization. This does not claim or require
+    # native OS push delivery; each event is idempotent through a dedupe key.
+    scheduler.add_job(
+        sync_operational_notifications,
+        "interval",
+        seconds=30,
+        id="sync_in_app_notifications",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    # 每日社区内容更新
+    from app.services.community_daily import generate_daily_posts
+    scheduler.add_job(
+        generate_daily_posts,
+        "cron",
+        hour=settings.COMMUNITY_PUBLISH_HOUR,
+        minute=settings.COMMUNITY_PUBLISH_MINUTE,
+        id="community_daily",
+        kwargs={"count": settings.COMMUNITY_DAILY_TARGET},
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        sync_market,
+        "date",
+        run_date=datetime.now(community_timezone) + timedelta(seconds=1),
+        id="market_startup_sync",
+        kwargs={"force": True},
+        replace_existing=True,
+    )
+    if settings.MARKET_HISTORY_SYNC_ENABLED:
+        scheduler.add_job(
+            sync_market_history,
+            "date",
+            run_date=datetime.now(community_timezone) + timedelta(seconds=5),
+            id="market_history_startup_sync",
+            kwargs={"force": True},
+            replace_existing=True,
+        )
+    scheduler.add_job(
+        sync_operational_notifications,
+        "date",
+        run_date=datetime.now(community_timezone) + timedelta(seconds=4),
+        id="notification_startup_sync",
+        replace_existing=True,
+    )
+    # Refresh provider-backed product cards at startup as well; otherwise an
+    # expired card can remain hidden for the first five minutes after restart.
+    scheduler.add_job(
+        sync_offers,
+        "date",
+        run_date=datetime.now(community_timezone) + timedelta(seconds=2),
+        id="offer_startup_sync",
+        replace_existing=True,
+    )
+    # 启动后自动补齐当天缺口；任务自身幂等，不会重复发布。
+    scheduler.add_job(
+        generate_daily_posts,
+        "date",
+        run_date=datetime.now(community_timezone) + timedelta(seconds=3),
+        id="community_startup_catchup",
+        kwargs={"count": settings.COMMUNITY_DAILY_TARGET},
+        replace_existing=True,
+    )
+    scheduler.start()
+    print(
+        f"[KAI API] 定时任务已启动: 收益每 {INTERVAL_SECONDS}s / 到期每 60s / "
+        f"社区每天 {settings.COMMUNITY_PUBLISH_HOUR:02d}:{settings.COMMUNITY_PUBLISH_MINUTE:02d} "
+        f"补齐 {settings.COMMUNITY_DAILY_TARGET} 条"
+    )
+    yield
+    scheduler.shutdown()
 
 
-app = FastAPI(title="KAI Web API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="KAI API", version="1.0.0", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins(),
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
 )
-app.add_middleware(ObservabilityMiddleware)
-app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 
-@app.exception_handler(ApiError)
-async def api_error_handler(request: Request, exc: ApiError):
-    return JSONResponse(
-        fail(exc.code, exc.message),
-        status_code=exc.status_code,
-        headers={"Cache-Control": "no-store", **exc.headers},
-    )
+@app.exception_handler(BizError)
+async def biz_handler(request: Request, exc: BizError):
+    return JSONResponse(status_code=exc.status_code, content=error(exc.msg, exc.code))
+
+
+@app.exception_handler(FastAPIHTTPException)
+async def http_handler(request: Request, exc: FastAPIHTTPException):
+    msg = exc.detail if isinstance(exc.detail, str) else "请求错误"
+    return JSONResponse(status_code=exc.status_code, content=error(msg))
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_error_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        fail("VALIDATION_ERROR", "请求参数不符合要求"),
-        status_code=422,
-        headers={"Cache-Control": "no-store"},
+async def request_validation_handler(request: Request, exc: RequestValidationError):
+    # Consent is intentionally a required strict boolean in the public schema.
+    # Convert the otherwise-generic FastAPI 422 into an explicit client error
+    # so old clients cannot silently submit identity documents without it.
+    is_verification_submit = (
+        request.method.upper() == "POST"
+        and request.url.path.rstrip("/") == "/api/verification"
     )
+    consent_error = any(
+        error_item.get("loc", ())[-1:] == ("sensitive_consent",)
+        for error_item in exc.errors()
+    )
+    if is_verification_submit and consent_error:
+        return JSONResponse(
+            status_code=400,
+            content=error("请先单独同意身份证敏感信息用于本地文字识别和人工审核"),
+        )
+    return await request_validation_exception_handler(request, exc)
 
 
 app.include_router(auth.router)
-app.include_router(public.router)
-app.include_router(news.router)
-app.include_router(comments.router)
-app.include_router(integrations.router)
-app.include_router(internal_modules.router)
-app.include_router(kyc_reviews.router)
-app.include_router(placeholders.router)
-app.include_router(account.router)
-app.include_router(agents.router)
-app.include_router(buy_requests.router)
-app.include_router(quotes.router)
-app.include_router(orders.router)
-app.include_router(resources.router)
-app.include_router(server_rentals.router)
-app.include_router(settlements.router)
-app.include_router(security_sessions.router)
-app.include_router(admin_suppliers.router)
+app.include_router(user.router)
+app.include_router(product.router)
+app.include_router(market.router)
+app.include_router(asset.router)
+app.include_router(order.router)
+app.include_router(wallet.router)
+app.include_router(withdrawal.router)
+app.include_router(finance.router)
+app.include_router(payment.router)
+app.include_router(qixiang_payment.router)
+app.include_router(revenue.router)
+app.include_router(notification.router)
+app.include_router(verification.router)
+app.include_router(bank_card.router)
+app.include_router(invite.router)
+app.include_router(coupon.router)
+app.include_router(address.router)
+app.include_router(offline_purchase.router)
+app.include_router(buy_request.router)
+app.include_router(onboarding.router)
+app.include_router(supplier.router)
+app.include_router(community.router)
+app.include_router(community.public_router)
+app.include_router(chat.router)
+
+@app.get("/")
+def health():
+    return {"code": 0, "msg": "KAI API running", "data": None}
 
 
-@app.get("/health", tags=["system"], summary="进程存活检查")
-def health(response: Response):
-    response.headers["Cache-Control"] = "no-store"
-    return ok({
-        "status": "healthy",
-        "service": "kai-web-api",
-        "news_scheduler_running": news_scheduler.is_running,
-        "email_scheduler_running": email_scheduler.is_running,
-        "market_snapshot_scheduler_running": market_snapshot_scheduler.is_running,
-    })
-
-
-@app.get(
-    "/ready",
-    tags=["system"],
-    summary="数据库与迁移就绪检查",
-    responses={503: {"description": "数据库不可达或迁移未升级到当前 head"}},
-)
-def ready(response: Response):
-    try:
-        report = database_readiness()
-    except Exception:
-        logger.exception(
-            "readiness check failed",
-            extra={"event": "readiness_check", "database_status": "not_ready"},
-        )
-        return JSONResponse(
-            fail("SERVICE_NOT_READY", "服务依赖尚未就绪"),
-            status_code=503,
-            headers={"Cache-Control": "no-store"},
-        )
-    response.headers["Cache-Control"] = "no-store"
-    production_issues = settings.production_issues()
-    return ok({
-        "status": "ready",
-        "service": "kai-web-api",
-        **report,
-        "deployment": {
-            "environment": settings.APP_ENV,
-            "production_ready": not production_issues,
-            "blocking_issues": production_issues,
-        },
-    })
-
-
-@app.get(
-    "/metrics",
-    tags=["system"],
-    summary="Prometheus 基础进程指标",
-    response_class=PlainTextResponse,
-)
-def metrics():
-    return PlainTextResponse(
-        render_prometheus_metrics(scheduler_running=news_scheduler.is_running),
-        media_type="text/plain; version=0.0.4",
-        headers={"Cache-Control": "no-store"},
-    )
+@app.get("/health")
+def health2():
+    return {"code": 0, "msg": "ok", "data": {"status": "healthy"}}

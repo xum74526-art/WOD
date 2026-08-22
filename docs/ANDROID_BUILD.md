@@ -18,7 +18,7 @@ Android 与 iOS 共用 `apps/mobile` 中的 uni-app、Vue 3 和 TypeScript 源�
 在仓库根目录执行：
 
 ```bash
-npm ci
+npm ci --prefix apps/mobile
 npm run check:mobile
 npm run test:mobile
 npm run build:mobile:app
@@ -58,7 +58,7 @@ export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
 复制 `apps/mobile/.env.example` 为被 Git 忽略的 `.env.local`，设置设备能够访问的地址：
 
 ```dotenv
-VITE_KAI_API_BASE=http://192.168.31.5:8100/api/v1
+VITE_KAI_APP_API_BASE=http://192.168.31.5:8000/api
 ```
 
 局域网调试地址会随网络变化。正式包必须使用 HTTPS API；不要把 `127.0.0.1` 用作真机地址。

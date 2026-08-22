@@ -1,6 +1,6 @@
 /**
  * Web requests stay on the Next.js origin. The server-side BFF forwards them
- * to the canonical mobile backend without exposing its JWT to browser code.
+ * to the canonical KAI API without exposing its JWT to browser code.
  */
 export const apiBaseUrl = "";
 

@@ -3,11 +3,11 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-if [ -x "$repo_root/services/mobile-api/.venv/bin/python" ]; then
-  (cd "$repo_root/services/mobile-api" && .venv/bin/python -m compileall -q app init_db.py)
-  (cd "$repo_root/services/mobile-api" && .venv/bin/python -m unittest discover -s tests -p 'test_*.py')
+if [ -x "$repo_root/services/api/.venv/bin/python" ]; then
+  (cd "$repo_root/services/api" && .venv/bin/python -m compileall -q app init_db.py)
+  (cd "$repo_root/services/api" && .venv/bin/python -m unittest discover -s tests -p 'test_*.py')
 else
-  echo "Mobile API dependencies not installed; run the setup in README.md" >&2
+  echo "API dependencies not installed; run the setup in README.md" >&2
   exit 1
 fi
 
@@ -22,6 +22,7 @@ fi
 if [ -d "$repo_root/apps/mobile/node_modules" ]; then
   npm --prefix "$repo_root/apps/mobile" run type-check
   npm --prefix "$repo_root/apps/mobile" test
+  node "$repo_root/packages/api-contracts/check-mobile-api.mjs"
 else
   echo "Mobile dependencies not installed; run npm ci --prefix apps/mobile" >&2
   exit 1

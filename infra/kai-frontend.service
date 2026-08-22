@@ -1,7 +1,7 @@
 [Unit]
 Description=KAI Next.js frontend
-After=network-online.target wod-mobile-api.service
-Wants=network-online.target wod-mobile-api.service
+After=network-online.target kai-api.service
+Wants=network-online.target kai-api.service
 
 [Service]
 Type=simple

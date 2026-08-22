@@ -128,3 +128,26 @@ export function upload<T = any>(options: {
     })
   })
 }
+
+export function download(options: { url: string; silent?: boolean }): Promise<string> {
+  const token = getToken()
+  const i18n = useI18nStore()
+  return new Promise((resolve, reject) => {
+    uni.downloadFile({
+      url: API_BASE + options.url,
+      header: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      success: result => {
+        if (result.statusCode >= 200 && result.statusCode < 300) {
+          resolve(result.tempFilePath)
+          return
+        }
+        if (!options.silent) uni.showToast({ title: i18n.t('photoLoadFailed'), icon: 'none' })
+        reject(new Error(i18n.t('photoLoadFailed')))
+      },
+      fail: error => {
+        if (!options.silent) uni.showToast({ title: i18n.t('photoLoadFailed'), icon: 'none' })
+        reject(error)
+      },
+    })
+  })
+}

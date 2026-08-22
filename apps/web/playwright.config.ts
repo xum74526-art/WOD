@@ -2,10 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 import { resolve } from "node:path";
 
 const frontendDir = __dirname;
-const backendDir = resolve(frontendDir, "../../services/mobile-api");
+const backendDir = resolve(frontendDir, "../../services/api");
 const webPort = Number(process.env.WEB_E2E_PORT || 9100);
-const apiPort = Number(process.env.MOBILE_API_E2E_PORT || 8000);
-const python = process.env.MOBILE_API_PYTHON ?? resolve(
+const apiPort = Number(process.env.API_E2E_PORT || 8000);
+const python = process.env.API_PYTHON ?? resolve(
   backendDir,
   process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python",
 );
@@ -43,7 +43,7 @@ export default defineConfig({
       command: `./node_modules/.bin/next dev -p ${webPort}`,
       cwd: frontendDir,
       url: `http://127.0.0.1:${webPort}`,
-      env: { ...process.env, MOBILE_API_ORIGIN: `http://127.0.0.1:${apiPort}` },
+      env: { ...process.env, API_ORIGIN: `http://127.0.0.1:${apiPort}` },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

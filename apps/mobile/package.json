@@ -1,7 +1,7 @@
 {
-  "name": "wod-mobile",
+  "name": "kai-mobile",
   "version": "1.0.4",
-  "description": "WOD - AI 算力资产管理 App",
+  "description": "KAI cross-platform iOS and Android app",
   "scripts": {
     "dev:h5": "uni",
     "build:h5": "uni build",

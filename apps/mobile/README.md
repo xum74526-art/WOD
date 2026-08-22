@@ -1,6 +1,6 @@
-# WOD 前端
+# KAI Mobile
 
-uni-app + Vue 3 + TypeScript 前端，可构建 H5、Android App 和微信小程序。
+uni-app + Vue 3 + TypeScript 前端，一套源码可构建 iOS、Android 和 H5。
 
 ## 开发
 
@@ -12,8 +12,8 @@ npm run dev:h5
 
 环境变量：
 
-- `WOD_H5_API_TARGET`：H5 开发代理目标；云端联调使用 `https://wod.kai.com`。
-- `VITE_WOD_APP_API_BASE`：原生 App 使用的完整 HTTPS API，生产地址为 `https://wod.kai.com/api`。
+- `KAI_H5_API_TARGET`：H5 开发代理目标；云端联调使用 `https://wod.kai.com`。
+- `VITE_KAI_APP_API_BASE`：原生 App 使用的完整 HTTPS API，生产地址为 `https://wod.kai.com/api`。
 
 浏览器页面统一请求 `/api`；原生 App 在构建时写入 `VITE_WOD_APP_API_BASE`。前端目录中禁止保存任何第三方私钥或服务端 Token。
 
@@ -29,7 +29,7 @@ npm run build:app
 
 ## App 配置
 
-交付版 `src/manifest.json` 已清空 DCloud AppID，并使用示例包名 `com.example.wod`。云打包前必须改为接收方自己的：
+交付版 `src/manifest.json` 已清空 DCloud AppID，并使用示例包名 `com.example.kai`。云打包前必须改为接收方自己的：
 
 1. DCloud AppID
 2. Android applicationId/包名
@@ -37,7 +37,7 @@ npm run build:app
 4. Android 签名证书
 5. 正式 HTTPS API 地址
 
-详见 `../docs/ANDROID_BUILD.md`。
+详见 [`../../docs/ANDROID_BUILD.md`](../../docs/ANDROID_BUILD.md)。
 
 ## 主要目录
 

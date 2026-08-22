@@ -89,8 +89,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatDate, formatMoney, formatNumber } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
-import { API_BASE } from '@/utils/config'
-import { getToken } from '@/utils/auth'
+import { download } from '@/api/request'
 import {
   OCR_SUMMARY_FIELDS,
   hasOcrResult,
@@ -194,23 +193,17 @@ function approveIdentity(item: FinanceVerification) {
     finally { submitting.value = false }
   } })
 }
-function openVerificationPhoto(item: FinanceVerification, side: 'front' | 'back') {
+async function openVerificationPhoto(item: FinanceVerification, side: 'front' | 'back') {
   if ((side === 'front' && !item.front_photo_uploaded) || (side === 'back' && !item.back_photo_uploaded)) return
   uni.showLoading({ title: t('loading') })
-  uni.downloadFile({
-    url: `${API_BASE}/finance/verifications/${item.id}/photo/${side}`,
-    header: { Authorization: `Bearer ${getToken()}` },
-    success: result => {
-      if (result.statusCode >= 200 && result.statusCode < 300) uni.previewImage({
-        urls: [result.tempFilePath],
-        current: result.tempFilePath,
-        success: () => markPhotoViewed(item, side),
-      })
-      else uni.showToast({ title: t('photoLoadFailed'), icon: 'none' })
-    },
-    fail: () => uni.showToast({ title: t('photoLoadFailed'), icon: 'none' }),
-    complete: () => uni.hideLoading(),
-  })
+  try {
+    const tempFilePath = await download({ url: `/finance/verifications/${item.id}/photo/${side}` })
+    uni.previewImage({ urls: [tempFilePath], current: tempFilePath, success: () => markPhotoViewed(item, side) })
+  } catch {
+    // download() already presents the localized failure message.
+  } finally {
+    uni.hideLoading()
+  }
 }
 function openWithdrawal(id: number) { nav(`/pages/finance/withdrawal-detail?id=${id}`) }
 onShow(() => { void checkAccess() })

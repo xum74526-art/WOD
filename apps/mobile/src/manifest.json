@@ -1,5 +1,5 @@
 {
-    "name" : "WOD",
+    "name" : "KAI",
     "appid" : "",
     "description" : "AI 算力资产管理 App",
     "locale" : "zh-Hans",
@@ -21,7 +21,7 @@
         },
         "distribute" : {
             "android" : {
-                "packagename" : "com.example.wod",
+                "packagename" : "com.example.kai",
                 "minSdkVersion" : 23,
                 "targetSdkVersion" : 36,
                 "abiFilters" : [ "arm64-v8a", "armeabi-v7a" ],
