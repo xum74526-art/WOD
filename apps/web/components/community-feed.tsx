@@ -2,29 +2,231 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ChatCircle, Heart, ImageSquare, MagnifyingGlass, PaperPlaneTilt, Plus, UserPlus, VideoCamera } from "@phosphor-icons/react";
+import { ArrowUpRight, ChatCircle, Heart, ImageSquare, MagnifyingGlass, PaperPlaneTilt, Play, Plus, ShareNetwork, UserPlus, VideoCamera } from "@phosphor-icons/react";
 import { ApiError } from "@/lib/api";
-import { createCommunityComment, createCommunityPost, getCommunityComments, getCommunityPosts, communityMediaUrl, toggleCommunityFollow, toggleCommunityLike, uploadCommunityMedia, type CommunityComment, type CommunityPost } from "@/lib/mobile-community-api";
+import {
+  communityMediaUrl,
+  createCommunityComment,
+  createCommunityPost,
+  getCommunityComments,
+  getCommunityPosts,
+  toggleCommunityFollow,
+  toggleCommunityLike,
+  uploadCommunityMedia,
+  type CommunityComment,
+  type CommunityPost,
+} from "@/lib/mobile-community-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 
-const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]];
+const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]] as const;
+
 function readVideoDuration(file: File) {
   return new Promise<number>((resolve, reject) => {
-    const url = URL.createObjectURL(file); const video = document.createElement("video"); video.preload = "metadata";
-    video.onloadedmetadata = () => { const duration = Math.max(1, Math.round(video.duration || 0)); URL.revokeObjectURL(url); resolve(duration); };
-    video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("无法读取视频时长，请更换视频文件")); };
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const duration = Math.max(1, Math.round(video.duration || 0));
+      URL.revokeObjectURL(url);
+      resolve(duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("无法读取视频时长，请更换视频文件"));
+    };
     video.src = url;
   });
 }
+
+function postSourceHref(row: CommunityPost) {
+  return row.canonical_url || row.source_url || row.video_url || "";
+}
+
+function ExternalVideoPreview({ row }: { row: CommunityPost }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const href = postSourceHref(row);
+  if (!href) return null;
+  return (
+    <a className="community-video-cover" href={href} target="_blank" rel="noreferrer" aria-label={`观看视频：${row.content}`}>
+      {!thumbnailFailed && row.thumbnail_url ? (
+        <img src={row.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setThumbnailFailed(true)} />
+      ) : (
+        <span className="community-video-cover__fallback"><VideoCamera size={42} /><small>VIDEO SIGNAL</small></span>
+      )}
+      <span className="community-video-cover__shade" />
+      <span className="community-video-cover__play"><Play size={22} weight="fill" /></span>
+      <span className="community-video-cover__label">官方视频</span>
+      <span className="community-video-cover__source">{row.source_name || "在来源网站观看"}<ArrowUpRight size={15} /></span>
+    </a>
+  );
+}
+
+type CommunityCardProps = {
+  row: CommunityPost;
+  featured: boolean;
+  busy: string;
+  openComments: number | null;
+  comments: Record<number, CommunityComment[]>;
+  comment: string;
+  onCommentChange: (value: string) => void;
+  onLike: (row: CommunityPost) => void;
+  onFollow: (row: CommunityPost) => void;
+  onShowComments: (id: number) => void;
+  onSubmitComment: (event: FormEvent, id: number) => void;
+};
+
+function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShowComments, onSubmitComment }: CommunityCardProps) {
+  const externalVideo = !row.video && (row.content_type === "video" || Boolean(row.video_url));
+  const sourceName = row.source_name || row.source_author;
+  return (
+    <article className={`community-post-card${featured ? " community-post-card--featured" : ""}${externalVideo ? " community-post-card--video" : ""}`}>
+      <header className="community-post-card__author">
+        <div className="community-user-avatar">
+          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/mobile${row.author_avatar}` : row.author_avatar} alt="" /> : (row.author_name || "匿").slice(0, 1)}
+        </div>
+        <span><strong>{row.author_name || row.source_author || row.source_name || "社区用户"}</strong><small>{formatDate(row.source_published_at || row.created_at)}{row.topic ? ` · ${row.topic}` : ""}</small></span>
+        {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy === `follow-${row.id}`} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? "已关注" : "关注"}</button>}
+      </header>
+
+      <div className="community-post-card__copy">
+        {row.origin === "aggregated" && <div className="community-source-line"><span>自动资讯</span><b>{sourceName || "公开来源"}</b></div>}
+        <p>{row.content}</p>
+        {row.summary && row.summary !== row.content && <small className="community-post-summary">{row.summary}</small>}
+      </div>
+
+      <div className="community-post-card__media">
+        {row.images?.length ? <div className={`community-media-grid${row.images.length === 1 ? " is-single" : ""}`}>{row.images.map((image, index) => <img src={communityMediaUrl(image)} alt="动态图片" loading="lazy" key={`${image}-${index}`} />)}</div> : null}
+        {row.video && <video className="community-video-player" controls preload="metadata" src={communityMediaUrl(row.video)} />}
+        {externalVideo && <ExternalVideoPreview row={row} />}
+      </div>
+
+      <footer className="community-post-card__actions">
+        <button className={row.is_liked ? "liked" : ""} disabled={busy === `like-${row.id}`} onClick={() => onLike(row)}><Heart size={18} weight={row.is_liked ? "fill" : "regular"} />{row.likes}</button>
+        <button onClick={() => onShowComments(row.id)}><ChatCircle size={18} />{row.comments}</button>
+        <span><ShareNetwork size={18} />{row.shares || 0}</span>
+        {row.source_url && <a href={row.source_url} target="_blank" rel="noreferrer">查看来源<ArrowUpRight size={15} /></a>}
+      </footer>
+
+      {openComments === row.id && <section className="community-comments">
+        {comments[row.id]?.length ? comments[row.id].map((item) => <article key={item.id}><strong>{item.author_name || "社区用户"}</strong><p>{item.content}</p><time>{formatDate(item.created_at)}</time></article>) : <p className="community-comments__empty">还没有评论，写下第一条。</p>}
+        <form onSubmit={(event) => onSubmitComment(event, row.id)}><input maxLength={500} value={comment} onChange={(event) => onCommentChange(event.target.value)} placeholder="写下评论…" /><button disabled={busy === `comment-${row.id}`}>发送</button></form>
+      </section>}
+    </article>
+  );
+}
+
 export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialCategory?: string; initialQuery?: string; initialPage?: number }) {
-  const [rows, setRows] = useState<CommunityPost[]>([]); const [tab, setTab] = useState("recommend"); const [query, setQuery] = useState(initialQuery); const [page, setPage] = useState(initialPage); const [total, setTotal] = useState(0); const [loading, setLoading] = useState(true); const [loginRequired, setLoginRequired] = useState(false); const [error, setError] = useState(""); const [composerOpen, setComposerOpen] = useState(false); const [draft, setDraft] = useState({ content: "", topic: "" }); const [files, setFiles] = useState<File[]>([]); const [busy, setBusy] = useState(""); const [openComments, setOpenComments] = useState<number | null>(null); const [comments, setComments] = useState<Record<number, CommunityComment[]>>({}); const [comment, setComment] = useState("");
-  const load = useCallback(async () => { setLoading(true); setError(""); try { const result = await getCommunityPosts(tab, page, query.trim()); setRows(result.items); setTotal(result.total); setLoginRequired(false); } catch (reason) { if (reason instanceof ApiError && reason.status === 401) setLoginRequired(true); else setError(errorMessage(reason)); } finally { setLoading(false); } }, [page, query, tab]);
+  const [rows, setRows] = useState<CommunityPost[]>([]);
+  const [tab, setTab] = useState<(typeof tabs)[number][0]>("recommend");
+  const [query, setQuery] = useState(initialQuery);
+  const [page, setPage] = useState(initialPage);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loginRequired, setLoginRequired] = useState(false);
+  const [error, setError] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [draft, setDraft] = useState({ content: "", topic: "" });
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState("");
+  const [openComments, setOpenComments] = useState<number | null>(null);
+  const [comments, setComments] = useState<Record<number, CommunityComment[]>>({});
+  const [comment, setComment] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await getCommunityPosts(tab, page, query.trim());
+      setRows(result.items);
+      setTotal(result.total);
+      setLoginRequired(false);
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 401) setLoginRequired(true);
+      else setError(errorMessage(reason));
+    } finally { setLoading(false); }
+  }, [page, query, tab]);
+
   useEffect(() => { void load(); }, [load]);
-  async function publish(event: FormEvent) { event.preventDefault(); if (!draft.content.trim()) return; setBusy("publish"); setError(""); try { const videoFile = files.find((file) => file.type.startsWith("video/")); if (videoFile && files.length > 1) throw new Error("视频不能与其他图片或视频同时发布"); const duration = videoFile ? await readVideoDuration(videoFile) : undefined; const uploaded = []; for (const file of files) uploaded.push(await uploadCommunityMedia(file)); const images = uploaded.filter((item) => item.kind === "image").map((item) => item.url); const video = uploaded.find((item) => item.kind === "video"); await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: duration }); setDraft({ content: "", topic: "" }); setFiles([]); setComposerOpen(false); setPage(1); await load(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); } }
-  async function like(row: CommunityPost) { setBusy(`like-${row.id}`); try { const result = await toggleCommunityLike(row.id); setRows((items) => items.map((item) => item.id === row.id ? { ...item, likes: result.likes, is_liked: result.liked } : item)); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); } }
-  async function follow(row: CommunityPost) { setBusy(`follow-${row.id}`); try { const result = await toggleCommunityFollow(row.user_id); setRows((items) => items.map((item) => item.user_id === row.user_id ? { ...item, is_following: result.following } : item)); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); } }
-  async function showComments(id: number) { if (openComments === id) { setOpenComments(null); return; } setOpenComments(id); try { const next = await getCommunityComments(id); setComments((value) => ({ ...value, [id]: next })); } catch (reason) { setError(errorMessage(reason)); } }
-  async function submitComment(event: FormEvent, id: number) { event.preventDefault(); const value = comment.trim(); if (!value) return; setBusy(`comment-${id}`); try { await createCommunityComment(id, value); setComment(""); const next = await getCommunityComments(id); setComments((items) => ({ ...items, [id]: next })); setRows((items) => items.map((item) => item.id === id ? { ...item, comments: next.length } : item)); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); } }
+
+  async function publish(event: FormEvent) {
+    event.preventDefault();
+    if (!draft.content.trim()) return;
+    setBusy("publish"); setError("");
+    try {
+      const videoFile = files.find((file) => file.type.startsWith("video/"));
+      if (videoFile && files.length > 1) throw new Error("视频不能与其他图片或视频同时发布");
+      const duration = videoFile ? await readVideoDuration(videoFile) : undefined;
+      const uploaded = [];
+      for (const file of files) uploaded.push(await uploadCommunityMedia(file));
+      const images = uploaded.filter((item) => item.kind === "image").map((item) => item.url);
+      const video = uploaded.find((item) => item.kind === "video");
+      await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: duration });
+      setDraft({ content: "", topic: "" }); setFiles([]); setComposerOpen(false); setPage(1); await load();
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
+  async function like(row: CommunityPost) {
+    setBusy(`like-${row.id}`);
+    try { const result = await toggleCommunityLike(row.id); setRows((items) => items.map((item) => item.id === row.id ? { ...item, likes: result.likes, is_liked: result.liked } : item)); }
+    catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
+  async function follow(row: CommunityPost) {
+    setBusy(`follow-${row.id}`);
+    try { const result = await toggleCommunityFollow(row.user_id); setRows((items) => items.map((item) => item.user_id === row.user_id ? { ...item, is_following: result.following } : item)); }
+    catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
+  async function showComments(id: number) {
+    if (openComments === id) { setOpenComments(null); return; }
+    setOpenComments(id);
+    try { const next = await getCommunityComments(id); setComments((value) => ({ ...value, [id]: next })); }
+    catch (reason) { setError(errorMessage(reason)); }
+  }
+
+  async function submitComment(event: FormEvent, id: number) {
+    event.preventDefault();
+    const value = comment.trim();
+    if (!value) return;
+    setBusy(`comment-${id}`);
+    try {
+      await createCommunityComment(id, value); setComment("");
+      const next = await getCommunityComments(id);
+      setComments((items) => ({ ...items, [id]: next }));
+      setRows((items) => items.map((item) => item.id === id ? { ...item, comments: next.length } : item));
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    if (page === 1) void load(); else setPage(1);
+  }
+
   if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>Web 与手机端共用动态、关注、点赞和评论数据。</p><Link href="/login?return_to=/community">登录 北斗 kai</Link></div>;
-  return <section className="mobile-community-feed"><div className="community-commandbar"><form className="community-search" onSubmit={(event) => { event.preventDefault(); setPage(1); void load(); }}><MagnifyingGlass size={21}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索动态、话题或作者"/></form><button className="community-publish-button" onClick={() => setComposerOpen((value) => !value)}><Plus size={17}/>发布动态</button><div className="community-commandbar__meta"><span>POSTS</span><strong>{total}</strong><small>条社区动态</small></div></div><div className="mobile-community-tabs">{tabs.map(([value, label]) => <button className={tab === value ? "active" : ""} key={value} onClick={() => { setTab(value); setPage(1); }}>{label}</button>)}</div>{composerOpen && <form className="community-composer" onSubmit={publish}><header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布到手机端社区</h2></div></header><input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）"/><textarea required maxLength={2000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…"/><footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/2000`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer></form>}{error && <div className="commerce-error">{error}</div>}{loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row) => <article key={row.id}><header><div className="community-user-avatar">{row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/mobile${row.author_avatar}` : row.author_avatar} alt=""/> : (row.author_name || "匿").slice(0, 1)}</div><span><strong>{row.author_name || row.source_author || row.source_name || "社区用户"}</strong><small>{row.topic ? `#${row.topic} · ` : ""}{formatDate(row.source_published_at || row.created_at)}</small></span>{!row.is_own && <button className={row.is_following ? "following" : ""} onClick={() => void follow(row)}><UserPlus size={14}/>{row.is_following ? "已关注" : "关注"}</button>}</header><p>{row.content}</p>{row.images?.length ? <div className="community-media-grid">{row.images.map((image, index) => <img src={communityMediaUrl(image)} alt="动态图片" key={`${image}-${index}`}/>)}</div> : null}{row.video && <video className="community-video-player" controls preload="metadata" src={communityMediaUrl(row.video)}/>} {!row.video && row.video_url && <a className="community-external-video" href={row.canonical_url || row.source_url || row.video_url} target="_blank" rel="noreferrer"><VideoCamera size={18}/>打开来源视频</a>}<footer><button className={row.is_liked ? "liked" : ""} disabled={busy === `like-${row.id}`} onClick={() => void like(row)}><Heart size={17} weight={row.is_liked ? "fill" : "regular"}/>{row.likes}</button><button onClick={() => void showComments(row.id)}><ChatCircle size={17}/>{row.comments}</button>{row.source_url && <a href={row.source_url} target="_blank" rel="noreferrer">{row.source_name || "查看来源"}</a>}</footer>{openComments === row.id && <section className="community-comments">{comments[row.id]?.map((item) => <article key={item.id}><strong>{item.author_name || "社区用户"}</strong><p>{item.content}</p><time>{formatDate(item.created_at)}</time></article>)}<form onSubmit={(event) => void submitComment(event, row.id)}><input maxLength={500} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="写下评论…"/><button disabled={busy === `comment-${row.id}`}>发送</button></form></section>}</article>) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}{total > 10 && <nav className="community-page-nav"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><span>第 {page} 页</span><button disabled={page * 10 >= total} onClick={() => setPage((value) => value + 1)}>下一页</button></nav>}</section>;
+
+  return <section className="mobile-community-feed">
+    <div className="community-commandbar">
+      <form className="community-search" onSubmit={submitSearch}><MagnifyingGlass size={21}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索动态、话题或作者" /></form>
+      <button className="community-publish-button" type="button" onClick={() => setComposerOpen((value) => !value)}><Plus size={17}/>{composerOpen ? "收起发布" : "发布动态"}</button>
+      <div className="community-commandbar__meta"><span>POSTS</span><strong>{total}</strong><small>条社区动态</small></div>
+    </div>
+
+    <div className="mobile-community-tabs" role="tablist" aria-label="社区内容筛选">{tabs.map(([value, label]) => <button type="button" role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => { setTab(value); setPage(1); }}>{label}</button>)}</div>
+
+    {composerOpen && <form className="community-composer" onSubmit={publish}>
+      <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布到手机端社区</h2></div></header>
+      <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
+      <textarea required maxLength={2000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
+      <footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/2000`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
+    </form>}
+
+    {error && <div className="commerce-error">{error}</div>}
+    {loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={comment} onCommentChange={setComment} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}
+
+    {total > 10 && <nav className="community-page-nav"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><span>第 {page} 页</span><button disabled={page * 10 >= total} onClick={() => setPage((value) => value + 1)}>下一页</button></nav>}
+  </section>;
 }
