@@ -89,7 +89,8 @@ class MarketDataTests(unittest.TestCase):
             desc="KAI Pricing 当前卡时报价；数量为平台封闭测试人工履约额度",
         )
         output = _product_out(product, source_states={})
-        self.assertIn("平台人工履约额度", output["desc"])
+        self.assertIn("平台按已确认的履约额度协调交付", output["desc"])
+        self.assertNotIn("不是实时库存", output["desc"])
         self.assertNotIn("封闭测试", output["desc"])
         self.assertNotIn("closed_test", output["desc"].lower())
         self.assertEqual(

@@ -83,8 +83,8 @@ class OfferSyncTests(unittest.TestCase):
                 created.stock_semantics,
                 "platform_closed_test_manual_fulfillment_allocation",
             )
-            self.assertIn("平台人工履约额度", created.desc)
-            self.assertIn("不是实时库存", created.desc)
+            self.assertIn("平台按已确认的履约额度协调交付", created.desc)
+            self.assertNotIn("不是实时库存", created.desc)
             old_kai = db.query(Product).filter(Product.external_product_id == "old-kai").one()
             old_vast = db.query(Product).filter(Product.external_product_id == "old-vast").one()
             old_autodl = db.query(Product).filter(Product.external_product_id == "old-autodl").one()

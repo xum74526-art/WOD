@@ -25,6 +25,10 @@ from app.services.region_mapper import map_region
 
 
 _OFFER_SYNC_LOCK = Lock()
+KAI_PRODUCT_DESCRIPTION = (
+    "KAI Pricing 提供当前 GPU 小时报价，平台按已确认的履约额度协调交付，"
+    "完成确认后生成对应资源。"
+)
 
 
 def _upsert_kai_products(quotes: list[dict[str, Any]]) -> int:
@@ -53,10 +57,7 @@ def _upsert_kai_products(quotes: list[dict[str, Any]]) -> int:
                     name=data["display_name"], gpu_model=data["gpu_model"],
                     memory=data["gpu_variant"], cuda=None,
                     price=data["price_cny"], cycle=[],
-                    desc=(
-                        "KAI Pricing 当前卡时报价；可购数量为平台人工履约额度，"
-                        "上游数量仅表示单次最大可配置量，不是实时库存"
-                    ),
+                    desc=KAI_PRODUCT_DESCRIPTION,
                     image_url=f"/static/gpu/{data['gpu_model']}.jpg",
                     region_code=region_code, region_name=region_name,
                     country_code=None, city=data["region"],
@@ -95,10 +96,7 @@ def _upsert_kai_products(quotes: list[dict[str, Any]]) -> int:
                 product.reliability = 0
                 product.status = "on"
                 product.stock_semantics = "platform_closed_test_manual_fulfillment_allocation"
-                product.desc = (
-                    "KAI Pricing 当前卡时报价；可购数量为平台人工履约额度，"
-                    "上游数量仅表示单次最大可配置量，不是实时库存"
-                )
+                product.desc = KAI_PRODUCT_DESCRIPTION
                 product.image_url = f"/static/gpu/{data['gpu_model']}.jpg"
             updated += 1
         stale = db.query(Product).filter(Product.market_source == "kai")

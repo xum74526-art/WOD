@@ -14,6 +14,7 @@ from app.schemas.product import ProductOut
 from app.services.purchase_cycles import PURCHASE_HOUR_OPTIONS, available_purchase_cycles
 from app.services.market_freshness import CURRENT_SOURCE_STATES, product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
+from app.services.offer_sync import KAI_PRODUCT_DESCRIPTION
 from app.services.product_purchase import product_purchase_availability
 from app.services.gpu_catalog import canonicalize_gpu, normalize_gpu_variant
 from app.services.region_mapper import REGIONS, map_region
@@ -29,12 +30,6 @@ CATEGORY_MAP = {
     "domestic": ["MTTS4000"],
     "vgpu": ["vGPU32", "vGPU48"],
 }
-
-KAI_PUBLIC_DESCRIPTION = (
-    "KAI Pricing 当前卡时报价；可购数量为平台人工履约额度，"
-    "上游数量仅表示单次最大可配置量，不是实时库存"
-)
-
 
 def _market_source_states(db: Session) -> dict[str, str]:
     now = utcnow()
@@ -76,7 +71,7 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         # Some deployed databases still contain the former rollout wording.
         # The API is the compatibility boundary: never expose stale copy even
         # before the next catalogue synchronization updates stored rows.
-        out["desc"] = KAI_PUBLIC_DESCRIPTION
+        out["desc"] = KAI_PRODUCT_DESCRIPTION
         cny_price = Decimal(str(p.price or 0))
         rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
         out["cycle"] = []
