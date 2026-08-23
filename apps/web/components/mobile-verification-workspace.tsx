@@ -47,7 +47,7 @@ export function MobileVerificationWorkspace() {
   const photoLocked = status === "verified";
   const photoReady = Boolean(info?.consent_recorded) && !photoLocked;
   return <section className="workspace-page mobile-verification">
-    <div className="workspace-page__head"><p>ACCOUNT / IDENTITY</p><h1>实名认证</h1><span>认证资料、证件照片和 OCR 预检状态与手机端完全一致。</span></div>
+    <div className="workspace-page__head"><p>ACCOUNT / IDENTITY</p><h1>实名认证</h1><span>查看认证资料、证件照片和 OCR 预检状态。</span></div>
     {error && <div className="commerce-error">{error}</div>}
     {!info ? <div className="workspace-skeleton"/> : <div className="mobile-verification-layout">
       <aside className={`mobile-verification-status status-${status}`}><div>{status === "verified" ? <CheckCircle size={38}/> : status === "rejected" ? <WarningCircle size={38}/> : <ShieldCheck size={38}/>}<span><small>VERIFICATION STATUS</small><strong>{statusText[status] || status}</strong></span></div><dl><div><dt>认证姓名</dt><dd>{info.real_name || "未提交"}</dd></div><div><dt>证件号码</dt><dd>{info.id_card_masked || "未提交"}</dd></div><div><dt>敏感信息授权</dt><dd>{info.consent_recorded ? "已记录" : "未记录"}</dd></div><div><dt>证件正面</dt><dd>{info.front_photo_uploaded ? "已上传" : "未上传"}</dd></div><div><dt>证件反面</dt><dd>{info.back_photo_uploaded ? "已上传" : "未上传"}</dd></div><div><dt>OCR 预检</dt><dd>{ocrText[info.ocr_status || ""] || info.ocr_status || "未开始"}</dd></div></dl>{info.ocr_message && <p className="ocr-message">{info.ocr_message}</p>}{info.reject_reason && <p>{info.reject_reason}</p>}</aside>

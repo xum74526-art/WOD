@@ -80,7 +80,7 @@ function BankCardWorkspace() {
 }
 
 const headers: Record<MobileAccountSection, { eyebrow: string; title: string; description: string }> = {
-  revenue: { eyebrow: "ACCOUNT / EARNINGS", title: "收益与返佣", description: "查看与手机端一致的算力收益、趋势、明细和返佣进度。" },
+  revenue: { eyebrow: "ACCOUNT / EARNINGS", title: "收益与返佣", description: "查看算力收益、趋势、明细和返佣进度。" },
   referrals: { eyebrow: "ACCOUNT / REFERRALS", title: "邀请与记录", description: "管理邀请码、邀请关系和后端确认的奖励记录。" },
   coupons: { eyebrow: "ACCOUNT / COUPONS", title: "优惠券", description: "查看可用、已使用和已过期优惠券，并兑换新券。" },
   "bank-accounts": { eyebrow: "ACCOUNT / SETTLEMENT", title: "银行卡", description: "管理提现结算使用的实名银行卡，不在 Web 保存完整卡号。" },

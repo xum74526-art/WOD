@@ -10,7 +10,7 @@ type Params = Record<string, string | number>
 const ZH: Record<string, string> = {
   appName: 'KAI',
   mobileMerchantReadOnlyTitle: '商家数据只读',
-  mobileMerchantReadOnlyHint: '移动端用于查看，设备、商品、交付和商家资料管理请使用 Web 端。',
+  mobileMerchantReadOnlyHint: '当前客户端用于查看，设备、商品、交付和商家资料管理请使用 Web 端。',
   kaiIdentityBinding: 'Kai 身份绑定',
   kaiIdentity: 'Kai 统一身份',
   kaiIdentityBound: '已绑定',
@@ -1239,7 +1239,7 @@ const ZH: Record<string, string> = {
 const EN: Record<string, string> = {
   appName: 'KAI',
   mobileMerchantReadOnlyTitle: 'Seller data is read-only',
-  mobileMerchantReadOnlyHint: 'Use the mobile app to view data. Manage devices, products, delivery, and seller details on the Web.',
+  mobileMerchantReadOnlyHint: 'Use this client to view data. Manage devices, products, delivery, and seller details on the Web.',
   kaiIdentityBinding: 'Link Kai identity',
   kaiIdentity: 'Kai unified identity',
   kaiIdentityBound: 'Linked',

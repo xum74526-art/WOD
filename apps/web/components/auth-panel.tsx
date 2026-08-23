@@ -41,7 +41,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       .then(setCaptcha)
       .catch(() => {
         setMessageTone("error");
-        setMessage("验证码读取失败，请确认手机端后端已启动");
+        setMessage("验证码读取失败，请稍后重试");
       });
   }
 
@@ -133,7 +133,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       <div className="auth-panel__heading">
         <p className="auth-eyebrow">{isRegister ? "CREATE YOUR ACCOUNT" : "WELCOME BACK"}</p>
         <h1 id="auth-title">{isRegister ? t("auth.register.title", "创建账号") : t("auth.login.title", "欢迎回来")}</h1>
-        <p>{isRegister ? t("auth.register.desc", "创建与手机端共用的账号，Web 和 App 使用同一份数据。") : t("auth.login.desc", "使用手机端账号登录，查看同一份订单、资产和钱包数据。")}</p>
+        <p>{isRegister ? t("auth.register.desc", "创建统一账户，集中管理订单、资产和钱包数据。") : t("auth.login.desc", "登录统一账户，查看订单、资产和钱包数据。")}</p>
       </div>
 
       <div className="auth-methods" role="tablist" aria-label={locale === "en" ? "Sign-in method" : "登录方式"}>

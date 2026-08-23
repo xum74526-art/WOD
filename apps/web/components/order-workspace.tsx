@@ -136,7 +136,7 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   }
 
   return <section className="workspace-page commerce-workspace order-workspace">
-    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / MOBILE ORDERS" : "BUYER / MOBILE ORDERS"}</p><h1>{supplierView ? "交付订单" : "我的订单"}</h1><span>{supplierView ? "订单来自手机端；已付款后填写 SSH 信息完成交付。" : "订单、交付信息和资产状态与 App 实时共用。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>手机端统一账本<br />SSH 私钥不进入平台</span></div></div>
+    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / ORDERS" : "BUYER / ORDERS"}</p><h1>{supplierView ? "交付订单" : "我的订单"}</h1><span>{supplierView ? "已付款后填写 SSH 信息完成交付。" : "查看订单、交付信息和资产状态。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>统一订单账本<br />SSH 私钥不进入平台</span></div></div>
     <div className="commerce-tabs">{filters.map(([value, label]) => <button className={status === value ? "active" : ""} key={value || "all"} onClick={() => { setStatus(value); void load(value); }}>{label}</button>)}</div>
     {error && <div className="commerce-error">{error}</div>}{success && <div className="commerce-success">{success}</div>}
     <div className="order-console">

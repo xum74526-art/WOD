@@ -55,11 +55,11 @@ export function MobileAssetsWorkspace() {
 
   return <section className="workspace-page mobile-assets-workspace">
     <div className="mobile-ops-head">
-      <div><p>ACCOUNT / MOBILE ASSETS</p><h1>个人资产</h1><span>已购算力、运行状态、收益和到期时间与手机端保持一致。</span></div>
+      <div><p>ACCOUNT / ASSETS</p><h1>个人资产</h1><span>查看已购算力、运行状态、收益和到期时间。</span></div>
       <Link href="/market"><ShoppingCart size={17}/>购买算力</Link>
     </div>
 
-    <div className="mobile-data-spine" aria-label="手机端资产摘要">
+    <div className="mobile-data-spine" aria-label="资产摘要">
       <article><small>资产总值</small><strong>{amount(data?.total_value)}</strong><span>卡时</span></article>
       <article><small>运行中算力</small><strong>{metrics.active}</strong><span>个实例</span></article>
       <article><small>今日收益</small><strong>{amount(metrics.today)}</strong><span>卡时</span></article>

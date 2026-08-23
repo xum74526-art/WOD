@@ -38,6 +38,17 @@ test("market summary is built from official OHLC candles", () => {
   assert.doesNotMatch(summary, /\/api\/market\/prices\/history/);
 });
 
+test("market ranking and trend dashboard keep the complete KAI catalogue", () => {
+  const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+  const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(adapter, /rankingData\.items\)\.slice\(0,\s*12\)/);
+  assert.doesNotMatch(serverData, /ranking\.items\)\.slice\(0,\s*12\)/);
+  assert.doesNotMatch(serverData, /raw\.items\)\.slice\(0,\s*12\)/);
+  assert.match(adapter, /mapWithConcurrency\(entries, 8/);
+  assert.match(serverData, /mapWithConcurrency\(entries, 8/);
+});
+
 test("trend panel keeps current quotes and matches a model by model plus variant", () => {
   const source = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
 

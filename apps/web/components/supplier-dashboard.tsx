@@ -8,7 +8,7 @@ import { getMobileSupplierDashboard, type MobileSupplierDashboard } from "@/lib/
 const operations = [
   { eyebrow: "LISTING", title: "管理算力商品", description: "维护 GPU、区域、价格、库存与上下架状态。", href: "/supplier/resources", icon: Cube },
   { eyebrow: "DELIVERY", title: "处理交付订单", description: "查看已付款订单，填写有效 SSH 连接信息等待买家确认。", href: "/supplier/orders", icon: Receipt },
-  { eyebrow: "REVENUE", title: "查看商家收益", description: "查看手机端后端计算的订单收益、余额和提现能力。", href: "/supplier/revenue", icon: Wallet },
+  { eyebrow: "REVENUE", title: "查看商家收益", description: "查看订单收益、余额和提现能力。", href: "/supplier/revenue", icon: Wallet },
   { eyebrow: "PROFILE", title: "维护商家资料", description: "更新服务名称、联系人、服务地区和业务说明。", href: "/supplier/settings", icon: Gear },
 ] as const;
 

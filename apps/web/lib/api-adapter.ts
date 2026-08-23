@@ -22,6 +22,19 @@ function array(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.map(object) : [];
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
 function text(value: unknown, fallback = "") {
   return typeof value === "string" ? value : value == null ? fallback : String(value);
 }
@@ -391,7 +404,7 @@ async function marketRanking(request: NextRequest) {
   const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
   if (!ranking.ok) return upstreamFailure(ranking);
   const rankingData = object(ranking.body.data);
-  const entries = array(rankingData.items).slice(0, 12).map((entry) => ({
+  const entries = array(rankingData.items).map((entry) => ({
     gpu_model: text(entry.gpu_model),
     gpu_variant: text(entry.gpu_variant),
     median_price_cny: number(entry.median_price_cny),
@@ -415,8 +428,8 @@ async function marketSummary(request: NextRequest) {
   const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
   if (!ranking.ok) return upstreamFailure(ranking);
   const rankingData = object(ranking.body.data);
-  const entries = array(rankingData.items).slice(0, 12);
-  const withHistory = await Promise.all(entries.map(async (entry) => {
+  const entries = array(rankingData.items);
+  const withHistory = await mapWithConcurrency(entries, 8, async (entry) => {
     const model = text(entry.gpu_model);
     const variant = text(entry.gpu_variant);
     const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
@@ -448,7 +461,7 @@ async function marketSummary(request: NextRequest) {
       region: "多区域",
       reliability: text(entry.market_status) === "live" ? 100 : 0,
     };
-  }));
+  });
   return publicApiSuccess(withHistory, {
     observed_at: text(rankingData.server_time),
     history_updated_at: text(rankingData.server_time),
@@ -488,7 +501,7 @@ async function accountSummary(request: NextRequest) {
 }
 
 function unavailable(path: string) {
-  return apiError(`此 Web 模块没有手机端数据源，已停用：${path}`, 503, "mobile_source_unavailable");
+  return apiError(`此 Web 模块没有可用业务数据源，已停用：${path}`, 503, "business_source_unavailable");
 }
 
 export async function handleApi(request: NextRequest, segments: string[]) {

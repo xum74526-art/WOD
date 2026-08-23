@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Cpu, HardDrives, MapPin, ShieldCheck } from "@phosphor-icons/react";
+import { ArrowRight, Cpu, HardDrives, MapPin } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { getCurrentUser, type AuthUser } from "@/lib/api";
 import { listPublicProducts, type PublicProduct } from "@/lib/commerce-api";
@@ -33,13 +33,13 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
   const displayRows = typeof limit === "number" ? rows.slice(0, limit) : rows;
 
   const marketDescription = viewerRole === "supplier"
-    ? (locale === "en" ? "This is the public market buyers see. Products, stock, and orders come from the mobile supplier backend." : "这里是买家看到的公开市场；商品、库存与订单均来自手机端商家后台。")
+    ? (locale === "en" ? "This is the public market buyers see. Products, stock, and orders use the unified business platform." : "这里是买家看到的公开市场；商品、库存与订单使用统一业务平台。")
     : viewerRole === "admin"
       ? (locale === "en" ? "Public market preview. Review and publish servers from the admin console." : "这里是公开市场预览；服务器审核与发布请在管理控制台完成。")
-      : (locale === "en" ? "Products and stock come from the mobile backend. Suppliers deliver SSH access after purchase." : "商品与库存来自手机端后端；下单后由商家交付 SSH 信息。");
+      : (locale === "en" ? "Browse available compute resources. Suppliers deliver SSH access after purchase." : "浏览可用算力资源；下单后由商家交付 SSH 信息。");
 
   return <section className="merchant-market" aria-labelledby="merchant-market-title">
-    <header><div><p>北斗 kai SHARED COMPUTE</p><h2 id="merchant-market-title">{t("market.shared", "共享算力资源")}</h2><span>{marketDescription}</span></div><div className="sandbox-seal is-ready"><ShieldCheck size={19}/><span><small>ONE DATA SOURCE</small><strong>{t("market.source", "手机端数据")}</strong></span></div></header>
+    <header><div><p>北斗 kai SHARED COMPUTE</p><h2 id="merchant-market-title">{t("market.shared", "共享算力资源")}</h2><span>{marketDescription}</span></div></header>
     {loading ? <div className="merchant-market__state">{t("market.loading", "正在读取商家资源…")}</div> : error ? <div className="merchant-market__state is-error">{error}</div> : displayRows.length === 0 ? <div className="merchant-market__state"><strong>{t("market.empty", "暂无已发布资源")}</strong><span>{t("market.emptyDesc", "商家资源审核通过后会自动出现在这里。")}</span></div> : <div className="merchant-resource-grid">{displayRows.map((row) => {
       const legacyTestResource = row.name === "错误型号资源";
       const action = viewerRole === "supplier" ? { href: "/supplier/resources", label: t("market.manage", "管理服务器") } : viewerRole === "admin" ? { href: "/admin/resources", label: t("market.review", "审核服务器") } : viewerRole === "loading" ? { href: `/market/products/${row.id}`, label: t("market.view", "查看服务器") } : { href: `/market/products/${row.id}`, label: t("market.rent", "查看并租用") };

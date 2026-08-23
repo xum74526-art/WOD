@@ -2,13 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Cube, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
-import {
-  createMobileSupplierDevice,
-  deleteMobileSupplierDevice,
-  listMobileSupplierDevices,
-  updateMobileSupplierDevice,
-  type MobileSupplierDevice,
-} from "@/lib/supplier-api";
+import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice } from "@/lib/supplier-api";
 import { errorMessage } from "@/lib/commerce-ui";
 
 const blank = {
@@ -42,7 +36,9 @@ export function ResourceWorkspace() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function startCreate() {
     setSelected(null);
@@ -67,7 +63,8 @@ export function ResourceWorkspace() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       let id: number;
       if (selected) {
@@ -102,9 +99,13 @@ export function ResourceWorkspace() {
 
   async function toggle(item: MobileSupplierDevice) {
     try {
-      await updateMobileSupplierDevice(item.id, { status: item.list_status === "on" ? "off" : "on" });
+      await updateMobileSupplierDevice(item.id, {
+        status: item.list_status === "on" ? "off" : "on",
+      });
       await load(item.id);
-    } catch (reason) { setError(errorMessage(reason)); }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
   }
 
   async function remove(item: MobileSupplierDevice) {
@@ -112,25 +113,165 @@ export function ResourceWorkspace() {
     try {
       await deleteMobileSupplierDevice(item.id);
       await load();
-    } catch (reason) { setError(errorMessage(reason)); }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
   }
 
-  return <section className="workspace-page commerce-workspace resource-workspace">
-    <div className="workspace-page__head resource-head"><div><p>SUPPLIER / MOBILE PRODUCTS</p><h1>算力商品</h1><span>这里的新增、库存、价格和上下架操作直接写入手机端数据库。</span></div><button className="commerce-primary" onClick={startCreate}><Plus size={16}/>新增商品</button></div>
-    {error && <div className="commerce-error">{error}</div>}
-    <div className="resource-console">
-      <aside><header><strong>手机端商品</strong><small>{rows.length} 条</small></header>{rows.length ? rows.map((item) => <button type="button" className={selected?.id === item.id && !editing ? "active" : ""} key={item.id} onClick={() => { setSelected(item); setEditing(false); }}><span><small>WOD-P-{item.id}</small><strong>{item.name}</strong><em>{item.gpu_model} · {item.region}</em></span><span><b className={`status-chip status-chip--${item.list_status === "on" ? "published" : "archived"}`}>{item.list_status === "on" ? "已上架" : "已下架"}</b><i>库存 {item.stock}</i></span></button>) : <div className="commerce-empty"><Cube size={22}/><strong>还没有商品</strong><span>新增后会与 App 共用。</span></div>}</aside>
-      <main>{editing ? <form className="resource-form" onSubmit={(event) => void save(event)}><header><p>{selected ? `EDIT / WOD-P-${selected.id}` : "NEW MOBILE PRODUCT"}</p><h2>{selected ? "编辑商品" : "新增算力商品"}</h2></header><div className="resource-form__grid">
-        <label><span>商品名称</span><input required minLength={2} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label>
-        <label><span>GPU 型号</span><input required disabled={Boolean(selected)} value={form.gpu_model} onChange={(event) => setForm({ ...form, gpu_model: event.target.value })}/></label>
-        <label><span>显存</span><input required disabled={Boolean(selected)} value={form.memory} onChange={(event) => setForm({ ...form, memory: event.target.value })}/></label>
-        <label><span>每 GPU 小时价格（CNY）</span><input required type="number" min="0.0001" step="0.0001" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })}/></label>
-        <label><span>库存</span><input required type="number" min="0" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })}/></label>
-        <label><span>区域代码</span><input required disabled={Boolean(selected)} value={form.region_code} onChange={(event) => setForm({ ...form, region_code: event.target.value })}/></label>
-        <label><span>区域名称</span><input required disabled={Boolean(selected)} value={form.region_name} onChange={(event) => setForm({ ...form, region_name: event.target.value })}/></label>
-        <label><span>城市</span><input required disabled={Boolean(selected)} value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })}/></label>
-        {!selected && <label className="resource-form__wide"><span>商品说明</span><textarea value={form.desc} onChange={(event) => setForm({ ...form, desc: event.target.value })}/></label>}
-      </div><footer><button type="button" onClick={() => setEditing(false)}>取消</button><button className="commerce-primary" disabled={busy}><FloppyDisk size={16}/>{busy ? "保存中…" : "保存到手机端"}</button></footer></form> : selected ? <div className="resource-dossier"><header><div><p>WOD-P-{selected.id}</p><h2>{selected.name}</h2><span>{selected.gpu_model} · {selected.memory}</span></div><b className={`status-chip status-chip--${selected.list_status === "on" ? "published" : "archived"}`}>{selected.list_status === "on" ? "已上架" : "已下架"}</b></header><div className="order-facts"><div><small>每小时价格</small><strong>{selected.price.toFixed(4)} CNY</strong></div><div><small>当前库存</small><strong>{selected.stock}</strong></div><div><small>累计订单</small><strong>{selected.order_count}</strong></div></div><footer className="order-actions"><button className="commerce-primary" onClick={() => startEdit(selected)}>编辑价格与库存</button><button onClick={() => void toggle(selected)}>{selected.list_status === "on" ? "下架" : "上架"}</button><button className="commerce-danger" onClick={() => void remove(selected)}><Trash size={16}/>删除</button></footer></div> : <div className="commerce-empty"><Cube size={28}/><strong>选择一个商品或新增商品</strong></div>}</main>
-    </div>
-  </section>;
+  return (
+    <section className="workspace-page commerce-workspace resource-workspace">
+      <div className="workspace-page__head resource-head">
+        <div>
+          <p>SUPPLIER / PRODUCTS</p>
+          <h1>算力商品</h1>
+          <span>统一管理商品、库存、价格和上下架状态。</span>
+        </div>
+        <button className="commerce-primary" onClick={startCreate}>
+          <Plus size={16} />
+          新增商品
+        </button>
+      </div>
+      {error && <div className="commerce-error">{error}</div>}
+      <div className="resource-console">
+        <aside>
+          <header>
+            <strong>算力商品</strong>
+            <small>{rows.length} 条</small>
+          </header>
+          {rows.length ? (
+            rows.map((item) => (
+              <button
+                type="button"
+                className={selected?.id === item.id && !editing ? "active" : ""}
+                key={item.id}
+                onClick={() => {
+                  setSelected(item);
+                  setEditing(false);
+                }}
+              >
+                <span>
+                  <small>WOD-P-{item.id}</small>
+                  <strong>{item.name}</strong>
+                  <em>
+                    {item.gpu_model} · {item.region}
+                  </em>
+                </span>
+                <span>
+                  <b className={`status-chip status-chip--${item.list_status === "on" ? "published" : "archived"}`}>{item.list_status === "on" ? "已上架" : "已下架"}</b>
+                  <i>库存 {item.stock}</i>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="commerce-empty">
+              <Cube size={22} />
+              <strong>还没有商品</strong>
+              <span>新增后会保存到统一业务平台。</span>
+            </div>
+          )}
+        </aside>
+        <main>
+          {editing ? (
+            <form className="resource-form" onSubmit={(event) => void save(event)}>
+              <header>
+                <p>{selected ? `EDIT / WOD-P-${selected.id}` : "NEW MOBILE PRODUCT"}</p>
+                <h2>{selected ? "编辑商品" : "新增算力商品"}</h2>
+              </header>
+              <div className="resource-form__grid">
+                <label>
+                  <span>商品名称</span>
+                  <input required minLength={2} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+                </label>
+                <label>
+                  <span>GPU 型号</span>
+                  <input required disabled={Boolean(selected)} value={form.gpu_model} onChange={(event) => setForm({ ...form, gpu_model: event.target.value })} />
+                </label>
+                <label>
+                  <span>显存</span>
+                  <input required disabled={Boolean(selected)} value={form.memory} onChange={(event) => setForm({ ...form, memory: event.target.value })} />
+                </label>
+                <label>
+                  <span>每 GPU 小时价格（CNY）</span>
+                  <input required type="number" min="0.0001" step="0.0001" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
+                </label>
+                <label>
+                  <span>库存</span>
+                  <input required type="number" min="0" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} />
+                </label>
+                <label>
+                  <span>区域代码</span>
+                  <input required disabled={Boolean(selected)} value={form.region_code} onChange={(event) => setForm({ ...form, region_code: event.target.value })} />
+                </label>
+                <label>
+                  <span>区域名称</span>
+                  <input required disabled={Boolean(selected)} value={form.region_name} onChange={(event) => setForm({ ...form, region_name: event.target.value })} />
+                </label>
+                <label>
+                  <span>城市</span>
+                  <input required disabled={Boolean(selected)} value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+                </label>
+                {!selected && (
+                  <label className="resource-form__wide">
+                    <span>商品说明</span>
+                    <textarea value={form.desc} onChange={(event) => setForm({ ...form, desc: event.target.value })} />
+                  </label>
+                )}
+              </div>
+              <footer>
+                <button type="button" onClick={() => setEditing(false)}>
+                  取消
+                </button>
+                <button className="commerce-primary" disabled={busy}>
+                  <FloppyDisk size={16} />
+                  {busy ? "保存中…" : "保存商品"}
+                </button>
+              </footer>
+            </form>
+          ) : selected ? (
+            <div className="resource-dossier">
+              <header>
+                <div>
+                  <p>WOD-P-{selected.id}</p>
+                  <h2>{selected.name}</h2>
+                  <span>
+                    {selected.gpu_model} · {selected.memory}
+                  </span>
+                </div>
+                <b className={`status-chip status-chip--${selected.list_status === "on" ? "published" : "archived"}`}>{selected.list_status === "on" ? "已上架" : "已下架"}</b>
+              </header>
+              <div className="order-facts">
+                <div>
+                  <small>每小时价格</small>
+                  <strong>{selected.price.toFixed(4)} CNY</strong>
+                </div>
+                <div>
+                  <small>当前库存</small>
+                  <strong>{selected.stock}</strong>
+                </div>
+                <div>
+                  <small>累计订单</small>
+                  <strong>{selected.order_count}</strong>
+                </div>
+              </div>
+              <footer className="order-actions">
+                <button className="commerce-primary" onClick={() => startEdit(selected)}>
+                  编辑价格与库存
+                </button>
+                <button onClick={() => void toggle(selected)}>{selected.list_status === "on" ? "下架" : "上架"}</button>
+                <button className="commerce-danger" onClick={() => void remove(selected)}>
+                  <Trash size={16} />
+                  删除
+                </button>
+              </footer>
+            </div>
+          ) : (
+            <div className="commerce-empty">
+              <Cube size={28} />
+              <strong>选择一个商品或新增商品</strong>
+            </div>
+          )}
+        </main>
+      </div>
+    </section>
+  );
 }

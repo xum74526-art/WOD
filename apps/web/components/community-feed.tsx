@@ -206,7 +206,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     if (page === 1) void load(); else setPage(1);
   }
 
-  if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>Web 与手机端共用动态、关注、点赞和评论数据。</p><Link href="/login?return_to=/community">登录</Link></div>;
+  if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>登录后可发布动态、关注、点赞和评论。</p><Link href="/login?return_to=/community">登录</Link></div>;
 
   return <section className="mobile-community-feed">
     <div className="community-commandbar">
@@ -218,7 +218,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     <div className="mobile-community-tabs" role="tablist" aria-label="社区内容筛选">{tabs.map(([value, label]) => <button type="button" role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => { setTab(value); setPage(1); }}>{label}</button>)}</div>
 
     {composerOpen && <form className="community-composer" onSubmit={publish}>
-      <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布到手机端社区</h2></div></header>
+      <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布社区动态</h2></div></header>
       <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
       <textarea required maxLength={2000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
       <footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/2000`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>

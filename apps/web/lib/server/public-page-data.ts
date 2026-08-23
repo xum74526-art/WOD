@@ -16,6 +16,19 @@ function array(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.map(object) : [];
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
 function text(value: unknown, fallback = "") {
   return typeof value === "string" ? value : value == null ? fallback : String(value);
 }
@@ -125,7 +138,7 @@ function dashboardSource(value: unknown) {
 export async function getInitialMarketRanking(): Promise<PublicMarketRanking | null> {
   try {
     const raw = object(await cachedCanonicalData("/api/market/ranking", 30));
-    const data = array(raw.items).slice(0, 12).map(rankingItem);
+    const data = array(raw.items).map(rankingItem);
     return { data, meta: { observed_at: text(raw.server_time), count: data.length, source: "canonical-api" } };
   } catch {
     return null;
@@ -186,8 +199,8 @@ export async function getInitialMarketDashboard(): Promise<InitialMarketDashboar
       cachedCanonicalData("/api/market/sources/status", 30).catch(() => ({ items: [] })),
     ]);
     const ranking = object(rankingValue);
-    const entries = array(ranking.items).slice(0, 12);
-    const data = (await Promise.all(entries.map(async (entry): Promise<MarketSummary> => {
+    const entries = array(ranking.items);
+    const data = (await mapWithConcurrency(entries, 8, async (entry): Promise<MarketSummary> => {
       const model = text(entry.gpu_model);
       const variant = text(entry.gpu_variant);
       const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
@@ -211,7 +224,7 @@ export async function getInitialMarketDashboard(): Promise<InitialMarketDashboar
         official_median_price: current,
         history,
       };
-    }))).filter((item) => item.median_price > 0 || item.history.length > 0);
+    })).filter((item) => item.median_price > 0 || item.history.length > 0);
     if (!data.length) return null;
     return {
       data,

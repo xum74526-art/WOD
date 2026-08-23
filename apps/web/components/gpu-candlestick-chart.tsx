@@ -173,7 +173,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
     return <section className="gpu-kline-card gpu-trend-state" aria-live="polite">
       {status === "loading" ? <Database size={30} weight="light" /> : <ChartLine size={30} weight="light" />}
       <strong>{status === "loading" ? (locale === "en" ? "Building the price chart" : "正在生成价格 K 线") : (locale === "en" ? "Live market data is unavailable" : "真实行情暂不可用")}</strong>
-      <span>{status === "loading" ? (locale === "en" ? "Loading GPU prices from the mobile backend." : "正在读取手机端后端 GPU 行情。") : message}</span>
+      <span>{status === "loading" ? (locale === "en" ? "Loading KAI Pricing GPU data." : "正在读取 KAI Pricing GPU 行情。") : message}</span>
       {status === "error" && <Link href="/trend">{locale === "en" ? "Open full market" : "打开完整行情"} <ArrowRight size={13} /></Link>}
     </section>;
   }
@@ -190,7 +190,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
           <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "daily price candles" : "日价格 K 线"}</h2>
           <p>{locale === "en" ? "KAI market median" : "KAI 行情中位价"} · {locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</p>
         </div>
-        <span className="gpu-kline-simulated gpu-trend-source">{locale === "en" ? "Mobile data" : "手机端数据"}</span>
+        <span className="gpu-kline-simulated gpu-trend-source">KAI Pricing</span>
       </header>
 
       <div className="gpu-kline-quote">
@@ -259,7 +259,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
       </dl>
 
       <footer>
-        <span>{locale === "en" ? "Candles come from the mobile backend market history" : "K 线来自手机端后端行情历史"} · {locale === "en" ? "Updated" : "更新于"} {updatedAt ? new Date(updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN") : "—"}</span>
+        <span>{locale === "en" ? "Candles use KAI Pricing market history" : "K 线基于 KAI Pricing 行情历史"} · {locale === "en" ? "Updated" : "更新于"} {updatedAt ? new Date(updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN") : "—"}</span>
         <Link href="/trend">{locale === "en" ? "Open full market" : "查看完整行情"} <ArrowRight size={13} /></Link>
       </footer>
     </section>

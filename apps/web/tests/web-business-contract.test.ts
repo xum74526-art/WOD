@@ -26,6 +26,29 @@ test("released Web account copy does not expose retired test-only wording", () =
   );
 });
 
+test("released clients do not describe canonical data as coming from mobile", () => {
+  const webComponents = [
+    "account-dashboard.tsx",
+    "auth-panel.tsx",
+    "community-feed.tsx",
+    "gpu-candlestick-chart.tsx",
+    "merchant-resource-market.tsx",
+    "mobile-account-settings.tsx",
+    "mobile-assets-workspace.tsx",
+    "mobile-buy-request-workspace.tsx",
+    "mobile-onboarding-workspace.tsx",
+    "mobile-support-workspace.tsx",
+    "order-workspace.tsx",
+    "payment-workspace.tsx",
+    "product-shell.tsx",
+    "resource-workspace.tsx",
+  ].map((file) => fs.readFileSync(new URL(`../components/${file}`, import.meta.url), "utf8")).join("\n");
+  const iosLocale = fs.readFileSync(new URL("../../ios/src/store/i18n.ts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(webComponents, /手机端(?:后端|数据|数据库|账户|客服)|来自手机端|与手机端|mobile (?:backend|data|account|app)/i);
+  assert.doesNotMatch(iosLocale, /移动端用于查看|use the mobile app to view data/i);
+});
+
 test("Web market summary and chart use the canonical KAI candle contract", () => {
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
