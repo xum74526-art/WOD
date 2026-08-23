@@ -4685,16 +4685,26 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .wallet-payment-state strong { color: var(--text); font-size: 15px; }
 .wallet-payment-state em { color: var(--text-muted); font-size: 9px; font-style: normal; }
 .wallet-payment-state > b { font: 750 22px var(--font-mono); }
-.wallet-payment-state nav { display: flex; gap: 7px; }
+.wallet-payment-state nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .wallet-payment-state button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--brand-strong); background: var(--surface); cursor: pointer; font-size: 9px; }
+.wallet-payment-state button.danger,
+.wallet-order-actions button.danger { color: var(--negative); border-color: color-mix(in srgb, var(--negative) 45%, var(--line)); }
+.wallet-payment-state button:disabled,
+.wallet-order-actions button:disabled { opacity: .42; cursor: not-allowed; }
 .wallet-payment-state.state-paid { border-left-color: var(--positive); }
 .wallet-payment-state.state-paid > div { color: var(--positive); }
 .wallet-payment-state.state-failed,
-.wallet-payment-state.state-expired { border-left-color: var(--negative); }
+.wallet-payment-state.state-expired,
+.wallet-payment-state.state-canceled { border-left-color: var(--negative); }
 .wallet-payment-state.state-failed > div,
-.wallet-payment-state.state-expired > div { color: var(--negative); }
+.wallet-payment-state.state-expired > div,
+.wallet-payment-state.state-canceled > div { color: var(--negative); }
 .wallet-ledger > article { display: grid; grid-template-columns: minmax(210px, 1fr) .55fr .7fr auto; }
 .wallet-ledger article > b { color: var(--brand-strong); font-size: 9px; }
+.wallet-recharge-order > span { min-width: 0; }
+.wallet-recharge-order > span small { white-space: normal; }
+.wallet-order-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.wallet-order-actions button { min-height: 30px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--brand-strong); background: var(--surface); cursor: pointer; font-size: 8px; }
 
 @media (max-width: 980px) {
   .mobile-account-grid,

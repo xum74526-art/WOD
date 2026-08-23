@@ -97,3 +97,16 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
   assert.match(chart, /close_price_card_hours/);
   assert.doesNotMatch(chart, /close_price_cny/);
 });
+
+test("Web recharge orders expose the same query, safe cancel, and restart workflow as App", () => {
+  const wallet = fs.readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(wallet, /paymentQueryNotice\(order\)/);
+  assert.match(wallet, /queryRechargePayment\(row\.order_no\)/);
+  assert.match(wallet, /row\.can_cancel/);
+  assert.match(wallet, /cancelRechargePayment\(row\.order_no\)/);
+  assert.match(wallet, /paymentRestartable\(row\.status\)/);
+  assert.match(wallet, /取消订单/);
+  assert.match(wallet, /再来一单/);
+  assert.match(wallet, /到期：/);
+});
