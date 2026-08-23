@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+test("compute trends use /trend as the canonical route", () => {
+  const page = fs.readFileSync(new URL("../app/trend/page.tsx", import.meta.url), "utf8");
+  const config = fs.readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
+  const header = fs.readFileSync(new URL("../components/site-header.tsx", import.meta.url), "utf8");
+  const footer = fs.readFileSync(new URL("../components/site-footer.tsx", import.meta.url), "utf8");
+
+  assert.match(page, /LiveMarketPanel/);
+  assert.match(config, /source: "\/market\/trends", destination: "\/trend", permanent: true/);
+  assert.match(header, /label: "算力行情", href: "\/trend"/);
+  assert.match(footer, /href="\/trend"/);
+});
+
 test("market summary is built from official OHLC candles", () => {
   const source = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const summary = source.slice(source.indexOf("async function marketSummary"), source.indexOf("function orderStatus"));

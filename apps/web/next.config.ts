@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      { source: "/market/trends", destination: "/trend", permanent: true },
       { source: "/account/supplier-review", destination: "/admin/suppliers", permanent: false },
       { source: "/account/resource-review", destination: "/admin/resources", permanent: false },
       { source: "/account/moderation", destination: "/admin/moderation", permanent: false },

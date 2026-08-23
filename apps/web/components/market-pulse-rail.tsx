@@ -64,7 +64,7 @@ export function MarketPulseRail({ initialData = null }: { initialData?: PublicMa
     </div>}
     <footer>
       <span>{updatedAt ? `${locale === "en" ? "Updated" : "更新于"} ${new Date(updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN")}` : locale === "en" ? "Public market data" : "公开市场数据"}</span>
-      <Link href="/market/trends">{locale === "en" ? "Open market" : "查看行情"}<ArrowRight size={13}/></Link>
+      <Link href="/trend">{locale === "en" ? "Open market" : "查看行情"}<ArrowRight size={13}/></Link>
     </footer>
   </section>;
 }

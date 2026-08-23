@@ -174,7 +174,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
       {status === "loading" ? <Database size={30} weight="light" /> : <ChartLine size={30} weight="light" />}
       <strong>{status === "loading" ? (locale === "en" ? "Building the price chart" : "正在生成价格 K 线") : (locale === "en" ? "Live market data is unavailable" : "真实行情暂不可用")}</strong>
       <span>{status === "loading" ? (locale === "en" ? "Loading GPU prices from the mobile backend." : "正在读取手机端后端 GPU 行情。") : message}</span>
-      {status === "error" && <Link href="/market/trends">{locale === "en" ? "Open full market" : "打开完整行情"} <ArrowRight size={13} /></Link>}
+      {status === "error" && <Link href="/trend">{locale === "en" ? "Open full market" : "打开完整行情"} <ArrowRight size={13} /></Link>}
     </section>;
   }
 
@@ -260,7 +260,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
 
       <footer>
         <span>{locale === "en" ? "Candles come from the mobile backend market history" : "K 线来自手机端后端行情历史"} · {locale === "en" ? "Updated" : "更新于"} {updatedAt ? new Date(updatedAt).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN") : "—"}</span>
-        <Link href="/market/trends">{locale === "en" ? "Open full market" : "查看完整行情"} <ArrowRight size={13} /></Link>
+        <Link href="/trend">{locale === "en" ? "Open full market" : "查看完整行情"} <ArrowRight size={13} /></Link>
       </footer>
     </section>
   );

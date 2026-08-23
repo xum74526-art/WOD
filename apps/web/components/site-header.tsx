@@ -13,7 +13,7 @@ import { useI18n } from "@/components/locale-root";
 const navigation = [
   { key: "nav.home", label: "首页", href: "/" },
   { key: "nav.market", label: "算力市场", href: "/market" },
-  { key: "nav.trends", label: "算力行情", href: "/market/trends" },
+  { key: "nav.trends", label: "算力行情", href: "/trend" },
   { key: "nav.community", label: "算力社区", href: "/community" },
   { key: "nav.supplierApply", label: "商家入驻", href: "/supplier/apply" },
   { key: "nav.download", label: "下载 App", href: "/download" },
