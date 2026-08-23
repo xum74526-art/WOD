@@ -2,6 +2,7 @@ export type PublicMarketRankingItem = {
   gpu_model: string;
   gpu_variant: string;
   median_price_cny: number;
+  median_price_card_hours: number;
   change_24h: number;
   available_gpu_count: number;
   source_count: number;

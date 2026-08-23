@@ -65,6 +65,16 @@ def get_current_user(context: AuthContext = Depends(get_current_auth_context)) -
     return context.user
 
 
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Return the signed-in user when present while allowing public reads."""
+    if not token:
+        return None
+    return get_current_auth_context(token, db).user
+
+
 def get_current_platform(context: AuthContext = Depends(get_current_auth_context)) -> str:
     """Dependency for orders/payments/audit rows that need trusted attribution."""
     return context.platform

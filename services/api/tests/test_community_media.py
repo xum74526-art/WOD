@@ -17,6 +17,7 @@ from app.core.deps import get_current_platform, get_current_user
 from app.db.base import Base
 from app.db.session import get_db
 from app.models import User  # noqa: F401
+from app.models.community import Post
 from app.routers import community as community_router
 from app.utils.response import BizError, error
 
@@ -92,6 +93,28 @@ class CommunityMediaTests(unittest.TestCase):
             files={"media": ("image.png", image_bytes(), "image/png")},
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_post_feed_and_comments_are_publicly_readable(self):
+        post = Post(user_id=self.user.id, content="公开算力资讯", content_type="text")
+        self.db.add(post)
+        self.db.commit()
+        self.db.refresh(post)
+
+        feed = self.client.get("/api/community/posts?tab=recommend&page=1&page_size=10")
+        self.assertEqual(feed.status_code, 200)
+        item = feed.json()["data"]["items"][0]
+        self.assertEqual(item["content"], "公开算力资讯")
+        self.assertFalse(item["is_liked"])
+        self.assertFalse(item["is_following"])
+        self.assertFalse(item["is_own"])
+
+        comments = self.client.get(f"/api/community/posts/{post.id}/comments")
+        self.assertEqual(comments.status_code, 200)
+        self.assertEqual(comments.json()["data"], [])
+        self.assertEqual(
+            self.client.get("/api/community/posts?tab=follow").status_code,
+            401,
+        )
 
     def test_valid_png_is_uuid_persisted_and_only_public_route_serves_it(self):
         response = self.upload("photo.png", image_bytes(), "image/png")

@@ -4478,11 +4478,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
         "summary": "List Comments",
         "tags": [
           "community"

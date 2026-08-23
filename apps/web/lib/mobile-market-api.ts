@@ -19,6 +19,10 @@ export type MobileMarketCandle = {
   high_price_cny: number;
   low_price_cny: number;
   close_price_cny: number;
+  open_price_card_hours: number;
+  high_price_card_hours: number;
+  low_price_card_hours: number;
+  close_price_card_hours: number;
   sample_count: number;
   observation_count: number;
   sources: string[];
@@ -33,6 +37,7 @@ export type MobileMarketCandles = {
   is_interpolated: false;
   history_status?: string;
   latest_live_price_cny?: number | null;
+  latest_live_price_card_hours?: number | null;
   latest_live_observed_at?: string | null;
   candles: MobileMarketCandle[];
 };
@@ -45,6 +50,9 @@ export type MobileLatestMarket = {
     median_price_cny: number | null;
     min_price_cny: number | null;
     max_price_cny: number | null;
+    median_price_card_hours: number | null;
+    min_price_card_hours: number | null;
+    max_price_card_hours: number | null;
     sample_count: number;
     available_gpu_count: number;
     source_count: number;

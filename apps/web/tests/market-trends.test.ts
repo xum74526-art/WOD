@@ -7,7 +7,8 @@ test("market summary is built from official OHLC candles", () => {
   const summary = source.slice(source.indexOf("async function marketSummary"), source.indexOf("function orderStatus"));
 
   assert.match(summary, /\/api\/market\/prices\/candles/);
-  assert.match(summary, /close_price_cny/);
+  assert.match(summary, /close_price_card_hours/);
+  assert.match(summary, /median_price_card_hours/);
   assert.doesNotMatch(summary, /\/api\/market\/prices\/history/);
 });
 
@@ -82,8 +83,8 @@ test("home candlestick chart uses stored OHLC and real calendar ranges", () => {
   assert.match(chart, /point\.low/);
   assert.match(chart, /point\.close/);
   assert.match(chart, /rawRange \* \.08/);
-  assert.match(serverData, /open_price_cny/);
-  assert.match(serverData, /high_price_cny/);
-  assert.match(serverData, /low_price_cny/);
-  assert.match(serverData, /close_price_cny/);
+  assert.match(serverData, /open_price_card_hours/);
+  assert.match(serverData, /high_price_card_hours/);
+  assert.match(serverData, /low_price_card_hours/);
+  assert.match(serverData, /close_price_card_hours/);
 });

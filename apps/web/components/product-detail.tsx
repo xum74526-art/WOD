@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, Cpu, HardDrives, ShieldCheck, TerminalWindow, Wallet } from "@phosphor-icons/react";
 import { ApiError, getCurrentUser, type AuthUser } from "@/lib/api";
 import { createDirectOrder, getPublicProduct, type PublicProduct } from "@/lib/commerce-api";
-import { formatMoney } from "@/lib/commerce-ui";
 import { loginHref } from "@/lib/auth-navigation";
 
 export function ProductDetail({ productId }: { productId: string }) {
@@ -34,10 +33,6 @@ export function ProductDetail({ productId }: { productId: string }) {
       .finally(() => setAuthLoading(false));
   }, [productId]);
 
-  const total = useMemo(
-    () => product ? Number(product.price.amount) * purchaseHours * quantity : 0,
-    [purchaseHours, product, quantity],
-  );
   const walletTotal = useMemo(
     () => product ? product.unit_price_ch * purchaseHours * quantity : 0,
     [purchaseHours, product, quantity],
@@ -79,11 +74,11 @@ export function ProductDetail({ productId }: { productId: string }) {
       <div className="sandbox-disclosure"><ShieldCheck size={20}/><div><strong>统一交付流程</strong><span>钱包金额下单后先冻结；商家填写有效 SSH 信息，买家确认交付后订单完成并生成资产。</span></div></div>
     </section>
     <aside className="purchase-panel direct-purchase-panel">
-      <div><span>GPU 每小时价格</span><strong>{formatMoney(product.price.amount, product.price.currency, product.price.unit)}</strong></div>
+      <div><span>GPU 每小时价格</span><strong>{product.unit_price_ch.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 卡时 / GPU·小时</strong></div>
       <label>购买时长（小时）<span className="cycle-grid">{hourlyPurchase ? product.purchase_hour_options.map((hours) => <button className={purchaseHours === hours ? "active" : ""} type="button" onClick={() => setPurchaseHours(hours)} key={hours}>{hours} 小时</button>) : <small>仅保留历史展示，不接受新订单</small>}</span></label>
       <label>数量<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>{Array.from({ length: Math.min(Math.max(product.available_quantity, 1), 10) }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value} 台</option>)}</select></label>
       <label>购买模式<select value={purchaseType} onChange={(event) => setPurchaseType(event.target.value as "usage" | "holding")}><option value="usage">使用</option><option value="holding">持有资产</option></select></label>
-      <div className="purchase-total"><span>预计钱包扣款</span><strong>{walletTotal.toFixed(4)} 卡时</strong><small>KAI 行情估值 ¥ {total.toFixed(2)}</small></div>
+      <div className="purchase-total"><span>预计钱包扣款</span><strong>{walletTotal.toFixed(4)} 卡时</strong></div>
       <button className="sandbox-purchase-button" type="button" disabled={!hourlyPurchase || busy || authLoading || Boolean(user && !product.purchasable)} onClick={() => void purchase()}>{hourlyPurchase && product.purchasable && user && !busy ? <Wallet size={17}/> : <CheckCircle size={17}/>} {purchaseLabel}</button>
       <p>余额、冻结金额和订单都来自统一业务后端。余额不足时可前往钱包使用七相支付充值。</p>
       {error && <div className="commerce-error">{error}</div>}

@@ -36,6 +36,36 @@ RANGE_REPRESENTATIVE_SECONDS = 60 * 60
 _Payload = TypeVar("_Payload")
 
 
+def _card_hour_rate() -> Decimal:
+    rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
+    if rate <= 0:
+        raise BizError("卡时换算配置无效", status_code=503)
+    return rate
+
+
+def _to_card_hours(value: object | None) -> float | None:
+    if value is None:
+        return None
+    return float((Decimal(str(value)) / _card_hour_rate()).quantize(Decimal("0.000001")))
+
+
+def _with_card_hour_candles(payload: dict) -> dict:
+    """Expose wallet-denominated prices without replacing official CNY data."""
+    for candle in payload.get("candles") or []:
+        if not isinstance(candle, dict):
+            continue
+        for name in ("open", "high", "low", "close"):
+            candle[f"{name}_price_card_hours"] = _to_card_hours(
+                candle.get(f"{name}_price_cny")
+            )
+    payload["latest_live_price_card_hours"] = _to_card_hours(
+        payload.get("latest_live_price_cny")
+    )
+    payload["card_hour_rmb_rate"] = float(_card_hour_rate())
+    payload["wallet_charge_unit"] = "CARD_HOUR"
+    return payload
+
+
 class _MarketResponseCache:
     """Small process-local TTL cache with per-key request coalescing.
 
@@ -225,6 +255,9 @@ def _snapshot_out(row: MarketPriceSnapshot, checked_at: datetime | None = None) 
         "min_price_cny": float(row.min_price_cny) if row.min_price_cny is not None else None,
         "median_price_cny": float(row.median_price_cny) if row.median_price_cny is not None else None,
         "max_price_cny": float(row.max_price_cny) if row.max_price_cny is not None else None,
+        "min_price_card_hours": _to_card_hours(row.min_price_cny),
+        "median_price_card_hours": _to_card_hours(row.median_price_cny),
+        "max_price_card_hours": _to_card_hours(row.max_price_cny),
         "sample_count": row.sample_count,
         "quote_sample_count": row.sample_count,
         # KAI publishes quote observations and configuration limits, not live
@@ -944,6 +977,7 @@ def latest_prices(
     items = [_snapshot_out(row, statuses.get(row.source).last_success_at if statuses.get(row.source) else None) for row in rows]
     cny_mins = [float(row.min_price_cny) for row in rows if row.min_price_cny is not None]
     cny_maxes = [float(row.max_price_cny) for row in rows if row.max_price_cny is not None]
+    median_cny = _weighted_median(rows)
     # Prefer sources that actually contributed this model/variant.  When no
     # quote exists yet, fall back to the valid requested set, then to the
     # requested set itself so retry guidance remains source-specific.
@@ -954,15 +988,20 @@ def latest_prices(
         "gpu_model": canonical_model,
         "gpu_variant": selected_variant,
         "summary": {
-            "median_price_cny": _weighted_median(rows),
+            "median_price_cny": median_cny,
             "min_price_cny": min(cny_mins) if cny_mins else None,
             "max_price_cny": max(cny_maxes) if cny_maxes else None,
+            "median_price_card_hours": _to_card_hours(median_cny),
+            "min_price_card_hours": _to_card_hours(min(cny_mins) if cny_mins else None),
+            "max_price_card_hours": _to_card_hours(max(cny_maxes) if cny_maxes else None),
             "sample_count": sum(row.sample_count for row in rows),
             "quote_sample_count": sum(row.sample_count for row in rows),
             "available_gpu_count": None,
             "inventory_available": None,
             "sample_semantics": "current_quote_observations_not_inventory",
             "billing_unit": "GPU_HOUR",
+            "wallet_charge_unit": "CARD_HOUR",
+            "card_hour_rmb_rate": float(_card_hour_rate()),
             "source_count": len(rows),
         },
         "items": items,
@@ -1015,6 +1054,7 @@ def price_history(
         grouped[row.source].append({
             "time": _iso(row.observed_at),
             "price_cny": float(row.median_price_cny) if row.median_price_cny is not None else None,
+            "price_card_hours": _to_card_hours(row.median_price_cny),
             "price_original": float(row.median_price),
             "currency": row.currency,
             "sample_count": row.sample_count,
@@ -1202,7 +1242,7 @@ def _price_candles_payload(
             db, canonical_model, selected_variant, range, duration,
         )
         if stored_payload is not None:
-            return stored_payload
+            return _with_card_hour_candles(stored_payload)
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
     since = utcnow() - duration
     rows = db.query(
@@ -1308,7 +1348,7 @@ def _price_candles_payload(
         if len(candles) == 1
         else "unavailable"
     )
-    return {
+    return _with_card_hour_candles({
         "server_time": _iso(utcnow()),
         "gpu_model": canonical_model,
         "gpu_variant": selected_variant,
@@ -1332,7 +1372,7 @@ def _price_candles_payload(
         "latest_live_observed_at": latest_live_observed_at,
         "latest_live_comparable_to_history": True if latest_live_price_cny is not None else None,
         "candles": candles,
-    }
+    })
 
 
 @router.get("/ranking")
@@ -1399,6 +1439,11 @@ def _ranking_payload(db: Session) -> dict:
             "max_price_cny": max(max_values) if max_values else None,
             "p25_price_cny": min(p25_values) if p25_values else None,
             "p75_price_cny": max(p75_values) if p75_values else None,
+            "median_price_card_hours": _to_card_hours(current),
+            "min_price_card_hours": _to_card_hours(min(min_values) if min_values else None),
+            "max_price_card_hours": _to_card_hours(max(max_values) if max_values else None),
+            "p25_price_card_hours": _to_card_hours(min(p25_values) if p25_values else None),
+            "p75_price_card_hours": _to_card_hours(max(p75_values) if p75_values else None),
             "change_24h": change,
             **metric,
             "seven_day_status": seven_day_status,
@@ -1432,5 +1477,7 @@ def _ranking_payload(db: Session) -> dict:
         "source_states": source_states,
         "source": "kai",
         "billing_unit": "GPU_HOUR",
+        "wallet_charge_unit": "CARD_HOUR",
+        "card_hour_rmb_rate": float(_card_hour_rate()),
         "sample_semantics": "current_quote_observations_not_inventory",
     }

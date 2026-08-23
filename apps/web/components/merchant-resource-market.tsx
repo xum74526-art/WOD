@@ -5,7 +5,7 @@ import { ArrowRight, Cpu, HardDrives, MapPin, ShieldCheck } from "@phosphor-icon
 import { useEffect, useState } from "react";
 import { getCurrentUser, type AuthUser } from "@/lib/api";
 import { listPublicProducts, type PublicProduct } from "@/lib/commerce-api";
-import { errorMessage, formatMoney } from "@/lib/commerce-ui";
+import { errorMessage } from "@/lib/commerce-ui";
 import { useI18n } from "@/components/locale-root";
 import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
 
@@ -52,7 +52,7 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
         <header><div><small>{row.supplier_id ? <Link href={`/stores/${row.supplier_id}`}>{supplierName}</Link> : supplierName}</small><h3>{displayName}</h3></div><span className={!row.server_online && !legacyTestResource ? "is-offline" : ""}>{status}</span></header>
         <div className="merchant-resource-gpu"><Cpu size={24}/><strong>{row.gpu_model}</strong><span>{row.gpu_memory_gb}GB</span></div>
         <dl><div><dt><MapPin size={13}/>{t("market.region", "区域")}</dt><dd>{localizeMarketRegion(row.region, locale)}</dd></div><div><dt><HardDrives size={13}/>{t("market.config", "配置")}</dt><dd>{displayCpuCores || "—"}C / {displayRamGb || "—"}GB</dd></div></dl>
-        <footer><div><small>{t("market.hourly", "每小时价格")}</small><strong>{formatMoney(row.price.amount, row.price.currency, locale === "en" ? row.price.unit.replace("GPU·小时", "GPU·hour") : row.price.unit)}</strong></div><Link href={action.href}>{action.label} <ArrowRight size={15}/></Link></footer>
+        <footer><div><small>{t("market.hourly", "每小时价格")}</small><strong>{row.unit_price_ch.toLocaleString(locale === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: 6 })} {locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}</strong></div><Link href={action.href}>{action.label} <ArrowRight size={15}/></Link></footer>
       </article>;
     })}</div>}
   </section>;

@@ -265,6 +265,23 @@ function product(value: unknown) {
   };
 }
 
+function representativeProducts(values: unknown[]) {
+  const representatives = new Map<string, ReturnType<typeof product>>();
+  for (const value of values) {
+    const item = product(value);
+    const identity = `${item.gpu_model.trim().toLowerCase()}|${item.memory.trim().toLowerCase()}`;
+    const current = representatives.get(identity);
+    if (
+      !current
+      || (item.purchasable && !current.purchasable)
+      || (item.purchasable === current.purchasable && item.unit_price_ch < current.unit_price_ch)
+    ) {
+      representatives.set(identity, item);
+    }
+  }
+  return [...representatives.values()];
+}
+
 function pageEnvelope(value: unknown) {
   const page = object(value);
   const items = Array.isArray(page.items) ? page.items : [];
@@ -395,6 +412,7 @@ async function marketRanking(request: NextRequest) {
     gpu_model: text(entry.gpu_model),
     gpu_variant: text(entry.gpu_variant),
     median_price_cny: number(entry.median_price_cny),
+    median_price_card_hours: number(entry.median_price_card_hours),
     change_24h: number(entry.change_24h),
     available_gpu_count: number(entry.available_gpu_count),
     source_count: number(entry.source_count),
@@ -425,11 +443,11 @@ async function marketSummary(request: NextRequest) {
     const history = array(candleData.candles)
       .map((candle) => ({
         date: text(candle.start_time).slice(0, 10),
-        median: number(candle.close_price_cny, NaN),
+        median: number(candle.close_price_card_hours, NaN),
       }))
       .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
       .sort((a, b) => b.date.localeCompare(a.date));
-    const current = number(entry.median_price_cny);
+    const current = number(entry.median_price_card_hours);
     return {
       gpu_model: variant ? `${model} ${variant}`.trim() : model,
       tier: text(entry.market_status),
@@ -629,10 +647,13 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
   }
   if (path === "public/products" && request.method === "GET") {
-    const result = await upstream(request, "/api/products", { query: request.nextUrl.searchParams, auth: false, revalidate: 15 });
+    const query = new URLSearchParams(request.nextUrl.searchParams);
+    if (!query.has("page_size")) query.set("page_size", "100");
+    const result = await upstream(request, "/api/products", { query, auth: false, revalidate: 15 });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
-    return publicApiSuccess((page.data as unknown[]).map(product), { ...page.meta, count: page.meta.total, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
+    const products = representativeProducts(page.data as unknown[]);
+    return publicApiSuccess(products, { ...page.meta, count: products.length, total: products.length, total_pages: 1, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);
   if (productMatch && request.method === "GET") {

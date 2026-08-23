@@ -214,11 +214,11 @@ function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary;
   });
   const storedCandles = pointsWithinDays(realCandles.map((point) => ({
     date: point.start_time.slice(0, 10),
-    median: point.close_price_cny,
-    open: point.open_price_cny,
-    high: point.high_price_cny,
-    low: point.low_price_cny,
-    close: point.close_price_cny,
+    median: point.close_price_card_hours,
+    open: point.open_price_card_hours,
+    high: point.high_price_card_hours,
+    low: point.low_price_card_hours,
+    close: point.close_price_card_hours,
   })), days);
   const candles = storedCandles.length > 1 ? storedCandles : fallbackCandles;
   const rawMin = Math.min(...candles.map((candle) => candle.low));
@@ -578,7 +578,7 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
           <div className="trend-focus-period"><span>观察周期</span><div className="trend-ranges" aria-label="时间范围">{ranges.map((range) => <button className={days === range.value ? "is-active" : ""} aria-pressed={days === range.value} onClick={() => setDays(range.value)} type="button" key={range.value}>{range.label}</button>)}</div></div>
         </div>
         <div className="trend-focus-quote">
-          <div className="trend-current-price"><span>当前实时中位价</span><strong>{latest?.summary.median_price_cny ? formatPrice(latest.summary.median_price_cny) : selectedStats.current ? formatPrice(selectedStats.current) : "数据不足"}</strong><small>{liveLoading ? "正在刷新实时行情" : latest ? `${latest.summary.source_count} 个来源 · ${latest.summary.available_gpu_count == null ? "库存未披露" : `${latest.summary.available_gpu_count} 张可用`}` : "历史行情兼容模式"}</small></div>
+          <div className="trend-current-price"><span>当前实时中位价</span><strong>{latest?.summary.median_price_card_hours ? formatPrice(latest.summary.median_price_card_hours) : selectedStats.current ? formatPrice(selectedStats.current) : "数据不足"}</strong><small>{liveLoading ? "正在刷新实时行情" : latest ? `${latest.summary.sample_count} 条 KAI 报价` : "历史行情兼容模式"}</small></div>
           {selectedStats.enough && <div className={`trend-focus-change ${selectedStats.delta >= 0 ? "is-up" : "is-down"}`}><span>{ranges.find((range) => range.value === days)?.label}涨跌</span><strong>{formatChange(selectedStats.percent, "%")}</strong></div>}
           <Link href={`/market?gpu=${encodeURIComponent(selected.gpu_model)}`}>查看可租资源</Link>
         </div>

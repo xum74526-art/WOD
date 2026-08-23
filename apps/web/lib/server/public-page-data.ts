@@ -42,6 +42,7 @@ function rankingItem(value: unknown): PublicMarketRankingItem {
     gpu_model: text(item.gpu_model),
     gpu_variant: text(item.gpu_variant),
     median_price_cny: number(item.median_price_cny),
+    median_price_card_hours: number(item.median_price_card_hours),
     change_24h: number(item.change_24h),
     available_gpu_count: number(item.available_gpu_count),
     source_count: number(item.source_count),
@@ -89,6 +90,23 @@ function publicProduct(value: unknown): PublicProduct {
   };
 }
 
+function representativePublicProducts(values: unknown[]) {
+  const representatives = new Map<string, PublicProduct>();
+  for (const value of values) {
+    const item = publicProduct(value);
+    const identity = `${item.gpu_model.trim().toLowerCase()}|${item.gpu_memory_gb}`;
+    const current = representatives.get(identity);
+    if (
+      !current
+      || (item.purchasable && !current.purchasable)
+      || (item.purchasable === current.purchasable && item.unit_price_ch < current.unit_price_ch)
+    ) {
+      representatives.set(identity, item);
+    }
+  }
+  return [...representatives.values()];
+}
+
 export async function getInitialMarketRanking(): Promise<PublicMarketRanking | null> {
   try {
     const raw = object(await cachedCanonicalData("/api/market/ranking", 30));
@@ -101,15 +119,15 @@ export async function getInitialMarketRanking(): Promise<PublicMarketRanking | n
 
 export async function getInitialPublicProducts(): Promise<PublicProduct[] | null> {
   try {
-    const raw = object(await cachedCanonicalData("/api/products", 15));
-    return array(raw.items).map(publicProduct);
+    const raw = object(await cachedCanonicalData("/api/products?page_size=100", 15));
+    return representativePublicProducts(array(raw.items));
   } catch {
     return null;
   }
 }
 
 export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): Promise<InitialGpuTrend | null> {
-  const candidates = (ranking?.data ?? []).filter((item) => item.median_price_cny > 0);
+  const candidates = (ranking?.data ?? []).filter((item) => item.median_price_card_hours > 0);
   const withHistory = candidates.filter((item) => item.history_point_count >= 2 || item.history_day_count >= 2);
   const selected = withHistory.find((item) => item.gpu_model.toUpperCase().includes("H100")) ?? withHistory[0] ?? candidates[0];
   if (!selected) return null;
@@ -124,11 +142,11 @@ export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): P
     const raw = object(await cachedCanonicalData(`/api/market/prices/candles?${query}`, 120));
     const history = array(raw.candles).map((point) => ({
       date: text(point.start_time),
-      median: number(point.close_price_cny),
-      open: number(point.open_price_cny),
-      high: number(point.high_price_cny),
-      low: number(point.low_price_cny),
-      close: number(point.close_price_cny),
+      median: number(point.close_price_card_hours),
+      open: number(point.open_price_card_hours),
+      high: number(point.high_price_card_hours),
+      low: number(point.low_price_card_hours),
+      close: number(point.close_price_card_hours),
     })).filter((point) => point.date && point.median > 0);
     if (history.length < 2) return null;
     return {

@@ -13,7 +13,7 @@ from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_platform, get_current_user
+from app.core.deps import get_current_platform, get_current_user, get_optional_current_user
 from app.db.session import get_db
 from app.models.community import Comment, ContentIngestRun, ContentSource, Follow, Like, Post
 from app.models.user import User
@@ -235,10 +235,14 @@ def public_community_media(user_id: int, filename: str, request: Request):
     )
 
 
-def _post_out(p: Post, user: User, db: Session) -> dict:
+def _post_out(p: Post, user: User | None, db: Session) -> dict:
     u = db.query(User).filter(User.id == p.user_id).first()
-    is_liked = db.query(Like).filter(Like.post_id == p.id, Like.user_id == user.id).first() is not None
-    is_following = db.query(Follow).filter(Follow.follower_id == user.id, Follow.following_id == p.user_id).first() is not None
+    is_liked = bool(user) and db.query(Like).filter(
+        Like.post_id == p.id, Like.user_id == user.id
+    ).first() is not None
+    is_following = bool(user) and db.query(Follow).filter(
+        Follow.follower_id == user.id, Follow.following_id == p.user_id
+    ).first() is not None
     # 用真实评论数替代种子生成时的随机数
     actual_comments = db.query(Comment).filter(Comment.post_id == p.id).count()
     # Post.images is stored as JSON text for legacy SQLite compatibility, while
@@ -258,7 +262,7 @@ def _post_out(p: Post, user: User, db: Session) -> dict:
     out["author_avatar"] = u.avatar if u else None
     out["is_liked"] = is_liked
     out["is_following"] = is_following
-    out["is_own"] = (p.user_id == user.id)
+    out["is_own"] = bool(user) and p.user_id == user.id
     out["comments"] = actual_comments
     return out
 
@@ -267,7 +271,7 @@ def _post_out(p: Post, user: User, db: Session) -> dict:
 def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
                page_size: int = Query(default=10, ge=1, le=50),
                keyword: str = "",
-               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+               user: User | None = Depends(get_optional_current_user), db: Session = Depends(get_db)):
     q = db.query(Post)
     # 外部来源一旦停用或授权状态变更，聚合内容立即停止展示；用户内容和站内行情不受影响。
     enabled_source_keys = [
@@ -288,6 +292,8 @@ def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
             conds.append(Post.user_id.in_(author_ids))
         q = q.filter(or_(*conds))
     if tab == "follow":
+        if user is None:
+            raise HTTPException(status_code=401, detail="登录后才能查看关注动态")
         following_ids = [f.following_id for f in db.query(Follow).filter(Follow.follower_id == user.id).all()]
         if following_ids:
             q = q.filter(Post.user_id.in_(following_ids))
@@ -387,7 +393,7 @@ def toggle_like(
 
 
 @router.get("/posts/{pid}/comments")
-def list_comments(pid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_comments(pid: int, db: Session = Depends(get_db)):
     items = db.query(Comment).filter(Comment.post_id == pid).order_by(
         Comment.created_at.desc()
     ).limit(50).all()

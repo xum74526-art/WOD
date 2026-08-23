@@ -26,7 +26,7 @@ type MarketResponse = {
   data: Array<{
     gpu_model: string;
     gpu_variant: string;
-    median_price_cny: number;
+    median_price_card_hours: number;
     source_count: number;
     available_gpu_count: number;
     sources: string[];
@@ -74,7 +74,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
       try {
         const payload = await publicApiEnvelopeRequest<MarketResponse["data"], MarketResponse["meta"]>("/api/v1/public/market/ranking", 30_000);
         if (!active) return;
-        const ranked = (payload.data ?? []).filter((item) => item.median_price_cny > 0);
+        const ranked = (payload.data ?? []).filter((item) => item.median_price_card_hours > 0);
         const withHistory = ranked.filter((item) => item.history_point_count >= 2 || item.history_day_count >= 2);
         const selected = withHistory.find((item) => item.gpu_model.toUpperCase().includes("H100")) ?? withHistory[0] ?? ranked[0];
         if (!selected) throw new Error(locale === "en" ? "No GPU market quote is available" : "暂无可用的 GPU 行情");
@@ -90,11 +90,11 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
         if (!active) return;
         const history = (candlePayload.candles ?? []).map((point) => ({
           date: point.start_time,
-          median: point.close_price_cny,
-          open: point.open_price_cny,
-          high: point.high_price_cny,
-          low: point.low_price_cny,
-          close: point.close_price_cny,
+          median: point.close_price_card_hours,
+          open: point.open_price_card_hours,
+          high: point.high_price_card_hours,
+          low: point.low_price_card_hours,
+          close: point.close_price_card_hours,
         }));
         if (history.length < 2) throw new Error(locale === "en" ? "GPU price history is still accumulating" : "GPU 历史价格仍在积累");
         setMarket({
@@ -188,13 +188,13 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
         <div>
           <span className="gpu-kline-eyebrow"><i /> GPU RENTAL CANDLE INDEX</span>
           <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "daily price candles" : "日价格 K 线"}</h2>
-          <p>{locale === "en" ? "Mobile backend market median" : "手机端后端行情中位价"} · CNY / GPU·h</p>
+          <p>{locale === "en" ? "KAI market median" : "KAI 行情中位价"} · {locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</p>
         </div>
         <span className="gpu-kline-simulated gpu-trend-source">{locale === "en" ? "Mobile data" : "手机端数据"}</span>
       </header>
 
       <div className="gpu-kline-quote">
-        <div><strong>{formatPrice(active.close)}</strong><span>CNY / GPU·h</span></div>
+        <div><strong>{formatPrice(active.close)}</strong><span>{locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</span></div>
         <b className={isUp ? "is-up" : "is-down"}>
           {plot.delta >= 0 ? "+" : ""}{plot.delta.toFixed(2)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
         </b>

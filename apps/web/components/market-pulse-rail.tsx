@@ -10,7 +10,7 @@ import type { PublicMarketRanking } from "@/lib/public-data";
 type PulseMarket = {
   gpu_model: string;
   gpu_variant: string;
-  median_price_cny: number;
+  median_price_card_hours: number;
   change_24h: number;
   source_count: number;
 };
@@ -22,7 +22,7 @@ type PulseResponse = {
 
 export function MarketPulseRail({ initialData = null }: { initialData?: PublicMarketRanking | null }) {
   const { locale } = useI18n();
-  const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price_cny > 0).slice(0, 4);
+  const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price_card_hours > 0).slice(0, 4);
   const [markets, setMarkets] = useState<PulseMarket[]>(initialMarkets);
   const [updatedAt, setUpdatedAt] = useState(initialData?.meta.observed_at ?? "");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(initialMarkets.length ? "ready" : "loading");
@@ -33,7 +33,7 @@ export function MarketPulseRail({ initialData = null }: { initialData?: PublicMa
     publicApiEnvelopeRequest<PulseResponse["data"], NonNullable<PulseResponse["meta"]>>("/api/v1/public/market/ranking", 30_000)
       .then((payload) => {
         if (!active) return;
-        const available = (payload.data ?? []).filter((item) => item.median_price_cny > 0).slice(0, 4);
+        const available = (payload.data ?? []).filter((item) => item.median_price_card_hours > 0).slice(0, 4);
         setMarkets(available);
         setUpdatedAt(payload.meta?.observed_at ?? "");
         setStatus(available.length ? "ready" : "error");
@@ -57,7 +57,7 @@ export function MarketPulseRail({ initialData = null }: { initialData?: PublicMa
         const modelName = `${market.gpu_model} ${market.gpu_variant}`.trim();
         return <article key={`${market.gpu_model}:${market.gpu_variant}`}>
           <span><strong>{modelName}</strong><small>{market.source_count} {locale === "en" ? (market.source_count === 1 ? "source" : "sources") : "个数据源"}</small></span>
-          <span className="market-pulse-value"><strong>{market.median_price_cny.toFixed(2)}</strong><small>CNY / GPU·h</small></span>
+          <span className="market-pulse-value"><strong>{market.median_price_card_hours.toFixed(2)}</strong><small>{locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</small></span>
           <b className={`is-${direction}`}>{direction === "up" ? "▲" : "▼"} {Math.abs(market.change_24h).toFixed(2)}% / 24H</b>
         </article>;
       })}
