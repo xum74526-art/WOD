@@ -9,9 +9,23 @@ test("compute trends use /trend as the canonical route", () => {
   const footer = fs.readFileSync(new URL("../components/site-footer.tsx", import.meta.url), "utf8");
 
   assert.match(page, /LiveMarketPanel/);
+  assert.match(page, /getInitialMarketDashboard/);
+  assert.match(page, /initialData=\{initialData\}/);
   assert.match(config, /source: "\/market\/trends", destination: "\/trend", permanent: true/);
   assert.match(header, /label: "算力行情", href: "\/trend"/);
   assert.match(footer, /href="\/trend"/);
+});
+
+test("trend dashboard renders server data before refreshing in the background", () => {
+  const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
+
+  assert.match(panel, /initialData \? "ready" : "loading"/);
+  assert.match(panel, /void load\(false, !initialData\)/);
+  assert.match(panel, /if \(showLoading\) setStatus\("loading"\)/);
+  assert.match(serverData, /export async function getInitialMarketDashboard/);
+  assert.match(serverData, /cachedCanonicalData\("\/api\/market\/ranking", 30\)/);
+  assert.match(serverData, /cachedCanonicalData\(`\/api\/market\/prices\/candles\?\$\{query\}`, 120\)/);
 });
 
 test("market summary is built from official OHLC candles", () => {

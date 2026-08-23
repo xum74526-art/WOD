@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { InitialMarketDashboard, MarketSummary } from "@/components/live-market-panel";
 import type { PublicProduct } from "@/lib/commerce-api";
 import type { InitialGpuTrend, PublicMarketRanking, PublicMarketRankingItem } from "@/lib/public-data";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
@@ -107,6 +108,37 @@ function representativePublicProducts(values: unknown[]) {
   return [...representatives.values()];
 }
 
+function dashboardModelMemory(model: string, variant: string) {
+  const matched = `${variant} ${model}`.match(/(?:^|\D)(\d{2,3})\s*(?:GB|G)(?:\D|$)/i);
+  return matched ? number(matched[1]) : undefined;
+}
+
+function dashboardModel(value: unknown) {
+  const item = object(value);
+  return {
+    gpu_model: text(item.gpu_model),
+    gpu_variant: text(item.gpu_variant),
+    sources: Array.isArray(item.sources) ? item.sources.map((source) => text(source)).filter(Boolean) : [],
+    sample_count: number(item.sample_count),
+    available_gpu_count: number(item.available_gpu_count),
+    market_status: text(item.market_status),
+  };
+}
+
+function dashboardSource(value: unknown) {
+  const item = object(value);
+  return {
+    source: text(item.source),
+    source_name: text(item.source_name),
+    enabled: Boolean(item.enabled),
+    status: text(item.status),
+    sample_count: number(item.sample_count),
+    last_success_at: text(item.last_success_at) || null,
+    has_error: Boolean(item.has_error),
+    error_code: text(item.error_code) || null,
+  };
+}
+
 export async function getInitialMarketRanking(): Promise<PublicMarketRanking | null> {
   try {
     const raw = object(await cachedCanonicalData("/api/market/ranking", 30));
@@ -157,6 +189,55 @@ export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): P
         history,
       },
       updated_at: text(raw.server_time, ranking?.meta.observed_at),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getInitialMarketDashboard(): Promise<InitialMarketDashboard | null> {
+  try {
+    const [rankingValue, modelsValue, sourcesValue] = await Promise.all([
+      cachedCanonicalData("/api/market/ranking", 30),
+      cachedCanonicalData("/api/market/models", 30).catch(() => ({ items: [] })),
+      cachedCanonicalData("/api/market/sources/status", 30).catch(() => ({ items: [] })),
+    ]);
+    const ranking = object(rankingValue);
+    const entries = array(ranking.items).slice(0, 12);
+    const data = (await Promise.all(entries.map(async (entry): Promise<MarketSummary> => {
+      const model = text(entry.gpu_model);
+      const variant = text(entry.gpu_variant);
+      const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
+      if (variant) query.set("variant", variant);
+      const candleValue = await cachedCanonicalData(`/api/market/prices/candles?${query}`, 120).catch(() => ({}));
+      const history = array(object(candleValue).candles)
+        .map((candle) => ({
+          date: text(candle.start_time).slice(0, 10),
+          median: number(candle.close_price_card_hours, NaN),
+        }))
+        .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      const current = number(entry.median_price_card_hours);
+      return {
+        gpu_model: variant ? `${model} ${variant}`.trim() : model,
+        tier: text(entry.market_status),
+        vram_gb: dashboardModelMemory(model, variant),
+        min_price: current,
+        median_price: current,
+        official_min_price: current,
+        official_median_price: current,
+        history,
+      };
+    }))).filter((item) => item.median_price > 0 || item.history.length > 0);
+    if (!data.length) return null;
+    return {
+      data,
+      meta: {
+        observed_at: text(ranking.server_time),
+        history_updated_at: text(ranking.server_time),
+      },
+      models: array(object(modelsValue).items).map(dashboardModel),
+      sources: array(object(sourcesValue).items).map(dashboardSource),
     };
   } catch {
     return null;

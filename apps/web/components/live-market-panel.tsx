@@ -7,8 +7,8 @@ import { publicApiEnvelopeRequest } from "@/lib/api";
 import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource } from "@/lib/mobile-market-api";
 import { KAI_REALTIME_SOURCE } from "@/lib/web-business-contract";
 
-type PricePoint = { date: string; median: number };
-type MarketSummary = {
+export type PricePoint = { date: string; median: number };
+export type MarketSummary = {
   gpu_model: string;
   tier?: string;
   vram_gb?: number;
@@ -18,8 +18,12 @@ type MarketSummary = {
   official_median_price?: number;
   history: PricePoint[];
 };
-type MarketMeta = { observed_at: string; history_updated_at?: string };
-type MarketResponse = { data: MarketSummary[]; meta: MarketMeta };
+export type MarketMeta = { observed_at: string; history_updated_at?: string };
+export type MarketResponse = { data: MarketSummary[]; meta: MarketMeta };
+export type InitialMarketDashboard = MarketResponse & {
+  models: MobileMarketModel[];
+  sources: MobileMarketSource[];
+};
 type RangeDays = 28 | 56 | 90;
 type SortKey = "price" | "day" | "week" | "updated";
 type Direction = "all" | "up" | "down";
@@ -298,11 +302,13 @@ function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary;
   </div>;
 }
 
-export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
-  const [markets, setMarkets] = useState<MarketSummary[]>([]);
-  const [meta, setMeta] = useState<MarketMeta | null>(null);
-  const [selectedModel, setSelectedModel] = useState("");
-  const [gpuPickerQuery, setGpuPickerQuery] = useState("");
+export function LiveMarketPanel({ featured = false, initialData = null }: { featured?: boolean; initialData?: InitialMarketDashboard | null }) {
+  const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price > 0 || validHistory(item).length > 0);
+  const initialModel = initialMarkets[0]?.gpu_model ?? "";
+  const [markets, setMarkets] = useState<MarketSummary[]>(initialMarkets);
+  const [meta, setMeta] = useState<MarketMeta | null>(initialData?.meta ?? null);
+  const [selectedModel, setSelectedModel] = useState(initialModel);
+  const [gpuPickerQuery, setGpuPickerQuery] = useState(initialModel);
   const [gpuPickerOpen, setGpuPickerOpen] = useState(false);
   const [gpuPickerDirty, setGpuPickerDirty] = useState(false);
   const [gpuPickerActive, setGpuPickerActive] = useState(0);
@@ -314,16 +320,18 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
   const [sortKey, setSortKey] = useState<SortKey>("price");
   const [sortAsc, setSortAsc] = useState(true);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(initialData ? "ready" : "loading");
   const [message, setMessage] = useState("");
-  const [mobileModels, setMobileModels] = useState<MobileMarketModel[]>([]);
-  const [sourceStates, setSourceStates] = useState<MobileMarketSource[]>([]);
+  const [mobileModels, setMobileModels] = useState<MobileMarketModel[]>(initialData?.models ?? []);
+  const [sourceStates, setSourceStates] = useState<MobileMarketSource[]>(
+    (initialData?.sources ?? []).filter((source) => source.source.toLowerCase() === KAI_REALTIME_SOURCE),
+  );
   const [latest, setLatest] = useState<MobileLatestMarket | null>(null);
   const [realCandles, setRealCandles] = useState<MobileMarketCandle[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
 
-  const load = useCallback(async (force = false) => {
-    setStatus("loading");
+  const load = useCallback(async (force = false, showLoading = true) => {
+    if (showLoading) setStatus("loading");
     try {
       const [payload, modelsPayload, sourcesPayload] = await Promise.all([
         publicApiEnvelopeRequest<MarketSummary[], MarketMeta>("/api/v1/public/market/summary", 60_000, force) as Promise<MarketResponse>,
@@ -340,10 +348,10 @@ export function LiveMarketPanel({ featured = false }: { featured?: boolean }) {
       setStatus("ready");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "行情读取失败");
-      setStatus("error");
+      if (showLoading) setStatus("error");
     }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(false, !initialData); }, [initialData, load]);
 
   useEffect(() => {
     const model = findMobileModel(mobileModels, selectedModel);
