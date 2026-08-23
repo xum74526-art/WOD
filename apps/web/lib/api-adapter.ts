@@ -265,23 +265,6 @@ function product(value: unknown) {
   };
 }
 
-function representativeProducts(values: unknown[]) {
-  const representatives = new Map<string, ReturnType<typeof product>>();
-  for (const value of values) {
-    const item = product(value);
-    const identity = `${item.gpu_model.trim().toLowerCase()}|${item.memory.trim().toLowerCase()}`;
-    const current = representatives.get(identity);
-    if (
-      !current
-      || (item.purchasable && !current.purchasable)
-      || (item.purchasable === current.purchasable && item.unit_price_ch < current.unit_price_ch)
-    ) {
-      representatives.set(identity, item);
-    }
-  }
-  return [...representatives.values()];
-}
-
 function pageEnvelope(value: unknown) {
   const page = object(value);
   const items = Array.isArray(page.items) ? page.items : [];
@@ -648,11 +631,14 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   }
   if (path === "public/products" && request.method === "GET") {
     const query = new URLSearchParams(request.nextUrl.searchParams);
-    if (!query.has("page_size")) query.set("page_size", "100");
+    query.set("page", "1");
+    query.set("page_size", "100");
+    query.set("market_source", "kai");
+    query.set("representative", "true");
     const result = await upstream(request, "/api/products", { query, auth: false, revalidate: 15 });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
-    const products = representativeProducts(page.data as unknown[]);
+    const products = page.data.map((item) => product(item));
     return publicApiSuccess(products, { ...page.meta, count: products.length, total: products.length, total_pages: 1, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);

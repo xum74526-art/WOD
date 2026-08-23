@@ -49,18 +49,16 @@ test("Web compute catalogue shows one representative per GPU identity in card ho
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
 
-  assert.match(adapter, /function representativeProducts/);
   assert.match(adapter, /query\.set\("page_size", "100"\)/);
-  assert.match(adapter, /gpu_model\.trim\(\)\.toLowerCase\(\)/);
-  assert.match(adapter, /memory\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(adapter, /query\.set\("market_source", "kai"\)/);
+  assert.match(adapter, /query\.set\("representative", "true"\)/);
   assert.match(market, /row\.unit_price_ch/);
   assert.match(market, /卡时 \/ GPU·小时/);
   assert.match(detail, /product\.unit_price_ch/);
   assert.match(detail, /卡时 \/ GPU·小时/);
   assert.doesNotMatch(detail, /KAI 行情估值|¥|product\.price\.amount/);
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
-  assert.match(serverData, /function representativePublicProducts/);
-  assert.match(serverData, /\/api\/products\?page_size=100/);
+  assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=kai&representative=true/);
 });
 
 test("Web market chart and pulse consistently render KAI prices in card hours", () => {

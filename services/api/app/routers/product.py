@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, or_
@@ -150,6 +151,35 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
     return out
 
 
+def _representative_products(
+    products: list[Product],
+    db: Session,
+    source_states: dict[str, str],
+) -> list[dict]:
+    """Return one purchasable, lowest-price card per exact GPU/VRAM identity."""
+    representatives: dict[str, dict] = {}
+    for product in products:
+        item = _product_out(product, db, source_states)
+        identity = f"{str(item.get('gpu_model') or '').strip().casefold()}|{str(item.get('memory') or '').strip().casefold()}"
+        current = representatives.get(identity)
+        price = Decimal(str(item.get("price_card_hours_per_gpu_hour") or item.get("price") or 0))
+        current_price = (
+            Decimal(str(current.get("price_card_hours_per_gpu_hour") or current.get("price") or 0))
+            if current else None
+        )
+        if (
+            current is None
+            or (bool(item.get("purchasable")) and not bool(current.get("purchasable")))
+            or (
+                bool(item.get("purchasable")) == bool(current.get("purchasable"))
+                and current_price is not None
+                and price < current_price
+            )
+        ):
+            representatives[identity] = item
+    return list(representatives.values())
+
+
 @router.get("")
 def list_products(
     keyword: str | None = None,
@@ -159,6 +189,8 @@ def list_products(
     sort: str = "default",
     min_price: float | None = None,
     max_price: float | None = None,
+    market_source: Literal["kai"] | None = Query(default=None),
+    representative: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -177,12 +209,27 @@ def list_products(
         q = q.filter(Product.price >= min_price)
     if max_price is not None:
         q = q.filter(Product.price <= max_price)
+    if market_source:
+        q = q.filter(Product.market_source == market_source)
     if sort == "price_asc":
         q = q.order_by(Product.price.asc())
     elif sort == "price_desc":
         q = q.order_by(Product.price.desc())
     else:
         q = q.order_by(Product.price_updated_at.desc())
+    if representative:
+        items = _representative_products(q.all(), db, source_states)
+        if sort == "price_asc":
+            items.sort(key=lambda item: Decimal(str(item.get("price_card_hours_per_gpu_hour") or item.get("price") or 0)))
+        elif sort == "price_desc":
+            items.sort(
+                key=lambda item: Decimal(str(item.get("price_card_hours_per_gpu_hour") or item.get("price") or 0)),
+                reverse=True,
+            )
+        total = len(items)
+        start = (page - 1) * page_size
+        return success({"items": items[start:start + page_size], "total": total, "page": page, "page_size": page_size})
+
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()
     return success({"items": [_product_out(p, db, source_states) for p in items], "total": total, "page": page, "page_size": page_size})

@@ -64,6 +64,7 @@ export interface ProductQuery {
   page?: number
   page_size?: number
   market_source?: 'kai'
+  representative?: boolean
 }
 
 export interface ProductPage { items: Product[]; total: number; page: number; page_size: number }

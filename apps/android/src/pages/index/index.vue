@@ -267,7 +267,7 @@ async function load() {
 async function loadFeaturedProducts(silent = true) {
   if (!productPool.value.length) featuredLoading.value = true
   try {
-    const response = await getProducts({ page_size: 24, market_source: 'kai' })
+    const response = await getProducts({ page_size: 100, market_source: 'kai', representative: true })
     productPool.value = response.items.filter((item) => item.market_source === 'kai')
     updateHotProducts()
     featuredError.value = false

@@ -91,23 +91,6 @@ function publicProduct(value: unknown): PublicProduct {
   };
 }
 
-function representativePublicProducts(values: unknown[]) {
-  const representatives = new Map<string, PublicProduct>();
-  for (const value of values) {
-    const item = publicProduct(value);
-    const identity = `${item.gpu_model.trim().toLowerCase()}|${item.gpu_memory_gb}`;
-    const current = representatives.get(identity);
-    if (
-      !current
-      || (item.purchasable && !current.purchasable)
-      || (item.purchasable === current.purchasable && item.unit_price_ch < current.unit_price_ch)
-    ) {
-      representatives.set(identity, item);
-    }
-  }
-  return [...representatives.values()];
-}
-
 function dashboardModelMemory(model: string, variant: string) {
   const matched = `${variant} ${model}`.match(/(?:^|\D)(\d{2,3})\s*(?:GB|G)(?:\D|$)/i);
   return matched ? number(matched[1]) : undefined;
@@ -151,8 +134,8 @@ export async function getInitialMarketRanking(): Promise<PublicMarketRanking | n
 
 export async function getInitialPublicProducts(): Promise<PublicProduct[] | null> {
   try {
-    const raw = object(await cachedCanonicalData("/api/products?page_size=100", 15));
-    return representativePublicProducts(array(raw.items));
+    const raw = object(await cachedCanonicalData("/api/products?page=1&page_size=100&market_source=kai&representative=true", 15));
+    return array(raw.items).map(publicProduct);
   } catch {
     return null;
   }

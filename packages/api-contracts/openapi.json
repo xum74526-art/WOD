@@ -7562,6 +7562,36 @@
           },
           {
             "in": "query",
+            "name": "market_source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "kai",
+                  "enum": [
+                    "kai"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Market Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "representative",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Representative",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {

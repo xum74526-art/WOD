@@ -177,8 +177,9 @@ async function load(reset = false) {
       category: category.value || undefined,
       sort: sort.value,
       page: requestedPage,
-      page_size: 20,
+      page_size: 100,
       market_source: 'kai',
+      representative: true,
     })
     if (generation !== loadGeneration) return
     const kaiItems = res.items.filter((item) => item.market_source === 'kai')

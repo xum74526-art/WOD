@@ -32,6 +32,12 @@ test('KAI product contract distinguishes CNY pricing from wallet card-hours', ()
   assert.match(marketPage, /productPriceCny/)
 })
 
+test('home and market request the complete representative KAI catalogue', () => {
+  assert.match(gpuApi, /representative\?: boolean/)
+  assert.match(homePage, /page_size: 100, market_source: 'kai', representative: true/)
+  assert.match(marketPage, /page_size: 100,[\s\S]*?market_source: 'kai',[\s\S]*?representative: true/)
+})
+
 test('quote views render raw KAI CNY while shared charts keep explicit display units', () => {
   assert.match(quotePage, /display-currency="CNY"/)
   assert.match(quotePage, /cnyPricePerGpuHour/)
