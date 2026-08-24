@@ -187,6 +187,24 @@ class QixiangPayPaymentTests(unittest.TestCase):
         lower_md5 = dict(params, sign_type="md5")
         self.assertTrue(verify_params(lower_md5))
 
+    def test_configured_ten_yuan_minimum_is_enforced(self):
+        settings.QIXIANGPAY_MIN_AMOUNT_CNY = 10
+        self.assertEqual(public_config()["min_amount_cny"], 10.0)
+        with self.assertRaises(BizError):
+            create_recharge_order(
+                self.db,
+                self.user.id,
+                Decimal("9.99"),
+                payment_type="alipay",
+            )
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("10"),
+            payment_type="alipay",
+        )
+        self.assertEqual(output["amount_cny"], 10.0)
+
     def test_new_orders_are_qixiangpay_with_five_minute_deadline(self):
         order, _ = self._new_order()
         self.assertEqual(order.provider, "qixiangpay")

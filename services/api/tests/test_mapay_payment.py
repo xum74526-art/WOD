@@ -145,6 +145,24 @@ class MaPayPaymentTests(unittest.TestCase):
         payload = RechargePaymentCreateIn(amount_cny="0.01", payment_type="wxpay")
         self.assertEqual(payload.payment_type, "wxpay")
 
+    def test_configured_ten_yuan_minimum_is_enforced(self):
+        settings.MAPAY_MIN_AMOUNT_CNY = 10
+        self.assertEqual(public_config()["min_amount_cny"], 10.0)
+        with self.assertRaises(BizError):
+            create_recharge_order(
+                self.db,
+                self.user.id,
+                Decimal("9.99"),
+                payment_type="alipay",
+            )
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("10"),
+            payment_type="alipay",
+        )
+        self.assertEqual(output["amount_cny"], 10.0)
+
     def test_only_configured_payment_types_are_public_and_accepted(self):
         settings.MAPAY_PAYMENT_TYPES = " wxpay,wxpay,unknown "
         config = public_config()

@@ -244,7 +244,10 @@ import { useI18nStore } from '@/store/i18n'
 import { openPaymentCheckout, type PaymentCheckoutFailure } from '@/utils/payment-checkout'
 import {
   DEFAULT_RECHARGE_TTL_SECONDS,
+  effectiveRechargeMinimum,
+  effectiveWithdrawalMinimum,
   formatPaymentCountdown,
+  MINIMUM_RECHARGE_CNY,
   paymentRemainingMs,
   readRechargePrefillQuery,
   readStoredRechargeSession,
@@ -305,13 +308,14 @@ const rechargeEnabled = computed(() => (
   && wallet.value?.payment_config?.enabled === true
   && paymentMethods.value.length > 0
 ))
-const minimumAmount = computed(() => Number(wallet.value?.payment_config?.min_amount_cny || 0.01))
+const minimumAmount = computed(() => effectiveRechargeMinimum(wallet.value?.payment_config?.min_amount_cny))
+const minimumWithdrawalAmount = computed(() => effectiveWithdrawalMinimum(withdrawConfig.value?.min_card_hours))
 const maximumAmount = computed(() => Number(wallet.value?.payment_config?.max_amount_cny || 50000))
 const checkoutTtlMinutes = computed(() => Math.max(
   1,
   Math.ceil(Number(wallet.value?.payment_config?.checkout_ttl_seconds || DEFAULT_RECHARGE_TTL_SECONDS) / 60),
 ))
-const quickAmounts = [0.01, 10, 50, 100]
+const quickAmounts = [MINIMUM_RECHARGE_CNY, 50, 100]
 const estimatedCardHours = computed(() => {
   const amount = Number(sheet.amount)
   return Number.isFinite(amount) && amount > 0 ? amount / cardHourRate.value : 0
@@ -862,8 +866,8 @@ function dismissPaymentState() {
 
 async function onWithdraw() {
   const amount = Number(sheet.amount)
-  if (!Number.isFinite(amount) || amount < Number(withdrawConfig.value?.min_card_hours || 0) || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
-    uni.showToast({ title: t('withdrawAmountRange', { min: formatNumber(withdrawConfig.value?.min_card_hours || 0), max: formatNumber(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
+  if (!Number.isFinite(amount) || amount < minimumWithdrawalAmount.value || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
+    uni.showToast({ title: t('withdrawAmountRange', { min: formatNumber(minimumWithdrawalAmount.value), max: formatNumber(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
     return
   }
   if (amount > Number(wallet.value?.withdrawable_balance || 0)) {

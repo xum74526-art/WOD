@@ -120,6 +120,10 @@ test("Web recharge orders expose the same query, safe cancel, and restart workfl
   assert.match(wallet, /取消订单/);
   assert.match(wallet, /再来一单/);
   assert.match(wallet, /到期：/);
+  assert.match(wallet, /minimumRechargeAmountCny\(paymentConfig\?\.min_amount_cny\)/);
+  assert.match(wallet, /minimumWithdrawalCardHours\(withdrawalConfig\?\.min_card_hours\)/);
+  assert.doesNotMatch(wallet, /min=\{paymentConfig\?\.min_amount_cny \|\| 0\.01\}/);
+  assert.doesNotMatch(wallet, /min=\{withdrawalConfig\?\.min_card_hours \|\| 0\.01\}/);
 
   const replaceFlow = wallet.slice(wallet.indexOf("async function replaceRechargeAmount"), wallet.indexOf("function continueCheckout"));
   assert.ok(replaceFlow.indexOf("queryRechargePayment") < replaceFlow.indexOf("localStorage.removeItem"));

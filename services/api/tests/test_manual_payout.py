@@ -46,6 +46,7 @@ from app.services.manual_payout import (
     reject_withdrawal,
     utc_now,
     validate_receipt,
+    withdrawal_config,
 )
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.bank_util import AMBIGUOUS_BANK_BINS, BANK_BINS, detect_bank
@@ -159,6 +160,17 @@ class ManualPayoutTests(unittest.TestCase):
         self.wallet.balance -= Decimal("5")
         self.assertEqual(self.wallet.balance, self.wallet.withdrawable_balance)
         self.assertEqual(spendable_wallet_balance(self.wallet, self.db), Decimal("0"))
+
+    def test_configured_ten_card_hour_minimum_is_enforced(self):
+        settings.PAYOUT_MIN_CARD_HOURS = 10
+        self.assertEqual(withdrawal_config()["min_card_hours"], 10.0)
+        with self.assertRaises(BizError):
+            self._create(amount="9.99", request_id="withdraw-below-minimum")
+        self.wallet.balance = Decimal("20")
+        self.wallet.withdrawable_balance = Decimal("20")
+        self.db.commit()
+        output = self._create(amount="10", request_id="withdraw-at-minimum")
+        self.assertEqual(output.amount_card_hours, Decimal("10.000000"))
 
     def test_card_input_rejects_non_digits_and_normalizes_spaces(self):
         with self.assertRaises(ValidationError):
@@ -585,8 +597,8 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             setup.add(user)
             setup.flush()
             wallet = Wallet(
-                user_id=user.id, balance=Decimal("5"), frozen=Decimal("0"),
-                withdrawable_balance=Decimal("5"), withdraw_frozen=Decimal("0"),
+                user_id=user.id, balance=Decimal("15"), frozen=Decimal("0"),
+                withdrawable_balance=Decimal("15"), withdraw_frozen=Decimal("0"),
             )
             card = BankCard(
                 user_id=user.id, bank_name="测试银行", card_number=VALID_CARD,
@@ -604,12 +616,14 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
 
             original = {
                 "MANUAL_PAYOUT_ENABLED": settings.MANUAL_PAYOUT_ENABLED,
+                "PAYOUT_MIN_CARD_HOURS": settings.PAYOUT_MIN_CARD_HOURS,
                 "SECRET_KEY": settings.SECRET_KEY,
                 "SENSITIVE_DATA_KEY": settings.SENSITIVE_DATA_KEY,
             }
             settings.SECRET_KEY = "unit-test-manual-payout-concurrency-secret"
             settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
             settings.MANUAL_PAYOUT_ENABLED = True
+            settings.PAYOUT_MIN_CARD_HOURS = 10
             barrier = threading.Barrier(2)
 
             def attempt(request_id: str) -> str:
@@ -618,7 +632,7 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
                     local_user = db.query(User).filter(User.id == user_id).one()
                     barrier.wait(timeout=5)
                     create_withdrawal(
-                        db, local_user, amount_card_hours=Decimal("4"),
+                        db, local_user, amount_card_hours=Decimal("10"),
                         bank_card_id=card_id, client_request_id=request_id,
                     )
                     return "ok"
@@ -638,8 +652,8 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             self.assertEqual(sorted(results), ["insufficient", "ok"])
             check = Session()
             final_wallet = check.query(Wallet).filter(Wallet.user_id == user_id).one()
-            self.assertEqual(final_wallet.withdrawable_balance, Decimal("1"))
-            self.assertEqual(final_wallet.withdraw_frozen, Decimal("4"))
+            self.assertEqual(final_wallet.withdrawable_balance, Decimal("5"))
+            self.assertEqual(final_wallet.withdraw_frozen, Decimal("10"))
             self.assertEqual(check.query(WithdrawalOrder).count(), 1)
             check.close()
             engine.dispose()

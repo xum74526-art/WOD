@@ -7,6 +7,21 @@ export type RechargeStateSource = {
 };
 
 export const REGISTERED_BANK_CARD_STATUSES = ["registered", "pending_review", "active"] as const;
+export const MIN_RECHARGE_AMOUNT_CNY = 10;
+export const MIN_WITHDRAWAL_CARD_HOURS = 10;
+
+function configuredMinimum(value: unknown, floor: number) {
+  const configured = Number(value);
+  return Number.isFinite(configured) ? Math.max(floor, configured) : floor;
+}
+
+export function minimumRechargeAmountCny(value?: number | null) {
+  return configuredMinimum(value, MIN_RECHARGE_AMOUNT_CNY);
+}
+
+export function minimumWithdrawalCardHours(value?: number | null) {
+  return configuredMinimum(value, MIN_WITHDRAWAL_CARD_HOURS);
+}
 
 export function rechargeUiState(order?: RechargeStateSource | null): RechargeUiState {
   const status = String(order?.status || "").trim().toLowerCase();

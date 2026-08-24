@@ -4,10 +4,21 @@ import {
   canPrepareRechargeRestart,
   isRegisteredBankCardStatus,
   luhnCheckCardNumber,
+  minimumRechargeAmountCny,
+  minimumWithdrawalCardHours,
   rechargeBlocksNewOrder,
   rechargeCanRestart,
   rechargeUiState,
 } from "../lib/finance-ui.ts";
+
+test("recharge and withdrawal never fall below the production minimums", () => {
+  assert.equal(minimumRechargeAmountCny(), 10);
+  assert.equal(minimumRechargeAmountCny(0.01), 10);
+  assert.equal(minimumRechargeAmountCny(20), 20);
+  assert.equal(minimumWithdrawalCardHours(), 10);
+  assert.equal(minimumWithdrawalCardHours(0.01), 10);
+  assert.equal(minimumWithdrawalCardHours(25), 25);
+});
 
 test("recharge only succeeds after the backend has credited card hours", () => {
   assert.equal(rechargeUiState({ status: "paid" }), "processing");

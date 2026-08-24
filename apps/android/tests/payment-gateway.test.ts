@@ -36,3 +36,10 @@ test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
   assert.match(locale, /Qixiang Pay/)
   assert.doesNotMatch(locale, /码支付订单号|MaPay order|MaPay has no merchant/)
 })
+
+test('wallet removes the 0.01 test recharge and enforces production minimums', () => {
+  assert.doesNotMatch(walletPage, /0\.01/)
+  assert.match(walletPage, /effectiveRechargeMinimum/)
+  assert.match(walletPage, /effectiveWithdrawalMinimum/)
+  assert.match(walletPage, /quickAmounts = \[MINIMUM_RECHARGE_CNY, 50, 100\]/)
+})

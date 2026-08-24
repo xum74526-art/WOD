@@ -90,7 +90,7 @@ class PlatformAttributionTests(unittest.TestCase):
         payment = create_recharge_order(
             self.db,
             self.user.id,
-            Decimal("1"),
+            Decimal("10"),
             payment_type="alipay",
             created_platform="android",
         )
@@ -132,7 +132,7 @@ class PlatformAttributionTests(unittest.TestCase):
         withdrawal = create_withdrawal(
             self.db,
             self.user,
-            amount_card_hours=Decimal("1"),
+            amount_card_hours=Decimal("10"),
             bank_card_id=card.id,
             client_request_id="platform-withdrawal-0001",
             created_platform="web",

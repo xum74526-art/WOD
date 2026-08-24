@@ -38,6 +38,21 @@ export interface RechargeHistoryPresentation {
 }
 
 export const DEFAULT_RECHARGE_TTL_SECONDS = 5 * 60
+export const MINIMUM_RECHARGE_CNY = 10
+export const MINIMUM_WITHDRAW_CARD_HOURS = 10
+
+function configuredMinimum(value: unknown, floor: number): number {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.max(floor, amount) : floor
+}
+
+export function effectiveRechargeMinimum(value: unknown): number {
+  return configuredMinimum(value, MINIMUM_RECHARGE_CNY)
+}
+
+export function effectiveWithdrawalMinimum(value: unknown): number {
+  return configuredMinimum(value, MINIMUM_WITHDRAW_CARD_HOURS)
+}
 
 /**
  * The API currently serializes UTC datetimes without a suffix. Treat those
@@ -146,7 +161,7 @@ function normalizeRechargeAmount(value: unknown): string | null {
   const source = String(value ?? '').trim()
   if (!/^\d+(?:\.\d{1,2})?$/.test(source)) return null
   const amount = Number(source)
-  return Number.isFinite(amount) && amount > 0 ? String(amount) : null
+  return Number.isFinite(amount) && amount >= MINIMUM_RECHARGE_CNY ? String(amount) : null
 }
 
 function normalizeRechargeChannel(value: unknown): RechargePaymentChannel | null {

@@ -96,14 +96,15 @@ test('terminal recharge history can prefill a fresh checkout without changing th
   }), '/pages/wallet/index?rechargeAmount=100&rechargeChannel=alipay')
   assert.equal(createRechargeRestartRoute({
     status: 'expired',
-    amount_cny: '0.01',
+    amount_cny: '10',
     channel: 'wxpay',
-  }), '/pages/wallet/index?rechargeAmount=0.01&rechargeChannel=wxpay')
+  }), '/pages/wallet/index?rechargeAmount=10&rechargeChannel=wxpay')
   assert.equal(createRechargeRestartRoute({ status: 'canceled', amount_cny: 50, channel: 'unknown' }),
     '/pages/wallet/index?rechargeAmount=50')
   assert.equal(createRechargeRestartRoute({ status: 'pending', amount_cny: 100, channel: 'alipay' }), null)
   assert.equal(createRechargeRestartRoute({ status: 'paid', amount_cny: 100, channel: 'alipay' }), null)
   assert.equal(createRechargeRestartRoute({ status: 'failed', amount_cny: 0, channel: 'alipay' }), null)
+  assert.equal(createRechargeRestartRoute({ status: 'failed', amount_cny: 0.01, channel: 'alipay' }), null)
 
   assert.deepEqual(readRechargePrefillQuery({
     rechargeAmount: '100.00',
@@ -114,6 +115,7 @@ test('terminal recharge history can prefill a fresh checkout without changing th
     paymentType: null,
   })
   assert.equal(readRechargePrefillQuery({ rechargeAmount: '-1', rechargeChannel: 'alipay' }), null)
+  assert.equal(readRechargePrefillQuery({ rechargeAmount: '0.01', rechargeChannel: 'alipay' }), null)
 })
 
 test('a server-confirmed cancellation leaves history but clears the current checkout session', () => {

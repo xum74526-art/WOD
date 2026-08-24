@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     FINANCE_ADMIN_USER_IDS: str = ""
     PAYOUT_CARD_HOUR_RMB_RATE: float = 1.002
     PAYOUT_FEE_RATE: float = 0.0
-    PAYOUT_MIN_CARD_HOURS: float = 1.0
+    PAYOUT_MIN_CARD_HOURS: float = 10.0
     PAYOUT_MAX_CARD_HOURS: float = 100000.0
     PAYOUT_RECEIPT_MAX_BYTES: int = 5 * 1024 * 1024
     # Full payout instructions are sensitive. Finance must use the short-lived,
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     MAPAY_CHECKOUT_TTL_SECONDS: int = 300
     # Human-readable MaPay addtime/endtime values use the provider timezone.
     MAPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
-    MAPAY_MIN_AMOUNT_CNY: float = 0.01
+    MAPAY_MIN_AMOUNT_CNY: float = 10.0
     MAPAY_MAX_AMOUNT_CNY: float = 50000.0
     # QiXiang Pay (EasyPay-compatible) wallet recharge collection. Keep the
     # provider disabled until the public HTTPS notify/return URLs are deployed.
@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     QIXIANGPAY_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
     QIXIANGPAY_CHECKOUT_TTL_SECONDS: int = 300
     QIXIANGPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
-    QIXIANGPAY_MIN_AMOUNT_CNY: float = 0.01
+    QIXIANGPAY_MIN_AMOUNT_CNY: float = 10.0
     QIXIANGPAY_MAX_AMOUNT_CNY: float = 50000.0
     # Disabled until metered compute output and an auditable settlement source
     # are connected. Never create wallet income from a configured percentage.
