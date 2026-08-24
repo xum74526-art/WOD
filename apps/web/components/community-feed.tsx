@@ -17,6 +17,7 @@ import {
   type CommunityPost,
 } from "@/lib/mobile-community-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
+import { COMMUNITY_POST_MAX_LENGTH, communityShareText } from "@/lib/community-ui";
 
 const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]] as const;
 
@@ -71,11 +72,12 @@ type CommunityCardProps = {
   onCommentChange: (value: string) => void;
   onLike: (row: CommunityPost) => void;
   onFollow: (row: CommunityPost) => void;
+  onShare: (row: CommunityPost) => void;
   onShowComments: (id: number) => void;
   onSubmitComment: (event: FormEvent, id: number) => void;
 };
 
-function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShowComments, onSubmitComment }: CommunityCardProps) {
+function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShare, onShowComments, onSubmitComment }: CommunityCardProps) {
   const externalVideo = !row.video && (row.content_type === "video" || Boolean(row.video_url));
   const sourceName = row.source_name || row.source_author;
   return (
@@ -103,7 +105,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
       <footer className="community-post-card__actions">
         <button className={row.is_liked ? "liked" : ""} disabled={busy === `like-${row.id}`} onClick={() => onLike(row)}><Heart size={18} weight={row.is_liked ? "fill" : "regular"} />{row.likes}</button>
         <button onClick={() => onShowComments(row.id)}><ChatCircle size={18} />{row.comments}</button>
-        <span><ShareNetwork size={18} />{row.shares || 0}</span>
+        <button disabled={busy === `share-${row.id}`} onClick={() => onShare(row)}><ShareNetwork size={18} />{busy === `share-${row.id}` ? "复制中…" : `分享${row.shares ? ` ${row.shares}` : ""}`}</button>
         {row.source_url && <a href={row.source_url} target="_blank" rel="noreferrer">查看来源<ArrowUpRight size={15} /></a>}
       </footer>
 
@@ -124,6 +126,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   const [loading, setLoading] = useState(true);
   const [loginRequired, setLoginRequired] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState({ content: "", topic: "" });
   const [files, setFiles] = useState<File[]>([]);
@@ -180,6 +183,30 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     finally { setBusy(""); }
   }
 
+  async function share(row: CommunityPost) {
+    const text = communityShareText(row);
+    if (!text) return;
+    setBusy(`share-${row.id}`); setError(""); setMessage("");
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = text;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const copied = document.execCommand("copy");
+        field.remove();
+        if (!copied) throw new Error("浏览器未允许复制，请手动复制动态内容");
+      }
+      setMessage("动态内容已复制，可以粘贴分享");
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  }
+
   async function showComments(id: number) {
     if (openComments === id) { setOpenComments(null); return; }
     setOpenComments(id);
@@ -220,12 +247,13 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     {composerOpen && <form className="community-composer" onSubmit={publish}>
       <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布社区动态</h2></div></header>
       <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
-      <textarea required maxLength={2000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
-      <footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/2000`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
+      <textarea required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
+      <footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
     </form>}
 
     {error && <div className="commerce-error">{error}</div>}
-    {loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={comment} onCommentChange={setComment} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}
+    {message && <div className="commerce-success">{message}</div>}
+    {loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={comment} onCommentChange={setComment} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShare={(item) => void share(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}
 
     {total > 10 && <nav className="community-page-nav"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><span>第 {page} 页</span><button disabled={page * 10 >= total} onClick={() => setPage((value) => value + 1)}>下一页</button></nav>}
   </section>;

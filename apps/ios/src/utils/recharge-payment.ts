@@ -19,6 +19,24 @@ export interface StoredRechargeSession {
   successNotified: boolean
 }
 
+export type RechargePaymentChannel = 'alipay' | 'wxpay'
+
+export interface RechargeRestartSource extends RechargeTimingSource {
+  amount_cny?: number | string | null
+  channel?: string | null
+}
+
+export interface RechargePrefill {
+  amount: string
+  paymentType: RechargePaymentChannel | null
+}
+
+export interface RechargeHistoryPresentation {
+  state: RechargeUiState
+  labelKey: string
+  tone: 'pending' | 'reviewing' | 'success' | 'danger'
+}
+
 export const DEFAULT_RECHARGE_TTL_SECONDS = 5 * 60
 
 /**
@@ -81,6 +99,29 @@ export function rechargeUiState(
   return 'pending'
 }
 
+export function rechargeHistoryPresentation(order: RechargeTimingSource): RechargeHistoryPresentation {
+  const state = rechargeUiState(order, null)
+  const status = String(order.status || '').trim().toLowerCase()
+  const labelKey = status === 'review' || status === 'late_paid_review'
+    ? 'rechargeReviewing'
+    : {
+      pending: 'statusPendingPayment',
+      processing: 'statusProcessing',
+      success: 'statusCompleted',
+      failed: 'statusFailed',
+      expired: 'statusExpired',
+      canceled: 'statusCanceled',
+    }[state]
+  const tone = state === 'success'
+    ? 'success'
+    : state === 'pending'
+      ? 'pending'
+      : state === 'processing'
+        ? 'reviewing'
+        : 'danger'
+  return { state, labelKey, tone }
+}
+
 export function rechargeCanQuery(order: RechargeTimingSource): boolean {
   if (order.can_query === false) return false
   return rechargeUiState(order, null) !== 'success'
@@ -99,6 +140,44 @@ export function rechargeCanCancel(order: RechargeTimingSource): boolean {
 export function rechargeCanRestart(order: RechargeTimingSource, remainingMs: number | null): boolean {
   const state = rechargeUiState(order, remainingMs)
   return state === 'failed' || state === 'expired' || state === 'canceled'
+}
+
+function normalizeRechargeAmount(value: unknown): string | null {
+  const source = String(value ?? '').trim()
+  if (!/^\d+(?:\.\d{1,2})?$/.test(source)) return null
+  const amount = Number(source)
+  return Number.isFinite(amount) && amount > 0 ? String(amount) : null
+}
+
+function normalizeRechargeChannel(value: unknown): RechargePaymentChannel | null {
+  const channel = String(value ?? '').trim().toLowerCase()
+  return channel === 'alipay' || channel === 'wxpay' ? channel : null
+}
+
+/**
+ * Build the only supported history-to-wallet restart route. The old order is
+ * never changed here: only terminal failed/expired/canceled orders can offer
+ * a fresh checkout, while the wallet page still enforces any active session.
+ */
+export function createRechargeRestartRoute(order: RechargeRestartSource): string | null {
+  if (!rechargeCanRestart(order, null)) return null
+  const amount = normalizeRechargeAmount(order.amount_cny)
+  if (!amount) return null
+  const channel = normalizeRechargeChannel(order.channel)
+  const params = [`rechargeAmount=${encodeURIComponent(amount)}`]
+  if (channel) params.push(`rechargeChannel=${encodeURIComponent(channel)}`)
+  return `/pages/wallet/index?${params.join('&')}`
+}
+
+/** Parse and validate the shared restart query before it reaches form state. */
+export function readRechargePrefillQuery(query: Record<string, unknown> | undefined): RechargePrefill | null {
+  if (!query) return null
+  const amount = normalizeRechargeAmount(query.rechargeAmount)
+  if (!amount) return null
+  return {
+    amount,
+    paymentType: normalizeRechargeChannel(query.rechargeChannel),
+  }
 }
 
 export function rechargeClearsCurrentSession(order: RechargeTimingSource): boolean {

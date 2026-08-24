@@ -7,6 +7,7 @@ import {
   addBankCard,
   deleteBankCard,
   getBankCardBundle,
+  getVerification,
   getInviteBundle,
   getRevenueBundle,
   listCoupons,
@@ -21,7 +22,9 @@ import {
   type RevenuePoint,
   type RevenueRecord,
   type RevenueSummary,
+  type VerificationInfo,
 } from "@/lib/mobile-business-api";
+import { isRegisteredBankCardStatus, luhnCheckCardNumber } from "@/lib/finance-ui";
 
 export type MobileAccountSection = "revenue" | "referrals" | "coupons" | "bank-accounts";
 
@@ -71,12 +74,90 @@ function CouponWorkspace() {
 }
 
 function BankCardWorkspace() {
-  const [rows, setRows] = useState<BankCard[]>([]); const [config, setConfig] = useState<BankCardConfig | null>(null); const [form, setForm] = useState({ bank_name: "", card_number: "", holder: "", phone: "" }); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const load = useCallback(async () => { try { const [a, b] = await getBankCardBundle(); setRows(a); setConfig(b); } catch (reason) { setError(errorMessage(reason)); } }, []);
+  const [rows, setRows] = useState<BankCard[]>([]);
+  const [config, setConfig] = useState<BankCardConfig | null>(null);
+  const [verification, setVerification] = useState<VerificationInfo | null>(null);
+  const [form, setForm] = useState({ bank_name: "", card_number: "", holder: "", phone: "" });
+  const [consent, setConsent] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const [[bankCards, bankConfig], identity] = await Promise.all([getBankCardBundle(), getVerification()]);
+      setRows(bankCards);
+      setConfig(bankConfig);
+      setVerification(identity);
+      setForm((current) => ({ ...current, holder: identity.real_name || "" }));
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setLoading(false); }
+  }, []);
+
   useEffect(() => { void load(); }, [load]);
-  async function act(action: () => Promise<unknown>) { setBusy(true); setError(""); try { await action(); await load(); return true; } catch (reason) { setError(errorMessage(reason)); return false; } finally { setBusy(false); } }
-  async function submit(event: FormEvent) { event.preventDefault(); if (await act(() => addBankCard(form))) setForm({ bank_name: "", card_number: "", holder: "", phone: "" }); }
-  return <>{error && <div className="commerce-error">{error}</div>}<div className="mobile-service-columns bank-layout"><section className="mobile-record-panel"><header><Bank size={20}/><div><small>SETTLEMENT CARDS</small><h2>已绑定银行卡</h2></div><b>{rows.length}</b></header>{rows.length ? rows.map((card) => <article className="mobile-bank-row" key={card.id}><span><strong>{card.bank_name || "银行卡"} ···· {card.card_last4 || card.card_number.slice(-4)}</strong><small>{card.holder} · {card.status}{card.is_default ? " · 默认卡" : ""}</small></span><div>{!card.is_default && <button disabled={busy} onClick={() => void act(() => setDefaultBankCard(card.id))}>设为默认</button>}<button className="danger" disabled={busy} onClick={() => { if (window.confirm("确定解绑这张银行卡？")) void act(() => deleteBankCard(card.id)); }}><Trash size={14}/>解绑</button></div></article>) : <div className="mobile-inline-empty">还没有绑定银行卡</div>}</section><form className="mobile-business-form" onSubmit={submit}><header><Plus size={20}/><div><small>ADD BANK CARD</small><h2>添加银行卡</h2></div></header><label>持卡人<input value={form.holder} onChange={(e) => setForm({ ...form, holder: e.target.value })} required/></label><label>银行卡号<input inputMode="numeric" value={form.card_number} onChange={(e) => setForm({ ...form, card_number: e.target.value.replace(/\s/g, "") })} required/></label><label>开户银行<input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })}/></label><label>预留手机号<input inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}/></label><button className="commerce-primary" disabled={busy || config?.binding_enabled === false}>{busy ? "保存中…" : config?.binding_enabled === false ? "绑定服务未开放" : "添加银行卡"}</button><p>{config?.notice || "银行卡仅用于人工审核后的提现结算。"}</p></form></div></>;
+
+  async function act(action: () => Promise<unknown>) {
+    setBusy(true); setError("");
+    try { await action(); await load(); return true; }
+    catch (reason) { setError(errorMessage(reason)); return false; }
+    finally { setBusy(false); }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const cardNumber = form.card_number.replace(/\D/g, "");
+    if (verification?.status !== "verified" || !form.holder) { setError("请先完成实名认证，持卡人必须与实名姓名一致"); return; }
+    if (config?.binding_enabled === false) { setError("银行卡绑定服务未开放"); return; }
+    if (!/^\d{12,19}$/.test(cardNumber)) { setError("请输入 12 至 19 位银行卡号"); return; }
+    if (!luhnCheckCardNumber(cardNumber)) { setError("银行卡号校验未通过，请检查后重新输入"); return; }
+    if (!form.bank_name.trim()) { setError("请输入开户银行"); return; }
+    if (!/^1\d{10}$/.test(form.phone)) { setError("请输入 11 位有效预留手机号"); return; }
+    if (!consent) { setError("请先同意银行卡登记与人工复核说明"); return; }
+    const created = await act(() => addBankCard({
+      bank_name: form.bank_name.trim(), card_number: cardNumber, holder: form.holder,
+      phone: form.phone, is_default: rows.length === 0,
+    }));
+    if (created) {
+      setForm({ bank_name: "", card_number: "", holder: verification.real_name || "", phone: "" });
+      setConsent(false);
+    }
+  }
+
+  const statusLabel = (status: BankCard["status"]) => ({ registered: "已登记", pending_review: "待复核", active: "已启用", rejected: "已驳回", disabled: "已停用" })[status];
+  const identityReady = verification?.status === "verified";
+
+  if (loading) return <div className="workspace-skeleton" aria-label="正在读取银行卡资料" />;
+  return <>
+    {error && <div className="commerce-error">{error}</div>}
+    {!identityReady && <div className="workspace-service-note">
+      <strong>{verification?.status === "pending" ? "实名认证正在审核" : "绑定银行卡前需完成实名认证"}</strong>
+      <span>持卡人姓名将从实名认证资料自动填写，不能自行修改。 </span>
+      {verification?.status !== "pending" && <a href="/account/verification">去认证</a>}
+    </div>}
+    <div className="mobile-service-columns bank-layout">
+      <section className="mobile-record-panel">
+        <header><Bank size={20}/><div><small>SETTLEMENT CARDS</small><h2>已绑定银行卡</h2></div><b>{rows.length}</b></header>
+        {rows.length ? rows.map((card) => <article className="mobile-bank-row" key={card.id}>
+          <span><strong>{card.bank_name || "银行卡"} ···· {card.card_last4 || card.card_number.slice(-4)}</strong><small>{card.holder} · {statusLabel(card.status)}{card.is_default ? " · 默认卡" : ""}</small>{card.reject_reason && <small className="finance-review-reason">驳回原因：{card.reject_reason}</small>}</span>
+          <div>
+            {!card.is_default && isRegisteredBankCardStatus(card.status) && <button disabled={busy} onClick={() => void act(() => setDefaultBankCard(card.id))}>设为默认</button>}
+            {card.status !== "disabled" && <button className="danger" disabled={busy} onClick={() => { if (window.confirm("确定停用这张银行卡？")) void act(() => deleteBankCard(card.id)); }}><Trash size={14}/>停用</button>}
+          </div>
+        </article>) : <div className="mobile-inline-empty">还没有绑定银行卡</div>}
+      </section>
+      <form className="mobile-business-form" onSubmit={submit}>
+        <header><Plus size={20}/><div><small>ADD BANK CARD</small><h2>添加银行卡</h2></div></header>
+        <label>持卡人<input value={form.holder} readOnly placeholder="完成实名认证后自动填写"/></label>
+        <label>银行卡号<input inputMode="numeric" maxLength={19} value={form.card_number} onChange={(event) => setForm({ ...form, card_number: event.target.value.replace(/\D/g, "").slice(0, 19) })} required/></label>
+        <label>开户银行<input value={form.bank_name} onChange={(event) => setForm({ ...form, bank_name: event.target.value })} required/></label>
+        <label>预留手机号<input inputMode="tel" maxLength={11} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.replace(/\D/g, "").slice(0, 11) })} required/></label>
+        <label className="bank-card-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)}/> 我确认银行卡为本人所有，并同意平台进行格式校验和人工复核。</label>
+        <button className="commerce-primary" disabled={busy || !identityReady || !consent || config?.binding_enabled === false}>{busy ? "保存中…" : config?.binding_enabled === false ? "绑定服务未开放" : !identityReady ? "请先完成实名认证" : "登记银行卡"}</button>
+        <p>{config?.notice || "银行卡登记不代表银行已完成真实性验证；审核通过后才可用于提现。"}</p>
+      </form>
+    </div>
+  </>;
 }
 
 const headers: Record<MobileAccountSection, { eyebrow: string; title: string; description: string }> = {

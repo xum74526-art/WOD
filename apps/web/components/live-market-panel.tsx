@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass, MapPin } from "@phosphor-icons/react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
-import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource } from "@/lib/mobile-market-api";
+import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, getMobileRegionalQuotes, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource, type MobileRegionalQuotes } from "@/lib/mobile-market-api";
 import { KAI_REALTIME_SOURCE } from "@/lib/web-business-contract";
 
 export type PricePoint = { date: string; median: number };
@@ -34,6 +34,7 @@ const ranges: { value: RangeDays; label: string }[] = [
   { value: 90, label: "3个月" },
 ];
 const PAGE_SIZE = 15;
+const MARKET_AUTO_REFRESH_MS = 10_000;
 
 function validHistory(item: MarketSummary) {
   return item.history.filter((point) => point.median > 0);
@@ -85,6 +86,11 @@ function formatPrice(value: number) {
 
 function formatChange(value: number, suffix = "") {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}${suffix}`;
+}
+
+function regionalCardHours(value: number | null, rate: number | undefined) {
+  if (value == null || !Number.isFinite(value) || !rate || !Number.isFinite(rate) || rate <= 0) return "—";
+  return `${(value / rate).toFixed(3)} 卡时`;
 }
 
 function linearPath(points: { x: number; y: number }[]) {
@@ -328,6 +334,8 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
   );
   const [latest, setLatest] = useState<MobileLatestMarket | null>(null);
   const [realCandles, setRealCandles] = useState<MobileMarketCandle[]>([]);
+  const [candleIdentity, setCandleIdentity] = useState("");
+  const [regionalQuotes, setRegionalQuotes] = useState<MobileRegionalQuotes | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
 
   const load = useCallback(async (force = false, showLoading = true) => {
@@ -345,6 +353,7 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
       setSourceStates((sourcesPayload.items ?? []).filter((source) => source.source.toLowerCase() === KAI_REALTIME_SOURCE));
       setSelectedModel((current) => current || data[0]?.gpu_model || "");
       setGpuPickerQuery((current) => current || data[0]?.gpu_model || "");
+      setMessage("");
       setStatus("ready");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "行情读取失败");
@@ -352,20 +361,28 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     }
   }, []);
   useEffect(() => { void load(false, !initialData); }, [initialData, load]);
+  useEffect(() => {
+    const timer = window.setInterval(() => { void load(true, false); }, MARKET_AUTO_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [load]);
 
   useEffect(() => {
     const model = findMobileModel(mobileModels, selectedModel);
-    if (!model) { setLatest(null); setRealCandles([]); return; }
+    if (!model) { setLatest(null); setRealCandles([]); setCandleIdentity(""); setRegionalQuotes(null); return; }
     let active = true;
     setLiveLoading(true);
+    const identity = `${model.gpu_model}|${model.gpu_variant}`;
+    setLatest((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
+    if (candleIdentity !== identity) setRealCandles([]);
+    setRegionalQuotes((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
     const range = days <= 28 ? "30d" : "90d";
-    Promise.all([getMobileLatestMarket(model), getMobileMarketCandles(model, range)])
-      .then(([latestPayload, candlePayload]) => {
+    Promise.allSettled([getMobileLatestMarket(model), getMobileMarketCandles(model, range), getMobileRegionalQuotes(model)])
+      .then(([latestResult, candleResult, regionalResult]) => {
         if (!active) return;
-        setLatest(latestPayload);
-        setRealCandles(candlePayload.candles ?? []);
+        if (latestResult.status === "fulfilled") setLatest(latestResult.value);
+        if (candleResult.status === "fulfilled") { setRealCandles(candleResult.value.candles ?? []); setCandleIdentity(identity); }
+        if (regionalResult.status === "fulfilled") setRegionalQuotes(regionalResult.value);
       })
-      .catch(() => { if (active) { setLatest(null); setRealCandles([]); } })
       .finally(() => { if (active) setLiveLoading(false); });
     return () => { active = false; };
   }, [mobileModels, selectedModel, days]);
@@ -485,14 +502,12 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
 
   if (status === "loading") return <section className="trend-state-panel"><Database size={34} weight="light" /><strong>正在加载算力行情</strong><p>正在读取真实历史价格。</p></section>;
   if (status === "error") {
-    const needsConfiguration = message.includes("GetDeploying API Key");
-    return <section className={`trend-state-panel ${needsConfiguration ? "is-configuration" : "is-error"}`}>
+    return <section className="trend-state-panel is-error">
       <Database size={34} weight="light" />
-      <strong>{needsConfiguration ? "行情源尚未启用" : "行情服务暂时不可用"}</strong>
-      <p>{needsConfiguration ? "服务器还没有配置 GetDeploying 行情凭证。服务器租赁功能不受影响。" : message}</p>
+      <strong>KAI 行情服务暂时不可用</strong>
+      <p>{message}</p>
       <div className="trend-state-actions">
-        {!needsConfiguration && <button type="button" onClick={() => void load(true)}><ArrowClockwise size={15} />重新读取</button>}
-        {needsConfiguration && <a href="https://getdeploying.com/gpus" target="_blank" rel="noreferrer">查看数据来源</a>}
+        <button type="button" onClick={() => void load(true)}><ArrowClockwise size={15} />重新读取</button>
         <Link href="/market">浏览服务器</Link>
       </div>
     </section>;
@@ -598,6 +613,12 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
         <span><small>市场中位价</small><strong>{selectedStats.enough ? formatPrice(selectedStats.median) : "—"}</strong></span>
         <span><small>周期涨跌</small><strong className={selectedStats.delta >= 0 ? "is-up" : "is-down"}>{selectedStats.enough ? formatChange(selectedStats.percent, "%") : "—"}</strong></span>
       </div>
+    </section>}
+
+    {selected && <section className="trend-regional-spread" aria-labelledby="trend-regional-title">
+      <header><div><p className="hero-eyebrow">KAI REGIONAL QUOTES</p><h2 id="trend-regional-title">区域价差</h2><span>{selected.gpu_model}{regionalQuotes?.gpu_variant ? ` · ${regionalQuotes.gpu_variant}` : ""}</span></div><small>{regionalQuotes ? `${regionalQuotes.region_count} 个区域 · ${regionalQuotes.market_status}` : liveLoading ? "正在刷新" : "暂无区域报价"}</small></header>
+      {regionalQuotes?.regions.length ? <div className="trend-regional-grid">{regionalQuotes.regions.map((region) => <article className={region.is_lowest ? "is-lowest" : ""} key={region.region_code || region.region}><div><MapPin size={16}/><span><strong>{region.region}</strong><small>{region.quote_sample_count} 条报价 · {region.location_count} 个地点</small></span></div><dl><div><dt>中位价</dt><dd>{regionalCardHours(region.median_price_cny, latest?.summary.card_hour_rmb_rate)}</dd></div><div><dt>区间</dt><dd>{regionalCardHours(region.min_price_cny, latest?.summary.card_hour_rmb_rate)} – {regionalCardHours(region.max_price_cny, latest?.summary.card_hour_rmb_rate)}</dd></div></dl><b>{region.is_lowest ? "当前最低" : region.relative_to_lowest_pct == null ? "—" : `较最低 +${region.relative_to_lowest_pct.toFixed(2)}%`}</b></article>)}</div> : <div className="trend-regional-empty">{liveLoading ? "正在读取同型号区域报价…" : "该型号当前没有可比较的区域报价"}</div>}
+      <p>按同一 GPU 型号与显存比较 KAI 当前报价观察值，统一显示为卡时 / GPU·小时；报价数量不代表实时库存。</p>
     </section>}
 
     <div className="trend-mobile-board-tabs"><button className={mobileBoard === "gainers" ? "is-active" : ""} onClick={() => setMobileBoard("gainers")} type="button">涨幅榜</button><button className={mobileBoard === "losers" ? "is-active" : ""} onClick={() => setMobileBoard("losers")} type="button">跌幅榜</button></div>

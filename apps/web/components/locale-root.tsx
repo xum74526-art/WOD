@@ -151,7 +151,7 @@ const legacyEnglish: Record<string, string> = {
   "发布动态": "Create post", "发布": "Publish", "发布中…": "Publishing…", "搜索动态、话题或作者": "Search posts, topics, or authors", "写下评论…": "Write a comment…", "发送": "Send",
   "条社区动态": "community posts", "当前没有动态": "No posts yet", "切换标签或发布第一条内容。": "Switch tabs or create the first post.",
   "GPU 型号": "GPU model", "观察周期": "Time range", "当前实时中位价": "Current live median", "当前价格": "Current price", "数据不足": "Insufficient data", "实时数据源": "Live sources",
-  "正在生成价格 K 线": "Generating price chart", "正在加载 GetDeploying GPU 公开价格。": "Loading public GetDeploying GPU prices.", "正在加载算力行情": "Loading compute market", "正在读取真实历史价格。": "Loading real historical prices.",
+  "正在生成价格 K 线": "Generating price chart", "正在加载算力行情": "Loading compute market", "正在读取真实历史价格。": "Loading real historical prices.",
   "涨幅榜": "Top gainers", "跌幅榜": "Top losers", "GPU 完整行情": "Full GPU market", "搜索完整行情": "Search full market", "全部显存": "All VRAM", "只看上涨": "Gainers only", "只看下跌": "Losers only",
   "当前价": "Current", "本周涨跌": "Weekly change", "4周涨跌": "4-week change", "3个月涨跌": "3-month change", "最高价": "High", "最低价": "Low", "更新时间": "Updated",
   "个人资产": "My Assets", "购买算力": "Buy Compute", "资产总值": "Total asset value", "运行中算力": "Running compute", "今日收益": "Today's earnings", "待续费": "Renewal due",

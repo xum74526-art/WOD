@@ -232,6 +232,14 @@ def get_rebate_summary(user_id: int, db: Session) -> dict:
         "month_spent": float(_money(month_spent)),
         "month_rebated": float(_money(month_rebated)),
         "current_rate": int(current_rate * 100),
+        "minimum_order_amount": float(MIN_ORDER_AMOUNT),
+        "tiers": [
+            {
+                "max_month_spent": None if threshold == float("inf") else float(threshold),
+                "rate": int(rate * 100),
+            }
+            for threshold, rate in MONTHLY_TIERS
+        ],
         "next_tier_hint": next_hint,
         "pending_rebate": float(_money(pending_total)),
         "monthly_cap": float(MONTHLY_REBATE_CAP),

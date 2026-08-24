@@ -1,0 +1,38 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const manifest = JSON.parse(readFileSync(resolve(appRoot, 'src/manifest.json'), 'utf8'))
+
+test('iOS package identity and icon paths use the WOD Vue 3 source tree', () => {
+  assert.equal(manifest.name, 'WOD')
+  assert.equal(manifest.vueVersion, '3')
+  assert.equal(manifest['app-plus'].distribute.ios.appid, 'com.kai.wod')
+
+  const icons = manifest['app-plus'].distribute.icons.ios
+  const paths = [
+    icons.appstore,
+    icons.ipad.app,
+    icons.ipad['app@2x'],
+    icons.iphone['app@2x'],
+    icons.iphone['app@3x'],
+  ]
+  for (const iconPath of paths) {
+    assert.match(iconPath, /^src\/static\/logo\//)
+    assert.equal(existsSync(resolve(appRoot, iconPath)), true, `${iconPath} must exist`)
+  }
+  assert.equal(existsSync(resolve(appRoot, 'assets/branding/app-icon-master.png')), true)
+})
+
+test('iOS App Store icon is a square 1024px PNG and login uses the same KAI logo family', () => {
+  const icon = readFileSync(resolve(appRoot, manifest['app-plus'].distribute.icons.ios.appstore))
+  assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG')
+  assert.equal(icon.readUInt32BE(16), 1024)
+  assert.equal(icon.readUInt32BE(20), 1024)
+
+  const loginPage = readFileSync(resolve(appRoot, 'src/pages/login/index.vue'), 'utf8')
+  assert.match(loginPage, /src="\/static\/logo\/logo\.png"/)
+})

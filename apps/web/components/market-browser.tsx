@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CaretDown, CaretUp, Funnel, List, MagnifyingGlass, SquaresFour, X } from "@phosphor-icons/react";
 import { apiBaseUrl, readApiError } from "@/lib/api";
+import { ProductImage } from "@/components/product-image";
 
 type GpuItem = {
   gpu_model: string; tier?: string; vram_gb?: number;
@@ -10,6 +11,7 @@ type GpuItem = {
   official_min_price?: number; official_median_price?: number; official_available?: number;
   has_current_offers: boolean; offer_count: number; provider_count?: number; representative_offer_id?: string;
   region?: string; reliability?: number; gpu_count?: number; cpu_cores?: number; ram_gb?: number; disk_gb?: number;
+  image_url?: string | null;
 };
 type CatalogResponse = { data?: GpuItem[]; meta?: { observed_at?: string; count?: number } };
 type Filters = { model: string; vram: string; gpuCount: string; minPrice: string; maxPrice: string; region: string; availability: "all" | "available" | "unavailable" };
@@ -31,14 +33,6 @@ function normalizeSearch(value: string) {
 function priceOf(item: GpuItem) { return item.official_min_price ?? item.min_price; }
 function medianOf(item: GpuItem) { return item.official_median_price ?? item.median_price; }
 function formatPrice(value: number) { return value.toFixed(3); }
-function gpuImage(model: string) {
-  const value = model.toLowerCase();
-  if (value.includes("5090")) return "/images/rtx5090.jpg";
-  if (value.includes("h100") || value.includes("h200")) return "/images/h100.jpg";
-  if (value.includes("a800") || value.includes("a100")) return "/images/a800.jpg";
-  return "/images/rtx4090.jpg";
-}
-
 function FilterPanel(props: {
   filters: Filters; setFilters: (value: Filters) => void; models: string[]; vrams: number[]; counts: number[]; regions: string[]; close?: () => void;
 }) {
@@ -175,7 +169,7 @@ export function MarketBrowser() {
 
 function MarketCard({ item, observedAt, targeted, onDetails }: { item: GpuItem; observedAt: string; targeted: boolean; onDetails: () => void }) {
   return <article id={"gpu-market-" + item.gpu_model} className={"market-resource-card" + (item.has_current_offers ? "" : " is-unavailable") + (targeted ? " is-targeted" : "")}>
-    <header><img src={gpuImage(item.gpu_model)} alt="" /><div><h2>{item.gpu_model}</h2><p>{item.vram_gb ? item.vram_gb + "GB 显存" : "显存待补充"} · {item.gpu_count ?? "—"} GPU</p></div><span>{item.has_current_offers ? "可用" : "暂无资源"}</span></header>
+    <header><ProductImage imageUrl={item.image_url} gpuModel={item.gpu_model}/><div><h2>{item.gpu_model}</h2><p>{item.vram_gb ? item.vram_gb + "GB 显存" : "显存待补充"} · {item.gpu_count ?? "—"} GPU</p></div><span>{item.has_current_offers ? "可用" : "暂无资源"}</span></header>
     <div className="market-resource-price"><small>当前最低价</small><strong>{formatPrice(priceOf(item))}</strong><span>卡时 / GPU·小时</span><p>市场中位价 {formatPrice(medianOf(item))} 卡时</p></div>
     <dl><div><dt>供应商国家</dt><dd>{item.region || "暂无"}</dd></div><div><dt>可用资源</dt><dd>{item.has_current_offers ? item.offer_count + " 个报价 / " + (item.provider_count ?? 0) + " 家" : "0"}</dd></div><div><dt>更新时间</dt><dd>{observedAt ? new Date(observedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</dd></div></dl>
     <button type="button" disabled={!item.has_current_offers} onClick={onDetails}>{item.has_current_offers ? "查看详情" : "暂无资源"}</button>
@@ -187,5 +181,5 @@ function MarketList({ items, observedAt, onDetails }: { items: GpuItem[]; observ
 }
 
 function MarketDetail({ item, observedAt, close }: { item: GpuItem; observedAt: string; close: () => void }) {
-  return <div className="market-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="market-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="market-detail-title"><button className="market-detail-close" type="button" onClick={close} aria-label="关闭"><X size={18} /></button><p className="hero-eyebrow">GETDEPLOYING MARKET</p><h2 id="market-detail-title">{item.gpu_model}</h2><p>{item.vram_gb}GB 显存 · {item.gpu_count ?? "—"} GPU</p><dl><div><dt>当前最低价</dt><dd>{formatPrice(priceOf(item))} 卡时 / GPU·小时</dd></div><div><dt>供应商加权中位价</dt><dd>{formatPrice(medianOf(item))} 卡时 / GPU·小时</dd></div><div><dt>可用资源</dt><dd>{item.offer_count} 个报价 / {item.provider_count ?? 0} 家供应商</dd></div><div><dt>供应商国家</dt><dd>{item.region || "未标注"}</dd></div><div><dt>CPU / 内存</dt><dd>{item.cpu_cores ?? "—"} 核 / {item.ram_gb ?? "—"}GB</dd></div><div><dt>硬盘</dt><dd>{item.disk_gb ?? "—"}GB</dd></div><div><dt>更新时间</dt><dd>{observedAt ? new Date(observedAt).toLocaleString("zh-CN") : "—"}</dd></div><div><dt>数据用途</dt><dd>价格比较与行情展示</dd></div></dl></section></div>;
+  return <div className="market-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="market-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="market-detail-title"><button className="market-detail-close" type="button" onClick={close} aria-label="关闭"><X size={18} /></button><p className="hero-eyebrow">KAI PRICING MARKET</p><ProductImage imageUrl={item.image_url} gpuModel={item.gpu_model}/><h2 id="market-detail-title">{item.gpu_model}</h2><p>{item.vram_gb}GB 显存 · {item.gpu_count ?? "—"} GPU</p><dl><div><dt>当前最低价</dt><dd>{formatPrice(priceOf(item))} 卡时 / GPU·小时</dd></div><div><dt>供应商加权中位价</dt><dd>{formatPrice(medianOf(item))} 卡时 / GPU·小时</dd></div><div><dt>可用资源</dt><dd>{item.offer_count} 个报价 / {item.provider_count ?? 0} 家供应商</dd></div><div><dt>供应商国家</dt><dd>{item.region || "未标注"}</dd></div><div><dt>CPU / 内存</dt><dd>{item.cpu_cores ?? "—"} 核 / {item.ram_gb ?? "—"}GB</dd></div><div><dt>硬盘</dt><dd>{item.disk_gb ?? "—"}GB</dd></div><div><dt>更新时间</dt><dd>{observedAt ? new Date(observedAt).toLocaleString("zh-CN") : "—"}</dd></div><div><dt>数据用途</dt><dd>KAI 行情比较与趋势展示</dd></div></dl></section></div>;
 }

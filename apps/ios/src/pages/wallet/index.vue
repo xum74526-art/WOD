@@ -227,7 +227,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, reactive } from 'vue'
-import { onHide, onShow, onUnload } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { cancelRechargePayment, createRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type RechargePaymentType, type WalletInfo } from '@/api/wallet'
 import { getBankCards, type BankCardItem } from '@/api/bank-card'
 import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/api/withdrawal'
@@ -246,12 +246,14 @@ import {
   DEFAULT_RECHARGE_TTL_SECONDS,
   formatPaymentCountdown,
   paymentRemainingMs,
+  readRechargePrefillQuery,
   readStoredRechargeSession,
   rechargeCanCancel,
   rechargeCanQuery,
   rechargeCanRestart,
   rechargeClearsCurrentSession,
   rechargeUiState,
+  type RechargePrefill,
   type RechargeUiState,
   type StoredRechargeSession,
 } from '@/utils/recharge-payment'
@@ -272,6 +274,7 @@ const paymentDeadlineMs = ref<number | null>(null)
 const countdownRemainingMs = ref<number | null>(null)
 const checkingStatus = ref(false)
 const cancelingPayment = ref(false)
+const queuedRechargePrefill = ref<RechargePrefill | null>(null)
 const PENDING_PAYMENT_KEY = 'wod-pending-recharge-order'
 const PAYMENT_POLL_INTERVAL_MS = 5000
 let pageActive = false
@@ -378,6 +381,10 @@ const canReplacePayment = computed(() => Boolean(
 
 let resumePromise: Promise<void> | null = null
 
+onLoad((query) => {
+  queuedRechargePrefill.value = readRechargePrefillQuery(query)
+})
+
 onShow(() => {
   pageActive = true
   void resumePage()
@@ -417,6 +424,7 @@ async function resumePage() {
     hydratePaymentSession()
     await fetchWallet()
     await refreshPendingPayment(true, true)
+    applyQueuedRechargePrefill()
     startPaymentTracking()
   })()
   try {
@@ -459,6 +467,10 @@ async function fetchWallet() {
 }
 
 function openRecharge() {
+  showRechargeSheet()
+}
+
+function showRechargeSheet(prefill?: RechargePrefill) {
   if (pendingPayment.value && (paymentCardState.value === 'pending' || paymentCardState.value === 'processing')) {
     uni.showModal({
       title: t('activeRechargeExistsTitle'),
@@ -474,8 +486,20 @@ function openRecharge() {
     return
   }
   sheet.type = 'recharge'
-  sheet.amount = ''
-  sheet.paymentType = paymentMethods.value[0]?.value || 'wxpay'
+  sheet.amount = prefill?.amount || ''
+  sheet.paymentType = prefill?.paymentType && paymentMethods.value.some(method => method.value === prefill.paymentType)
+    ? prefill.paymentType
+    : paymentMethods.value[0]?.value || 'wxpay'
+}
+
+function applyQueuedRechargePrefill() {
+  const prefill = queuedRechargePrefill.value
+  if (!prefill) return
+  // Consume once so pageshow/onShow cannot reopen the sheet after the user
+  // closes it. showRechargeSheet still blocks a new order when another live
+  // checkout exists, preserving the same safety rule as the main wallet CTA.
+  queuedRechargePrefill.value = null
+  showRechargeSheet(prefill)
 }
 async function openWithdraw() {
   if (!wallet.value?.withdraw_service_enabled || withdrawConfig.value?.enabled !== true) {

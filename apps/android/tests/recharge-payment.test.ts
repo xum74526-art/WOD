@@ -2,14 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  createRechargeRestartRoute,
   formatPaymentCountdown,
   parseBackendTimestamp,
   paymentRemainingMs,
   readStoredRechargeSession,
+  readRechargePrefillQuery,
   rechargeCanCancel,
   rechargeCanQuery,
   rechargeCanRestart,
   rechargeClearsCurrentSession,
+  rechargeHistoryPresentation,
   rechargeUiState,
 } from '../src/utils/recharge-payment.ts'
 
@@ -49,6 +52,27 @@ test('pending order becomes locally expired at zero but paid order is processing
   assert.equal(rechargeUiState({ status: 'cancelled' }, 0), 'canceled')
 })
 
+test('history only marks a recharge completed after it is credited', () => {
+  assert.deepEqual(rechargeHistoryPresentation({ status: 'paid' }), {
+    state: 'processing',
+    labelKey: 'statusProcessing',
+    tone: 'reviewing',
+  })
+  assert.deepEqual(rechargeHistoryPresentation({ status: 'late_paid_review' }), {
+    state: 'processing',
+    labelKey: 'rechargeReviewing',
+    tone: 'reviewing',
+  })
+  assert.deepEqual(rechargeHistoryPresentation({
+    status: 'paid',
+    credited_at: '2026-08-20T02:03:00Z',
+  }), {
+    state: 'success',
+    labelKey: 'statusCompleted',
+    tone: 'success',
+  })
+})
+
 test('recharge actions follow server state and never allow paid cancellation', () => {
   assert.equal(rechargeCanCancel({ status: 'pending', can_cancel: true }), true)
   assert.equal(rechargeCanCancel({ status: 'pending', can_cancel: false }), false)
@@ -58,8 +82,38 @@ test('recharge actions follow server state and never allow paid cancellation', (
   assert.equal(rechargeCanQuery({ status: 'pending', can_query: true }), true)
   assert.equal(rechargeCanQuery({ status: 'pending', can_query: false }), false)
   assert.equal(rechargeCanRestart({ status: 'pending' }, 10_000), false)
+  assert.equal(rechargeCanRestart({ status: 'paid' }, null), false)
+  assert.equal(rechargeCanRestart({ status: 'failed' }, null), true)
   assert.equal(rechargeCanRestart({ status: 'expired' }, 0), true)
   assert.equal(rechargeCanRestart({ status: 'canceled' }, null), true)
+})
+
+test('terminal recharge history can prefill a fresh checkout without changing the old order', () => {
+  assert.equal(createRechargeRestartRoute({
+    status: 'failed',
+    amount_cny: 100,
+    channel: 'alipay',
+  }), '/pages/wallet/index?rechargeAmount=100&rechargeChannel=alipay')
+  assert.equal(createRechargeRestartRoute({
+    status: 'expired',
+    amount_cny: '0.01',
+    channel: 'wxpay',
+  }), '/pages/wallet/index?rechargeAmount=0.01&rechargeChannel=wxpay')
+  assert.equal(createRechargeRestartRoute({ status: 'canceled', amount_cny: 50, channel: 'unknown' }),
+    '/pages/wallet/index?rechargeAmount=50')
+  assert.equal(createRechargeRestartRoute({ status: 'pending', amount_cny: 100, channel: 'alipay' }), null)
+  assert.equal(createRechargeRestartRoute({ status: 'paid', amount_cny: 100, channel: 'alipay' }), null)
+  assert.equal(createRechargeRestartRoute({ status: 'failed', amount_cny: 0, channel: 'alipay' }), null)
+
+  assert.deepEqual(readRechargePrefillQuery({
+    rechargeAmount: '100.00',
+    rechargeChannel: 'ALIPAY',
+  }), { amount: '100', paymentType: 'alipay' })
+  assert.deepEqual(readRechargePrefillQuery({ rechargeAmount: '50', rechargeChannel: 'unknown' }), {
+    amount: '50',
+    paymentType: null,
+  })
+  assert.equal(readRechargePrefillQuery({ rechargeAmount: '-1', rechargeChannel: 'alipay' }), null)
 })
 
 test('a server-confirmed cancellation leaves history but clears the current checkout session', () => {

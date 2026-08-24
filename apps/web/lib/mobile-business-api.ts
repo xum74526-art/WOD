@@ -224,6 +224,13 @@ export type WithdrawalOrder = {
   created_at?: string | null;
 };
 
+export type WithdrawalPage = {
+  total: number;
+  page: number;
+  page_size: number;
+  items: WithdrawalOrder[];
+};
+
 export type SupplierWallet = {
   total_revenue: number;
   pending_amount: number;
@@ -413,10 +420,19 @@ export function getMobileLedger() {
   return apiRequest<{ total: number; page: number; page_size: number; items: MobileLedgerItem[] }>(canonicalApiPath("/wallet/ledger?page=1&page_size=20"));
 }
 
-export function getWithdrawalBundle() {
+export function listWithdrawals(params: { page?: number; page_size?: number; status_filter?: string } = {}) {
+  const query = new URLSearchParams({
+    page: String(params.page || 1),
+    page_size: String(params.page_size || 20),
+  });
+  if (params.status_filter) query.set("status_filter", params.status_filter);
+  return apiRequest<WithdrawalPage>(canonicalApiPath(`/withdrawals?${query.toString()}`));
+}
+
+export function getWithdrawalBundle(params: { page?: number; page_size?: number; status_filter?: string } = {}) {
   return Promise.all([
     apiRequest<WithdrawalConfig>(canonicalApiPath("/withdrawals/config")),
-    apiRequest<{ total: number; items: WithdrawalOrder[] }>(canonicalApiPath("/withdrawals?page=1&page_size=20")),
+    listWithdrawals(params),
     apiRequest<BankCard[]>(canonicalApiPath("/bank-cards")),
   ]);
 }
@@ -436,10 +452,13 @@ export function getRechargePayment(orderNo: string) {
   return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}`));
 }
 
-export function listRechargePayments(status = "", orderNo = "") {
-  const query = new URLSearchParams({ page: "1", page_size: "50" });
-  if (status) query.set("status", status);
-  if (orderNo) query.set("order_no", orderNo);
+export function listRechargePayments(params: { page?: number; page_size?: number; status?: string; order_no?: string } = {}) {
+  const query = new URLSearchParams({
+    page: String(params.page || 1),
+    page_size: String(params.page_size || 20),
+  });
+  if (params.status) query.set("status", params.status);
+  if (params.order_no) query.set("order_no", params.order_no);
   return apiRequest<RechargePaymentPage>(canonicalApiPath(`/payments/qixiang/orders?${query.toString()}`));
 }
 

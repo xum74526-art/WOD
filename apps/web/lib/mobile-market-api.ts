@@ -56,6 +56,7 @@ export type MobileLatestMarket = {
     sample_count: number;
     available_gpu_count: number;
     source_count: number;
+    card_hour_rmb_rate: number;
   };
   requested_source_states: Record<string, string>;
   excluded_sources: string[];
@@ -70,6 +71,30 @@ export type MobileMarketSource = {
   last_success_at: string | null;
   has_error: boolean;
   error_code: string | null;
+};
+
+export type MobileRegionalQuote = {
+  region_code: string;
+  region: string;
+  median_price_cny: number | null;
+  min_price_cny: number | null;
+  max_price_cny: number | null;
+  quote_sample_count: number;
+  location_count: number;
+  relative_to_lowest_pct: number | null;
+  is_lowest: boolean;
+  observed_at?: string | null;
+};
+
+export type MobileRegionalQuotes = {
+  gpu_model: string;
+  gpu_variant: string;
+  region_count: number;
+  source: "kai";
+  billing_unit: "GPU_HOUR" | string;
+  market_status: string;
+  sample_semantics: "current_quote_observations_not_inventory" | string;
+  regions: MobileRegionalQuote[];
 };
 
 export function getMobileMarketModels() {
@@ -94,4 +119,9 @@ export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "
 
 export function getMobileMarketSources() {
   return apiRequest<{ server_time: string; items: MobileMarketSource[] }>(canonicalApiPath("/market/sources/status"));
+}
+
+export function getMobileRegionalQuotes(model: MobileMarketModel) {
+  const query = new URLSearchParams({ model: model.gpu_model, variant: model.gpu_variant });
+  return apiRequest<MobileRegionalQuotes>(canonicalApiPath(`/products/quote/regional?${query.toString()}`));
 }

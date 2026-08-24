@@ -877,7 +877,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
-    const publicMarketRead = request.method === "GET" && /^market\/(?:models|ranking|sources\/status|prices\/(?:latest|candles|history))$/.test(canonicalPath);
+    const publicMarketRead = request.method === "GET" && /^(?:market\/(?:models|ranking|sources\/status|prices\/(?:latest|candles|history))|products\/quote\/regional)$/.test(canonicalPath);
     const result = await upstream(request, `/api/${canonicalPath}`, {
       body: isMutation(request.method) ? body : undefined,
       query: request.nextUrl.searchParams,

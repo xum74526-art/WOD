@@ -935,7 +935,7 @@ const ZH: Record<string, string> = {
   checkPaymentStatus: '查询状态',
   queryAndConfirmPayment: '查询并确认到账',
   checkingPaymentStatus: '正在查询…',
-  restartRecharge: '重新充值',
+  restartRecharge: '再来一单',
   cancelRechargeOrder: '取消订单',
   cancelingRechargeOrder: '取消中…',
   cancelRechargeConfirmTitle: '确认取消订单',

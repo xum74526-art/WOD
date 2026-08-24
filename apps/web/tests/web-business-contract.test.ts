@@ -100,13 +100,41 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
 
 test("Web recharge orders expose the same query, safe cancel, and restart workflow as App", () => {
   const wallet = fs.readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
+  const api = fs.readFileSync(new URL("../lib/mobile-business-api.ts", import.meta.url), "utf8");
 
   assert.match(wallet, /paymentQueryNotice\(order\)/);
   assert.match(wallet, /queryRechargePayment\(row\.order_no\)/);
   assert.match(wallet, /row\.can_cancel/);
   assert.match(wallet, /cancelRechargePayment\(row\.order_no\)/);
-  assert.match(wallet, /paymentRestartable\(row\.status\)/);
+  assert.match(wallet, /rechargeCanRestart\(row\)/);
+  assert.match(wallet, /更换充值金额/);
+  assert.match(wallet, /queryRechargePayment\(pendingPayment\.order_no\)/);
+  assert.match(wallet, /确认充值金额/);
+  assert.match(wallet, /credited_at/);
+  assert.match(wallet, /rechargeStatus/);
+  assert.match(wallet, /rechargeOrderNo/);
+  assert.match(wallet, /withdrawalStatus/);
+  assert.match(api, /page: String\(params\.page \|\| 1\)/);
+  assert.match(api, /query\.set\("order_no", params\.order_no\)/);
+  assert.match(api, /query\.set\("status_filter", params\.status_filter\)/);
   assert.match(wallet, /取消订单/);
   assert.match(wallet, /再来一单/);
   assert.match(wallet, /到期：/);
+
+  const replaceFlow = wallet.slice(wallet.indexOf("async function replaceRechargeAmount"), wallet.indexOf("function continueCheckout"));
+  assert.ok(replaceFlow.indexOf("queryRechargePayment") < replaceFlow.indexOf("localStorage.removeItem"));
+  const failedQueryBranch = replaceFlow.slice(replaceFlow.indexOf("catch (reason)"), replaceFlow.indexOf("finally"));
+  assert.doesNotMatch(failedQueryBranch, /localStorage\.removeItem|setPendingPayment\(null\)/);
+});
+
+test("Web bank cards require identity, consent, validation, and eligible default cards", () => {
+  const source = fs.readFileSync(new URL("../components/mobile-account-services.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /getVerification\(\)/);
+  assert.match(source, /verification\?\.status !== "verified"/);
+  assert.match(source, /readOnly placeholder="完成实名认证后自动填写"/);
+  assert.match(source, /luhnCheckCardNumber\(cardNumber\)/);
+  assert.match(source, /type="checkbox" checked=\{consent\}/);
+  assert.match(source, /card\.reject_reason/);
+  assert.match(source, /isRegisteredBankCardStatus\(card\.status\)/);
 });

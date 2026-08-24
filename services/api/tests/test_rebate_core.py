@@ -116,6 +116,13 @@ class RebateCoreTests(unittest.TestCase):
         self.assertEqual(consumer["reward_mode"], "test_card_hours")
         self.assertEqual(consumer["month_spent"], 14.4)
         self.assertEqual(consumer["pending_rebate"], 0.43)
+        self.assertEqual(consumer["minimum_order_amount"], 10.0)
+        self.assertEqual(consumer["tiers"], [
+            {"max_month_spent": 10000.0, "rate": 3},
+            {"max_month_spent": 50000.0, "rate": 5},
+            {"max_month_spent": 100000.0, "rate": 7},
+            {"max_month_spent": None, "rate": 10},
+        ])
         self.assertEqual(merchant["month_sales"], 14.4)
         self.assertEqual(merchant["month_rebated"], 0.07)
         self.assertEqual(invite["current_tier"], "15%")

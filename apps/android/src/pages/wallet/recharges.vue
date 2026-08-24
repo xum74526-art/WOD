@@ -95,7 +95,7 @@
 
         <text v-if="showFailureReason(order)" class="status-reason">{{ tr(order.failure_reason) }}</text>
 
-        <view v-if="order.can_query || order.can_cancel" class="order-actions">
+        <view v-if="order.can_query || order.can_cancel || canRestartOrder(order)" class="order-actions">
           <view
             v-if="order.can_query"
             class="query-button"
@@ -112,6 +112,14 @@
             role="button"
             @tap="cancelOrder(order)"
           >{{ cancelingOrderNo === order.order_no ? t('cancelingRechargeOrder') : t('cancelRechargeOrder') }}</view>
+          <view
+            v-if="canRestartOrder(order)"
+            class="restart-button"
+            :class="{ disabled: Boolean(queryingOrderNo || cancelingOrderNo) }"
+            :aria-disabled="Boolean(queryingOrderNo || cancelingOrderNo)"
+            role="button"
+            @tap="restartOrder(order)"
+          >{{ t('restartRecharge') }}</view>
         </view>
       </view>
 
@@ -139,6 +147,8 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatMoney, formatNumber } from '@/utils/format'
+import { createRechargeRestartRoute, rechargeCanRestart, rechargeHistoryPresentation } from '@/utils/recharge-payment'
+import { navigateTo as nav } from '@/utils/nav'
 
 type RechargeStatusFilter = '' | 'pending' | 'paid' | 'review' | 'canceled' | 'expired' | 'failed'
 
@@ -165,21 +175,15 @@ const filters: Array<{ value: RechargeStatusFilter; label: string }> = [
 ]
 
 function statusLabel(order: RechargePaymentOrder): string {
-  const status = String(order.status || '').toLowerCase()
-  if (order.credited_at || status === 'paid') return 'statusCompleted'
-  if (status === 'review' || status === 'late_paid_review') return 'rechargeReviewing'
-  if (status === 'canceled' || status === 'cancelled') return 'statusCanceled'
-  if (status === 'expired') return 'statusExpired'
-  if (status === 'failed') return 'statusFailed'
-  return 'statusPendingPayment'
+  return rechargeHistoryPresentation(order).labelKey
 }
 
 function statusTone(order: RechargePaymentOrder): string {
-  const status = String(order.status || '').toLowerCase()
-  if (order.credited_at || status === 'paid') return 'success'
-  if (status === 'review' || status === 'late_paid_review') return 'reviewing'
-  if (status === 'canceled' || status === 'cancelled' || status === 'expired' || status === 'failed') return 'danger'
-  return 'pending'
+  return rechargeHistoryPresentation(order).tone
+}
+
+function canRestartOrder(order: RechargePaymentOrder): boolean {
+  return rechargeCanRestart(order, null)
 }
 
 function channelLabel(channel?: string | null): string {
@@ -257,6 +261,13 @@ function copyOrderNumber(orderNo: string) {
   })
 }
 
+function restartOrder(order: RechargePaymentOrder) {
+  if (queryingOrderNo.value || cancelingOrderNo.value) return
+  const target = createRechargeRestartRoute(order)
+  if (!target) return
+  nav(target)
+}
+
 async function queryOrder(order: RechargePaymentOrder) {
   if (queryingOrderNo.value || cancelingOrderNo.value) return
   queryingOrderNo.value = order.order_no
@@ -312,7 +323,7 @@ onShow(reload)
 .search-placeholder { color: var(--text-dim); }
 .search-clear { flex: none; min-height: 52rpx; display: flex; align-items: center; color: var(--text-sub); font-size: 21rpx; }
 .search-button { width: 104rpx; min-height: 72rpx; display: flex; align-items: center; justify-content: center; color: #fff; background: var(--primary); border-radius: 16rpx; font-size: 24rpx; font-weight: 700; }
-.search-button:active, .query-button:active, .cancel-button:active, .retry:active, .order-number-action:active { transform: scale(.98); }
+.search-button:active, .query-button:active, .cancel-button:active, .restart-button:active, .retry:active, .order-number-action:active { transform: scale(.98); }
 .filter-scroll { width: 100%; min-width: 0; flex: none; padding: 8rpx 0 12rpx; box-sizing: border-box; }
 .filter-inner { width: 100%; white-space: nowrap; }
 .filter-row { display: inline-flex; gap: 12rpx; padding: 0 32rpx; }
@@ -340,11 +351,12 @@ onShow(reload)
 .detail-cell:last-child { grid-column: 1 / -1; }
 .detail-value { display: block; margin-top: 6rpx; color: var(--text); font-size: 22rpx; line-height: 1.45; overflow-wrap: anywhere; }
 .status-reason { display: block; margin-top: 18rpx; padding: 16rpx 18rpx; color: var(--text-sub); background: var(--bg-2); border-radius: 13rpx; font-size: 21rpx; line-height: 1.55; }
-.order-actions { display: flex; justify-content: flex-end; gap: 12rpx; margin-top: 20rpx; }
-.query-button, .cancel-button { min-height: 64rpx; padding: 0 22rpx; display: flex; align-items: center; justify-content: center; border-radius: 15rpx; font-size: 22rpx; font-weight: 700; }
+.order-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12rpx; margin-top: 20rpx; }
+.query-button, .cancel-button, .restart-button { min-height: 64rpx; padding: 0 22rpx; display: flex; align-items: center; justify-content: center; border-radius: 15rpx; font-size: 22rpx; font-weight: 700; }
 .query-button { color: var(--primary); border: 1rpx solid var(--primary); }
 .cancel-button { color: var(--down); border: 1rpx solid var(--down); }
-.query-button.disabled, .cancel-button.disabled { opacity: .48; }
+.restart-button { color: #fff; background: var(--primary); border: 1rpx solid var(--primary); }
+.query-button.disabled, .cancel-button.disabled, .restart-button.disabled { opacity: .48; }
 .state { min-height: 420rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 25rpx; }
 .error-state { flex-direction: column; gap: 18rpx; }
 .retry { min-height: 66rpx; padding: 0 28rpx; display: flex; align-items: center; color: var(--primary); border: 1rpx solid var(--primary); border-radius: 15rpx; font-weight: 700; }
