@@ -38,10 +38,10 @@
             },
             "icons" : {
                 "android" : {
-                    "hdpi" : "static/logo/logo-72.png",
-                    "xhdpi" : "static/logo/logo-96.png",
-                    "xxhdpi" : "static/logo/logo-144.png",
-                    "xxxhdpi" : "static/logo/logo-192.png"
+                    "hdpi" : "src/static/logo/logo-72.png",
+                    "xhdpi" : "src/static/logo/logo-96.png",
+                    "xxhdpi" : "src/static/logo/logo-144.png",
+                    "xxxhdpi" : "src/static/logo/logo-192.png"
                 }
             }
         }
