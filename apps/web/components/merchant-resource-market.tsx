@@ -43,7 +43,10 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
     <header><div><p>北斗 kai SHARED COMPUTE</p><h2 id="merchant-market-title">{t("market.shared", "共享算力资源")}</h2><span>{marketDescription}</span></div></header>
     {loading ? <div className="merchant-market__state">{t("market.loading", "正在读取商家资源…")}</div> : error ? <div className="merchant-market__state is-error">{error}</div> : displayRows.length === 0 ? <div className="merchant-market__state"><strong>{t("market.empty", "暂无已发布资源")}</strong><span>{t("market.emptyDesc", "商家资源审核通过后会自动出现在这里。")}</span></div> : <div className="merchant-resource-grid">{displayRows.map((row) => {
       const legacyTestResource = row.name === "错误型号资源";
-      const action = viewerRole === "supplier" ? { href: "/supplier/resources", label: t("market.manage", "管理服务器") } : viewerRole === "admin" ? { href: "/admin/resources", label: t("market.review", "审核服务器") } : viewerRole === "loading" ? { href: `/market/products/${row.id}`, label: t("market.view", "查看服务器") } : { href: `/market/products/${row.id}`, label: t("market.rent", "查看并租用") };
+      const action = {
+        href: `/market/products/${row.id}`,
+        label: row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情"),
+      };
       const displayName = localizeMarketProductName(legacyTestResource ? `${row.gpu_model} ${row.gpu_memory_gb}GB 独占训练节点` : row.name, locale);
       const supplierName = localizeSupplierName(row.source_name, locale);
       const displayCpuCores = row.cpu_cores || (legacyTestResource ? 64 : null);

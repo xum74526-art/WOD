@@ -44,7 +44,7 @@
           <view class="request-specs">
             <text>{{ t('gpuQuantityValue', { count: item.quantity }) }}</text>
             <text v-if="item.gpu_hours">{{ t('gpuHoursValue', { count: item.gpu_hours }) }}</text>
-            <text v-if="item.region">{{ tr(item.region) }}</text>
+          <text v-if="item.region">{{ localizeRegionName(item.region, i18n.lang) }}</text>
           </view>
           <view class="request-bottom">
             <view>
@@ -168,7 +168,7 @@
           <view class="detail-grid">
             <view class="detail-cell"><text class="detail-label">{{ t('quantity') }}</text><text class="detail-value">{{ detail.request.quantity }}</text></view>
             <view class="detail-cell"><text class="detail-label">{{ t('totalBudget') }}</text><text class="detail-value">{{ requestBudget(detail.request) }}</text></view>
-            <view class="detail-cell"><text class="detail-label">{{ t('region') }}</text><text class="detail-value">{{ detail.request.region ? tr(detail.request.region) : t('notLimited') }}</text></view>
+          <view class="detail-cell"><text class="detail-label">{{ t('region') }}</text><text class="detail-value">{{ detail.request.region ? localizeRegionName(detail.request.region, i18n.lang) : t('notLimited') }}</text></view>
             <view class="detail-cell"><text class="detail-label">{{ t('quotesReceived') }}</text><text class="detail-value">{{ detail.request.quote_count }}</text></view>
           </view>
           <text v-if="detail.request.requirements?.remark" class="detail-remark">{{ detail.request.requirements.remark }}</text>
@@ -202,10 +202,11 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
+import { localizeRegionName } from '@/utils/region-name'
 import { fmtCH, fmtCHr, formatNumberInput, fromCardHours, toCardHours } from '@/utils/format'
 
 const i18n = useI18nStore()
-const { t, tr } = i18n
+const { t } = i18n
 const requestTab = ref(0)
 const viewMode = 'buyer' as const
 const requests = ref<BuyRequestItem[]>([])

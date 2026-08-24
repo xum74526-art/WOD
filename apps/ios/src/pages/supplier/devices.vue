@@ -21,7 +21,7 @@
               {{ t(d.list_status === 'on' ? '在售' : '已下架') }}
             </view>
           </view>
-          <text class="dg">{{ d.gpu_model }} · {{ d.memory }} · {{ tr(d.region) }} {{ localizeRegionName(d.city, i18n.lang) }}</text>
+          <text class="dg">{{ d.gpu_model }} · {{ d.memory }} · {{ localizeRegionName(d.region, i18n.lang) }} {{ localizeRegionName(d.city, i18n.lang) }}</text>
           <view class="dinfo">
             <text class="di">{{ fmtCH(d.price) }}/h</text>
             <text class="di">{{ t('可租 {count}', { count: d.stock }) }}</text>
@@ -47,7 +47,7 @@ import { localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 
 const i18n = useI18nStore()
-const { t, tr } = i18n
+const { t } = i18n
 
 const devices = ref<SupplierDeviceItem[]>([])
 const failedImages = ref<Record<number, boolean>>({})

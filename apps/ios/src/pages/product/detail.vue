@@ -28,7 +28,7 @@
         <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ product.gpu_model }}</text></view>
         <view class="row"><text class="sk">{{ t('k_224d9bc8') }}</text><text class="sv">{{ product.memory }}</text></view>
         <view class="row"><text class="sk">CUDA</text><text class="sv">{{ product.cuda || '-' }}</text></view>
-        <view class="row"><text class="sk">{{ t("region") }}</text><text class="sv">{{ tr(product.region_name || '-') }} {{ localizeRegionName(product.city || '', i18n.lang) }}</text></view>
+        <view class="row"><text class="sk">{{ t("region") }}</text><text class="sv">{{ localizeMarketLocation(product.region_name, product.region_code, product.city, i18n.lang) || '-' }}</text></view>
         <view class="row"><text class="sk">{{ t(isKaiProduct ? 'kaiFulfillmentAllocation' : 'k_40a4b798') }}</text><text class="sv">{{ product.stock ?? 0 }} {{ t('units') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_262a2599') }}</text><text class="sv">{{ product.stability != null ? `${formatNumber(product.stability)}%` : '-' }}</text></view>
         <view v-if="product.market_source && product.market_source !== 'wod'" class="row"><text class="sk">{{ t('marketOfferSource') }}</text><text class="sv">{{ sourceName }}</text></view>
@@ -142,7 +142,7 @@ import BottomActionBar from '@/components/BottomActionBar.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
-import { localizeRegionName } from '@/utils/region-name'
+import { localizeMarketLocation } from '@/utils/region-name'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { estimateUsageExpiryRebate } from '@/utils/product-rebate'

@@ -81,19 +81,23 @@ import { useHostingStore } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
 import { fmtCH } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
+import { localizeRegionName } from '@/utils/region-name'
 
 defineEmits<{ (event: 'navigate', url: string): void }>()
 
 const hostingStore = useHostingStore()
 const i18n = useI18nStore()
-const { t, tr } = i18n
+const { t } = i18n
 
 const listedCount = computed(() => hostingStore.supplierDevices.filter((device) => device.list_status === 'on').length)
 const delistedCount = computed(() => hostingStore.supplierDevices.filter((device) => device.list_status !== 'on').length)
 const totalStock = computed(() => hostingStore.supplierDevices.reduce((sum, device) => sum + Math.max(Number(device.stock) || 0, 0), 0))
 
 function locationText(device: SupplierDeviceItem) {
-  const location = [device.region, device.city].filter((value) => value && value !== '-').join(' ')
-  return location ? tr(location) : t('locationNotProvided')
+  const location = [device.region, device.city]
+    .filter((value) => value && value !== '-')
+    .map((value) => localizeRegionName(String(value), i18n.lang))
+    .join(' · ')
+  return location || t('locationNotProvided')
 }
 </script>

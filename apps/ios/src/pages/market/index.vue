@@ -43,7 +43,7 @@
           </view>
           <view class="pmid">
             <view class="info"><text class="il">{{ t('kaiFulfillmentAllocation') }}</text><text class="iv">{{ p.stock ?? 0 }}</text></view>
-            <view class="info"><text class="il">{{ t("region") }}</text><text class="iv">{{ tr(p.region_name || '-') }}</text></view>
+            <view class="info"><text class="il">{{ t("region") }}</text><text class="iv">{{ localizeRegionName(p.region_name || '-', i18n.lang, p.region_code) }}</text></view>
             <view v-if="p.supplier_id" class="info"><text class="il">{{ t("merchant") }}</text><text class="iv info-link" @tap.stop="goStore(p.supplier_id)">{{ t("view") }}</text></view>
             <view v-else class="info"><text class="il">{{ t('marketOfferSource') }}</text><text class="iv">{{ marketSourceLabel(p) }}</text></view>
           </view>
@@ -78,6 +78,7 @@ import { navigateTo as nav } from '@/utils/nav'
 import { fmtCHn, formatNumber, toCardHours } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
+import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { marketSourceDisplayName } from '@/utils/market-history'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
@@ -93,7 +94,7 @@ import {
 } from '@/utils/market-list'
 
 const i18n = useI18nStore()
-const { t, tr } = i18n
+const { t } = i18n
 const list = ref<Product[]>([])
 const loading = ref(false)
 const loadError = ref(false)
@@ -134,27 +135,27 @@ async function loadQuote() {
 }
 
 const types = [
-  { code: '', name: '全部' },
-  { code: 'h_series', name: 'H系列' },
-  { code: 'a_series', name: 'A系列' },
-  { code: 'consumer', name: '消费卡' },
-  { code: 'professional', name: '专业卡' },
-  { code: 'domestic', name: '国产卡' },
-  { code: 'vgpu', name: 'vGPU' },
+  { code: '', name: 'allTypes' },
+  { code: 'h_series', name: 'hSeries' },
+  { code: 'a_series', name: 'aSeries' },
+  { code: 'consumer', name: 'consumer' },
+  { code: 'professional', name: 'professional' },
+  { code: 'domestic', name: 'domestic' },
+  { code: 'vgpu', name: 'vgpu' },
 ]
 const mems = ['', '80GB', '48GB', '40GB', '24GB', '16GB']
 const regions = [
-  { code: '', name: '全部地区' },
-  { code: 'north_china', name: '华北' },
-  { code: 'east_china', name: '华东' },
-  { code: 'south_china', name: '华南' },
-  { code: 'northwest_china', name: '西北' },
-  { code: 'southwest_china', name: '西南' },
+  { code: '', name: 'allRegions' },
+  { code: 'north_china', name: 'northChina' },
+  { code: 'east_china', name: 'eastChina' },
+  { code: 'south_china', name: 'southChina' },
+  { code: 'northwest_china', name: 'northwest' },
+  { code: 'southwest_china', name: 'southwest' },
 ]
 const sorts = [
   { key: 'default', label: 'hotSort' },
-  { key: 'price_asc', label: '价格↑' },
-  { key: 'price_desc', label: '价格↓' },
+  { key: 'price_asc', label: 'sortPriceUp' },
+  { key: 'price_desc', label: 'sortPriceDown' },
 ]
 
 async function load(reset = false) {

@@ -14,7 +14,7 @@
             <view class="sc-info">
               <text class="sc-name">{{ displayCompanyName }}</text>
               <text v-if="contactSummary" class="sc-sub">{{ contactSummary }}</text>
-      <text class="sc-tags">{{ tr(info.region) }} · {{ t('评分 {rating}', { rating: info.rating == null ? '-' : formatNumber(info.rating) }) }} · {{ t('{count} 单', { count: info.order_count ?? 0 }) }}</text>
+              <text class="sc-tags">{{ localizeRegionName(info.region || '', i18n.lang) }} · {{ t('评分 {rating}', { rating: info.rating == null ? '-' : formatNumber(info.rating) }) }} · {{ t('{count} 单', { count: info.order_count ?? 0 }) }}</text>
             </view>
           </view>
           <text class="sc-desc" v-if="info.desc">{{ tr(info.desc) }}</text>
@@ -52,6 +52,7 @@ import { navigateTo as nav } from '@/utils/nav'
 import { formatNumber, fmtCH } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
+import { localizeRegionName } from '@/utils/region-name'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 
 const i18n = useI18nStore()

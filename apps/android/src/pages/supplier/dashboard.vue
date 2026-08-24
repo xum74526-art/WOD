@@ -100,7 +100,7 @@
             <text class="dn">{{ tr(d.name) }}</text>
             <view class="dot" :class="d.status"></view>
           </view>
-          <text class="dg">{{ d.gpu_model }} · {{ tr(d.region) }} · {{ t('可租 {count}', { count: d.stock }) }}</text>
+            <text class="dg">{{ d.gpu_model }} · {{ localizeRegionName(d.region, i18n.lang) }} · {{ t('可租 {count}', { count: d.stock }) }}</text>
         </view>
         <view class="dr"><text class="dv up">{{ fmtCH(d.price) }}/h</text></view>
       </view>
@@ -120,8 +120,10 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import Chart from '@/components/Chart.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
+import { localizeRegionName } from '@/utils/region-name'
 
-const { t, tr } = useI18nStore()
+const i18n = useI18nStore()
+const { t, tr } = i18n
 const userStore = useUserStore()
 const dash = ref<Awaited<ReturnType<typeof getDashboard>> | null>(null)
 const rebate = ref<SupplierRebate | null>(null)

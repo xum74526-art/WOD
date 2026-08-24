@@ -15,7 +15,7 @@
         <view class="field"><text class="flabel">{{ t('k_f47e2736') }}</text><text class="fvalue">{{ info.company_name || t('notAvailableShort') }}</text></view>
         <view class="field"><text class="flabel">{{ t('k_52409da5') }}</text><text class="fvalue">{{ info.contact || t('notAvailableShort') }}</text></view>
         <view class="field"><text class="flabel">{{ t('k_09a1f698') }}</text><text class="fvalue">{{ info.phone || t('notAvailableShort') }}</text></view>
-        <view class="field"><text class="flabel">{{ t('k_65d3ab77') }}</text><text class="fvalue">{{ info.region || t('notAvailableShort') }}</text></view>
+        <view class="field"><text class="flabel">{{ t('k_65d3ab77') }}</text><text class="fvalue">{{ localizedRegion }}</text></view>
         <view class="field"><text class="flabel">{{ t('k_a784c811') }}</text><text class="fvalue multiline">{{ info.desc || t('notAvailableShort') }}</text></view>
       </view>
 
@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '@/api/request'
 import { useUserStore } from '@/store/user'
@@ -69,8 +69,10 @@ import {
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import { useI18nStore } from '@/store/i18n'
+import { localizeRegionName } from '@/utils/region-name'
 
-const { t } = useI18nStore()
+const i18n = useI18nStore()
+const { t } = i18n
 const userStore = useUserStore()
 const info = reactive({ company_name: '', contact: '', phone: '', region: '', desc: '' })
 const loadError = ref(false)
@@ -83,6 +85,9 @@ const notificationPrefs = reactive<NotificationPreferences>({
 })
 const delivery = ref<NotificationDeliveryStatus | null>(null)
 const notificationLoadError = ref(false)
+const localizedRegion = computed(() => info.region
+  ? localizeRegionName(info.region, i18n.lang)
+  : t('notAvailableShort'))
 
 async function load() {
   loadError.value = false

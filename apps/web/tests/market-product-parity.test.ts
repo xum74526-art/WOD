@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { fallbackWebProductImage, resolveWebProductImage } from "../lib/product-image.ts";
 import { clampPurchaseHours, estimateProductExpiryRebate, type ProductRebateSummary } from "../lib/product-purchase.ts";
+import { localizeMarketRegion } from "../lib/market-localization.ts";
 
 const rewardSummary: ProductRebateSummary = {
   month_spent: 100,
@@ -26,6 +27,16 @@ test("Web product images safely honor image_url and give B300 a real fallback", 
   assert.equal(resolveWebProductImage("http://127.0.0.1/private.png", "A100"), "/images/a800.jpg");
   assert.equal(resolveWebProductImage("http://localhost/private.png", "B300"), "/images/h100.jpg");
   assert.equal(resolveWebProductImage("javascript:alert(1)", "RTX 5090"), "/images/rtx5090.jpg");
+});
+
+test("Web English market localizes every canonical KAI region", () => {
+  assert.equal(localizeMarketRegion("华中", "en"), "Central China");
+  assert.equal(localizeMarketRegion("中国大陆", "en"), "Mainland China");
+  assert.equal(localizeMarketRegion("北美", "en"), "North America");
+  assert.equal(localizeMarketRegion("欧洲", "en"), "Europe");
+  assert.equal(localizeMarketRegion("全球 / 未披露", "en"), "Global / Undisclosed");
+  assert.equal(localizeMarketRegion("global_unspecified", "en"), "Global / Undisclosed");
+  assert.equal(localizeMarketRegion("北美", "zh-CN"), "北美");
 });
 
 test("hour purchases and expiry rebate estimates remain bounded by server policy", () => {
@@ -59,6 +70,8 @@ test("Web market and detail use image_url, hourly input, rebate estimate, and an
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
 
   assert.match(market, /imageUrl=\{row\.image_url\}/);
+  assert.match(market, /row\.purchasable \? t\("market\.buy", "立即购买"\) : t\("market\.details", "查看详情"\)/);
+  assert.doesNotMatch(market, /href: "\/(supplier|admin)\/resources"/);
   assert.match(detail, /imageUrl=\{product\.image_url\}/);
   assert.match(detail, /type="number"/);
   assert.match(detail, /DEFAULT_PURCHASE_HOURS/);

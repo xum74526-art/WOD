@@ -131,10 +131,23 @@ const TERM_EN: Record<string, string> = {
   '低一点': 'slightly lower',
   '华北': 'North China',
   '华东': 'East China',
+  '华中': 'Central China',
   '华南': 'South China',
+  '东北': 'Northeast China',
   '西北': 'Northwest China',
   '西南': 'Southwest China',
+  '中国大陆': 'Mainland China',
+  '亚太': 'Asia Pacific',
+  '北美': 'North America',
+  '欧洲': 'Europe',
+  '中东': 'Middle East',
+  '南美': 'South America',
+  '非洲': 'Africa',
   '海外': 'Overseas',
+  '全球/未披露': 'Global / Undisclosed',
+  '全球／未披露': 'Global / Undisclosed',
+  '全球 / 未披露': 'Global / Undisclosed',
+  '未披露': 'Undisclosed',
 }
 
 function term(value: string): string {

@@ -225,7 +225,7 @@
         <view v-for="item in regions" :key="item.region_code || item.region" class="region-row" :class="{ cheapest: item.is_lowest }">
           <view class="region-main">
             <view class="region-title-row">
-              <text class="region-name">{{ tr(item.region) }}</text>
+              <text class="region-name">{{ localizeRegionName(item.region, i18n.lang, item.region_code) }}</text>
               <text v-if="item.is_lowest" class="lowest-badge">{{ t('lowestRegion') }}</text>
             </view>
             <text class="region-meta">{{ t('quoteSampleCount', { count: item.quote_sample_count || 0 }) }} · {{ t('quoteLocations', { count: item.location_count || 0 }) }}</text>
@@ -269,6 +269,7 @@ import SegmentedControl from '@/components/SegmentedControl.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatNumber } from '@/utils/format'
+import { localizeRegionName } from '@/utils/region-name'
 import { candleChangePercent, formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import {
   hasCompleteSevenDayMetric,
@@ -283,7 +284,7 @@ import {
 } from '@/utils/market-history'
 
 const i18n = useI18nStore()
-const { t, tr } = i18n
+const { t } = i18n
 const tab = ref(0)
 const models = ref<MarketModel[]>([])
 const ranking = ref<MarketRankingItem[]>([])
