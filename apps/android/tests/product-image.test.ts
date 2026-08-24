@@ -33,9 +33,9 @@ test('provider model paths with case-sensitive App filenames resolve to real bun
   assert.equal(resolveProductImage('/static/gpu/RTX4070TI.jpg', 'RTX4070TI'), '/static/gpu/RTX4070.jpg')
 })
 
-test('all current KAI model families avoid the generic product placeholder', () => {
-  const currentKaiModels = [
-    'A10', 'A100', 'A30', 'A40', 'A4000', 'A5000', 'A6000', 'A800', 'B100', 'B200',
+test('all supported KAI model families avoid the generic product placeholder', () => {
+  const supportedKaiModels = [
+    'A10', 'A100', 'A30', 'A40', 'A4000', 'A5000', 'A6000', 'A800', 'B100', 'B200', 'B300',
     'H100', 'H200', 'L40', 'L40S', 'RTX2000', 'RTX2060', 'RTX2070',
     'RTX2070SUPER', 'RTX2080', 'RTX2080TI', 'RTX3050', 'RTX3060',
     'RTX3060TI', 'RTX3070', 'RTX3070TI', 'RTX3080', 'RTX3080TI',
@@ -46,10 +46,11 @@ test('all current KAI model families avoid the generic product placeholder', () 
     'RTXPRO6000', 'T4', 'V100',
   ]
 
-  for (const model of currentKaiModels) {
+  for (const model of supportedKaiModels) {
     assert.notEqual(fallbackProductImage(model), DEFAULT_PRODUCT_IMAGE, model)
   }
 
   assert.equal(fallbackProductImage('B100'), '/static/gpu/H200.jpg')
   assert.equal(fallbackProductImage('B200'), '/static/gpu/H200.jpg')
+  assert.equal(fallbackProductImage('B300'), '/static/gpu/H200.jpg')
 })

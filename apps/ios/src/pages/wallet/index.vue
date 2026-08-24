@@ -50,15 +50,32 @@
           <view class="payment-order-copy" role="button" @tap="copyRechargeOrderNo(pendingPayment.order_no)">{{ t('copyOrderNumber') }}</view>
         </view>
         <text class="payment-state-detail">{{ paymentStateDetail }}</text>
-        <view v-if="paymentCardState !== 'success'" class="payment-state-actions three-actions">
+        <view v-if="paymentCardState !== 'success'" class="payment-state-actions action-grid">
           <view
+            v-if="canContinuePayment"
             class="payment-action primary"
+            :class="{ disabled: checkingStatus || cancelingPayment }"
+            :aria-disabled="checkingStatus || cancelingPayment"
+            role="button"
+            @tap="continueCurrentPayment"
+          >{{ t('continuePayment') }}</view>
+          <view
+            class="payment-action secondary"
             :class="{ disabled: !canQueryPayment || checkingStatus || cancelingPayment }"
             :aria-disabled="!canQueryPayment || checkingStatus || cancelingPayment"
             role="button"
             @tap="manualRefreshPayment"
           >{{ checkingStatus ? t('checkingPaymentStatus') : t('queryAndConfirmPayment') }}</view>
           <view
+            v-if="canReplacePayment"
+            class="payment-action danger"
+            :class="{ disabled: checkingStatus || cancelingPayment }"
+            :aria-disabled="checkingStatus || cancelingPayment"
+            role="button"
+            @tap="requestReplaceRecharge"
+          >{{ t('changeRechargeAmount') }}</view>
+          <view
+            v-else
             class="payment-action danger"
             :class="{ disabled: !canCancelPayment || checkingStatus || cancelingPayment }"
             :aria-disabled="!canCancelPayment || checkingStatus || cancelingPayment"
@@ -66,9 +83,10 @@
             @tap="requestCancelPayment"
           >{{ cancelingPayment ? t('cancelingRechargeOrder') : t('cancelRechargeOrder') }}</view>
           <view
+            v-if="canRestartPayment"
             class="payment-action secondary"
-            :class="{ disabled: !canRestartPayment || checkingStatus || cancelingPayment }"
-            :aria-disabled="!canRestartPayment || checkingStatus || cancelingPayment"
+            :class="{ disabled: checkingStatus || cancelingPayment }"
+            :aria-disabled="checkingStatus || cancelingPayment"
             role="button"
             @tap="handleRestartRecharge"
           >{{ t('restartRecharge') }}</view>
@@ -223,6 +241,7 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
+import { openPaymentCheckout, type PaymentCheckoutFailure } from '@/utils/payment-checkout'
 import {
   DEFAULT_RECHARGE_TTL_SECONDS,
   formatPaymentCountdown,
@@ -350,6 +369,12 @@ const canCancelPayment = computed(() => Boolean(
 const canRestartPayment = computed(() => Boolean(
   pendingPayment.value && rechargeCanRestart(pendingPayment.value, countdownRemainingMs.value),
 ))
+const canContinuePayment = computed(() => Boolean(
+  paymentCardState.value === 'pending' && paymentSession.value?.checkoutUrl,
+))
+const canReplacePayment = computed(() => Boolean(
+  pendingPayment.value && paymentSession.value && paymentCardState.value === 'pending',
+))
 
 let resumePromise: Promise<void> | null = null
 
@@ -435,7 +460,17 @@ async function fetchWallet() {
 
 function openRecharge() {
   if (pendingPayment.value && (paymentCardState.value === 'pending' || paymentCardState.value === 'processing')) {
-    uni.showToast({ title: t('activeRechargeExists'), icon: 'none' })
+    uni.showModal({
+      title: t('activeRechargeExistsTitle'),
+      content: t('activeRechargeExists'),
+      cancelText: t('close'),
+      confirmText: canContinuePayment.value ? t('continuePayment') : t('viewRechargeOrders'),
+      success: result => {
+        if (!result.confirm) return
+        if (canContinuePayment.value) continueCurrentPayment()
+        else goRechargeOrders()
+      },
+    })
     return
   }
   sheet.type = 'recharge'
@@ -492,6 +527,7 @@ async function onRecharge() {
     uni.showToast({ title: t('paymentChannelUnavailable'), icon: 'none' })
     return
   }
+  if (!await confirmRechargeAmount(amount)) return
   if (submitting.value) return
   submitting.value = true
   try {
@@ -519,13 +555,45 @@ async function onRecharge() {
   }
 }
 
+function confirmRechargeAmount(amount: number): Promise<boolean> {
+  return new Promise(resolve => {
+    uni.showModal({
+      title: t('confirmRechargeAmountTitle'),
+      content: t('confirmRechargeAmountContent', {
+        amount: formatMoney(amount),
+        cardHours: formatNumber(amount / cardHourRate.value, { maximumFractionDigits: 6 }),
+      }),
+      cancelText: t('checkAmountAgain'),
+      confirmText: t('confirmAndPay'),
+      success: result => resolve(result.confirm === true),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+function handleCheckoutFailure(failure: PaymentCheckoutFailure) {
+  console.error('[wallet] payment checkout navigation failed', failure)
+  const paymentAppMissing = failure.code === 'payment-app-open-failed'
+  uni.showModal({
+    title: t(paymentAppMissing ? 'paymentAppUnavailableTitle' : 'paymentPageOpenFailedTitle'),
+    content: t(paymentAppMissing ? 'paymentAppUnavailable' : 'paymentPageOpenFailed'),
+    showCancel: false,
+    confirmText: t('understood'),
+  })
+}
+
 function openCheckout(url: string) {
-  // #ifdef APP-PLUS
-  plus.runtime.openURL(url)
-  // #endif
-  // #ifdef H5
-  if (typeof window !== 'undefined') window.location.href = url
-  // #endif
+  openPaymentCheckout(url, handleCheckoutFailure)
+}
+
+function continueCurrentPayment() {
+  if (checkingStatus.value || cancelingPayment.value) return
+  const target = paymentSession.value?.checkoutUrl || ''
+  if (!target || paymentCardState.value !== 'pending') {
+    uni.showToast({ title: t('paymentCheckoutUnavailable'), icon: 'none' })
+    return
+  }
+  openCheckout(target)
 }
 
 function hydratePaymentSession() {
@@ -710,6 +778,50 @@ async function requestCancelPayment() {
   }
 }
 
+function confirmReplaceRecharge(): Promise<boolean> {
+  return new Promise(resolve => {
+    uni.showModal({
+      title: t('changeRechargeAmountTitle'),
+      content: t('changeRechargeAmountContent', {
+        amount: formatMoney(pendingPayment.value?.amount_cny || 0),
+      }),
+      cancelText: t('keepRechargeOrder'),
+      confirmText: t('changeRechargeAmount'),
+      confirmColor: '#dc4949',
+      success: result => resolve(result.confirm === true),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+async function requestReplaceRecharge() {
+  if (checkingStatus.value || cancelingPayment.value || !canReplacePayment.value) return
+  if (!await confirmReplaceRecharge()) return
+
+  checkingStatus.value = true
+  stopPaymentTracking()
+  try {
+    const orderNo = paymentSession.value?.orderNo || ''
+    if (!orderNo) return
+    const payment = await queryRechargePayment(orderNo, true)
+    applyPayment(payment)
+    if (paymentCardState.value !== 'pending') {
+      uni.showToast({ title: t('rechargeStatusChanged'), icon: 'none' })
+      return
+    }
+    // This intentionally abandons only the local checkout session. The old
+    // provider order remains visible in history and must not be presented as
+    // canceled while the provider can still accept payment.
+    clearPaymentSession()
+    openRecharge()
+  } catch {
+    uni.showToast({ title: t('paymentStatusUnavailable'), icon: 'none' })
+  } finally {
+    checkingStatus.value = false
+    startPaymentTracking()
+  }
+}
+
 function handleRestartRecharge() {
   if (checkingStatus.value || cancelingPayment.value) return
   if (!canRestartPayment.value) {
@@ -811,7 +923,8 @@ function goWithdrawals() { nav('/pages/withdrawals/index') }
 .payment-action.secondary { color: var(--primary); background: transparent; border: 1rpx solid var(--primary); }
 .payment-action.danger { color: var(--down); background: transparent; border: 1rpx solid rgba(220, 73, 73, 0.62); }
 .payment-action.disabled { opacity: 0.48; }
-.three-actions .payment-action { min-width: 0; padding: 0 8rpx; font-size: 21rpx; line-height: 1.25; }
+.action-grid { flex-wrap: wrap; }
+.action-grid .payment-action { flex: 1 1 calc(50% - 7rpx); min-width: 0; padding: 0 10rpx; font-size: 22rpx; line-height: 1.25; }
 .balance-card { padding: 40rpx 32rpx; margin: 24rpx 0; }
 .bc-label { color: var(--text-sub); font-size: 26rpx; display: block; margin-bottom: 12rpx; }
 .bc-actions { display: flex; gap: 16rpx; margin-top: 32rpx; }

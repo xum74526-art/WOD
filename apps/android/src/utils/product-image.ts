@@ -14,6 +14,7 @@ const VERIFIED_MODEL_IMAGES: Record<string, string> = {
   A800: 'A800.jpg',
   B100: 'H200.jpg',
   B200: 'H200.jpg',
+  B300: 'H200.jpg',
   GRIDK1: 'GRIDK1.jpg',
   GRIDK2: 'GRIDK2.jpg',
   GTX1080: 'GTX1080.jpg',

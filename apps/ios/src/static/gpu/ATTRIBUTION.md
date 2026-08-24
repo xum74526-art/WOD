@@ -22,5 +22,5 @@ Alias copies inherit the source image's license and modification notice.
 Data-center and professional-model family aliases use pre-existing project
 assets. They are intentionally labelled by the UI model name rather than
 presented as exact board photography when exact reusable media was unavailable.
-`B100` and `B200` currently use the bundled `H200.jpg` data-center family image;
+`B100`, `B200`, and `B300` currently use the bundled `H200.jpg` data-center family image;
 the UI model label remains authoritative and the image is illustrative.
