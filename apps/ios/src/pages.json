@@ -57,7 +57,7 @@
     "list": [
       { "pagePath": "pages/index/index", "text": "首页", "iconPath": "static/tabbar/home.png", "selectedIconPath": "static/tabbar/home-active.png" },
       { "pagePath": "pages/market/index", "text": "算力", "iconPath": "static/tabbar/compute.png", "selectedIconPath": "static/tabbar/compute-active.png" },
-      { "pagePath": "pages/community/index", "text": "社区", "iconPath": "static/tabbar/community.png", "selectedIconPath": "static/tabbar/community-active.png" },
+      { "pagePath": "pages/community/index", "text": "资讯", "iconPath": "static/tabbar/community.png", "selectedIconPath": "static/tabbar/community-active.png" },
       { "pagePath": "pages/assets/index", "text": "资产", "iconPath": "static/tabbar/assets.png", "selectedIconPath": "static/tabbar/assets-active.png" },
       { "pagePath": "pages/profile/index", "text": "我的", "iconPath": "static/tabbar/profile.png", "selectedIconPath": "static/tabbar/profile-active.png" }
     ]

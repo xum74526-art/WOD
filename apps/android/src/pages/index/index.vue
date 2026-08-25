@@ -31,6 +31,8 @@
         </view>
       </view>
 
+      <HomePromoCarousel />
+
       <view class="divider"></view>
 
       <view v-if="homeLoadError" class="home-load-warning">
@@ -194,6 +196,7 @@ import Chart from '@/components/Chart.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
+import HomePromoCarousel from '@/components/HomePromoCarousel.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
@@ -501,7 +504,14 @@ function markProductImageFailed(id: number) {
 </script>
 
 <style lang="scss" scoped>
-.page { min-height: 100vh; background: var(--bg); }
+.page {
+  min-height: 100vh;
+  background: var(--bg);
+  --card: var(--home-card);
+  --bg-2: var(--home-card-soft);
+  --card-border: var(--home-card-border);
+  --shadow: var(--home-card-shadow);
+}
 .shell { padding: 0 20px calc(132rpx + var(--safe-bottom)); }
 
 .topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }
