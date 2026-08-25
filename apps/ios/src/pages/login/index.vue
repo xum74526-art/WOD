@@ -15,7 +15,7 @@
           <view class="mode-item" :class="{ active: mode === 'register' }" @tap="setMode('register')">{{ t('注册') }}</view>
         </view>
 
-        <view v-if="mode === 'login'" class="method-switch">
+        <view class="method-switch">
           <view class="method-item" :class="{ active: authMethod === 'phone' }" @tap="setAuthMethod('phone')">
             <text>{{ t(mode === 'login' ? 'phoneLogin' : 'phoneRegister') }}</text>
           </view>
@@ -25,7 +25,6 @@
         </view>
 
         <view v-if="authMethod === 'phone'" class="phone-form">
-          <view v-if="mode === 'register'" class="config-warning">{{ t('closedTestPhoneNotice') }}</view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_819767ad') }}</text>
             <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" />
@@ -61,10 +60,10 @@
             <view class="flow-dot">1</view><text>{{ t('kaiVerifyStep') }}</text>
             <view class="flow-line" />
             <view />
-            <view class="flow-dot">2</view><text>{{ t('kaiReturnStep') }}</text>
+            <view class="flow-dot">2</view><text>{{ t(mode === 'login' ? 'kaiReturnStep' : 'kaiRegisterReturnStep') }}</text>
           </view>
           <view v-if="kaiConfigured === false" class="config-warning">{{ t('kaiNotConfigured') }}</view>
-          <text class="phone-note">{{ t('kaiPhoneBindingHint') }}</text>
+          <text class="phone-note">{{ t(mode === 'login' ? 'kaiPhoneBindingHint' : 'kaiRegisterBindingHint') }}</text>
         </view>
 
         <view class="agree">
@@ -113,6 +112,7 @@ let processingKaiCallback = ''
 let kaiReturnProbeTimer: ReturnType<typeof setTimeout> | null = null
 let kaiReturnProbeGeneration = 0
 const HANDLED_KAI_CALLBACK_KEY = 'wod_kai_callback_fingerprint'
+const PENDING_KAI_INTENT_KEY = 'wod_kai_auth_intent'
 const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 
 function setMode(value: 'login' | 'register') {
@@ -174,13 +174,16 @@ async function submitKai() {
   }
   submitting.value = true
   try {
-    const result = await startKaiAuth('login')
+    const result = await startKaiAuth(mode.value)
+    uni.setStorageSync(PENDING_KAI_INTENT_KEY, mode.value)
     externalKaiAuthorizationPending.value = true
     if (!openExternalAuthorization(result.authorization_url)) {
+      uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
       externalKaiAuthorizationPending.value = false
       submitting.value = false
     }
   } catch {
+    uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
     externalKaiAuthorizationPending.value = false
     submitting.value = false
   }
@@ -200,9 +203,18 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   externalKaiAuthorizationPending.value = false
   submitting.value = true
   authMethod.value = 'kai'
+  const pendingKaiIntent = uni.getStorageSync(PENDING_KAI_INTENT_KEY) === 'register' ? 'register' : 'login'
   try {
     if (callback.error) {
       uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
+      uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
+      if (callback.error === 'identity_not_bound' && pendingKaiIntent === 'register') {
+        mode.value = 'register'
+        authMethod.value = 'phone'
+        if (!captchaImg.value) void refreshCaptcha()
+        uni.showToast({ title: t('kaiRegisterContinuePhone'), icon: 'none', duration: 2600 })
+        return true
+      }
       const errorKey = callback.error === 'access_denied'
         ? 'kaiCancelled'
         : callback.error === 'identity_not_bound'
@@ -213,6 +225,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     }
     if (!callback.ticket) return false
     await userStore.loginWithKaiTicket(callback.ticket)
+    uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
     uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
     uni.showToast({ title: t('loginSuccess'), icon: 'success' })
     setTimeout(enterAuthenticatedApp, 500)

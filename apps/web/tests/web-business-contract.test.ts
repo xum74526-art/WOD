@@ -26,6 +26,18 @@ test("released Web account copy does not expose retired test-only wording", () =
   );
 });
 
+test("Web registration offers phone and Kai registration through the existing authorization route", () => {
+  const panel = fs.readFileSync(new URL("../components/auth-panel.tsx", import.meta.url), "utf8");
+
+  assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
+  assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
+  assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);
+  assert.match(panel, /sessionStorage\.setItem\(PENDING_KAI_INTENT_KEY, mode\)/);
+  assert.match(panel, /kaiError === "identity_not_bound" && pendingKaiIntent === "register"/);
+  assert.match(panel, /window\.location\.replace\(`\/register\$\{suffix\}`\)/);
+  assert.match(panel, /isRegister \? "Continue to Kai registration" : "Sign in with Kai"/);
+});
+
 test("released clients do not describe canonical data as coming from mobile", () => {
   const webComponents = [
     "account-dashboard.tsx",
