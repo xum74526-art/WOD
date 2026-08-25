@@ -8,7 +8,10 @@ export const metadata: Metadata = {
   description: "下载 北斗 kai Android App，或查看 iOS 与 Android 应用商店发布状态。",
 };
 
-const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim();
+const androidVersion = "1.0.5";
+const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "/download/wod.apk";
+const androidApkSize = "27.7 MB";
+const androidApkSha256 = "005B06BBC520F6FDFCE2FEF912009FFB1E177ABB1AF0728140744B7A5B869B7E";
 
 export default function DownloadPage() {
   return (
@@ -16,7 +19,7 @@ export default function DownloadPage() {
       <SiteHeader />
       <main className="download-page__main">
         <header className="download-hero">
-          <p className="hero-eyebrow">北斗 kai MOBILE / 1.0.3</p>
+          <p className="hero-eyebrow">北斗 kai ANDROID / {androidVersion}</p>
           <h1>把算力市场<br />装进口袋</h1>
           <p>网页与 App 使用同一个北斗 kai 账号、余额、订单和算力数据。选择你的设备开始使用。</p>
         </header>
@@ -28,24 +31,18 @@ export default function DownloadPage() {
               <div><small>ANDROID</small><h2>Android</h2></div>
               <span className="download-status">优先发布</span>
             </div>
-            <p>适用于 Android 8.0 及以上设备。APK 发布后可直接下载安装，也可等待应用商店版本。</p>
+            <p>适用于 Android 8.0 及以上设备。可从本页直接下载安装，也可等待应用商店版本。</p>
             <div className="download-platform__actions">
-              {androidApkUrl ? (
-                <a className="download-primary" href={androidApkUrl} download>
-                  <DownloadSimple size={19} weight="bold" />下载 APK
-                </a>
-              ) : (
-                <span className="download-primary is-disabled" aria-disabled="true">
-                  <DownloadSimple size={19} />APK 正在准备
-                </span>
-              )}
+              <a className="download-primary" href={androidApkUrl} download>
+                <DownloadSimple size={19} weight="bold" />下载 APK
+              </a>
               <a className="download-store-placeholder" href="/download#android-store" aria-disabled="true" tabIndex={-1}>
                 <Storefront size={18} />Android 应用商店<span>即将上线</span>
               </a>
             </div>
             <dl className="download-build-info">
-              <div><dt>版本</dt><dd>1.0.3</dd></div>
-              <div><dt>格式</dt><dd>APK</dd></div>
+              <div><dt>版本</dt><dd>{androidVersion}</dd></div>
+              <div><dt>大小</dt><dd>{androidApkSize}</dd></div>
               <div><dt>架构</dt><dd>ARM64 / ARMv7</dd></div>
             </dl>
           </article>
@@ -63,7 +60,7 @@ export default function DownloadPage() {
               </a>
             </div>
             <dl className="download-build-info">
-              <div><dt>版本</dt><dd>1.0.3</dd></div>
+              <div><dt>版本</dt><dd>待发布</dd></div>
               <div><dt>系统</dt><dd>iOS 13+</dd></div>
               <div><dt>渠道</dt><dd>App Store</dd></div>
             </dl>
@@ -72,7 +69,11 @@ export default function DownloadPage() {
 
         <aside className="download-security-note">
           <ShieldCheck size={21} weight="duotone" />
-          <div><strong>只从北斗 kai 官方页面安装</strong><span>正式 APK 发布时，这里会显示文件大小和校验信息。应用商店入口在审核通过前保持占位状态。</span></div>
+          <div>
+            <strong>只从北斗 kai 官方页面安装</strong>
+            <span>Android APK {androidVersion} · {androidApkSize}</span>
+            <code>SHA-256: {androidApkSha256}</code>
+          </div>
         </aside>
       </main>
       <SiteFooter />
