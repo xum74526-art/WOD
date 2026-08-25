@@ -2,8 +2,10 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowClockwise, ChartLine, Coins, Gear, Gift, HardDrives, Receipt, TrendUp } from "@phosphor-icons/react";
+import { useI18n } from "@/components/locale-root";
 import { errorMessage } from "@/lib/commerce-ui";
-import { getSupplierProfile, getSupplierRebate, getSupplierRevenueBundle, getSupplierStats, updateSupplierProfile, type SupplierProfile, type SupplierRebate, type SupplierRevenueRecord, type SupplierStats, type SupplierWallet } from "@/lib/mobile-business-api";
+import { getSupplierProfile, getSupplierRebate, getSupplierRevenueBundle, getSupplierStats, getUserRebate, updateSupplierProfile, type RebateSummary, type SupplierProfile, type SupplierRebate, type SupplierRevenueRecord, type SupplierStats, type SupplierWallet } from "@/lib/mobile-business-api";
+import { localizeRebateHint, rebateTierRange } from "@/lib/product-purchase";
 
 export type MobileSupplierSection = "revenue" | "analytics" | "rebates" | "settings";
 const amount = (value: unknown) => {
@@ -195,80 +197,96 @@ function SupplierAnalytics() {
 }
 
 function SupplierRebates() {
-  const [data, setData] = useState<SupplierRebate | null>(null);
+  const { locale, t } = useI18n();
+  const [personal, setPersonal] = useState<RebateSummary | null>(null);
+  const [supplier, setSupplier] = useState<SupplierRebate | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    getSupplierRebate()
-      .then(setData)
+    Promise.all([getUserRebate(), getSupplierRebate()])
+      .then(([personalSummary, supplierSummary]) => {
+        setPersonal(personalSummary);
+        setSupplier(supplierSummary);
+      })
       .catch((reason) => setError(errorMessage(reason)));
   }, []);
-  const tiers = [
-    [5, "0 – 10,000"],
-    [8, "10,000 – 50,000"],
-    [11, "50,000 – 100,000"],
-    [13, "100,000 – 200,000"],
-    [15, "200,000+"],
-  ] as const;
-  if (!data && !error) return <div className="workspace-skeleton" />;
+  const personalTiers = personal?.tiers ?? [];
+  const supplierTiers = supplier?.tiers ?? [];
+  const personalHint = localizeRebateHint(personal?.next_tier_hint, locale)
+    || t("rebate.personal.noHint", "当前没有新的等级提示。");
+  const supplierHint = localizeRebateHint(supplier?.next_tier_hint, locale)
+    || t("rebate.supplier.noHint", "当前没有新的等级提示。");
+  const personalCap = Number(personal?.monthly_cap ?? 0);
+  const supplierCap = Number(supplier?.monthly_cap ?? 0);
+  const personalEntitled = Number(personal?.month_entitled ?? 0);
+  const personalCapUsed = Number(personal?.cap_used ?? 0);
+  const personalCapRemaining = Number(personal?.cap_remaining ?? 0);
+  const supplierEntitled = Number(supplier?.month_entitled ?? 0);
+  const supplierCapUsed = Number(supplier?.cap_used ?? 0);
+  const supplierCapRemaining = Number(supplier?.cap_remaining ?? 0);
+  if ((!personal || !supplier) && !error) return <div className="workspace-skeleton" />;
   return (
     <>
       {error && <div className="commerce-error">{error}</div>}
       <div className="mobile-data-spine">
         <article>
-          <small>本月销售</small>
-          <strong>{amount(data?.month_sales)}</strong>
-          <span>卡时</span>
+          <small>{t("rebate.personal.monthSpent", "本月个人购买")}</small>
+          <strong>{amount(personal?.month_spent)}</strong>
+          <span>{t("rebate.unit.cardHours", "卡时")}</span>
         </article>
         <article>
-          <small>本月返佣</small>
-          <strong>{amount(data?.month_rebated)}</strong>
-          <span>卡时</span>
+          <small>{t("rebate.personal.monthRebated", "本月个人购买返佣")}</small>
+          <strong>{amount(personal?.month_rebated)}</strong>
+          <span>{t("rebate.unit.cardHours", "卡时")}</span>
         </article>
         <article>
-          <small>当前返佣率</small>
-          <strong>{amount(data?.current_rate)}%</strong>
-          <span>当前阶梯</span>
+          <small>{t("rebate.supplier.monthSales", "本月已确认销售")}</small>
+          <strong>{amount(supplier?.month_sales)}</strong>
+          <span>{t("rebate.unit.cardHours", "卡时")}</span>
         </article>
         <article>
-          <small>预计总返佣</small>
-          <strong>{amount(data?.est_total_rebate)}</strong>
-          <span>卡时</span>
+          <small>{t("rebate.supplier.monthRebated", "本月商家销售返佣")}</small>
+          <strong>{amount(supplier?.month_rebated)}</strong>
+          <span>{t("rebate.unit.cardHours", "卡时")}</span>
         </article>
       </div>
-      <div className="mobile-service-columns">
-        <section className="supplier-tier-panel">
+      <div className="mobile-service-columns rebate-program-columns">
+        <section className="mobile-rebate-panel rebate-program-card">
           <header>
             <Gift size={20} />
             <div>
-              <small>REBATE TIERS</small>
-              <h2>返佣阶梯</h2>
+              <small>PERSONAL PURCHASE REBATE</small>
+              <h2>{t("rebate.personal.title", "个人购买返佣")}</h2>
             </div>
           </header>
-          {tiers.map(([rate, range]) => (
-            <article className={Number(data?.current_rate) === rate ? "active" : ""} key={rate}>
-              <strong>{rate}%</strong>
-              <span>{range} 卡时</span>
-              {Number(data?.current_rate) === rate && <b>当前</b>}
-            </article>
-          ))}
+          <strong>{amount(personal?.current_rate)}%</strong>
+          <span>{t("rebate.personal.currentTierLabel", "当前个人购买等级")}</span>
+          <p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买卡时总额计算，资产服务期结束后返佣入账。")}</p>
+          <footer>{personalHint}<br/>{t("rebate.personal.summary", "待到期 {pending} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时", { pending: amount(personal?.pending_rebate), entitled: amount(personalEntitled), used: amount(personalCapUsed), remaining: amount(personalCapRemaining), cap: amount(personalCap) })}</footer>
         </section>
-        <section className="mobile-rebate-panel">
+        <section className="mobile-rebate-panel rebate-program-card">
           <header>
             <TrendUp size={20} />
             <div>
-              <small>NEXT TIER</small>
-              <h2>本月进度</h2>
+              <small>SUPPLIER SALES REBATE</small>
+              <h2>{t("rebate.supplier.title", "商家销售返佣")}</h2>
             </div>
           </header>
-          <strong>{amount(data?.month_sales)}</strong>
-          <span>本月销售卡时</span>
-          <p>{data?.next_tier_hint || "已处于当前最高可用阶梯"}</p>
-          <footer>
-            月度上限 {amount(data?.monthly_cap)} · 服务费率 {amount(data?.service_fee_rate)}%
-          </footer>
+          <strong>{amount(supplier?.current_rate)}%</strong>
+          <span>{t("rebate.supplier.currentTierLabel", "当前商家销售等级")}</span>
+          <p>{t("rebate.supplier.mechanism", "返佣基数为本月已确认销售卡时总额，不是平台服务费；按销售总额乘当前等级比例计算。")}</p>
+          <footer>{supplierHint}<br/>{t("rebate.supplier.summary", "预计返佣 {estimated} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时", { estimated: amount(supplier?.est_total_rebate), entitled: amount(supplierEntitled), used: amount(supplierCapUsed), remaining: amount(supplierCapRemaining), cap: amount(supplierCap) })}</footer>
         </section>
       </div>
-      {!data?.rewards_enabled && <div className="workspace-service-note">商家返佣服务当前未启用。</div>}
+      <div className="mobile-service-columns rebate-tier-columns">
+        <section className="supplier-tier-panel">
+          <header><Gift size={20}/><div><small>PERSONAL TIERS</small><h2>{t("rebate.personal.tiers", "个人购买等级")}</h2></div></header>
+          {personalTiers.map((tier, index) => <article className={Number(personal?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(personalTiers, index, locale)} {t("rebate.unit.cardHours", "卡时")}</span>{Number(personal?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
+        </section>
+        <section className="supplier-tier-panel">
+          <header><TrendUp size={20}/><div><small>SUPPLIER TIERS</small><h2>{t("rebate.supplier.tiers", "商家销售等级")}</h2></div></header>
+          {supplierTiers.map((tier, index) => <article className={Number(supplier?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(supplierTiers, index, locale)} {t("rebate.unit.cardHours", "卡时")}</span>{Number(supplier?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
+        </section>
+      </div>
     </>
   );
 }
@@ -394,6 +412,7 @@ const headers: Record<MobileSupplierSection, { eyebrow: string; title: string; d
 };
 
 export function MobileSupplierOperations({ section }: { section: MobileSupplierSection }) {
+  const { t } = useI18n();
   const header = headers[section];
   const Icon = header.icon;
   return (
@@ -401,8 +420,8 @@ export function MobileSupplierOperations({ section }: { section: MobileSupplierS
       <div className="mobile-ops-head">
         <div>
           <p>{header.eyebrow}</p>
-          <h1>{header.title}</h1>
-          <span>{header.description}</span>
+          <h1>{section === "rebates" ? t("rebate.center.title", "返佣中心") : header.title}</h1>
+          <span>{section === "rebates" ? t("rebate.center.description", "分别查看个人购买返佣与商家销售返佣，两套等级和进度独立计算。") : header.description}</span>
         </div>
         <Icon size={34} weight="thin" />
       </div>

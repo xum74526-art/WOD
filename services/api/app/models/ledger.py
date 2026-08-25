@@ -15,6 +15,7 @@ class Ledger(Base):
         # SQLite/PostgreSQL both permit multiple NULLs in this constraint.
         UniqueConstraint("ref_payment_order_id", name="uq_ledger_payment_credit"),
         UniqueConstraint("ref_order_renewal_id", name="uq_ledger_order_renewal"),
+        UniqueConstraint("ref_reward_accrual_id", name="uq_ledger_reward_accrual"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -28,6 +29,9 @@ class Ledger(Base):
     ref_payment_order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ref_order_renewal_id: Mapped[int | None] = mapped_column(
         ForeignKey("order_renewals.id"), nullable=True,
+    )
+    ref_reward_accrual_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reward_accruals.id"), nullable=True,
     )
     # Durable idempotency key for non-payment money events such as withdrawal
     # freeze, unfreeze, and manual payout completion.

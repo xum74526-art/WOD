@@ -194,6 +194,30 @@ export function localizePersonName(value: string, lang: AppLanguage): string {
   return given ? `${surname} ${given.charAt(0).toUpperCase()}${given.slice(1)}` : surname
 }
 
+/**
+ * Localize a stored nickname for display without changing the account value.
+ * Once the user edits the field, their input is shown verbatim.
+ */
+export function profileUsernameDisplayValue(
+  originalUsername: string,
+  editedUsername: string,
+  usernameEdited: boolean,
+  lang: AppLanguage,
+): string {
+  return usernameEdited
+    ? editedUsername
+    : localizePersonName(originalUsername, lang)
+}
+
+/** Preserve the stored nickname when a localized display value was not edited. */
+export function profileUsernameSubmissionValue(
+  originalUsername: string,
+  editedUsername: string,
+  usernameEdited: boolean,
+): string {
+  return usernameEdited ? editedUsername : originalUsername
+}
+
 export function localizeCommunityText(value: string, lang: AppLanguage): string {
   if (!value || lang === 'zh') return value
   return COMMUNITY_EN[value] ?? translateGeneratedPost(value) ?? value

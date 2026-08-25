@@ -12,7 +12,13 @@
       <view class="card form">
         <view class="field">
           <text class="flabel">{{ t('k_23eb0e60') }}</text>
-          <input class="finput" v-model="form.username" :placeholder="t('k_916ff9ed')" placeholder-class="ph" />
+          <input
+            v-model="form.username"
+            class="finput"
+            :placeholder="t('k_916ff9ed')"
+            placeholder-class="ph"
+            @input="usernameEdited = true"
+          />
         </view>
         <view class="field">
           <text class="flabel">{{ t('k_8098e2b4') }}</text>
@@ -41,6 +47,8 @@ const { t } = i18n
 const userStore = useUserStore()
 const user = computed(() => userStore.userInfo)
 const form = reactive({ username: '' })
+const originalUsername = ref('')
+const usernameEdited = ref(false)
 const pendingAvatarPath = ref('')
 const avatarLoadFailed = ref(false)
 const avatarText = computed(() => localizePersonName(form.username || user.value?.username || 'W', i18n.lang).slice(0, 1).toUpperCase())
@@ -57,7 +65,9 @@ onShow(async () => {
   if (!userStore.userInfo) {
     try { await userStore.fetchProfile() } catch {}
   }
-  form.username = userStore.userInfo?.username || ''
+  originalUsername.value = userStore.userInfo?.username || ''
+  usernameEdited.value = false
+  form.username = localizePersonName(originalUsername.value, i18n.lang)
   pendingAvatarPath.value = ''
   avatarLoadFailed.value = false
 })
@@ -81,14 +91,15 @@ function changeAvatar() {
 
 async function onSave() {
   if (submitting.value) return
-  if (!form.username) { uni.showToast({ title: t('k_916ff9ed'), icon: 'none' }); return }
+  const username = usernameEdited.value ? form.username : originalUsername.value
+  if (!username) { uni.showToast({ title: t('k_916ff9ed'), icon: 'none' }); return }
   submitting.value = true
   try {
     if (pendingAvatarPath.value) {
       await userApi.uploadAvatar(pendingAvatarPath.value)
       pendingAvatarPath.value = ''
     }
-    await userApi.updateProfile({ username: form.username })
+    await userApi.updateProfile({ username })
     await userStore.fetchProfile()
     uni.showToast({ title: t('保存成功'), icon: 'success' })
     setTimeout(() => navigateBack(), 600)

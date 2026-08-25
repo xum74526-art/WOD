@@ -4,30 +4,31 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle, Cpu, HardDrives, ShieldCheck, TerminalWindow, Wallet, X } from "@phosphor-icons/react";
-import { ApiError, apiRequest, getCurrentUser, type AuthUser } from "@/lib/api";
+import { ApiError, getCurrentUser, type AuthUser } from "@/lib/api";
 import { createDirectOrder, getPublicProduct, type PublicProduct } from "@/lib/commerce-api";
 import { loginHref } from "@/lib/auth-navigation";
-import { canonicalApiPath } from "@/lib/canonical-api";
 import { ProductImage } from "@/components/product-image";
+import { getUserRebate, type RebateSummary } from "@/lib/mobile-business-api";
 import {
   clampPurchaseHours,
   estimateProductExpiryRebate,
   type ProductPurchaseType,
-  type ProductRebateSummary,
 } from "@/lib/product-purchase";
+import { useI18n } from "@/components/locale-root";
 
 const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168];
 
 export function ProductDetail({ productId }: { productId: string }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [product, setProduct] = useState<PublicProduct | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [rebate, setRebate] = useState<RebateSummary | null>(null);
   const [error, setError] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [purchaseHours, setPurchaseHours] = useState(24);
   const [quantity, setQuantity] = useState(1);
   const [purchaseType, setPurchaseType] = useState<ProductPurchaseType>("usage");
-  const [rebate, setRebate] = useState<ProductRebateSummary | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -41,13 +42,12 @@ export function ProductDetail({ productId }: { productId: string }) {
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "算力资源读取失败"));
     getCurrentUser()
-      .then(({ user: current }) => {
+      .then(async ({ user: current }) => {
         setUser(current);
-        return apiRequest<ProductRebateSummary>(canonicalApiPath("/user/rebate"))
-          .then(setRebate)
-          .catch(() => setRebate(null));
+        try { setRebate(await getUserRebate()); }
+        catch { setRebate(null); }
       })
-      .catch(() => setUser(null))
+      .catch(() => { setUser(null); setRebate(null); })
       .finally(() => setAuthLoading(false));
   }, [productId]);
 
@@ -59,6 +59,34 @@ export function ProductDetail({ productId }: { productId: string }) {
     () => estimateProductExpiryRebate(walletTotal, purchaseType, rebate),
     [purchaseType, rebate, walletTotal],
   );
+  const currentRebateRate = Number(rebate?.current_rate || 0);
+  const minimumRebateOrder = Number(rebate?.minimum_order_amount || 0);
+  const rebateCapRemaining = Number(rebate?.cap_remaining);
+  const rebateCapKnown = Number.isFinite(rebateCapRemaining) && rebateCapRemaining >= 0;
+  const uncappedRebateAmount = rebateEstimate.ratePercent > 0
+    ? Math.round(walletTotal * rebateEstimate.ratePercent) / 100
+    : 0;
+  const rebateCapLimited = rebateCapKnown && rebateEstimate.amount < uncappedRebateAmount;
+  const rebateAmountText = rebate?.rewards_enabled && rebateEstimate.ratePercent > 0
+    ? t("product.rebate.amount", "+{amount} 卡时", { amount: rebateEstimate.amount.toFixed(2) })
+    : "—";
+  const rebatePolicyText = !user
+    ? t("product.rebate.login", "登录后读取个人等级返佣政策。")
+    : !rebate
+      ? t("product.rebate.unavailable", "暂时无法读取个人返佣政策，请稍后刷新。")
+      : !rebate.rewards_enabled
+        ? t("product.rebate.disabled", "个人购买返佣当前未开启。")
+        : !rebateCapKnown
+          ? t("product.rebate.unavailable", "暂时无法读取个人返佣政策，请稍后刷新。")
+        : walletTotal < minimumRebateOrder
+          ? t("product.rebate.minimum", "当前个人等级 {current}%；订单满 {amount} 卡时后参与个人购买返佣。", { current: currentRebateRate, amount: minimumRebateOrder.toFixed(2) })
+          : rebateCapRemaining <= 0
+            ? t("product.rebate.capExhausted", "当前个人等级 {current}%，本单计入后预计 {projected}%；本月返佣额度已用完，本单预计返佣为 0。", { current: currentRebateRate, projected: rebateEstimate.ratePercent })
+            : rebateCapLimited
+              ? t("product.rebate.capLimited", "当前个人等级 {current}%，本单计入后预计 {projected}%；受本月剩余额度限制，当前最多预计返佣 {remaining} 卡时。", { current: currentRebateRate, projected: rebateEstimate.ratePercent, remaining: rebateCapRemaining.toFixed(2) })
+          : rebateEstimate.ratePercent !== currentRebateRate
+            ? t("product.rebate.tierChange", "当前个人等级 {current}%，本单计入后预计 {projected}%。", { current: currentRebateRate, projected: rebateEstimate.ratePercent })
+            : t("product.rebate.tierStable", "当前及本单预计个人等级均为 {rate}%。", { rate: rebateEstimate.ratePercent });
 
   function normalizeHours(value = purchaseHours) {
     setPurchaseHours(clampPurchaseHours(value));
@@ -116,10 +144,10 @@ export function ProductDetail({ productId }: { productId: string }) {
       <label>数量<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>{Array.from({ length: Math.min(Math.max(product.available_quantity, 1), 10) }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value} 台</option>)}</select></label>
       <label>购买模式<select value={purchaseType} onChange={(event) => setPurchaseType(event.target.value as ProductPurchaseType)}><option value="usage">使用</option><option value="holding">持有资产</option></select></label>
       <div className="purchase-total"><span>预计钱包扣款</span><strong>{walletTotal.toFixed(4)} 卡时</strong></div>
-      <div className="product-rebate-estimate"><span>到期预计返佣</span><strong>+{rebateEstimate.amount.toFixed(2)} 卡时</strong><small>{purchaseType === "holding" ? "持有资产不参与到期返佣" : !user ? "登录后读取返佣政策" : !rebate?.rewards_enabled ? "返佣计划当前未开启" : `按预计 ${rebateEstimate.ratePercent.toFixed(2)}% 计算，实际以到期结算为准`}</small></div>
+      {purchaseType === "usage" && <div className="product-rebate-estimate"><span>{t("product.rebate.label", "预计到期个人购买返佣")}</span><strong>{rebateAmountText}</strong><small>{rebatePolicyText}</small></div>}
       <button className="sandbox-purchase-button" type="button" disabled={!hourlyPurchase || busy || authLoading || Boolean(user && !product.purchasable)} onClick={beginPurchase}>{hourlyPurchase && product.purchasable && user && !busy ? <Wallet size={17}/> : <CheckCircle size={17}/>} {purchaseLabel}</button>
       <p>余额、冻结金额和订单都来自统一业务后端。余额不足时可前往钱包使用七相支付充值。</p>
       {error && <div className="commerce-error">{error}</div>}
     </aside>
-  </div>{confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setConfirmOpen(false); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label="关闭购买确认" disabled={busy} onClick={() => setConfirmOpen(false)}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">确认小时购买</h2><p>{product.name}</p><dl><div><dt>GPU / 数量</dt><dd>{product.gpu_model} × {quantity} 台</dd></div><div><dt>购买时长</dt><dd>{purchaseHours} 小时</dd></div><div><dt>购买模式</dt><dd>{purchaseType === "usage" ? "使用" : "持有资产"}</dd></div><div><dt>钱包扣款</dt><dd>{walletTotal.toFixed(4)} 卡时</dd></div>{purchaseType === "usage" && <div><dt>到期预计返佣</dt><dd>+{rebateEstimate.amount.toFixed(2)} 卡时</dd></div>}</dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={() => setConfirmOpen(false)}>返回修改</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? "正在创建订单…" : "确认并下单"}</button></div><small>订单按小时计费；返佣以资产到期后的服务端实际结算结果为准。</small></section></div>}</>;
+  </div>{confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setConfirmOpen(false); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label="关闭购买确认" disabled={busy} onClick={() => setConfirmOpen(false)}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">确认小时购买</h2><p>{product.name}</p><dl><div><dt>GPU / 数量</dt><dd>{product.gpu_model} × {quantity} 台</dd></div><div><dt>购买时长</dt><dd>{purchaseHours} 小时</dd></div><div><dt>购买模式</dt><dd>{purchaseType === "usage" ? "使用" : "持有资产"}</dd></div><div><dt>钱包扣款</dt><dd>{walletTotal.toFixed(4)} 卡时</dd></div>{purchaseType === "usage" && <div><dt>{t("product.rebate.label", "预计到期个人购买返佣")}</dt><dd>{rebateAmountText}</dd></div>}</dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={() => setConfirmOpen(false)}>返回修改</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? "正在创建订单…" : "确认并下单"}</button></div>{purchaseType === "usage" && <small>{t("product.rebate.settlement", "页面金额为预计值；确认交付时服务端会按个人等级和剩余额度最终重算，实际金额以资产到期结算为准。")}</small>}</section></div>}</>;
 }

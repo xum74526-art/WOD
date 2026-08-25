@@ -11,8 +11,9 @@ export interface RebateTier {
 }
 
 /**
- * Estimate the expiry rebate from the complete policy returned by the server.
- * No thresholds or minimums are duplicated here, so server policy remains authoritative.
+ * Estimate a usage-order rebate from the current server policy.
+ * The backend rechecks the tier and cap transactionally when delivery is
+ * confirmed, so this value is deliberately presented as an estimate.
  */
 export function estimateUsageExpiryRebate(
   orderAmount: number,
@@ -21,10 +22,12 @@ export function estimateUsageExpiryRebate(
   monthSpent: number,
   minimumOrderAmount: number,
   tiers: RebateTier[],
+  capRemaining: number,
 ): UsageRebateEstimate {
   const amount = Number(orderAmount)
   const spent = Number(monthSpent)
   const minimum = Number(minimumOrderAmount)
+  const remaining = Number(capRemaining)
   if (
     purchaseType !== 'usage'
     || !rewardsEnabled
@@ -35,6 +38,8 @@ export function estimateUsageExpiryRebate(
     || !Number.isFinite(minimum)
     || minimum < 0
     || amount < minimum
+    || !Number.isFinite(remaining)
+    || remaining <= 0
   ) {
     return { amount: 0, ratePercent: 0 }
   }
@@ -53,13 +58,11 @@ export function estimateUsageExpiryRebate(
       (left.max_month_spent ?? Number.POSITIVE_INFINITY)
       - (right.max_month_spent ?? Number.POSITIVE_INFINITY)
     ))
-    .find((tier) => (
-      tier.max_month_spent == null || projectedMonthlySpend <= Number(tier.max_month_spent)
-    ))
+    .find((tier) => tier.max_month_spent == null || projectedMonthlySpend <= Number(tier.max_month_spent))
   if (!projectedTier) return { amount: 0, ratePercent: 0 }
 
   const ratePercent = Number(projectedTier.rate)
-  const unrounded = amount * ratePercent / 100
+  const unrounded = Math.min(amount * ratePercent / 100, remaining)
   const scaled = unrounded * 100
   const floatingPointTolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4
   return {

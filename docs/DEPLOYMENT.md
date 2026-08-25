@@ -50,6 +50,25 @@ API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collec
 9. 确认稳定后清理源码目录内的 `node_modules`、`.next` 等可重建产物；至少保留当前和上一
    个稳定 release，不删除运行数据库、上传目录或未经确认的备份。
 
+### 返佣账务首次启用
+
+返佣升级包含新增 `reward_accruals` 表和 `ledger.ref_reward_accrual_id`，属于向后兼容的
+增量迁移。首次启用时必须按以下顺序操作：
+
+1. 先完成数据库备份，再在所有返佣开关关闭的情况下运行 `services/api/init_db.py`；
+2. 确认新表、账务引用列和唯一索引已创建，且新表初始没有意外的历史补录；
+3. 保持旧 `REWARD_SERVICE_ENABLED=false`、`CLOSED_TEST_REWARD_ENABLED=false`；
+4. 正式启用个人购买与商家销售时设置
+   `CONSUMER_REWARD_ENABLED=true`、`SUPPLIER_REWARD_ENABLED=true`、
+   `REWARD_SETTLEMENT_ENABLED=true`、`REWARD_TIMEZONE=Asia/Shanghai`；
+5. 邀请奖励是独立机制，除非另有业务批准，保持 `INVITE_REWARD_ENABLED=false`；
+6. 重启后检查 API 日志，并用只读查询确认同一业务事件只有一个计提记录、同一计提最多
+   只有一条钱包流水。
+
+程序会拒绝在旧返佣写入器开启时启动。新开关只影响之后确认的订单或续费，不自动追溯历史
+订单；暂停新计提时也不能删除已经生成的待结算义务。紧急情况下可单独关闭
+`REWARD_SETTLEMENT_ENABLED` 暂停入账，待问题确认后再恢复。
+
 Web standalone 必须在 Linux 上构建，不要把 macOS 产生的原生 Node 依赖直接上传到 Linux。
 
 ## 验收命令

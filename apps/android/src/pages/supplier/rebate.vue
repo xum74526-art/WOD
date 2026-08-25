@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <AppNavBar :title="t('k_ae9229c7')" />
+    <AppNavBar :title="t('merchantSalesRebate')" />
     <view class="shell">
       <view v-if="loading" class="load-state">{{ t('loading') }}</view>
       <view v-else-if="loadError" class="load-state load-error">
@@ -13,21 +13,21 @@
       <!-- 返佣看板 -->
       <view class="card hero">
         <view class="hero-main">
-          <text class="hero-label">{{ t('k_e08bcd4e') }}</text>
+          <text class="hero-label">{{ t('supplierMonthRebated') }}</text>
           <text class="hero-val up">{{ fmtCHn(info?.month_rebated ?? 0) }}</text>
         </view>
         <view class="hero-grid">
           <view class="hg-item">
-          <text class="hg-v">{{ formatNumber(info?.current_rate ?? 5) }}%</text>
-            <text class="hg-l">{{ t('k_cfc752a6') }}</text>
+          <text class="hg-v">{{ formatNumber(info?.current_rate ?? 0) }}%</text>
+            <text class="hg-l">{{ t('merchantSalesRebateTier') }}</text>
           </view>
           <view class="hg-item">
             <text class="hg-v">{{ fmtCHn(info?.month_sales ?? 0) }}</text>
-            <text class="hg-l">{{ t('k_e1e32957') }}</text>
+            <text class="hg-l">{{ t('confirmedSalesThisMonth') }}</text>
           </view>
           <view class="hg-item">
-            <text class="hg-v">{{ fmtCHn(info?.est_total_rebate ?? 0) }}</text>
-            <text class="hg-l">{{ t('k_cc3967b0') }}</text>
+            <text class="hg-v">{{ fmtCHn(estimatedSalesRebate) }}</text>
+            <text class="hg-l">{{ t('supplierEstimatedRebate') }}</text>
           </view>
         </view>
         <text class="hero-hint">{{ tr(info?.next_tier_hint || '') }}</text>
@@ -36,24 +36,23 @@
       <!-- 阶梯说明 -->
       <SectionHeader :title="t('k_88c1784e')" />
       <view class="card tier-card">
-        <view class="tier-row" v-for="tier in tiers" :key="tier.rate" :class="{ active: (info?.current_rate ?? 5) === tier.rate }">
+        <view class="tier-row" v-for="(tier, index) in tiers" :key="tier.rate" :class="{ active: info?.current_rate === tier.rate }">
           <view class="tier-left">
             <text class="tier-rate">{{ formatNumber(tier.rate) }}%</text>
-            <text class="tier-range">{{ t(tier.range) }}</text>
+            <text class="tier-range">{{ tierRange(tier, index) }}</text>
           </view>
-          <text v-if="(info?.current_rate ?? 5) === tier.rate" class="tier-tag">{{ t('k_48ac4797') }}</text>
+          <text v-if="info?.current_rate === tier.rate" class="tier-tag">{{ t('k_48ac4797') }}</text>
         </view>
       </view>
 
       <!-- 规则说明 -->
       <SectionHeader :title="t('k_9317c0d3')" />
       <view class="card rules-card">
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('k_f01375b8') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('服务费 = 订单卡时 × {rate}%', { rate: formatNumber(info?.service_fee_rate ?? 10) }) }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('返佣 = 服务费 × 对应阶梯比例') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('k_5b130763') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('每月返佣上限 {amount} 卡时', { amount: formatNumber(info?.monthly_cap ?? 2000) }) }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('k_c8d65559') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateConfirmedSalesRule') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateFormulaRule') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateTiersRule') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateNotServiceFeeRule') }}</text></view>
       </view>
 
       <!-- 返佣记录 -->
@@ -72,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getSupplierRebate, type SupplierRebate } from '@/api/supplier'
 import { getLedger, type LedgerItem } from '@/api/wallet'
@@ -82,19 +81,29 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 
-const { t, tr } = useI18nStore()
+const i18n = useI18nStore()
+const { t, tr } = i18n
 const info = ref<SupplierRebate | null>(null)
 const records = ref<LedgerItem[]>([])
 const loading = ref(true)
 const loadError = ref(false)
+const estimatedSalesRebate = computed(() => Number(info.value?.est_total_rebate ?? 0))
 
-const tiers = [
-  { rate: 5, range: '0 - 10,000 卡时' },
-  { rate: 8, range: '10,000 - 50,000 卡时' },
-  { rate: 11, range: '50,000 - 100,000 卡时' },
-  { rate: 13, range: '100,000 - 200,000 卡时' },
-  { rate: 15, range: '200,000+ 卡时' },
-]
+type SupplierTier = SupplierRebate['tiers'][number]
+const tiers = computed<SupplierTier[]>(() => info.value?.tiers ?? [])
+
+function tierRange(tier: SupplierTier, index: number) {
+  const previous = index > 0 ? tiers.value[index - 1]?.max_month_spent : null
+  const upper = tier.max_month_spent
+  if (i18n.lang === 'en') {
+    if (upper == null) return `Over ${formatNumber(previous ?? 0)} CH / month`
+    if (previous == null) return `Up to ${formatNumber(upper)} CH / month`
+    return `Over ${formatNumber(previous)} to ${formatNumber(upper)} CH / month`
+  }
+  if (upper == null) return `月累计超过 ${formatNumber(previous ?? 0)} 卡时`
+  if (previous == null) return `月累计不超过 ${formatNumber(upper)} 卡时`
+  return `月累计超过 ${formatNumber(previous)} 至 ${formatNumber(upper)} 卡时`
+}
 
 async function load() {
   loading.value = true

@@ -307,8 +307,8 @@ def supplier_wallet(user: User = Depends(get_current_user), db: Session = Depend
 @router.get("/rebate")
 def supplier_rebate(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """商家销售返佣概览"""
-    from app.services.supplier_rebate import get_supplier_rebate_summary
-    return success(get_supplier_rebate_summary(user.id, db))
+    from app.services.reward_entitlements import get_supplier_summary
+    return success(get_supplier_summary(user.id, db))
 
 
 @router.post("/withdraw")

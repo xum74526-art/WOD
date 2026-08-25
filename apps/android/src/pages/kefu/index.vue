@@ -6,7 +6,6 @@
       <view class="service-dot" :class="serviceMode"></view>
       <view class="service-copy">
         <text class="service-title">{{ serviceMode === 'ai_assisted' ? t('supportAiAssisted') : t('supportSelfService') }}</text>
-        <text class="service-note">{{ t('supportHumanNotConfigured') }}</text>
       </view>
       <view v-if="tickets.length" class="ticket-count" @tap="refreshTickets">
         {{ t('supportTicketsCount', { count: tickets.length }) }}
@@ -69,7 +68,6 @@
               <text class="created-ticket-title">{{ t('supportTicketCreated') }}</text>
               <text class="created-ticket-no">{{ message.ticket.ticket_no }}</text>
               <text class="created-ticket-status">{{ ticketStatusLabel(message.ticket.status) }}</text>
-              <text class="created-ticket-note">{{ t('supportTicketPendingNotice') }}</text>
             </view>
           </view>
         </template>
@@ -306,7 +304,6 @@ watch(() => i18n.lang, () => {
 .service-dot.ai_assisted { background: #0ea5a8; box-shadow: 0 0 0 8rpx rgba(14, 165, 168, .1); }
 .service-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4rpx; }
 .service-title { color: var(--text); font-size: 26rpx; font-weight: 700; }
-.service-note { color: var(--text-dim); font-size: 21rpx; }
 .ticket-count { flex-shrink: 0; color: var(--primary); font-size: 22rpx; padding: 10rpx 14rpx; border-radius: 16rpx; background: var(--primary-soft); }
 .tickets-strip { flex-shrink: 0; width: 100%; padding: 14rpx 0 2rpx; }
 .tickets-row { display: inline-flex; gap: 14rpx; padding: 0 28rpx; }
@@ -340,7 +337,6 @@ watch(() => i18n.lang, () => {
 .created-ticket-title { color: #775019; font-size: 22rpx; }
 .created-ticket-no { color: #3f2c0f; font-size: 24rpx; font-weight: 700; }
 .created-ticket-status { color: #a56512; font-size: 21rpx; }
-.created-ticket-note { width: 100%; color: #876d49; font-size: 20rpx; line-height: 1.5; }
 .typing { display: flex; gap: 8rpx; padding-top: 28rpx; padding-bottom: 28rpx; }
 .typing-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: var(--text-dim); animation: pulse 1s infinite ease-in-out; }
 .typing-dot:nth-child(2) { animation-delay: .15s; }

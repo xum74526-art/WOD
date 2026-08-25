@@ -1,9 +1,11 @@
-"""Reward-program mode and ledger naming.
+"""Reward-program mode, startup safety and ledger naming.
 
 The in-app reward mode credits nonwithdrawable card-hours only. It is deliberately
 separate from the future live settlement switch so historical synthetic
 reward rows never become spendable merely because the in-app program is enabled.
 """
+
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.config import settings
 
@@ -11,6 +13,10 @@ from app.core.config import settings
 REWARD_MODE_DISABLED = "disabled"
 REWARD_MODE_CLOSED_TEST = "test_card_hours"
 REWARD_MODE_LIVE = "live"
+
+PROGRAM_CONSUMER = "consumer_purchase"
+PROGRAM_SUPPLIER = "supplier_sales"
+PROGRAM_INVITE = "invite_first_order"
 
 _LIVE_LEDGER_TYPES = {
     "consumer": "rebate",
@@ -23,6 +29,62 @@ _TEST_LEDGER_TYPES = {
     "supplier": "test_supplier",
     "invite": "test_invite",
 }
+
+_PROGRAM_LEDGER_TYPES = {
+    PROGRAM_CONSUMER: "consumer_purchase_rebate",
+    PROGRAM_SUPPLIER: "supplier_sales_rebate",
+    PROGRAM_INVITE: "invite_first_order_reward",
+}
+
+_PROGRAM_PUBLIC_TYPES = {
+    PROGRAM_CONSUMER: "rebate",
+    PROGRAM_SUPPLIER: "supplier_rebate",
+    PROGRAM_INVITE: "invite_reward",
+}
+
+
+def program_enabled(program_code: str) -> bool:
+    switches = {
+        PROGRAM_CONSUMER: settings.CONSUMER_REWARD_ENABLED,
+        PROGRAM_SUPPLIER: settings.SUPPLIER_REWARD_ENABLED,
+        PROGRAM_INVITE: settings.INVITE_REWARD_ENABLED,
+    }
+    if program_code not in switches:
+        raise ValueError(f"unsupported reward program: {program_code}")
+    return bool(switches[program_code])
+
+
+def any_reward_program_enabled() -> bool:
+    return any(program_enabled(program) for program in _PROGRAM_LEDGER_TYPES)
+
+
+def assert_reward_configuration_safe() -> None:
+    """Reject mixed legacy/new writers before the API starts.
+
+    Legacy rewards use asset flags and non-versioned ledger references, while
+    the current programs use immutable accrual rows. Running both writers would
+    make one confirmed order eligible in two accounting systems.
+    """
+    legacy_enabled = bool(
+        settings.REWARD_SERVICE_ENABLED or settings.CLOSED_TEST_REWARD_ENABLED
+    )
+    if legacy_enabled:
+        raise RuntimeError(
+            "legacy reward writers are retired; enable only versioned reward programs"
+        )
+    try:
+        ZoneInfo(settings.REWARD_TIMEZONE)
+    except ZoneInfoNotFoundError as exc:
+        raise RuntimeError(
+            f"invalid REWARD_TIMEZONE: {settings.REWARD_TIMEZONE}"
+        ) from exc
+
+
+def program_ledger_type(program_code: str) -> str:
+    try:
+        return _PROGRAM_LEDGER_TYPES[program_code]
+    except KeyError as exc:
+        raise ValueError(f"unsupported reward program: {program_code}") from exc
 
 
 def reward_mode() -> str:
@@ -56,7 +118,12 @@ def ledger_filter_types(public_type: str) -> tuple[str, ...] | None:
     """Map the stable public filter to live and legacy in-app ledger rows."""
     for kind, live_type in _LIVE_LEDGER_TYPES.items():
         if public_type == live_type:
-            return live_type, _TEST_LEDGER_TYPES[kind]
+            new_types = tuple(
+                ledger_type
+                for program, ledger_type in _PROGRAM_LEDGER_TYPES.items()
+                if _PROGRAM_PUBLIC_TYPES[program] == public_type
+            )
+            return (live_type, _TEST_LEDGER_TYPES[kind], *new_types)
     return None
 
 
@@ -65,6 +132,9 @@ def is_test_reward_type(ledger_type: str) -> bool:
 
 
 def public_reward_type(ledger_type: str) -> str:
+    for program, program_type in _PROGRAM_LEDGER_TYPES.items():
+        if ledger_type == program_type:
+            return _PROGRAM_PUBLIC_TYPES[program]
     for kind, test_type in _TEST_LEDGER_TYPES.items():
         if ledger_type == test_type:
             return _LIVE_LEDGER_TYPES[kind]

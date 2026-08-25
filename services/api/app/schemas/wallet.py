@@ -28,4 +28,6 @@ class LedgerOut(OrmModel):
     remark: str | None = None
     ref_order_id: int | None = None
     ref_payment_order_id: int | None = None
+    ref_order_renewal_id: int | None = None
+    ref_reward_accrual_id: int | None = None
     created_at: datetime | None = None

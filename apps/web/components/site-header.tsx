@@ -142,7 +142,7 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
             >
               <DownloadSimple size={16}/>{t(item.key, item.label)}
             </Link>
-            {downloadOpen && <section className="download-popover" role="dialog" aria-label={locale === "en" ? "Download 北斗 kai App" : "下载北斗 kai App"} onMouseEnter={openDownloadPopover}>
+            {downloadOpen && <section className="download-popover" role="dialog" aria-label={locale === "en" ? "Download KAI App" : "下载北斗 kai App"} onMouseEnter={openDownloadPopover}>
               <div className="download-popover__scan">
                 <header><Phone size={21}/><strong>{locale === "en" ? "Mobile" : "手机版"}</strong></header>
                 <p>{locale === "en" ? "Scan to open the download page" : "扫码打开手机下载页"}</p>

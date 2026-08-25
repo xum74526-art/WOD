@@ -62,10 +62,10 @@
         </view>
       </view>
 
-      <!-- 商家返佣卡片（仅商家模式） -->
+      <!-- 商家销售返佣：按已确认销售卡时累计，和购买返佣独立。 -->
       <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('rebateSummary') }}</text>
+          <text class="rb-title">{{ t('supplierSalesRebateTitle') }}</text>
           <text v-if="supplierRebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -83,12 +83,13 @@
           </view>
         </view>
         <text class="rb-hint">{{ tr(supplierRebate.next_tier_hint) }}</text>
+        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatNumber(supplierRebate.monthly_cap) }) }}</text>
       </view>
 
-      <!-- 消费返佣卡片（仅个人模式） -->
-      <view v-if="role === 'personal' && rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
+      <!-- 个人购买返佣：商家作为买家时同样适用。 -->
+      <view v-if="rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('rebateCenter') }}</text>
+          <text class="rb-title">{{ t('personalPurchaseRebateTitle') }}</text>
           <text v-if="rebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -106,6 +107,7 @@
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
+        <text class="rb-explain">{{ t('personalPurchaseRebateCardHint', { cap: formatNumber(rebate.monthly_cap) }) }}</text>
       </view>
 
       <view v-for="group in widgetGroups" :key="group.key" class="card widget-card">
@@ -167,14 +169,14 @@ async function load() {
   if (userStore.role === 'supplier') {
     wallet.value = null
     invite.value = null
-    rebate.value = null
-    const [dashboardResult, walletResult, rebateResult] = await Promise.allSettled([
-      getDashboard(), getSupplierWallet(), getSupplierRebate(),
+    const [dashboardResult, walletResult, supplierRebateResult, personalRebateResult] = await Promise.allSettled([
+      getDashboard(), getSupplierWallet(), getSupplierRebate(), getRebateSummary(),
     ])
     dash.value = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null
     supplierWallet.value = walletResult.status === 'fulfilled' ? walletResult.value : null
-    supplierRebate.value = rebateResult.status === 'fulfilled' ? rebateResult.value : null
-    loadError.value = [dashboardResult, walletResult, rebateResult].some((result) => result.status === 'rejected')
+    supplierRebate.value = supplierRebateResult.status === 'fulfilled' ? supplierRebateResult.value : null
+    rebate.value = personalRebateResult.status === 'fulfilled' ? personalRebateResult.value : null
+    loadError.value = [dashboardResult, walletResult, supplierRebateResult, personalRebateResult].some((result) => result.status === 'rejected')
   } else {
     dash.value = null
     supplierWallet.value = null
@@ -268,6 +270,7 @@ async function onSwitchRole() {
 .rb-v.up { color: var(--up); }
 .rb-l { display: block; color: var(--text-sub); font-size: 20rpx; margin-top: 6rpx; }
 .rb-hint { display: block; color: var(--primary); font-size: 22rpx; margin-top: 16rpx; text-align: center; }
+.rb-explain { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.5; margin-top: 12rpx; text-align: center; }
 .g-item { width: 25%; display: flex; flex-direction: column; align-items: center; padding: 24rpx 0; color: var(--primary); }
 .g-icon { margin-bottom: 14rpx; }
 .g-text { color: var(--text); font-size: 24rpx; text-align: center; }

@@ -38,7 +38,8 @@ def _asset_out(a: Asset, db: Session) -> dict:
     ).scalar()
     out["historical_test_revenue"] = round(float(total_rev), 4)
     out["revenue_settlement_enabled"] = settings.REVENUE_SETTLEMENT_ENABLED
-    out["reward_service_enabled"] = settings.REWARD_SERVICE_ENABLED
+    from app.services.reward_program import PROGRAM_CONSUMER, program_enabled
+    out["reward_service_enabled"] = program_enabled(PROGRAM_CONSUMER)
     out["today_revenue"] = round(float(today_rev), 4) if settings.REVENUE_SETTLEMENT_ENABLED else 0
     out["accumulated_revenue"] = round(float(total_rev), 4) if settings.REVENUE_SETTLEMENT_ENABLED else 0
     if a.end_at and a.status == "active":
@@ -94,13 +95,15 @@ def asset_detail(aid: int, user: User = Depends(get_current_user), db: Session =
         out["pnl_pct"] = None
         out["can_sell"] = False
         out["trading_unavailable_reason"] = "持有交易与二级市场尚未接入"
-    # 返佣信息
+    # Legacy asset flags remain visible only as historical audit data. Current
+    # rewards are derived exclusively from versioned accrual rows.
     out["historical_test_reward"] = a.rebate_amount if a.rebate_status == "rewarded" else 0
-    out["rebate_status"] = a.rebate_status if settings.REWARD_SERVICE_ENABLED else None
-    out["rebate_amount"] = a.rebate_amount if settings.REWARD_SERVICE_ENABLED else None
-    if settings.REWARD_SERVICE_ENABLED and a.rebate_status == "pending" and a.status == "active":
-        from app.services.rebate_settle import get_rebate_summary
-        out["rebate_info"] = get_rebate_summary(a.user_id, db)
+    from app.services.reward_entitlements import get_asset_consumer_reward, get_consumer_summary
+    reward = get_asset_consumer_reward(a.id, db)
+    out["rebate_status"] = reward["rebate_status"] if reward else None
+    out["rebate_amount"] = reward["rebate_amount"] if reward else None
+    if reward:
+        out["rebate_info"] = {**get_consumer_summary(a.user_id, db), **reward}
     return success(out)
 
 

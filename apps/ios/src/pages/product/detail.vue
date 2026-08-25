@@ -107,6 +107,7 @@
         <view class="row" v-if="purchaseType === 'usage' && rebate && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} ({{ formatNumber(estRebateRate) }}%)</text></view>
         <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
       </view>
+      <text v-if="canBuy && purchaseType === 'usage' && rebate?.rewards_enabled" class="rebate-estimate-note">{{ t('rebateEstimateCheckoutNotice') }}</text>
       <view v-if="canBuy" class="risk">{{ t(purchaseType === 'holding' ? 'holdingRisk' : 'usageRisk') }}</view>
     </scroll-view>
     <BottomActionBar v-if="product">
@@ -379,6 +380,7 @@ const rebateEstimate = computed(() => estimateUsageExpiryRebate(
   Number(rebate.value?.month_spent ?? 0),
   Number(rebate.value?.minimum_order_amount ?? Number.NaN),
   rebate.value?.tiers ?? [],
+  Number(rebate.value?.cap_remaining ?? Number.NaN),
 ))
 const estRebateRate = computed(() => rebateEstimate.value.ratePercent)
 const estRebate = computed(() => rebateEstimate.value.amount)
@@ -484,6 +486,7 @@ function goStore() {
 .mode-card.active .mode-title { color: var(--primary); }
 .mode-desc { color: var(--text-sub); font-size: 22rpx; line-height: 1.5; }
 .fee { padding: 8rpx 32rpx; margin-bottom: 24rpx; }
+.rebate-estimate-note { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.55; padding: 0 8rpx 8rpx; }
 .risk { color: var(--text-dim); font-size: 24rpx; padding: 16rpx 8rpx; line-height: 1.6; }
 .buy-btn { background: var(--primary); color: #fff; text-align: center; padding: 28rpx 0; border-radius: var(--radius); font-size: 32rpx; font-weight: 600; }
 .buy-btn.disabled { opacity: 0.5; }

@@ -24,11 +24,14 @@ from app.services.wallet_balance import (
     spendable_wallet_balance,
 )
 from app.services.reward_program import (
-    REWARD_MODE_CLOSED_TEST,
     ledger_filter_types,
     public_reward_type,
-    reward_mode,
     reward_program_enabled,
+    any_reward_program_enabled,
+    program_enabled,
+    PROGRAM_CONSUMER,
+    PROGRAM_SUPPLIER,
+    PROGRAM_INVITE,
 )
 
 router = APIRouter(prefix="/api/wallet", tags=["wallet"])
@@ -61,8 +64,12 @@ def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(ge
         "historical_test_revenue": round(float(historical_income), 2),
         "historical_test_rewards": round(float(historical_rewards), 2),
         "revenue_settlement_enabled": settings.REVENUE_SETTLEMENT_ENABLED,
-        "reward_service_enabled": reward_program_enabled(),
-        "reward_mode": reward_mode(),
+        "reward_service_enabled": any_reward_program_enabled(),
+        "consumer_reward_enabled": program_enabled(PROGRAM_CONSUMER),
+        "supplier_reward_enabled": program_enabled(PROGRAM_SUPPLIER),
+        "invite_reward_enabled": program_enabled(PROGRAM_INVITE),
+        "legacy_reward_service_enabled": reward_program_enabled(),
+        "reward_mode": "live" if any_reward_program_enabled() else "disabled",
         "has_bank_card": has_bank_card,
         # Kept for old clients; it now means recharge collection only.
         "payment_service_enabled": provider_configured(),

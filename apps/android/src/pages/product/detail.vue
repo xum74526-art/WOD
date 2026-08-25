@@ -104,8 +104,10 @@
         <view class="row"><text class="sk">{{ t('purchaseDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ t('sshDelivery') }}</text></view>
-        <view class="row" v-if="purchaseType === 'usage' && rebate && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} ({{ formatNumber(estRebateRate) }}%)</text></view>
+        <view class="row" v-if="purchaseType === 'usage' && estRebate > 0"><text class="sk">{{ t('personalPurchaseRebateTier') }}</text><text class="sv">{{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text></view>
+        <view class="row" v-if="purchaseType === 'usage' && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text></view>
         <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
+        <text v-if="purchaseType === 'usage' && estRebate > 0" class="rebate-estimate-hint">{{ t('personalRebateEstimateHint') }}</text>
       </view>
       <view v-if="canBuy" class="risk">{{ t(purchaseType === 'holding' ? 'holdingRisk' : 'usageRisk') }}</view>
     </scroll-view>
@@ -120,7 +122,7 @@
       </view>
       <view v-if="purchaseType === 'usage' && estRebate > 0" class="confirm-fee">
         <text>{{ t('estimatedExpiryRebate') }}</text>
-        <text class="cf-val">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text>
+        <text class="cf-val">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} · {{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text>
       </view>
     </ConfirmSheet>
   </view>
@@ -379,6 +381,7 @@ const rebateEstimate = computed(() => estimateUsageExpiryRebate(
   Number(rebate.value?.month_spent ?? 0),
   Number(rebate.value?.minimum_order_amount ?? Number.NaN),
   rebate.value?.tiers ?? [],
+  Number(rebate.value?.cap_remaining ?? Number.NaN),
 ))
 const estRebateRate = computed(() => rebateEstimate.value.ratePercent)
 const estRebate = computed(() => rebateEstimate.value.amount)
@@ -453,6 +456,7 @@ function goStore() {
 .sv { color: var(--text); font-size: 28rpx; font-variant-numeric: tabular-nums; }
 .sv.stale { color: var(--down); }
 .up { color: var(--up); }
+.rebate-estimate-hint { display: block; padding: 4rpx 0 24rpx; color: var(--text-sub); font-size: 22rpx; line-height: 1.55; }
 .offer-warning { color: var(--down); background: rgba(217, 72, 72, 0.08); border: 1rpx solid rgba(217, 72, 72, 0.22); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
 .provider-notice { color: var(--text-sub); background: var(--primary-soft); border: 1rpx solid var(--card-border); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
 .duration-card { margin-bottom: 24rpx; padding: 24rpx; background: var(--card); border: 1rpx solid var(--border); border-radius: var(--radius); }

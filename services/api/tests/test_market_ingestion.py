@@ -1,6 +1,5 @@
 import unittest
 from copy import deepcopy
-from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -117,7 +116,10 @@ class MarketIngestionApiTests(unittest.TestCase):
         self.assertEqual(self.post(payload("vast:on-demand:snapshot-a", 101)).status_code, 200)
         second = payload("vast:on-demand:snapshot-b", 202)
         second["sync_mode"] = "snapshot"
-        second["observed_at"] = datetime.now(timezone.utc).isoformat()
+        # Keep both fixtures inside the hard-delete retention window. Using the
+        # real clock here made this deactivation test start deleting offer 101
+        # once the fixed first fixture became old enough.
+        second["observed_at"] = "2026-08-22T12:05:00Z"
         self.assertEqual(self.post(second).status_code, 200)
         db = self.Session()
         self.assertFalse(db.query(VastOffer).filter(VastOffer.external_offer_id == 101).one().active)

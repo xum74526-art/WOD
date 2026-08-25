@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api";
 import { canonicalApiPath } from "@/lib/canonical-api";
+import type { RebateTier } from "@/lib/product-purchase";
 
 
 export type MobileAsset = {
@@ -64,12 +65,20 @@ export type RevenuePoint = { date: string; amount: number };
 export type RevenueRecord = { id: number; asset_id?: number; amount: number; date?: string; created_at?: string };
 
 export type RebateSummary = {
+  program_code: "consumer_purchase_rebate";
+  policy_version: string;
+  period_key: string;
   month_spent: number;
   month_rebated: number;
+  month_entitled: number;
   current_rate: number;
+  minimum_order_amount: number;
+  tiers: RebateTier[];
   next_tier_hint: string;
   pending_rebate: number;
   monthly_cap: number;
+  cap_used: number;
+  cap_remaining: number;
   rewards_enabled: boolean;
   reward_mode: "disabled" | "test_card_hours" | "live";
 };
@@ -266,13 +275,21 @@ export type MobileStore = {
 };
 
 export type SupplierRebate = {
+  program_code: "supplier_sales_rebate";
+  policy_version: string;
+  period_key: string;
   month_sales: number;
   month_rebated: number;
+  month_entitled: number;
+  pending_rebate: number;
   current_rate: number;
+  tiers: RebateTier[];
+  monthly_target: number;
   est_total_rebate: number;
   next_tier_hint: string;
   monthly_cap: number;
-  service_fee_rate: number;
+  cap_used: number;
+  cap_remaining: number;
   rewards_enabled: boolean;
   reward_mode: "disabled" | "test_card_hours" | "live";
 };
@@ -358,8 +375,12 @@ export function getRevenueBundle(range = 30) {
     apiRequest<RevenueSummary>(canonicalApiPath("/revenue")),
     apiRequest<RevenuePoint[]>(canonicalApiPath(`/revenue/chart?range_days=${range}`)),
     apiRequest<RevenueRecord[]>(canonicalApiPath("/revenue/records")),
-    apiRequest<RebateSummary>(canonicalApiPath("/user/rebate")),
+    getUserRebate(),
   ]);
+}
+
+export function getUserRebate() {
+  return apiRequest<RebateSummary>(canonicalApiPath("/user/rebate"));
 }
 
 export function getInviteBundle() {

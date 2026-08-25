@@ -14,9 +14,9 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
 };
 export const unitLabel: Record<string, string> = { server_hour: "整机·小时", gpu_hour: "GPU·小时", gpu_day: "GPU·天", unit: "台" };
 
-export function formatDate(value?: string | null) {
+export function formatDate(value?: string | null, locale = "zh-CN") {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 export function formatMoney(amount: string | null, currency: string, unit: string) {

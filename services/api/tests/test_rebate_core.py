@@ -8,14 +8,19 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import Asset, Ledger, Order, Product, Supplier, User, Wallet  # noqa: F401
+from app.models import Asset, Ledger, Order, Product, RewardAccrual, Supplier, User, Wallet  # noqa: F401
 from app.models.invite import InviteCode, InviteRecord
 from app.routers.invite import process_first_order_reward, summary
 from app.routers.order import confirm_delivery, create_order, deliver_ssh
 from app.routers.wallet import WithdrawInV2, ledger_list, withdraw
 from app.schemas.order import OrderCreateIn
-from app.services.rebate_settle import get_rebate_summary, settle_rebates
-from app.services.supplier_rebate import get_supplier_rebate_summary, process_supplier_rebate
+from app.services.reward_entitlements import (
+    create_supplier_order_accrual,
+    get_asset_consumer_reward,
+    get_consumer_summary,
+    get_supplier_summary,
+    settle_reward_entitlements,
+)
 from app.utils.response import BizError
 
 
@@ -32,8 +37,16 @@ class RebateCoreTests(unittest.TestCase):
         self.original_test = settings.CLOSED_TEST_REWARD_ENABLED
         self.original_payment = settings.PAYMENT_SERVICE_ENABLED
         self.original_revenue_settlement = settings.REVENUE_SETTLEMENT_ENABLED
+        self.original_consumer = settings.CONSUMER_REWARD_ENABLED
+        self.original_supplier = settings.SUPPLIER_REWARD_ENABLED
+        self.original_invite = settings.INVITE_REWARD_ENABLED
+        self.original_reward_settlement = settings.REWARD_SETTLEMENT_ENABLED
         settings.REWARD_SERVICE_ENABLED = False
-        settings.CLOSED_TEST_REWARD_ENABLED = True
+        settings.CLOSED_TEST_REWARD_ENABLED = False
+        settings.CONSUMER_REWARD_ENABLED = True
+        settings.SUPPLIER_REWARD_ENABLED = True
+        settings.INVITE_REWARD_ENABLED = True
+        settings.REWARD_SETTLEMENT_ENABLED = True
         settings.REVENUE_SETTLEMENT_ENABLED = False
 
         self.inviter = User(
@@ -89,6 +102,10 @@ class RebateCoreTests(unittest.TestCase):
         settings.CLOSED_TEST_REWARD_ENABLED = self.original_test
         settings.PAYMENT_SERVICE_ENABLED = self.original_payment
         settings.REVENUE_SETTLEMENT_ENABLED = self.original_revenue_settlement
+        settings.CONSUMER_REWARD_ENABLED = self.original_consumer
+        settings.SUPPLIER_REWARD_ENABLED = self.original_supplier
+        settings.INVITE_REWARD_ENABLED = self.original_invite
+        settings.REWARD_SETTLEMENT_ENABLED = self.original_reward_settlement
         self.db.close()
 
     def _complete_order(self) -> int:
@@ -107,50 +124,64 @@ class RebateCoreTests(unittest.TestCase):
     def test_confirmed_order_drives_all_three_reward_views(self):
         order_id = self._complete_order()
         asset = self.db.query(Asset).filter(Asset.order_id == order_id).one()
-        self.assertEqual(asset.rebate_status, "pending")
-        self.assertEqual(Decimal(str(asset.rebate_amount)), Decimal("0.43"))
+        self.assertIsNone(asset.rebate_status)
+        self.assertEqual(Decimal(str(asset.rebate_amount)), Decimal("0"))
+        asset_reward = get_asset_consumer_reward(asset.id, self.db)
+        self.assertEqual(asset_reward["rebate_status"], "pending")
+        self.assertEqual(Decimal(str(asset_reward["rebate_amount"])), Decimal("0.43"))
 
-        consumer = get_rebate_summary(self.buyer.id, self.db)
-        merchant = get_supplier_rebate_summary(self.seller.id, self.db)
+        consumer = get_consumer_summary(self.buyer.id, self.db)
+        merchant = get_supplier_summary(self.seller.id, self.db)
         invite = summary(self.inviter, self.db)["data"]
-        self.assertEqual(consumer["reward_mode"], "test_card_hours")
+        self.assertEqual(consumer["reward_mode"], "live")
         self.assertEqual(consumer["month_spent"], 14.4)
         self.assertEqual(consumer["pending_rebate"], 0.43)
-        self.assertEqual(consumer["minimum_order_amount"], 10.0)
+        self.assertEqual(consumer["minimum_order_amount"], 0.0)
         self.assertEqual(consumer["tiers"], [
-            {"max_month_spent": 10000.0, "rate": 3},
-            {"max_month_spent": 50000.0, "rate": 5},
-            {"max_month_spent": 100000.0, "rate": 7},
-            {"max_month_spent": None, "rate": 10},
+            {"max_month_spent": 10000.0, "rate": 3, "rate_bps": 300},
+            {"max_month_spent": 50000.0, "rate": 5, "rate_bps": 500},
+            {"max_month_spent": 100000.0, "rate": 7, "rate_bps": 700},
+            {"max_month_spent": None, "rate": 10, "rate_bps": 1000},
         ])
         self.assertEqual(merchant["month_sales"], 14.4)
-        self.assertEqual(merchant["month_rebated"], 0.07)
+        self.assertEqual(merchant["month_rebated"], 0.72)
+        self.assertEqual(merchant["month_entitled"], 0.72)
         self.assertEqual(invite["current_tier"], "15%")
         self.assertEqual(invite["total_reward"], 2.16)
 
     def test_reward_credit_is_idempotent_and_matches_ledger(self):
         order_id = self._complete_order()
         self.assertEqual(process_first_order_reward(self.buyer.id, order_id, self.db), Decimal("0"))
-        self.assertEqual(process_supplier_rebate(self.seller.id, order_id, self.db), Decimal("0"))
+        order = self.db.query(Order).filter(Order.id == order_id).one()
+        self.assertIsNotNone(
+            create_supplier_order_accrual(order, datetime.now(timezone.utc), self.db),
+        )
 
         asset = self.db.query(Asset).filter(Asset.order_id == order_id).one()
         asset.end_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        self.db.query(RewardAccrual).filter(
+            RewardAccrual.asset_id == asset.id,
+        ).update({RewardAccrual.due_at: asset.end_at}, synchronize_session=False)
         self.db.commit()
-        self.assertEqual(settle_rebates(self.db), 1)
+        self.assertEqual(settle_reward_entitlements(self.db), 1)
         self.db.commit()
-        self.assertEqual(settle_rebates(self.db), 0)
+        self.assertEqual(settle_reward_entitlements(self.db), 0)
         self.db.commit()
 
         rewards = self.db.query(Ledger).filter(
             Ledger.ref_order_id == order_id,
-            Ledger.type.in_(["test_rebate", "test_supplier", "test_invite"]),
+            Ledger.type.in_([
+                "consumer_purchase_rebate",
+                "supplier_sales_rebate",
+                "invite_first_order_reward",
+            ]),
         ).all()
         self.assertEqual(len(rewards), 3)
-        self.assertEqual(sum((row.amount for row in rewards), Decimal("0")), Decimal("2.6600"))
+        self.assertEqual(sum((row.amount for row in rewards), Decimal("0")), Decimal("3.3100"))
         self.assertEqual(
             self.db.query(Ledger).filter(
                 Ledger.ref_order_id == order_id,
-                Ledger.type == "test_rebate",
+                Ledger.type == "consumer_purchase_rebate",
             ).count(),
             1,
         )
@@ -185,6 +216,15 @@ class RebateCoreTests(unittest.TestCase):
                 balance_after=wallet.balance,
                 remark="legacy reward",
             ),
+            Ledger(
+                user_id=self.buyer.id,
+                wallet_id=wallet.id,
+                type="test_rebate",
+                direction="in",
+                amount=Decimal("3"),
+                balance_after=wallet.balance,
+                remark="legacy closed-test reward",
+            ),
         ])
         self.db.commit()
 
@@ -192,6 +232,7 @@ class RebateCoreTests(unittest.TestCase):
         remarks = {row["type"]: row["remark"] for row in rows}
         self.assertEqual(remarks["test_revenue"], "历史未结算收益（不计入当前可用余额）")
         self.assertEqual(remarks["test_reward"], "历史不可用奖励（不计入当前可用余额或权益）")
+        self.assertEqual(sum(row["type"] == "test_reward" for row in rows), 2)
         self.assertNotIn("测试", "".join(remarks.values()))
 
     def test_unverified_relationship_is_visible_but_never_rewarded(self):
@@ -202,7 +243,7 @@ class RebateCoreTests(unittest.TestCase):
         order_id = self._complete_order()
         self.assertEqual(self.db.query(Ledger).filter(
             Ledger.ref_order_id == order_id,
-            Ledger.type == "test_invite",
+            Ledger.type == "invite_first_order_reward",
         ).count(), 0)
         self.db.refresh(relation)
         self.assertEqual(relation.status, "unverified")
@@ -221,14 +262,21 @@ class RebateCoreTests(unittest.TestCase):
         asset = self.db.query(Asset).filter(Asset.order_id == order_id).one()
         self.assertEqual(asset.quantity, 2)
         self.assertEqual(Decimal(str(asset.value)), Decimal("14.4000"))
-        self.assertEqual(Decimal(str(asset.rebate_amount)), Decimal("0.86"))
+        self.assertEqual(Decimal(str(asset.rebate_amount)), Decimal("0"))
+        self.assertEqual(
+            Decimal(str(get_asset_consumer_reward(asset.id, self.db)["rebate_amount"])),
+            Decimal("0.86"),
+        )
         asset.end_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        self.db.query(RewardAccrual).filter(
+            RewardAccrual.asset_id == asset.id,
+        ).update({RewardAccrual.due_at: asset.end_at}, synchronize_session=False)
         self.db.commit()
-        self.assertEqual(settle_rebates(self.db), 1)
+        self.assertEqual(settle_reward_entitlements(self.db), 1)
         self.db.commit()
         ledger = self.db.query(Ledger).filter(
             Ledger.ref_order_id == order_id,
-            Ledger.type == "test_rebate",
+            Ledger.type == "consumer_purchase_rebate",
         ).one()
         self.assertEqual(ledger.amount, Decimal("0.8600"))
 

@@ -52,7 +52,7 @@ _ENSURE = {
         "reviewed_by", "reviewed_at", "updated_at", "created_platform",
         "last_modified_platform",
     ],
-    "ledger": ["ref_payment_order_id", "ref_order_renewal_id", "event_key"],
+    "ledger": ["ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id", "event_key"],
     "payment_orders": [
         "provider_checkout_url", "checkout_started_at", "created_platform",
         "last_modified_platform",
@@ -72,7 +72,7 @@ _DATETIME_COLS = {
 }
 _INTEGER_COLS = {
     "quantity", "purchase_hours", "video_duration", "stock", "supplier_id",
-    "ref_payment_order_id", "ref_order_renewal_id", "reviewed_by", "user_id",
+    "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id", "reviewed_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
 }
 _NUMERIC_COLS = {"sell_price", "source_price", "exchange_rate", "reliability", "withdrawable_balance", "withdraw_frozen"}
@@ -940,6 +940,10 @@ def init():
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_order_renewal "
             "ON ledger (ref_order_renewal_id) WHERE ref_order_renewal_id IS NOT NULL"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_reward_accrual "
+            "ON ledger (ref_reward_accrual_id) WHERE ref_reward_accrual_id IS NOT NULL"
         ))
     _migrate_offline_purchases()
     _migrate_legacy_market_history()

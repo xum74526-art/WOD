@@ -101,8 +101,12 @@ export interface ConsumerRebateTier {
 }
 
 export interface RebateSummary {
+  program_code: 'consumer_purchase_rebate'
+  policy_version: string
+  period_key: string
   month_spent: number
   month_rebated: number
+  month_entitled: number
   current_rate: number
   minimum_order_amount: number
   tiers: ConsumerRebateTier[]
@@ -111,6 +115,8 @@ export interface RebateSummary {
   rewards_enabled: boolean
   reward_mode: 'disabled' | 'test_card_hours' | 'live'
   monthly_cap: number
+  cap_used: number
+  cap_remaining: number
 }
 
 export function getRebateSummary() {

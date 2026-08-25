@@ -82,13 +82,22 @@ export function getRevenueDetail() {
 }
 
 export interface SupplierRebate {
+  program_code: 'supplier_sales_rebate'
+  policy_version: string
+  period_key: string
   month_sales: number
   month_rebated: number
+  month_entitled: number
+  pending_rebate: number
   current_rate: number
+  tiers: { max_month_spent: number | null; rate: number; rate_bps?: number }[]
+  monthly_target: number
   est_total_rebate: number
   next_tier_hint: string
   monthly_cap: number
   service_fee_rate: number
+  cap_used: number
+  cap_remaining: number
   rewards_enabled: boolean
   reward_mode: 'disabled' | 'test_card_hours' | 'live'
 }

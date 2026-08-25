@@ -16,7 +16,8 @@ from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
 from app.services.market_candle_sync import dispatch_market_candle_sync, sync_market_candles
-from app.services.rebate_settle import settle_rebate
+from app.services.reward_entitlements import settle_reward_entitlements_job
+from app.services.reward_program import assert_reward_configuration_safe
 from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
 from app.services.notification_service import sync_operational_notifications
 from app.utils.response import BizError, error
@@ -27,6 +28,10 @@ async def lifespan(app: FastAPI):
     # Never start PII-bearing capabilities with the source default JWT secret
     # or without a separate valid Fernet key.
     assert_sensitive_capabilities_secure()
+    # A confirmed order must never enter both the legacy and versioned reward
+    # writers. Fail closed before any scheduler starts if deployment flags are
+    # inconsistent.
+    assert_reward_configuration_safe()
     try:
         community_timezone = ZoneInfo(settings.COMMUNITY_TIMEZONE)
     except ZoneInfoNotFoundError:
@@ -55,7 +60,15 @@ async def lifespan(app: FastAPI):
         coalesce=True,
         max_instances=1,
     )
-    scheduler.add_job(settle_rebate, "interval", seconds=300, id="settle_rebate")
+    scheduler.add_job(
+        settle_reward_entitlements_job,
+        "interval",
+        seconds=300,
+        id="settle_reward_entitlements",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
     # First-party inbox event synchronization. This does not claim or require
     # native OS push delivery; each event is idempotent through a dedupe key.
     scheduler.add_job(

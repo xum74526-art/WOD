@@ -161,8 +161,8 @@ def switch_role(user: User = Depends(get_current_user), db: Session = Depends(ge
 @router.get("/rebate")
 def rebate_summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """消费返佣概览"""
-    from app.services.rebate_settle import get_rebate_summary
-    return success(get_rebate_summary(user.id, db))
+    from app.services.reward_entitlements import get_consumer_summary
+    return success(get_consumer_summary(user.id, db))
 
 
 @router.post("/password")

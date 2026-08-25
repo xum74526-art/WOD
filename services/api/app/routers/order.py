@@ -30,6 +30,12 @@ from app.services.auth_session import PLATFORMS
 from app.services.market_freshness import product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.product_purchase import product_purchase_availability
+from app.services.reward_entitlements import (
+    create_consumer_order_accrual,
+    create_consumer_renewal_accrual,
+    create_supplier_order_accrual,
+    create_supplier_renewal_accrual,
+)
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.response import BizError, success
 
@@ -399,7 +405,9 @@ def confirm_delivery(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    o = db.query(Order).filter(Order.id == oid, Order.user_id == user.id).first()
+    o = db.query(Order).filter(
+        Order.id == oid, Order.user_id == user.id,
+    ).with_for_update().first()
     if not o:
         raise BizError("订单不存在", status_code=404)
     if o.status != "delivering":
@@ -439,15 +447,6 @@ def confirm_delivery(
         ))
     # SSH 交付证明使用权，不代表平台已接入真实算力收益结算。
     daily_rate = Decimal("0")
-    # Consumer rebates are derived from the confirmed order amount and the
-    # user's current monthly tier. In-app rewards are card-hours only.
-    p = db.query(Product).filter(Product.id == o.product_id).first()
-    from app.services.rebate_settle import estimate_completed_order_rebate
-    from app.services.reward_program import reward_program_enabled
-    program_enabled = reward_program_enabled()
-    reward_eligible = bool(program_enabled and o.purchase_type == "usage")
-    db.flush()
-    est_rebate = float(estimate_completed_order_rebate(o, db)) if reward_eligible else 0
     quantity = max(int(o.quantity or 1), 1)
     unit_value = (Decimal(o.amount) / Decimal(quantity)).quantize(Decimal("0.0001"))
     asset = Asset(
@@ -455,22 +454,21 @@ def confirm_delivery(
         quantity=quantity, value=unit_value, daily_rate=daily_rate, status="active",
         start_at=now, end_at=o.end_at,
         purchase_type=o.purchase_type or "usage",
-        rebate_status="pending" if reward_eligible else None,
-        rebate_amount=est_rebate,
+        # New rewards live in versioned reward_accruals.  Leaving the legacy
+        # fields empty prevents old synthetic rows from being reactivated.
+        rebate_status=None,
+        rebate_amount=0,
     )
     db.add(asset)
+    db.flush()
 
-    # Invite and merchant rewards join the same transaction as delivery
-    # confirmation.  Repeating a service call for the same order is harmless.
+    # Each program has its own switch and durable idempotency key. Consumer
+    # rewards settle at the final usage expiry; seller rewards are based on
+    # confirmed monthly sales card-hours and settle immediately.
+    create_consumer_order_accrual(o, asset, now, db)
+    create_supplier_order_accrual(o, now, db)
     from app.routers.invite import process_first_order_reward
-    if program_enabled:
-        process_first_order_reward(o.user_id, o.id, db)
-    from app.services.supplier_rebate import process_supplier_rebate
-    if program_enabled and p and p.supplier_id:
-        from app.models.supplier import Supplier
-        s = db.query(Supplier).filter(Supplier.id == p.supplier_id).first()
-        if s:
-            process_supplier_rebate(s.user_id, o.id, db)
+    process_first_order_reward(o.user_id, o.id, db)
     try:
         db.commit()
     except Exception:
@@ -632,6 +630,9 @@ def renew_order(
                 remark=f"续费 {p.name} × {quantity} ({request_id})",
             ))
             db.flush()
+            if asset:
+                create_consumer_renewal_accrual(o, renewal, asset, now, db)
+            create_supplier_renewal_accrual(o, renewal, now, db)
             payload = _order_out(o, db)
             payload.update({
                 "renewal_id": renewal.id,

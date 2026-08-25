@@ -12,7 +12,7 @@
       <view class="card form">
         <view class="field">
           <text class="flabel">{{ t('k_23eb0e60') }}</text>
-          <input class="finput" v-model="form.username" :placeholder="t('k_916ff9ed')" placeholder-class="ph" />
+          <input class="finput" v-model="displayUsername" :placeholder="t('k_916ff9ed')" placeholder-class="ph" />
         </view>
         <view class="field">
           <text class="flabel">{{ t('k_8098e2b4') }}</text>
@@ -33,7 +33,7 @@ import { useUserStore } from '@/store/user'
 import * as userApi from '@/api/user'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
-import { localizePersonName } from '@/utils/localize-content'
+import { localizePersonName, profileUsernameDisplayValue, profileUsernameSubmissionValue } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
 
 const i18n = useI18nStore()
@@ -41,9 +41,18 @@ const { t } = i18n
 const userStore = useUserStore()
 const user = computed(() => userStore.userInfo)
 const form = reactive({ username: '' })
+const originalUsername = ref('')
+const usernameEdited = ref(false)
+const displayUsername = computed({
+  get: () => profileUsernameDisplayValue(originalUsername.value, form.username, usernameEdited.value, i18n.lang),
+  set: (value: string) => {
+    form.username = value
+    usernameEdited.value = true
+  },
+})
 const pendingAvatarPath = ref('')
 const avatarLoadFailed = ref(false)
-const avatarText = computed(() => localizePersonName(form.username || user.value?.username || 'W', i18n.lang).slice(0, 1).toUpperCase())
+const avatarText = computed(() => localizePersonName(displayUsername.value || 'W', i18n.lang).slice(0, 1).toUpperCase())
 const avatarUrl = computed(() => avatarLoadFailed.value ? '' : (pendingAvatarPath.value || resolveApiMediaUrl(user.value?.avatar)))
 const phoneDisplay = computed(() => user.value?.phone_bound === false
   ? t('phoneNotBound')
@@ -57,7 +66,9 @@ onShow(async () => {
   if (!userStore.userInfo) {
     try { await userStore.fetchProfile() } catch {}
   }
-  form.username = userStore.userInfo?.username || ''
+  originalUsername.value = userStore.userInfo?.username || ''
+  form.username = originalUsername.value
+  usernameEdited.value = false
   pendingAvatarPath.value = ''
   avatarLoadFailed.value = false
 })
@@ -81,14 +92,15 @@ function changeAvatar() {
 
 async function onSave() {
   if (submitting.value) return
-  if (!form.username) { uni.showToast({ title: t('k_916ff9ed'), icon: 'none' }); return }
+  const username = profileUsernameSubmissionValue(originalUsername.value, form.username, usernameEdited.value).trim()
+  if (!username) { uni.showToast({ title: t('k_916ff9ed'), icon: 'none' }); return }
   submitting.value = true
   try {
     if (pendingAvatarPath.value) {
       await userApi.uploadAvatar(pendingAvatarPath.value)
       pendingAvatarPath.value = ''
     }
-    await userApi.updateProfile({ username: form.username })
+    await userApi.updateProfile({ username })
     await userStore.fetchProfile()
     uni.showToast({ title: t('保存成功'), icon: 'success' })
     setTimeout(() => navigateBack(), 600)

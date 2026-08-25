@@ -109,6 +109,16 @@ class Settings(BaseSettings):
     # non-withdrawable while PAYMENT_SERVICE_ENABLED is false.  They use
     # dedicated ledger types so legacy synthetic rewards stay excluded.
     CLOSED_TEST_REWARD_ENABLED: bool = False
+    # Versioned reward programs are deliberately independent. Enabling one
+    # never activates legacy reward ledger rows or either of the other
+    # programs. Existing deployments must opt in to each writer explicitly.
+    CONSUMER_REWARD_ENABLED: bool = False
+    SUPPLIER_REWARD_ENABLED: bool = False
+    INVITE_REWARD_ENABLED: bool = False
+    # Emergency settlement pause. Program switches above stop new accruals;
+    # this separate switch controls payment of already-promised accruals.
+    REWARD_SETTLEMENT_ENABLED: bool = False
+    REWARD_TIMEZONE: str = "Asia/Shanghai"
     # Station/in-app messages work without an external provider. Native push
     # stays explicitly unavailable until deployment enables a provider.
     PUSH_SERVICE_ENABLED: bool = False

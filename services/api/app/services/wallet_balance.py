@@ -7,7 +7,19 @@ from app.core.config import settings
 from app.models.ledger import Ledger
 
 
-LEGACY_REWARD_TYPES = ("rebate", "supplier_rebate", "invite_reward")
+# Every pre-accrual reward type is historical-only.  The ``test_*`` variants
+# were written by the retired closed-test mode; the unprefixed variants were
+# written by the retired live writer.  Neither family has a versioned,
+# auditable entitlement row, so neither may become spendable when the current
+# programs are enabled.
+LEGACY_REWARD_TYPES = (
+    "rebate",
+    "supplier_rebate",
+    "invite_reward",
+    "test_rebate",
+    "test_supplier",
+    "test_invite",
+)
 
 
 def historical_synthetic_revenue(user_id: int, db: Session) -> Decimal:
@@ -39,7 +51,9 @@ def spendable_wallet_balance(wallet, db: Session) -> Decimal:
     excluded = Decimal("0")
     if not settings.REVENUE_SETTLEMENT_ENABLED:
         excluded += historical_synthetic_revenue(wallet.user_id, db)
-    if not settings.REWARD_SERVICE_ENABLED:
-        excluded += historical_synthetic_rewards(wallet.user_id, db)
+    # Old reward types predate auditable accruals. They remain excluded even
+    # when a new independent program is enabled; otherwise a feature toggle
+    # could silently reactivate historical synthetic balances.
+    excluded += historical_synthetic_rewards(wallet.user_id, db)
     withdrawable = Decimal(str(wallet.withdrawable_balance or 0))
     return max(Decimal("0"), balance - excluded - withdrawable)

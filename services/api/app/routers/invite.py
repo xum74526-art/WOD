@@ -1,7 +1,7 @@
 import random
 import string
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -10,15 +10,14 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.invite import InviteCode, InviteRecord
-from app.models.ledger import Ledger
 from app.models.order import Order
+from app.models.reward_accrual import RewardAccrual
 from app.models.user import User
-from app.models.wallet import Wallet
 from app.services.reward_program import (
-    reward_ledger_type,
-    reward_mode,
-    reward_program_enabled,
+    PROGRAM_INVITE,
+    program_enabled,
 )
+from app.services.reward_entitlements import INVITE_POLICY_VERSION, create_invite_accrual
 from app.services.auth_session import normalize_platform
 from app.utils.response import success
 
@@ -104,7 +103,7 @@ def _promote_verified_relationship(user: User, record: InviteRecord, db: Session
 
 def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Decimal:
     """Reward a verified invitee's first confirmed usage order, exactly once."""
-    if not reward_program_enabled():
+    if not program_enabled(PROGRAM_INVITE):
         return Decimal("0")
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.invited_by:
@@ -130,13 +129,7 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
     if not first_order or first_order.id != order.id:
         return Decimal("0")
 
-    ledger_type = reward_ledger_type("invite")
-    existing = db.query(Ledger).filter(
-        Ledger.user_id == record.inviter_id,
-        Ledger.type == ledger_type,
-        Ledger.ref_order_id == order.id,
-    ).first()
-    if existing or record.status == "rewarded":
+    if record.status == "rewarded":
         return Decimal("0")
 
     qualified_count = db.query(InviteRecord).filter(
@@ -144,32 +137,27 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
         InviteRecord.status.in_(["registered", "ordered", "rewarded"]),
     ).count()
     rate = _get_tier_rate(qualified_count)
-    reward = (Decimal(str(order.amount or 0)) * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    wallet = db.query(Wallet).filter(Wallet.user_id == record.inviter_id).with_for_update().first()
-    if reward <= 0 or not wallet:
+    now = datetime.now(timezone.utc)
+    accrual = create_invite_accrual(
+        beneficiary_user_id=record.inviter_id,
+        order=order,
+        rate_bps=int(rate * Decimal("10000")),
+        event_at=now,
+        db=db,
+    )
+    if not accrual:
         record.status = "ordered"
         record.last_modified_platform = "system"
-        record.ordered_at = datetime.now(timezone.utc)
+        record.ordered_at = now
         return Decimal("0")
-
-    wallet.balance = Decimal(str(wallet.balance or 0)) + reward
-    db.add(Ledger(
-        user_id=record.inviter_id,
-        wallet_id=wallet.id,
-        type=ledger_type,
-        direction="in",
-        amount=reward,
-        balance_after=wallet.balance,
-        ref_order_id=order.id,
-        remark=f"邀请好友首单返利({int(rate * 100)}%)",
-    ))
-    record.status = "rewarded"
-    record.reward_amount = float(reward)
+    db.refresh(accrual)
+    record.status = "rewarded" if accrual.status == "settled" else "ordered"
+    record.reward_amount = float(accrual.reward_amount)
     record.ordered_at = order.start_at
-    record.rewarded_at = datetime.now(timezone.utc)
+    record.rewarded_at = accrual.settled_at if accrual.status == "settled" else None
     record.last_modified_platform = "system"
     db.flush()
-    return reward
+    return Decimal(str(accrual.reward_amount)) if accrual.status == "settled" else Decimal("0")
 
 
 @router.get("/summary")
@@ -183,8 +171,15 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
     pending = records_query.filter(InviteRecord.status.in_(["registered", "ordered"])).count()
     unverified = records_query.filter(InviteRecord.status == "unverified").count()
     rewarded = records_query.filter(InviteRecord.status == "rewarded").count()
-    total_reward = records_query.with_entities(
-        func.coalesce(func.sum(InviteRecord.reward_amount), 0)
+    total_reward = db.query(func.coalesce(func.sum(RewardAccrual.reward_amount), 0)).filter(
+        RewardAccrual.program_code == PROGRAM_INVITE,
+        RewardAccrual.beneficiary_user_id == user.id,
+        RewardAccrual.status == "settled",
+    ).scalar() or 0
+    pending_reward = db.query(func.coalesce(func.sum(RewardAccrual.reward_amount), 0)).filter(
+        RewardAccrual.program_code == PROGRAM_INVITE,
+        RewardAccrual.beneficiary_user_id == user.id,
+        RewardAccrual.status == "pending",
     ).scalar() or 0
 
     rate = _get_tier_rate(qualified_count)
@@ -201,12 +196,15 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         "qualified_count": qualified_count,
         "unverified_count": unverified,
         "total_reward": round(float(total_reward), 2),
+        "pending_reward": round(float(pending_reward), 2),
         "pending_count": pending,
         "rewarded_count": rewarded,
         "current_tier": f"{int(rate * 100)}%",
-        "next_tier_hint": next_tier if reward_program_enabled() else "返佣计划当前未开启",
-        "rewards_enabled": reward_program_enabled(),
-        "reward_mode": reward_mode(),
+        "next_tier_hint": next_tier if program_enabled(PROGRAM_INVITE) else "返佣计划当前未开启",
+        "rewards_enabled": program_enabled(PROGRAM_INVITE),
+        "reward_mode": "live" if program_enabled(PROGRAM_INVITE) else "disabled",
+        "program_code": "invite_first_order_reward",
+        "policy_version": INVITE_POLICY_VERSION,
     })
 
 

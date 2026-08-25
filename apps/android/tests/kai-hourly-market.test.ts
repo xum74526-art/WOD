@@ -18,6 +18,10 @@ const orderList = source('../src/pages/orders/index.vue')
 const orderDetail = source('../src/pages/order/detail.vue')
 const candleChart = source('../src/components/CandlestickChart.vue')
 const marketChart = source('../src/components/MarketChart.vue')
+const personalRebatePage = source('../src/pages/rebate/index.vue')
+const supplierRebatePage = source('../src/pages/supplier/rebate.vue')
+const supplierDashboard = source('../src/pages/supplier/dashboard.vue')
+const profilePage = source('../src/pages/profile/index.vue')
 
 test('KAI product contract distinguishes CNY pricing from wallet card-hours', () => {
   assert.match(gpuApi, /billing_unit\?: 'GPU_HOUR'/)
@@ -78,7 +82,7 @@ test('hourly checkout restores usage and holding without changing the duration c
   assert.match(productPage, /purchaseType === 'holding'/)
   assert.match(productPage, /t\('usageMode'\)/)
   assert.match(productPage, /t\('holdingMode'\)/)
-  assert.match(productPage, /purchaseType === 'usage' && rebate && estRebate > 0/)
+  assert.match(productPage, /purchaseType === 'usage' && estRebate > 0/)
   assert.match(productPage, /purchaseType === 'holding' \? 'confirmHoldingPurchase' : 'confirmUsagePurchase'/)
   assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\.value\}`/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
@@ -87,28 +91,52 @@ test('hourly checkout restores usage and holding without changing the duration c
   assert.doesNotMatch(createBlock, /cycle_days/)
 })
 
-test('usage expiry rebate follows the server policy and reacts to amount changes', () => {
+test('usage expiry rebate follows the live server tier that will be locked at confirmation', () => {
   const tiers = [
     { max_month_spent: 10000, rate: 3 },
     { max_month_spent: 50000, rate: 5 },
     { max_month_spent: 100000, rate: 7 },
     { max_month_spent: null, rate: 10 },
   ]
-  assert.deepEqual(estimateUsageExpiryRebate(240, 'usage', true, 0, 10, tiers), { amount: 7.2, ratePercent: 3 })
-  assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', true, 0, 10, tiers), { amount: 21.6, ratePercent: 3 })
-  assert.deepEqual(estimateUsageExpiryRebate(720, 'holding', true, 0, 10, tiers), { amount: 0, ratePercent: 0 })
-  assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', false, 0, 10, tiers), { amount: 0, ratePercent: 0 })
-  assert.deepEqual(estimateUsageExpiryRebate(20, 'usage', true, 9990, 10, tiers), { amount: 1, ratePercent: 5 })
-  assert.deepEqual(estimateUsageExpiryRebate(9.99, 'usage', true, 0, 10, tiers), { amount: 0, ratePercent: 0 })
-  assert.deepEqual(estimateUsageExpiryRebate(10, 'usage', true, 0, 10, tiers), { amount: 0.3, ratePercent: 3 })
-  assert.deepEqual(estimateUsageExpiryRebate(33.5, 'usage', true, 0, 10, tiers), { amount: 1.01, ratePercent: 3 })
-  assert.deepEqual(estimateUsageExpiryRebate(33.49, 'usage', true, 0, 10, tiers), { amount: 1, ratePercent: 3 })
+  assert.deepEqual(estimateUsageExpiryRebate(240, 'usage', true, 0, 10, tiers, 20000), { amount: 7.2, ratePercent: 3 })
+  assert.deepEqual(estimateUsageExpiryRebate(20, 'usage', true, 9990, 10, tiers, 20000), { amount: 1, ratePercent: 5 })
+  assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', true, 50000, 10, tiers, 20000), { amount: 50.4, ratePercent: 7 })
+  assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', true, 100000, 10, tiers, 20000), { amount: 72, ratePercent: 10 })
+  assert.deepEqual(estimateUsageExpiryRebate(1000, 'usage', true, 0, 10, tiers, 8), { amount: 8, ratePercent: 3 })
+  assert.deepEqual(estimateUsageExpiryRebate(720, 'holding', true, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
+  assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', false, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
+  assert.deepEqual(estimateUsageExpiryRebate(9.99, 'usage', true, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
+  assert.deepEqual(estimateUsageExpiryRebate(33.5, 'usage', true, 0, 10, tiers, 20000), { amount: 1.01, ratePercent: 3 })
+  assert.match(productPage, /getRebateSummary/)
   assert.match(productPage, /rebate\.value\?\.month_spent/)
   assert.match(productPage, /rebate\.value\?\.minimum_order_amount/)
   assert.match(productPage, /rebate\.value\?\.tiers/)
-  assert.doesNotMatch(productPage, /total <= 10000|total <= 50000|total <= 100000/)
+  assert.match(productPage, /rebate\.value\?\.cap_remaining/)
   assert.match(productPage, /estimatedExpiryRebate/)
+  assert.match(productPage, /personalRebateEstimateHint/)
+  assert.match(productPage, /personalPurchaseRebateTier/)
   assert.match(productPage, /purchaseType === 'usage' && estRebate > 0/)
+  assert.doesNotMatch(productPage, /USAGE_EXPIRY_REBATE_RATE_PERCENT/)
+})
+
+test('personal and merchant rebate policies stay separate in merchant mode', () => {
+  assert.match(personalRebatePage, /personalRebateLockRule/)
+  assert.match(personalRebatePage, /personalRebateExpiryRule/)
+  assert.match(personalRebatePage, /info\.value\?\.tiers/)
+  assert.match(personalRebatePage, /info\?\.monthly_cap/)
+  assert.match(supplierRebatePage, /info\.value\?\.tiers/)
+  assert.match(supplierRebatePage, /est_total_rebate/)
+  assert.match(supplierRebatePage, /supplierRebateFormulaRule/)
+  assert.match(supplierRebatePage, /info\?\.monthly_cap/)
+  assert.doesNotMatch(`${personalRebatePage}\n${supplierRebatePage}`, /MONTHLY_REBATE_CAP_CARD_HOURS/)
+  assert.doesNotMatch(supplierRebatePage, /service_fee_rate|服务费 =|返佣 = 服务费/)
+
+  for (const merchantModePage of [profilePage, supplierDashboard]) {
+    assert.match(merchantModePage, /getRebateSummary/)
+    assert.match(merchantModePage, /getSupplierRebate/)
+    assert.match(merchantModePage, /personalPurchaseRebate/)
+    assert.match(merchantModePage, /merchantSalesRebate/)
+  }
 })
 
 test('regional comparison is scoped to one model and VRAM identity', () => {

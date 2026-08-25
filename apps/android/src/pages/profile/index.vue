@@ -62,10 +62,10 @@
         </view>
       </view>
 
-      <!-- 商家返佣卡片（仅商家模式） -->
+      <!-- 商家模式同时显示销售返佣和同一账号的个人购买返佣。 -->
       <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('rebateSummary') }}</text>
+          <text class="rb-title">{{ t('merchantSalesRebate') }}</text>
           <text v-if="supplierRebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -75,20 +75,20 @@
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ formatNumber(supplierRebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('k_cfc752a6') }}</text>
+            <text class="rb-l">{{ t('merchantSalesRebateTier') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ fmtCHn(supplierRebate.month_sales) }}</text>
-            <text class="rb-l">{{ t('k_e1e32957') }}</text>
+            <text class="rb-l">{{ t('confirmedSalesThisMonth') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(supplierRebate.next_tier_hint) }}</text>
       </view>
 
-      <!-- 消费返佣卡片（仅个人模式） -->
-      <view v-if="role === 'personal' && rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
+      <!-- 个人购买返佣属于共享账号，个人与商家模式都可查看。 -->
+      <view v-if="rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('rebateCenter') }}</text>
+          <text class="rb-title">{{ t('personalPurchaseRebate') }}</text>
           <text v-if="rebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -98,11 +98,11 @@
           </view>
           <view class="rb-item">
             <text class="rb-v up">{{ formatNumber(rebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('k_5bfd670e') }}</text>
+            <text class="rb-l">{{ t('personalPurchaseRebateTier') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ fmtCHn(rebate.pending_rebate) }}</text>
-            <text class="rb-l">{{ t('k_ec4f52f4') }}</text>
+            <text class="rb-l">{{ t('pendingExpiryRebate') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
@@ -167,14 +167,14 @@ async function load() {
   if (userStore.role === 'supplier') {
     wallet.value = null
     invite.value = null
-    rebate.value = null
-    const [dashboardResult, walletResult, rebateResult] = await Promise.allSettled([
-      getDashboard(), getSupplierWallet(), getSupplierRebate(),
+    const [dashboardResult, walletResult, supplierRebateResult, personalRebateResult] = await Promise.allSettled([
+      getDashboard(), getSupplierWallet(), getSupplierRebate(), getRebateSummary(),
     ])
     dash.value = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null
     supplierWallet.value = walletResult.status === 'fulfilled' ? walletResult.value : null
-    supplierRebate.value = rebateResult.status === 'fulfilled' ? rebateResult.value : null
-    loadError.value = [dashboardResult, walletResult, rebateResult].some((result) => result.status === 'rejected')
+    supplierRebate.value = supplierRebateResult.status === 'fulfilled' ? supplierRebateResult.value : null
+    rebate.value = personalRebateResult.status === 'fulfilled' ? personalRebateResult.value : null
+    loadError.value = [dashboardResult, walletResult, supplierRebateResult, personalRebateResult].some((result) => result.status === 'rejected')
   } else {
     dash.value = null
     supplierWallet.value = null
