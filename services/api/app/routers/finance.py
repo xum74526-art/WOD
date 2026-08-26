@@ -40,6 +40,7 @@ from app.services.manual_payout import (
 from app.routers.verification import ocr_public_summary
 from app.utils.response import BizError, success
 from app.services.auth_session import AuditPlatform, normalize_platform
+from app.services.invite_rewards_v2 import reevaluate_invitee_qualification
 
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
@@ -204,6 +205,11 @@ def verification_review(
         "ocr_status_at_review": row.ocr_status or "not_started",
         "ocr_matched": row.ocr_status == "matched",
     })
+    if data.approved:
+        # Identity-first and order-first flows share the same idempotent V2
+        # qualification service. This path must not create retroactive order
+        # commission; it only completes the qualification and fixed bonus.
+        reevaluate_invitee_qualification(row.user_id, db, event_at=_utcnow())
     db.commit()
     db.refresh(row)
     return success(_verification_out(db, row))

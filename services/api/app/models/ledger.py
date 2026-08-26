@@ -16,6 +16,7 @@ class Ledger(Base):
         UniqueConstraint("ref_payment_order_id", name="uq_ledger_payment_credit"),
         UniqueConstraint("ref_order_renewal_id", name="uq_ledger_order_renewal"),
         UniqueConstraint("ref_reward_accrual_id", name="uq_ledger_reward_accrual"),
+        UniqueConstraint("ref_merchant_settlement_id", name="uq_ledger_merchant_settlement"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -32,6 +33,9 @@ class Ledger(Base):
     )
     ref_reward_accrual_id: Mapped[int | None] = mapped_column(
         ForeignKey("reward_accruals.id"), nullable=True,
+    )
+    ref_merchant_settlement_id: Mapped[int | None] = mapped_column(
+        ForeignKey("merchant_settlements.id"), nullable=True,
     )
     # Durable idempotency key for non-payment money events such as withdrawal
     # freeze, unfreeze, and manual payout completion.

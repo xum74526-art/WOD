@@ -4,11 +4,18 @@ import test from 'node:test'
 import {
   fmtCH,
   fmtCHr,
+  formatDeadline,
   formatMoney,
   formatNumber,
   formatNumberInput,
   setFormatLanguage,
 } from '../src/utils/format.ts'
+
+test('order deadlines render deterministic Asia/Shanghai date and time', () => {
+  assert.equal(formatDeadline('2026-08-26T01:02:03'), '2026-08-26 09:02 UTC+8')
+  assert.equal(formatDeadline('2026-08-26T01:02:03+08:00'), '2026-08-26 01:02 UTC+8')
+  assert.equal(formatDeadline(null), '')
+})
 
 test('formatNumber limits long Android-style floating tails without Intl', () => {
   assert.equal(formatNumber(1740.439121756487), '1,740.44')

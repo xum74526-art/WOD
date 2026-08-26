@@ -162,6 +162,13 @@ class OrderRenewalTests(unittest.TestCase):
             )
             db.add(supplier)
             db.flush()
+            seller_wallet = Wallet(
+                user_id=seller.id,
+                balance=Decimal("0"),
+                frozen=Decimal("0"),
+                withdrawable_balance=Decimal("0"),
+            )
+            db.add(seller_wallet)
             product = Product(
                 name="WOD Legacy", gpu_model="A800", memory="80GB",
                 price=Decimal("0.1"), cycle=[1, 7, 30], stock=1,
@@ -192,6 +199,9 @@ class OrderRenewalTests(unittest.TestCase):
             self.assertEqual(result["purchase_unit"], "day")
             self.assertEqual(result["renewal_cycle_days"], 1)
             self.assertIsNone(result["renewal_purchase_hours"])
+            db.refresh(seller_wallet)
+            self.assertEqual(seller_wallet.balance, Decimal("2.160000"))
+            self.assertEqual(seller_wallet.withdrawable_balance, Decimal("2.160000"))
 
     def test_different_users_can_create_orders_with_the_same_request_id(self):
         with self.factory() as db:

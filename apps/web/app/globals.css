@@ -3462,7 +3462,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .order-timeline article span { margin-top: 4px; color: var(--text-soft); font: 9px/1.4 var(--font-mono); }
 .order-timeline article p { margin: 7px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
 .order-actions { padding-top: 20px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-.status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered { color: #94610f; background: #fff3d9; }
+.status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered, .status-chip--disputed { color: #94610f; background: #fff3d9; }
 .status-chip--cancelled { color: #b43f4d; background: #ffebee; }
 .status-chip--pending_review, .status-chip--reserved, .status-chip--allocated { color: #9a6410; background: #fff3d9; }
 .status-chip--released { color: #087b59; background: #e7f7f0; }
@@ -3531,7 +3531,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
   .status-chip--published, .status-chip--approved, .status-chip--accepted, .status-chip--completed { color: #65d9af; background: #12352d; }
   .status-chip--negotiating, .status-chip--shortlisted, .status-chip--pending, .status-chip--reviewing, .status-chip--submitted { color: #efc66f; background: #382e1a; }
   .status-chip--rejected, .status-chip--expired, .status-chip--closed, .status-chip--withdrawn { color: #ff8a96; background: #3b2026; }
-  .status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered { color: #efc66f; background: #382e1a; }
+  .status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered, .status-chip--disputed { color: #efc66f; background: #382e1a; }
   .status-chip--cancelled { color: #ff8a96; background: #3b2026; }
   .request-filter > button, .workspace-filter > button { color: #071416; background: var(--brand); }
 }

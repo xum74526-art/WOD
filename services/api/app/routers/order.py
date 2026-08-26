@@ -6,12 +6,12 @@ from threading import Lock
 
 from fastapi import APIRouter, Depends
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_platform, get_current_user
+from app.core.deps import get_current_platform, get_current_user, require_admin
 from app.core.sensitive import protect, reveal
 from app.db.session import get_db
 from app.models.asset import Asset
@@ -24,12 +24,19 @@ from app.models.revenue import Revenue
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.models.wallet import Wallet
-from app.schemas.order import OrderCreateIn, OrderOut, OrderRenewIn
+from app.schemas.order import (
+    OrderCreateIn,
+    OrderDisputeIn,
+    OrderDisputeResolveIn,
+    OrderOut,
+    OrderRenewIn,
+)
 from app.services.purchase_cycles import available_purchase_cycles, valid_purchase_hours
 from app.services.auth_session import PLATFORMS
 from app.services.market_freshness import product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.product_purchase import product_purchase_availability
+from app.services.merchant_settlement import settle_merchant_sale
 from app.services.reward_entitlements import (
     create_consumer_order_accrual,
     create_consumer_renewal_accrual,
@@ -37,6 +44,16 @@ from app.services.reward_entitlements import (
     create_supplier_renewal_accrual,
 )
 from app.services.wallet_balance import spendable_wallet_balance
+from app.services.funding_allocation import (
+    capture_order_funding,
+    refund_order_funding,
+    reserve_order_funding,
+    spend_renewal_funding,
+)
+from app.services.invite_rewards_v2 import (
+    process_invite_order_event,
+    process_invite_renewal_event,
+)
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/orders", tags=["order"])
@@ -143,7 +160,11 @@ def _order_out(o: Order, db: Session) -> dict:
     p = db.query(Product).filter(Product.id == o.product_id).first()
     out = OrderOut.model_validate(o).model_dump()
     ssh_info = reveal(o.ssh_info) or None
-    out["ssh_info"] = ssh_info if valid_ssh_info(ssh_info) else None
+    out["ssh_info"] = (
+        ssh_info
+        if o.status not in ("canceled", "paid") and valid_ssh_info(ssh_info)
+        else None
+    )
     out["product_name"] = p.name if p else None
     out["gpu_model"] = p.gpu_model if p else None
     market_source = product_market_source(p) if p else None
@@ -176,8 +197,20 @@ def _order_out(o: Order, db: Session) -> dict:
         "paid": "pending_ssh",
         "delivering": "awaiting_confirmation",
         "completed": "active",
+        "running": "active",
+        "done": "expired",
+        "disputed": "under_review",
         "canceled": "canceled",
     }.get(o.status, o.status)
+    out["can_cancel"] = o.status == "paid"
+    out["can_confirm"] = o.status == "delivering"
+    confirmation_due = o.confirmation_due_at
+    if confirmation_due is not None and confirmation_due.tzinfo is None:
+        confirmation_due = confirmation_due.replace(tzinfo=timezone.utc)
+    out["can_dispute"] = (
+        o.status == "delivering"
+        and (confirmation_due is None or confirmation_due > datetime.now(timezone.utc))
+    )
     a = db.query(Asset).filter(Asset.order_id == o.id).first()
     out["asset_id"] = a.id if a else None
     out["revenue_settlement_enabled"] = settings.REVENUE_SETTLEMENT_ENABLED
@@ -215,7 +248,7 @@ def _calc_kai_hour_amount(p: Product, hours: int, quantity: int = 1) -> Decimal:
     ).quantize(Decimal("0.0001"))
 
 
-def _begin_renewal_transaction(db: Session) -> None:
+def _begin_serialized_write_transaction(db: Session) -> None:
     """Use a database write lock on SQLite; row locks handle other databases."""
 
     if db.get_bind().dialect.name != "sqlite":
@@ -248,6 +281,10 @@ def create_order(
     platform: str = Depends(get_current_platform),
 ):
     platform = _trusted_platform(platform)
+    # SQLite ignores FOR UPDATE. Serializing before the stock and wallet reads
+    # prevents two concurrent checkouts from selling the last unit twice or
+    # spending the same in-app card-hours twice.
+    _begin_serialized_write_transaction(db)
     request_id = str(data.client_request_id or "").strip() or None
     if request_id:
         existing = db.query(Order).filter(
@@ -290,8 +327,8 @@ def create_order(
         allowed = available_purchase_cycles(p.cycle)
         if cycle_days not in allowed:
             raise BizError(f"不支持的周期，可选 {allowed}")
-    if data.purchase_type not in ("usage", "holding"):
-        raise BizError("不支持的购买模式")
+    if data.purchase_type != "usage":
+        raise BizError("持有交易与二级市场尚未完成，当前仅支持使用模式", status_code=409)
     reserved_stock = max(int(p.stock or 0), 0)
     available_stock = reserved_stock
     if source == "kai":
@@ -321,8 +358,6 @@ def create_order(
         now = datetime.now(timezone.utc)
         # Manually fulfilled purchase: reserve the full amount until valid SSH/device
         # delivery is confirmed. No asset exists at checkout.
-        wallet.balance = wallet.balance - amount
-        wallet.frozen = wallet.frozen + amount
         order = Order(
             order_no="WOD" + datetime.now().strftime("%Y%m%d") + uuid.uuid4().hex[:8].upper(),
             client_request_id=request_id,
@@ -330,10 +365,15 @@ def create_order(
             cycle_days=cycle_days, purchase_hours=purchase_hours,
             created_platform=platform, last_modified_platform=platform,
             amount=amount, status="paid", purchase_type=data.purchase_type,
+            lifecycle_policy_version="reserved-v1",
             start_at=now, end_at=None,
+            delivery_due_at=now + timedelta(
+                hours=max(int(settings.ORDER_DELIVERY_TIMEOUT_HOURS), 1)
+            ),
         )
         db.add(order)
         db.flush()
+        reserve_order_funding(order, wallet, amount, db)
         db.add(Ledger(
             user_id=user.id, wallet_id=wallet.id, type="freeze", direction="out",
             amount=amount, balance_after=spendable_wallet_balance(wallet, db),
@@ -386,16 +426,211 @@ def deliver_ssh(
         authorized = is_platform_fulfiller(user)
     if not authorized:
         raise BizError("无权操作此订单", status_code=403)
-    if o.status != "paid":
-        raise BizError("当前订单状态不可交付")
     ssh_info = str(data.get("ssh_info", "")).strip()
     if not valid_ssh_info(ssh_info):
         raise BizError("SSH 信息格式无效，请填写用户名、主机地址及有效端口")
-    o.ssh_info = protect(ssh_info)
-    o.status = "delivering"
-    o.last_modified_platform = _trusted_platform(platform)
+    now = datetime.now(timezone.utc)
+    changed = db.query(Order).filter(
+        Order.id == oid,
+        Order.status == "paid",
+        or_(Order.delivery_due_at.is_(None), Order.delivery_due_at > now),
+    ).update({
+        Order.ssh_info: protect(ssh_info),
+        Order.status: "delivering",
+        Order.delivered_at: now,
+        Order.confirmation_due_at: now + timedelta(
+            hours=max(int(settings.ORDER_CONFIRMATION_TIMEOUT_HOURS), 1)
+        ),
+        Order.last_modified_platform: _trusted_platform(platform),
+    }, synchronize_session=False)
+    if changed != 1:
+        db.rollback()
+        raise BizError("当前订单状态不可交付", status_code=409)
     db.commit()
-    return success({"id": oid, "status": "delivering"})
+    db.expire_all()
+    current = db.query(Order).filter(Order.id == oid).populate_existing().first()
+    return success(_order_out(current, db))
+
+
+def _complete_reserved_order(
+    order: Order,
+    db: Session,
+    *,
+    platform: str,
+    allowed_statuses: tuple[str, ...] = ("delivering",),
+    resolved_by: int | None = None,
+    resolution_note: str | None = None,
+) -> bool:
+    """Atomically release reserved funds and create all sale-side facts."""
+
+    current_status = db.query(Order.status).filter(Order.id == order.id).scalar()
+    if current_status in ("completed", "running", "done"):
+        return False
+    original_status = str(current_status)
+    changed = db.query(Order).filter(
+        Order.id == order.id,
+        Order.status.in_(allowed_statuses),
+    ).update({Order.status: "settling"}, synchronize_session=False)
+    if changed != 1:
+        raise BizError("订单状态已变化，请刷新后重试", status_code=409)
+    db.expire(order)
+    db.refresh(order)
+
+    ssh_info = reveal(order.ssh_info)
+    if not valid_ssh_info(ssh_info):
+        raise BizError("SSH 连接信息无效，请联系交付人员重新填写", status_code=409)
+    amount = Decimal(str(order.amount))
+    wallet = db.query(Wallet).filter(
+        Wallet.user_id == order.user_id,
+    ).with_for_update().first()
+    if wallet is None:
+        raise BizError("钱包不存在", status_code=404)
+
+    now = datetime.now(timezone.utc)
+    capture_order_funding(order, wallet, db, captured_at=now)
+    order.status = "completed"
+    order.lifecycle_policy_version = "reserved-v1"
+    order.last_modified_platform = _trusted_platform(platform)
+    order.start_at = now
+    order.end_at = (
+        now + timedelta(hours=order.purchase_hours)
+        if order.purchase_hours is not None
+        else now + timedelta(days=order.cycle_days)
+    )
+    order.confirmed_at = now
+    order.delivery_due_at = None
+    order.confirmation_due_at = None
+    order.dispute_due_at = None
+    if original_status == "disputed":
+        order.dispute_resolution = "release"
+        order.dispute_resolution_note = resolution_note
+        order.dispute_resolved_at = now
+        order.dispute_resolved_by = resolved_by
+
+    payment_entry = db.query(Ledger).filter(
+        Ledger.ref_order_id == order.id,
+        Ledger.type == "pay",
+    ).first()
+    if payment_entry is None:
+        db.add(Ledger(
+            user_id=order.user_id,
+            wallet_id=wallet.id,
+            type="pay",
+            # The balance was already debited by the immutable freeze event.
+            # Confirmation captures frozen funds without subtracting twice.
+            direction="internal",
+            amount=amount,
+            balance_after=spendable_wallet_balance(wallet, db),
+            ref_order_id=order.id,
+            event_key=f"order_capture:{order.id}",
+            remark=(
+                f"购买{'持有' if order.purchase_type == 'holding' else '使用'}"
+                f"·已确认交付({order.order_no})"
+            ),
+        ))
+
+    # SSH delivery grants usage only; synthetic compute revenue stays disabled.
+    quantity = max(int(order.quantity or 1), 1)
+    unit_value = (amount / Decimal(quantity)).quantize(Decimal("0.0001"))
+    asset = db.query(Asset).filter(Asset.order_id == order.id).first()
+    if asset is None:
+        asset = Asset(
+            user_id=order.user_id,
+            product_id=order.product_id,
+            order_id=order.id,
+            quantity=quantity,
+            value=unit_value,
+            daily_rate=Decimal("0"),
+            status="active",
+            start_at=now,
+            end_at=order.end_at,
+            purchase_type=order.purchase_type or "usage",
+            rebate_status=None,
+            rebate_amount=0,
+        )
+        db.add(asset)
+        db.flush()
+
+    # Commercial proceeds are withdrawable. All reward writers below remain
+    # independent and only credit non-withdrawable in-app card-hours.
+    settle_merchant_sale(order, db, settled_at=now)
+    create_consumer_order_accrual(order, asset, now, db)
+    create_supplier_order_accrual(order, now, db)
+    from app.routers.invite import process_first_order_reward
+    process_first_order_reward(order.user_id, order.id, db)
+    process_invite_order_event(order, db, event_at=now)
+    return True
+
+
+def _refund_reserved_order(
+    order: Order,
+    db: Session,
+    *,
+    platform: str,
+    reason: str,
+    allowed_statuses: tuple[str, ...],
+    resolved_by: int | None = None,
+) -> bool:
+    """Refund a reserved order exactly once and restore its inventory."""
+
+    current_status = db.query(Order.status).filter(Order.id == order.id).scalar()
+    if current_status == "canceled":
+        return False
+    original_status = str(current_status)
+    changed = db.query(Order).filter(
+        Order.id == order.id,
+        Order.status.in_(allowed_statuses),
+    ).update({Order.status: "refunding"}, synchronize_session=False)
+    if changed != 1:
+        raise BizError("订单状态已变化，请刷新后重试", status_code=409)
+    db.expire(order)
+    db.refresh(order)
+    if db.query(Asset).filter(Asset.order_id == order.id).first() is not None:
+        raise BizError("订单已生成资产，不能按未交付订单退款", status_code=409)
+
+    refund = Decimal(str(order.amount))
+    wallet = db.query(Wallet).filter(
+        Wallet.user_id == order.user_id,
+    ).with_for_update().first()
+    if wallet is None:
+        raise BizError("钱包不存在", status_code=404)
+    now = datetime.now(timezone.utc)
+    refund_order_funding(order, wallet, db, refunded_at=now)
+
+    product = db.query(Product).filter(Product.id == order.product_id).with_for_update().first()
+    if product:
+        restored_stock = max(int(product.stock or 0), 0) + max(int(order.quantity or 1), 1)
+        if product_market_source(product) == "kai" and product.platform_stock_cap is not None:
+            restored_stock = min(restored_stock, max(int(product.platform_stock_cap), 0))
+        product.stock = restored_stock
+
+    order.status = "canceled"
+    order.canceled_at = now
+    order.stock_released_at = now
+    order.last_modified_platform = _trusted_platform(platform)
+    order.delivery_due_at = None
+    order.confirmation_due_at = None
+    order.dispute_due_at = None
+    if original_status == "disputed":
+        order.dispute_resolution = "refund"
+        order.dispute_resolution_note = reason
+        order.dispute_resolved_at = now
+        order.dispute_resolved_by = resolved_by
+
+    event_key = f"order_refund:{order.id}"
+    if db.query(Ledger).filter(Ledger.event_key == event_key).first() is None:
+        db.add(Ledger(
+            user_id=order.user_id,
+            wallet_id=wallet.id,
+            type="refund",
+            direction="in",
+            amount=refund,
+            balance_after=spendable_wallet_balance(wallet, db),
+            ref_order_id=order.id,
+            event_key=event_key,
+            remark=f"订单退款 {order.order_no}: {reason}",
+        ))
+    return True
 
 
 @router.post("/{oid}/confirm")
@@ -405,76 +640,123 @@ def confirm_delivery(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    o = db.query(Order).filter(
-        Order.id == oid, Order.user_id == user.id,
-    ).with_for_update().first()
-    if not o:
+    order = db.query(Order).filter(
+        Order.id == oid,
+        Order.user_id == user.id,
+    ).first()
+    if not order:
         raise BizError("订单不存在", status_code=404)
-    if o.status != "delivering":
-        raise BizError("当前订单状态不可确认")
-    ssh_info = reveal(o.ssh_info)
-    if not valid_ssh_info(ssh_info):
-        raise BizError("SSH 连接信息无效，请联系交付人员重新填写", status_code=409)
-    wallet = db.query(Wallet).filter(Wallet.user_id == user.id).with_for_update().first()
-    if not wallet:
-        raise BizError("钱包不存在", status_code=404)
-    if wallet.frozen < o.amount:
-        raise BizError("订单冻结余额异常，请联系平台服务人员核查", status_code=409)
-    wallet.frozen = wallet.frozen - o.amount
-    now = datetime.now(timezone.utc)
-    o.status = "completed"
-    o.last_modified_platform = _trusted_platform(platform)
-    o.start_at = now
-    o.end_at = (
-        now + timedelta(hours=o.purchase_hours)
-        if o.purchase_hours is not None
-        else now + timedelta(days=o.cycle_days)
-    )
-    payment_entry = db.query(Ledger).filter(
-        Ledger.ref_order_id == o.id,
-        Ledger.type.in_(["freeze", "pay"]),
-    ).order_by(Ledger.id.asc()).first()
-    if payment_entry:
-        payment_entry.type = "pay"
-        payment_entry.remark = f"购买{'持有' if o.purchase_type == 'holding' else '使用'}·已确认交付({o.order_no})"
-        payment_entry.balance_after = spendable_wallet_balance(wallet, db)
-    else:
-        db.add(Ledger(
-            user_id=user.id, wallet_id=wallet.id, type="pay", direction="out",
-            amount=o.amount, balance_after=spendable_wallet_balance(wallet, db),
-            ref_order_id=o.id,
-            remark=f"购买{'持有' if o.purchase_type == 'holding' else '使用'}·已确认交付({o.order_no})",
-        ))
-    # SSH 交付证明使用权，不代表平台已接入真实算力收益结算。
-    daily_rate = Decimal("0")
-    quantity = max(int(o.quantity or 1), 1)
-    unit_value = (Decimal(o.amount) / Decimal(quantity)).quantize(Decimal("0.0001"))
-    asset = Asset(
-        user_id=user.id, product_id=o.product_id, order_id=o.id,
-        quantity=quantity, value=unit_value, daily_rate=daily_rate, status="active",
-        start_at=now, end_at=o.end_at,
-        purchase_type=o.purchase_type or "usage",
-        # New rewards live in versioned reward_accruals.  Leaving the legacy
-        # fields empty prevents old synthetic rows from being reactivated.
-        rebate_status=None,
-        rebate_amount=0,
-    )
-    db.add(asset)
-    db.flush()
-
-    # Each program has its own switch and durable idempotency key. Consumer
-    # rewards settle at the final usage expiry; seller rewards are based on
-    # confirmed monthly sales card-hours and settle immediately.
-    create_consumer_order_accrual(o, asset, now, db)
-    create_supplier_order_accrual(o, now, db)
-    from app.routers.invite import process_first_order_reward
-    process_first_order_reward(o.user_id, o.id, db)
+    if order.status in ("completed", "running", "done"):
+        return success(_order_out(order, db))
+    if order.status != "delivering":
+        raise BizError("当前订单状态不可确认", status_code=409)
     try:
+        _complete_reserved_order(order, db, platform=_trusted_platform(platform))
         db.commit()
+    except BizError:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise BizError("确认交付失败，请重试")
-    return success({"id": oid, "status": "completed"})
+    db.refresh(order)
+    return success(_order_out(order, db))
+
+
+@router.post("/{oid}/dispute")
+def dispute_delivery(
+    oid: int,
+    data: OrderDisputeIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    order = db.query(Order).filter(
+        Order.id == oid,
+        Order.user_id == user.id,
+    ).first()
+    if not order:
+        raise BizError("订单不存在", status_code=404)
+    reason = data.reason.strip()
+    if order.status == "disputed" and order.dispute_reason == reason:
+        return success(_order_out(order, db))
+    if order.status != "delivering":
+        raise BizError("仅待确认交付订单可以发起争议", status_code=409)
+    now = datetime.now(timezone.utc)
+    changed = db.query(Order).filter(
+        Order.id == order.id,
+        Order.status == "delivering",
+        or_(Order.confirmation_due_at.is_(None), Order.confirmation_due_at > now),
+    ).update({
+        Order.status: "disputed",
+        Order.disputed_at: now,
+        Order.dispute_due_at: now + timedelta(
+            hours=max(int(settings.ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS), 1)
+        ),
+        Order.dispute_reason: reason,
+        Order.last_modified_platform: _trusted_platform(platform),
+    }, synchronize_session=False)
+    if changed != 1:
+        db.rollback()
+        raise BizError("订单状态已变化，请刷新后重试", status_code=409)
+    db.commit()
+    db.expire_all()
+    current = db.query(Order).filter(Order.id == order.id).populate_existing().first()
+    return success(_order_out(current, db))
+
+
+@router.post("/{oid}/dispute/resolve")
+def resolve_delivery_dispute(
+    oid: int,
+    data: OrderDisputeResolveIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    order = db.query(Order).filter(Order.id == oid).populate_existing().first()
+    if not order:
+        raise BizError("订单不存在", status_code=404)
+    if (
+        data.action == "refund"
+        and order.status == "canceled"
+        and order.dispute_resolution == "refund"
+    ) or (
+        data.action == "release"
+        and order.status in ("completed", "running", "done")
+        and order.dispute_resolution == "release"
+    ):
+        return success(_order_out(order, db))
+    if order.status != "disputed":
+        raise BizError("该订单当前没有待处理争议", status_code=409)
+    try:
+        if data.action == "refund":
+            _refund_reserved_order(
+                order,
+                db,
+                platform=_trusted_platform(platform),
+                reason=data.note.strip(),
+                allowed_statuses=("disputed",),
+                resolved_by=admin.id,
+            )
+        else:
+            _complete_reserved_order(
+                order,
+                db,
+                platform=_trusted_platform(platform),
+                allowed_statuses=("disputed",),
+                resolved_by=admin.id,
+                resolution_note=data.note.strip(),
+            )
+        db.commit()
+    except BizError:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise BizError("争议处理失败，请重试")
+    db.expire_all()
+    current = db.query(Order).filter(Order.id == oid).populate_existing().first()
+    return success(_order_out(current, db))
 
 
 @router.get("")
@@ -513,7 +795,7 @@ def renew_order(
     # keeps in-memory test databases deterministic.
     with _RENEW_LOCK:
         try:
-            _begin_renewal_transaction(db)
+            _begin_serialized_write_transaction(db)
             o = db.query(Order).filter(
                 Order.id == oid, Order.user_id == user_id,
             ).with_for_update().first()
@@ -603,7 +885,7 @@ def renew_order(
             db.add(renewal)
             db.flush()  # claim the unique idempotency key before any balance mutation
 
-            wallet.balance = wallet.balance - amount
+            spend_renewal_funding(o, renewal, wallet, amount, db, captured_at=now)
             o.end_at = new_end
             o.amount = renewal.total_amount_after
             o.last_modified_platform = platform
@@ -612,6 +894,7 @@ def renew_order(
             else:
                 o.cycle_days = renewal.total_cycle_days_after
             o.status = "running"
+            o.lifecycle_policy_version = "reserved-v1"
             asset = db.query(Asset).filter(Asset.order_id == o.id).with_for_update().first()
             if asset:
                 asset.end_at = new_end
@@ -630,9 +913,11 @@ def renew_order(
                 remark=f"续费 {p.name} × {quantity} ({request_id})",
             ))
             db.flush()
+            settle_merchant_sale(o, db, renewal=renewal, settled_at=now)
             if asset:
                 create_consumer_renewal_accrual(o, renewal, asset, now, db)
             create_supplier_renewal_accrual(o, renewal, now, db)
+            process_invite_renewal_event(o, renewal, db, event_at=now)
             payload = _order_out(o, db)
             payload.update({
                 "renewal_id": renewal.id,
@@ -670,42 +955,29 @@ def cancel_order(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    o = db.query(Order).filter(
+    order = db.query(Order).filter(
         Order.id == oid, Order.user_id == user.id,
-    ).with_for_update().first()
-    if not o:
+    ).first()
+    if not order:
         raise BizError("订单不存在", status_code=404)
-    if o.status != "paid":
-        raise BizError("当前订单不可取消")
-    wallet = db.query(Wallet).filter(Wallet.user_id == user.id).with_for_update().first()
-    if not wallet:
-        raise BizError("钱包不存在", status_code=404)
-    if wallet.frozen < o.amount:
-        raise BizError("订单冻结余额异常，请联系平台服务人员核查", status_code=409)
-    a = db.query(Asset).filter(Asset.order_id == o.id).first()
+    if order.status == "canceled":
+        return success(_order_out(order, db))
+    if order.status != "paid":
+        raise BizError("当前订单不可直接取消；已交付订单请发起争议", status_code=409)
     try:
-        refund = Decimal(str(o.amount))
-        # 使用模式下资金在冻结中，取消需解冻退回余额
-        wallet.frozen = wallet.frozen - refund
-        wallet.balance = wallet.balance + refund
-        o.status = "canceled"
-        o.last_modified_platform = _trusted_platform(platform)
-        product = db.query(Product).filter(Product.id == o.product_id).with_for_update().first()
-        if product:
-            restored_stock = max(int(product.stock or 0), 0) + max(int(o.quantity or 1), 1)
-            if product_market_source(product) == "kai" and product.platform_stock_cap is not None:
-                restored_stock = min(restored_stock, max(int(product.platform_stock_cap), 0))
-            product.stock = restored_stock
-        if a:
-            a.status = "expired"
-        db.add(Ledger(
-            user_id=user.id, wallet_id=wallet.id, type="refund", direction="in",
-            amount=refund, balance_after=spendable_wallet_balance(wallet, db),
-            ref_order_id=o.id, remark=f"取消订单 {o.order_no} 退款",
-        ))
+        _refund_reserved_order(
+            order,
+            db,
+            platform=_trusted_platform(platform),
+            reason="买家在交付前取消",
+            allowed_statuses=("paid",),
+        )
         db.commit()
+    except BizError:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise BizError("取消失败，请重试")
-    db.refresh(o)
-    return success(_order_out(o, db))
+    db.refresh(order)
+    return success(_order_out(order, db))

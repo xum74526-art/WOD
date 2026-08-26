@@ -28,9 +28,29 @@ class Order(Base):
     created_platform: Mapped[str] = mapped_column(String(16), default="legacy", index=True)
     last_modified_platform: Mapped[str] = mapped_column(String(16), default="legacy", index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 4))
-    status: Mapped[str] = mapped_column(String(16), default="running")  # paid(pending delivery)/delivering/completed/disputed/canceled
+    status: Mapped[str] = mapped_column(String(16), default="running")  # paid/delivering/disputed/completed/running/done/canceled
     purchase_type: Mapped[str] = mapped_column(String(16), default="usage")  # usage(使用) / holding(持有)
+    # Existing rows remain NULL after schema upgrade and require explicit stock
+    # reconciliation. New reserved-fund orders use the versioned lifecycle.
+    lifecycle_policy_version: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default="reserved-v1",
+    )
     ssh_info: Mapped[str | None] = mapped_column(Text, nullable=True)  # 字段级加密的 SSH 连接信息
+    delivery_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    confirmation_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stock_released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    disputed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dispute_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dispute_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dispute_resolution: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    dispute_resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dispute_resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dispute_resolved_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True,
+    )
     start_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

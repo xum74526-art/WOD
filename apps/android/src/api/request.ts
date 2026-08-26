@@ -9,6 +9,16 @@ export interface ApiResponse<T = unknown> {
   detail?: unknown
 }
 
+export class ApiRequestError extends Error {
+  readonly statusCode: number
+
+  constructor(message: string, statusCode: number) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.statusCode = statusCode
+  }
+}
+
 let redirecting = false
 
 function responseBody<T>(value: unknown): Partial<ApiResponse<T>> {
@@ -66,7 +76,7 @@ export function request<T = unknown>(options: {
           const msg = localize(body.msg || body.detail, '请求失败')
             || `${i18n.t('请求失败')} (${res.statusCode})`
           if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
-          reject(new Error(msg))
+          reject(new ApiRequestError(msg, res.statusCode))
           return
         }
         if (body.code !== 0 || !('data' in body)) {

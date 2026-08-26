@@ -30,6 +30,8 @@ from app.services.reward_accrual import (
 from app.services.reward_program import (
     PROGRAM_CONSUMER,
     PROGRAM_INVITE,
+    PROGRAM_INVITE_COMMISSION,
+    PROGRAM_INVITE_QUALIFICATION,
     PROGRAM_SUPPLIER,
     program_enabled,
 )
@@ -454,7 +456,13 @@ def settle_reward_entitlements(db: Session, now: datetime | None = None) -> int:
         return 0
     current = now or datetime.now(timezone.utc)
     due = db.query(RewardAccrual).filter(
-        RewardAccrual.program_code.in_((PROGRAM_CONSUMER, PROGRAM_SUPPLIER, PROGRAM_INVITE)),
+        RewardAccrual.program_code.in_((
+            PROGRAM_CONSUMER,
+            PROGRAM_SUPPLIER,
+            PROGRAM_INVITE,
+            PROGRAM_INVITE_QUALIFICATION,
+            PROGRAM_INVITE_COMMISSION,
+        )),
         RewardAccrual.status == "pending",
         RewardAccrual.due_at <= current,
     ).order_by(RewardAccrual.id.asc()).all()
@@ -597,6 +605,10 @@ def get_supplier_summary(supplier_user_id: int, db: Session) -> dict:
         "monthly_cap": float(SUPPLIER_MONTHLY_CAP),
         "cap_used": float(entitled),
         "cap_remaining": float(max(Decimal("0"), SUPPLIER_MONTHLY_CAP - entitled)),
+        "rebate_basis_percent": 100,
+        "platform_service_fee_percent": int(settings.MERCHANT_SERVICE_FEE_BPS) / 100,
+        # Deprecated compatibility field. It described the rebate basis, not
+        # the commercial platform fee; new clients must use the two fields above.
         "service_fee_rate": 100,
         "rewards_enabled": enabled,
         "reward_mode": "live" if enabled else "disabled",

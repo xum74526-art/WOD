@@ -4,8 +4,8 @@
     "description" : "AI 算力资产管理 App",
     "locale" : "zh-Hans",
     "vueVersion" : "3",
-    "versionName" : "1.0.8",
-    "versionCode" : "108",
+    "versionName" : "1.0.9",
+    "versionCode" : "109",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,

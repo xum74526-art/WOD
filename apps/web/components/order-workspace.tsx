@@ -9,11 +9,13 @@ import {
   Receipt,
   RocketLaunch,
   ShieldCheck,
+  ShieldWarning,
 } from "@phosphor-icons/react";
 import {
   cancelOrder,
   completeOrder,
   confirmOrder,
+  disputeOrder,
   getOrder,
   listOrders,
   markOrderDelivered,
@@ -31,6 +33,7 @@ const filters: Array<[OrderStatus | "", string]> = [
   ["confirmed", "已确认"],
   ["delivering", "交付中"],
   ["delivered", "待验收"],
+  ["disputed", "争议处理中"],
   ["completed", "已完成"],
   ["cancelled", "已取消"],
 ];
@@ -117,6 +120,14 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (reason?.trim()) void act("cancel", () => cancelOrder(scope, detail.id, detail.version, reason.trim()), "订单已取消");
   }
 
+  function dispute() {
+    if (!detail) return;
+    const reason = window.prompt("请说明 SSH 无法连接、配置不符或其他交付问题（至少 5 个字）", "");
+    if (reason === null) return;
+    if (reason.trim().length < 5) { setError("争议说明至少需要 5 个字"); return; }
+    void act("dispute", () => disputeOrder(detail.id, reason.trim()), "争议已提交，订单卡时将继续冻结等待平台处理");
+  }
+
   function deliveryNote(promptText: string, action: (note: string) => Promise<unknown>, key: string, message: string, sshDelivery = false) {
     const note = window.prompt(sshDelivery ? `${promptText}\n示例：ssh gpu-user@203.0.113.10 -p 2222\n请勿填写密码或私钥。` : `${promptText}\n请勿填写密码或私钥。`, "");
     if (note !== null) void act(key, () => action(note.trim()), message);
@@ -134,6 +145,12 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (order.cycle_days) return `${order.cycle_days} 天（历史订单）`;
     return order.duration_hours ? `${order.duration_hours} 小时` : "";
   }
+  function deadlineCopy(order: Order) {
+    if (order.dispute_due_at) return { title: "争议处理截止", value: order.dispute_due_at };
+    if (order.confirmation_due_at) return { title: "买家验收截止", value: order.confirmation_due_at };
+    if (order.delivery_due_at) return { title: "商家交付截止", value: order.delivery_due_at };
+    return null;
+  }
 
   return <section className="workspace-page commerce-workspace order-workspace">
     <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / ORDERS" : "BUYER / ORDERS"}</p><h1>{supplierView ? "交付订单" : "我的订单"}</h1><span>{supplierView ? "已付款后填写 SSH 信息完成交付。" : "查看订单、交付信息和资产状态。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>统一订单账本<br />SSH 私钥不进入平台</span></div></div>
@@ -147,6 +164,8 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
         <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "商家"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
         <section className="confirmation-grid"><div className={detail.buyer_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家确认</small><strong>{detail.buyer_confirmed_at ? formatDate(detail.buyer_confirmed_at) : "等待确认"}</strong></span></div><div className={detail.supplier_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>商家确认</small><strong>{detail.supplier_confirmed_at ? formatDate(detail.supplier_confirmed_at) : "等待确认"}</strong></span></div></section>
         {detail.delivery_note && <div className="delivery-note"><Package size={18} /><div><strong>最近交付说明</strong><p>{detail.delivery_note}</p></div></div>}
+        {deadlineCopy(detail) && <div className="delivery-note"><ClockCountdown size={18} /><div><strong>{deadlineCopy(detail)?.title}</strong><p>{formatDate(deadlineCopy(detail)?.value)}</p></div></div>}
+        {detail.status === "disputed" && detail.dispute_reason && <div className="delivery-note"><ShieldWarning size={18} /><div><strong>争议说明</strong><p>{detail.dispute_reason}</p></div></div>}
         {detail.available_actions.includes("renew") && <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><div>{renewalHours.map((hours) => <button type="button" className={renewalHour === hours ? "active" : ""} key={hours} onClick={() => setRenewalHour(hours)}>{hours} 小时</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用统一钱包续费 ${renewalHour} 小时？`)) void act("renew", () => renewOrder(detail.id, renewalHour), `已续费 ${renewalHour} 小时`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>}
         <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events?.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>
         <footer className="order-actions">
@@ -154,6 +173,7 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
           {detail.available_actions.includes("start_delivery") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写交付进度说明（可选）", (note) => startOrderDelivery(detail.id, detail.version, note), "start", "订单已进入交付中") }><RocketLaunch size={16} />开始交付</button>}
           {detail.available_actions.includes("mark_delivered") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写有效 SSH 连接信息", (note) => markOrderDelivered(detail.id, detail.version, note), "deliver", "已提交 SSH 交付，等待买家确认", true) }><Package size={16} />提交 SSH 交付</button>}
           {detail.available_actions.includes("complete") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("complete", () => completeOrder(detail.id, detail.version, "买家确认验收通过"), "订单已完成") }><CheckCircle size={16} />确认验收完成</button>}
+          {detail.available_actions.includes("dispute") && <button className="commerce-danger" disabled={Boolean(busy)} onClick={dispute}><ShieldWarning size={16} />{busy === "dispute" ? "提交中…" : "发起争议"}</button>}
           {detail.available_actions.includes("cancel") && <button className="commerce-danger" disabled={Boolean(busy)} onClick={cancel}><Prohibit size={16} />取消订单</button>}
         </footer>
       </> : <div className="commerce-empty"><Receipt size={28} /><strong>选择一笔订单</strong><span>这里会展示确认、交付与事件记录。</span></div>}</div>

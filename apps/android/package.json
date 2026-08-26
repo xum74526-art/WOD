@@ -1,6 +1,6 @@
 {
   "name": "kai-android",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "KAI Android client",
   "scripts": {
     "dev:h5": "uni",

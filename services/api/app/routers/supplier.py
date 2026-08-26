@@ -11,6 +11,7 @@ from app.core.sensitive import sensitive_capability_enabled
 from app.db.session import get_db
 from app.models.asset import Asset
 from app.models.ledger import Ledger
+from app.models.merchant_settlement import MerchantSettlement
 from app.models.order import Order
 from app.models.product import Product
 from app.models.supplier import Supplier
@@ -88,17 +89,17 @@ def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_
     query_product_ids = product_ids or [0]
     from datetime import datetime, timedelta, timezone
     today_start = datetime.now(timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
-    # 今日收益
-    today_revenue = float(db.query(func.coalesce(func.sum(Order.amount), 0)).filter(
-        Order.product_id.in_(query_product_ids),
-        Order.status == "completed",
-        Order.created_at >= today_start,
-    ).scalar()) * 0.9
-    # 累计收益
-    total_revenue = float(db.query(func.coalesce(func.sum(Order.amount), 0)).filter(
-        Order.product_id.in_(query_product_ids),
-        Order.status == "completed",
-    ).scalar()) * 0.9
+    # Only durable settlement facts are earnings. Historical completed orders
+    # are intentionally not converted into withdrawable money on page load.
+    today_revenue = float(db.query(func.coalesce(func.sum(MerchantSettlement.net_amount), 0)).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+        MerchantSettlement.settled_at >= today_start,
+    ).scalar())
+    total_revenue = float(db.query(func.coalesce(func.sum(MerchantSettlement.net_amount), 0)).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+    ).scalar())
     # 在售设备
     product_count = len(product_ids)
     total_stock = int(db.query(func.coalesce(func.sum(Product.stock), 0)).filter(
@@ -106,11 +107,13 @@ def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_
     ).scalar() or 0)
     # 待交付
     pending_orders = db.query(Order).filter(
-        Order.product_id.in_(query_product_ids), Order.status.in_(["paid", "delivering"])
+        Order.product_id.in_(query_product_ids), Order.status.in_(["paid", "delivering", "disputed"])
     ).count()
     # 完成订单数
-    completed_orders = db.query(Order).filter(
-        Order.product_id.in_(query_product_ids), Order.status == "completed"
+    completed_orders = db.query(MerchantSettlement).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.source_type == "order",
+        MerchantSettlement.status == "settled",
     ).count()
     # 设备概览
     products = db.query(Product).filter(Product.supplier_id == s.id, Product.status == "on").limit(5).all()
@@ -126,15 +129,15 @@ def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_
     from collections import defaultdict
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     week_ago = now - timedelta(days=7)
-    orders = db.query(Order).filter(
-        Order.product_id.in_(query_product_ids),
-        Order.status == "completed",
-        Order.created_at >= week_ago,
+    settlements = db.query(MerchantSettlement).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+        MerchantSettlement.settled_at >= week_ago,
     ).all()
     daily = defaultdict(float)
-    for o in orders:
-        day = o.created_at.strftime("%m-%d") if o.created_at else "未知"
-        daily[day] += float(o.amount) * 0.9
+    for settlement in settlements:
+        day = settlement.settled_at.strftime("%m-%d") if settlement.settled_at else "未知"
+        daily[day] += float(settlement.net_amount)
     trend = [{"date": d, "amount": round(daily[d], 2)} for d in sorted(daily.keys())]
     return success({
         "company_name": s.company_name,
@@ -236,20 +239,31 @@ def revenue_detail(user: User = Depends(get_current_user), db: Session = Depends
         product_ids = [0]
     orders = db.query(Order).filter(
         Order.product_id.in_(product_ids),
-        Order.status.in_(["completed", "paid", "delivering"]),
+        Order.status.in_(["completed", "running", "done", "paid", "delivering", "disputed"]),
     ).order_by(Order.created_at.desc()).limit(50).all()
+    settlement_by_order = {
+        settlement.order_id: settlement
+        for settlement in db.query(MerchantSettlement).filter(
+            MerchantSettlement.supplier_id == s.id,
+            MerchantSettlement.source_type == "order",
+            MerchantSettlement.order_id.in_([order.id for order in orders] or [0]),
+        ).all()
+    }
     items = []
     for o in orders:
         p = db.query(Product).filter(Product.id == o.product_id).first()
         buyer = db.query(User).filter(User.id == o.user_id).first()
-        # 服务费10%
-        service_fee = round(float(o.amount) * 0.1, 2)
-        net_income = round(float(o.amount) - service_fee, 2)
+        settlement = settlement_by_order.get(o.id)
+        service_fee = float(settlement.service_fee_amount) if settlement else 0
+        net_income = float(settlement.net_amount) if settlement else 0
         items.append({
             "order_no": o.order_no, "product_name": p.name if p else "-",
             "buyer_name": buyer.username if buyer else "匿名",
             "amount": float(o.amount), "service_fee": service_fee,
             "net_income": net_income,
+            "settlement_status": settlement.status if settlement else (
+                "pending" if o.status in {"paid", "delivering", "disputed"} else "historical_unreconciled"
+            ),
             "status": o.status, "purchase_type": o.purchase_type,
             "created_at": o.created_at.isoformat() if o.created_at else None,
         })
@@ -263,16 +277,14 @@ def supplier_wallet(user: User = Depends(get_current_user), db: Session = Depend
     product_ids = [pid for (pid,) in db.query(Product.id).filter(Product.supplier_id == s.id).all()]
     if not product_ids:
         product_ids = [0]
-    # 总收入（已完成订单 - 服务费）
-    completed = db.query(Order).filter(
-        Order.product_id.in_(product_ids),
-        Order.status == "completed",
-    ).all()
-    total_revenue = sum(float(o.amount) * 0.9 for o in completed)  # 扣10%服务费
+    total_revenue = float(db.query(func.coalesce(func.sum(MerchantSettlement.net_amount), 0)).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+    ).scalar())
     # 待结算（paid+delivering的冻结资金）
     pending = db.query(Order).filter(
         Order.product_id.in_(product_ids),
-        Order.status.in_(["paid", "delivering"]),
+        Order.status.in_(["paid", "delivering", "disputed"]),
     ).all()
     pending_amount = sum(float(o.amount) for o in pending)
     # 已完成的人工打款（冻结结算事件，不是二次钱包扣款）
@@ -288,18 +300,27 @@ def supplier_wallet(user: User = Depends(get_current_user), db: Session = Depend
     # 今日收入
     from datetime import datetime, timedelta, timezone
     today_start = datetime.now(timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
-    today_orders = db.query(Order).filter(
+    today_revenue = float(db.query(func.coalesce(func.sum(MerchantSettlement.net_amount), 0)).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+        MerchantSettlement.settled_at >= today_start,
+    ).scalar())
+    settled_order_ids = db.query(MerchantSettlement.order_id).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.source_type == "order",
+    )
+    historical_unreconciled_count = db.query(Order).filter(
         Order.product_id.in_(product_ids),
-        Order.status == "completed",
-        Order.created_at >= today_start,
-    ).all()
-    today_revenue = round(sum(float(o.amount) * 0.9 for o in today_orders), 2)
+        Order.status.in_(["completed", "running", "done"]),
+        ~Order.id.in_(settled_order_ids),
+    ).count()
     return success({
         "total_revenue": round(total_revenue, 2),
         "pending_amount": round(pending_amount, 2),
         "withdrawn": round(withdrawn, 2),
         "available": max(0, round(available, 6)),
         "today_revenue": today_revenue,
+        "historical_unreconciled_count": historical_unreconciled_count,
         "payment_service_enabled": sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED),
     })
 
@@ -341,21 +362,21 @@ def supplier_stats(user: User = Depends(get_current_user), db: Session = Depends
     if not product_ids:
         product_ids = [0]
     month_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
-    orders = db.query(Order).filter(
-        Order.product_id.in_(product_ids),
-        Order.status == "completed",
-        Order.created_at >= month_ago,
+    settlements = db.query(MerchantSettlement).filter(
+        MerchantSettlement.supplier_id == s.id,
+        MerchantSettlement.status == "settled",
+        MerchantSettlement.settled_at >= month_ago,
     ).all()
     daily = defaultdict(float)
-    for o in orders:
-        day = o.created_at.strftime("%m-%d") if o.created_at else "未知"
-        daily[day] += float(o.amount) * 0.9
+    for settlement in settlements:
+        day = settlement.settled_at.strftime("%m-%d") if settlement.settled_at else "未知"
+        daily[day] += float(settlement.net_amount)
     revenue_trend = [{"date": d, "amount": round(daily[d], 2)} for d in sorted(daily.keys())]
     return success({
         "device_stats": device_stats,
         "revenue_trend": revenue_trend,
         "total_products": len(products),
-        "total_orders": len(orders),
+        "total_orders": len(settlements),
         "attention_count": sum(1 for p in all_products if p.status != "on" or int(p.stock or 0) <= 0),
     })
 

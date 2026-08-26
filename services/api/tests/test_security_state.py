@@ -19,7 +19,7 @@ from app.core.sensitive import (
     sensitive_security_errors,
 )
 from app.db.base import Base
-from app.models import Asset, BankCard, Ledger, MarketSourceStatus, Order, Product, Supplier, User, Wallet  # noqa: F401
+from app.models import Asset, BankCard, Ledger, MarketSourceStatus, MerchantSettlement, Order, Product, Supplier, User, Wallet  # noqa: F401
 from app.routers.bank_card import add_card
 from app.routers.supplier import dashboard, store_page, supplier_withdraw
 from app.routers.supplier import register
@@ -193,7 +193,7 @@ class SecurityStateTests(unittest.TestCase):
         self.assertEqual(self.wallet.balance, Decimal("100"))
         self.assertEqual(self.wallet.frozen, Decimal("0"))
 
-    def test_confirm_delivery_conserves_funds_and_converts_freeze_to_one_payment(self):
+    def test_confirm_delivery_conserves_funds_and_settles_merchant_income(self):
         product = Product(
             name="RTX 4090 交付测试", gpu_model="RTX4090", memory="24GB",
             price=Decimal("0.01"), cycle=[30], stock=2,
@@ -214,11 +214,22 @@ class SecurityStateTests(unittest.TestCase):
         deliver_ssh(order_id, {"ssh_info": "ssh test@example.com -p 22"}, self.seller, self.db)
         confirm_delivery(order_id, self.user, self.db)
         self.db.refresh(self.wallet)
+        self.db.refresh(self.seller_wallet)
         self.assertEqual(self.wallet.balance, Decimal("85.6000"))
         self.assertEqual(self.wallet.frozen, Decimal("0.0000"))
-        entries = self.db.query(Ledger).filter(Ledger.ref_order_id == order_id).all()
-        self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0].type, "pay")
+        entries = self.db.query(Ledger).filter(Ledger.ref_order_id == order_id).order_by(Ledger.id).all()
+        self.assertEqual([entry.type for entry in entries], ["freeze", "pay", "merchant_sale_income"])
+        self.assertEqual(entries[1].direction, "internal")
+        settlement = self.db.query(MerchantSettlement).filter(
+            MerchantSettlement.order_id == order_id,
+        ).one()
+        self.assertEqual(settlement.gross_amount, Decimal("14.400000"))
+        self.assertEqual(settlement.service_fee_amount, Decimal("1.440000"))
+        self.assertEqual(settlement.net_amount, Decimal("12.960000"))
+        self.assertEqual(settlement.gross_amount, settlement.service_fee_amount + settlement.net_amount)
+        self.assertEqual(self.seller_wallet.balance, Decimal("22.960000"))
+        self.assertEqual(self.seller_wallet.withdrawable_balance, Decimal("12.960000"))
+        self.assertEqual(spendable_wallet_balance(self.seller_wallet, self.db), Decimal("10.000000"))
         self.assertFalse(self.db.query(Ledger).filter(Ledger.ref_order_id == order_id, Ledger.type == "fee").count())
         created_asset = self.db.query(Asset).filter(Asset.order_id == order_id).one()
         self.assertEqual(Decimal(str(created_asset.daily_rate)), Decimal("0.000000"))
@@ -240,7 +251,7 @@ class SecurityStateTests(unittest.TestCase):
         with self.assertRaises(BizError):
             cancel_order(result["data"]["id"], self.user, self.db)
 
-    def test_live_external_usage_and_holding_orders_reserve_full_amount_until_delivery(self):
+    def test_live_external_usage_reserves_funds_and_holding_is_disabled(self):
         now = datetime.now()
         self.db.add(MarketSourceStatus(
             source="kai", enabled=True, status="ok", refresh_seconds=300,
@@ -264,16 +275,16 @@ class SecurityStateTests(unittest.TestCase):
             product_id=external.id, hours=72, purchase_type="usage",
             client_request_id="external-usage-0001",
         ), self.user, self.db)
-        holding_result = create_order(OrderCreateIn(
-            product_id=local.id, cycle_days=30, purchase_type="holding",
-            client_request_id="local-holding-0001",
-        ), self.user, self.db)
+        with self.assertRaises(BizError):
+            create_order(OrderCreateIn(
+                product_id=local.id, cycle_days=30, purchase_type="holding",
+                client_request_id="local-holding-0001",
+            ), self.user, self.db)
         self.db.refresh(self.wallet)
-        self.assertEqual(self.wallet.balance, Decimal("85.6000"))
-        self.assertEqual(self.wallet.frozen, Decimal("14.4000"))
+        self.assertEqual(self.wallet.balance, Decimal("92.8000"))
+        self.assertEqual(self.wallet.frozen, Decimal("7.2000"))
         self.assertEqual(self.db.query(Asset).count(), 0)
         self.assertIsNone(external_result["data"]["ssh_info"])
-        self.assertIsNone(holding_result["data"]["asset_id"])
 
         settings.PLATFORM_FULFILLMENT_USER_IDS = str(self.seller.id)
         with self.assertRaises(BizError):
@@ -290,19 +301,6 @@ class SecurityStateTests(unittest.TestCase):
         ).one()
         self.assertEqual(external_asset.purchase_type, "usage")
         self.assertEqual(Decimal(str(external_asset.daily_rate)), Decimal("0.000000"))
-
-        deliver_ssh(
-            holding_result["data"]["id"],
-            {"ssh_info": "Host: 203.0.113.8\nPort: 22\nUsername: root"},
-            self.seller,
-            self.db,
-        )
-        confirm_delivery(holding_result["data"]["id"], self.user, self.db)
-        holding_asset = self.db.query(Asset).filter(
-            Asset.order_id == holding_result["data"]["id"]
-        ).one()
-        self.assertEqual(holding_asset.purchase_type, "holding")
-        self.assertEqual(Decimal(str(holding_asset.daily_rate)), Decimal("0.000000"))
 
     def test_order_client_request_id_is_idempotent(self):
         product = Product(

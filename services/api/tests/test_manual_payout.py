@@ -161,6 +161,34 @@ class ManualPayoutTests(unittest.TestCase):
         self.assertEqual(self.wallet.balance, self.wallet.withdrawable_balance)
         self.assertEqual(spendable_wallet_balance(self.wallet, self.db), Decimal("0"))
 
+    def test_reward_card_hours_are_spendable_but_never_raise_withdrawable_limit(self):
+        self.wallet.balance = Decimal("15")
+        self.wallet.withdrawable_balance = Decimal("5")
+        self.db.add(Ledger(
+            user_id=self.user.id,
+            wallet_id=self.wallet.id,
+            type="invite_first_order_reward",
+            direction="in",
+            amount=Decimal("10"),
+            balance_after=Decimal("10"),
+            event_key="test:nonwithdrawable-invite-reward",
+            remark="邀请奖励，仅限站内消费",
+        ))
+        self.db.commit()
+
+        self.assertEqual(spendable_wallet_balance(self.wallet, self.db), Decimal("10"))
+        with self.assertRaisesRegex(BizError, "可提现余额不足"):
+            self._create(amount="6", request_id="withdraw-reward-forbidden")
+        self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.balance, Decimal("15"))
+        self.assertEqual(self.wallet.withdrawable_balance, Decimal("5"))
+
+        allowed = self._create(amount="5", request_id="withdraw-earned-only")
+        self.assertEqual(allowed.amount_card_hours, Decimal("5.000000"))
+        self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.balance, Decimal("10.000000"))
+        self.assertEqual(self.wallet.withdrawable_balance, Decimal("0.000000"))
+
     def test_configured_ten_card_hour_minimum_is_enforced(self):
         settings.PAYOUT_MIN_CARD_HOURS = 10
         self.assertEqual(withdrawal_config()["min_card_hours"], 10.0)

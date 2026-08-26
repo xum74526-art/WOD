@@ -1,14 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Bank, CheckCircle, Copy, Gift, Plus, Receipt, Ticket, Trash, TrendUp, UsersThree } from "@phosphor-icons/react";
+import { Bank, Gift, Plus, Receipt, Ticket, Trash, TrendUp } from "@phosphor-icons/react";
 import { errorMessage } from "@/lib/commerce-ui";
 import {
   addBankCard,
   deleteBankCard,
   getBankCardBundle,
   getVerification,
-  getInviteBundle,
   getRevenueBundle,
   listCoupons,
   redeemCoupon,
@@ -16,8 +15,6 @@ import {
   type BankCard,
   type BankCardConfig,
   type Coupon,
-  type InviteRecord,
-  type InviteSummary,
   type RebateSummary,
   type RevenuePoint,
   type RevenueRecord,
@@ -27,6 +24,7 @@ import {
 import { isRegisteredBankCardStatus, luhnCheckCardNumber } from "@/lib/finance-ui";
 import { useI18n } from "@/components/locale-root";
 import { localizeRebateHint } from "@/lib/product-purchase";
+import { ReferralWorkspace } from "@/components/referral-workspace";
 
 export type MobileAccountSection = "revenue" | "referrals" | "coupons" | "bank-accounts";
 
@@ -69,14 +67,6 @@ function RevenueWorkspace() {
     <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>REVENUE LEDGER</small><h2>收益记录</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.id}><span><strong>+{amount(row.amount)} 卡时</strong><small>资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无收益记录</div>}</section>
         {!summary?.revenue_settlement_enabled && <div className="workspace-service-note">当前收益统计仅包含已确认结算记录；未结算历史记录为 {amount(summary?.historical_test_total)} 卡时。</div>}
   </>;
-}
-
-function ReferralWorkspace() {
-  const [summary, setSummary] = useState<InviteSummary | null>(null); const [rows, setRows] = useState<InviteRecord[]>([]); const [copied, setCopied] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { getInviteBundle().then(([a, b]) => { setSummary(a); setRows(b.items || []); }).catch((reason) => setError(errorMessage(reason))); }, []);
-  async function copy() { if (!summary?.code) return; await navigator.clipboard.writeText(summary.code); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
-  if (!summary && !error) return <div className="workspace-skeleton" />;
-  return <>{error && <div className="commerce-error">{error}</div>}<div className="mobile-invite-hero"><div><small>YOUR INVITE CODE</small><strong>{summary?.code || "—"}</strong><button onClick={() => void copy()}>{copied ? <CheckCircle size={16}/> : <Copy size={16}/>} {copied ? "已复制" : "复制邀请码"}</button></div><UsersThree size={64} weight="thin"/></div><div className="mobile-data-spine"><article><small>已邀请</small><strong>{summary?.invited_count || 0}</strong><span>位用户</span></article><article><small>已达标</small><strong>{summary?.qualified_count || 0}</strong><span>位用户</span></article><article><small>累计奖励</small><strong>{amount(summary?.total_reward)}</strong><span>卡时</span></article><article><small>当前等级</small><strong>{summary?.current_tier || "—"}</strong><span>{summary?.next_tier_hint || "暂无升级提示"}</span></article></div><section className="mobile-record-panel"><header><UsersThree size={19}/><div><small>INVITE HISTORY</small><h2>邀请记录</h2></div><b>{rows.length}</b></header>{rows.length ? rows.map((row) => <article key={row.id}><span><strong>{row.invitee_phone}</strong><small>{row.status}</small></span><span className="mobile-record-amount">{row.reward_amount ? `+${amount(row.reward_amount)} 卡时` : "待达标"}</span><time>{date(row.created_at)}</time></article>) : <div className="mobile-inline-empty">还没有邀请记录</div>}</section></>;
 }
 
 function CouponWorkspace() {
@@ -182,6 +172,11 @@ const headers: Record<MobileAccountSection, { eyebrow: string; title: string; de
 };
 
 export function MobileAccountServices({ section }: { section: MobileAccountSection }) {
-  const header = headers[section];
+  const { t } = useI18n();
+  const header = section === "referrals" ? {
+    eyebrow: "ACCOUNT / REFERRALS",
+    title: t("invite.page.title", "邀请奖励"),
+    description: t("invite.page.description", "查看每日名额、达标奖励、好友消费返佣和结算记录。"),
+  } : headers[section];
   return <section className={`workspace-page mobile-account-service mobile-account-service--${section}`}><div className="workspace-page__head"><p>{header.eyebrow}</p><h1>{header.title}</h1><span>{header.description}</span></div>{section === "revenue" ? <RevenueWorkspace/> : section === "referrals" ? <ReferralWorkspace/> : section === "coupons" ? <CouponWorkspace/> : <BankCardWorkspace/>}</section>;
 }

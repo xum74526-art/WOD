@@ -90,13 +90,9 @@
       </view>
       <SectionHeader v-if="canBuy" :title="t('purchaseModeLabel')" />
       <view v-if="canBuy" class="mode-row">
-        <view class="mode-card" :class="{ active: purchaseType === 'usage' }" role="button" @tap="purchaseType = 'usage'">
+        <view class="mode-card active">
           <text class="mode-title">{{ t('usageMode') }}</text>
           <text class="mode-desc">{{ t('usageDesc') }}</text>
-        </view>
-        <view class="mode-card" :class="{ active: purchaseType === 'holding' }" role="button" @tap="purchaseType = 'holding'">
-          <text class="mode-title">{{ t('holdingMode') }}</text>
-          <text class="mode-desc">{{ t('holdingDesc') }}</text>
         </view>
       </view>
       <view v-if="canBuy" class="card fee">
@@ -104,23 +100,23 @@
         <view class="row"><text class="sk">{{ t('purchaseDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ t('sshDelivery') }}</text></view>
-        <view class="row" v-if="purchaseType === 'usage' && estRebate > 0"><text class="sk">{{ t('personalPurchaseRebateTier') }}</text><text class="sv">{{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text></view>
-        <view class="row" v-if="purchaseType === 'usage' && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text></view>
+        <view class="row" v-if="estRebate > 0"><text class="sk">{{ t('personalPurchaseRebateTier') }}</text><text class="sv">{{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text></view>
+        <view class="row" v-if="estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text></view>
         <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
-        <text v-if="purchaseType === 'usage' && estRebate > 0" class="rebate-estimate-hint">{{ t('personalRebateEstimateHint') }}</text>
+        <text v-if="estRebate > 0" class="rebate-estimate-hint">{{ t('personalRebateEstimateHint') }}</text>
       </view>
-      <view v-if="canBuy" class="risk">{{ t(purchaseType === 'holding' ? 'holdingRisk' : 'usageRisk') }}</view>
+      <view v-if="canBuy" class="risk">{{ t('usageRisk') }}</view>
     </scroll-view>
     <BottomActionBar v-if="product">
-      <view class="buy-btn" :class="{ disabled: submitting || !canBuy }" @tap="openConfirm">{{ t(submitting ? '处理中...' : (!canBuy ? unavailableActionLabel : (purchaseType === 'holding' ? 'buyHolding' : 'buyUsage'))) }}</view>
+      <view class="buy-btn" :class="{ disabled: submitting || !canBuy }" @tap="openConfirm">{{ t(submitting ? '处理中...' : (!canBuy ? unavailableActionLabel : 'buyUsage')) }}</view>
     </BottomActionBar>
-    <ConfirmSheet :visible="showConfirm" :title="t(purchaseType === 'holding' ? 'confirmHoldingPurchase' : 'confirmUsagePurchase')" :desc="product ? `${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(amount)} ${t('cardHour')}` : ''" :confirmText="t('k_936de2c4')" @cancel="showConfirm = false" @confirm="onBuy">
+    <ConfirmSheet :visible="showConfirm" :title="t('confirmUsagePurchase')" :desc="product ? `${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(amount)} ${t('cardHour')}` : ''" :confirmText="t('k_936de2c4')" @cancel="showConfirm = false" @confirm="onBuy">
       <view v-if="isKaiProduct" class="provider-notice">{{ t('kaiFulfillmentAllocationNotice') }}</view>
       <view class="confirm-fee">
         <text>{{ t('k_99b6bb88') }}</text>
         <text class="cf-val up">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text>
       </view>
-      <view v-if="purchaseType === 'usage' && estRebate > 0" class="confirm-fee">
+      <view v-if="estRebate > 0" class="confirm-fee">
         <text>{{ t('estimatedExpiryRebate') }}</text>
         <text class="cf-val">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} · {{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text>
       </view>
@@ -162,7 +158,7 @@ const product = ref<Awaited<ReturnType<typeof getProduct>> | null>(null)
 const candles = ref<MarketCandles | null>(null)
 const hours = ref(24)
 const quantity = ref(1)
-const purchaseType = ref<'usage' | 'holding'>('usage')
+const purchaseType = 'usage' as const
 const wallet = ref<number | null>(null)
 const rebate = ref<RebateSummary | null>(null)
 const showConfirm = ref(false)
@@ -376,7 +372,7 @@ function quantityUnits(count: number) {
 
 const rebateEstimate = computed(() => estimateUsageExpiryRebate(
   amount.value,
-  purchaseType.value,
+  purchaseType,
   Boolean(rebate.value?.rewards_enabled),
   Number(rebate.value?.month_spent ?? 0),
   Number(rebate.value?.minimum_order_amount ?? Number.NaN),
@@ -391,7 +387,7 @@ async function onBuy() {
   if (submitting.value || !canBuy.value) return
   submitting.value = true
   try {
-    const created = await createOrder(pid.value, hours.value, purchaseType.value, quantity.value, ensureRequestId())
+    const created = await createOrder(pid.value, hours.value, purchaseType, quantity.value, ensureRequestId())
     pendingRequestId.value = ''
     pendingRequestSignature.value = ''
     uni.showToast({ title: t('购买成功'), icon: 'success' })
@@ -412,7 +408,7 @@ function openConfirm() {
 }
 
 function ensureRequestId() {
-  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType.value}`
+  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType}`
   if (!pendingRequestId.value || pendingRequestSignature.value !== signature) {
     pendingRequestSignature.value = signature
     pendingRequestId.value = `wod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
@@ -480,9 +476,8 @@ function goStore() {
 .quantity-button:active { transform: scale(0.96); }
 .quantity-button.disabled { color: var(--text-dim); background: var(--bg-2); }
 .quantity-value { color: var(--text); text-align: center; font-size: 28rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
-.mode-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-bottom: 24rpx; }
+.mode-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16rpx; margin-bottom: 24rpx; }
 .mode-card { min-width: 0; padding: 24rpx; border: 2rpx solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8rpx; background: var(--card); }
-.mode-card:active { transform: scale(0.98); }
 .mode-card.active { border-color: var(--primary); background: var(--primary-soft); }
 .mode-title { color: var(--text); font-size: 28rpx; font-weight: 700; }
 .mode-card.active .mode-title { color: var(--primary); }

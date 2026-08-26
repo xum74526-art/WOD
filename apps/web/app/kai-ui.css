@@ -459,7 +459,7 @@ html :where([class*="card"], [class*="panel"], [class*="console"], [class*="ledg
 :where(.status-chip, [class*="status-chip--"]) { min-height: 24px; padding-inline: 8px; border: 1px solid currentColor; border-radius: var(--kai-radius-sm) !important; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-weight: 500; }
 .status-chip--published, .status-chip--approved, .status-chip--accepted, .status-chip--completed { color: var(--success) !important; background: var(--success-soft) !important; }
 .status-chip--negotiating, .status-chip--shortlisted, .status-chip--pending, .status-chip--reviewing, .status-chip--submitted,
-.status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered { color: var(--warning) !important; background: var(--warning-soft) !important; }
+.status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered, .status-chip--disputed { color: var(--warning) !important; background: var(--warning-soft) !important; }
 .status-chip--rejected, .status-chip--expired, .status-chip--closed, .status-chip--withdrawn, .status-chip--cancelled { color: var(--destructive) !important; background: var(--destructive-soft) !important; }
 .provider-state { border-radius: 0; color: var(--warning); background: var(--warning-soft); }
 .provider-state--ready { color: var(--success); background: var(--success-soft); }

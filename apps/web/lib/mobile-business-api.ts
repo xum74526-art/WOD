@@ -1,6 +1,16 @@
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { canonicalApiPath } from "@/lib/canonical-api";
 import type { RebateTier } from "@/lib/product-purchase";
+import {
+  normalizeInviteRecordBundle,
+  normalizeInviteSummary,
+  type InviteRecord,
+  type InviteRecordBundle,
+  type InviteSummary,
+  type InviteTier,
+} from "@/lib/invite-v2";
+
+export type { InviteRecord, InviteRecordBundle, InviteSummary, InviteTier } from "@/lib/invite-v2";
 
 
 export type MobileAsset = {
@@ -81,29 +91,6 @@ export type RebateSummary = {
   cap_remaining: number;
   rewards_enabled: boolean;
   reward_mode: "disabled" | "test_card_hours" | "live";
-};
-
-export type InviteSummary = {
-  code: string;
-  invited_count: number;
-  qualified_count: number;
-  unverified_count: number;
-  total_reward: number;
-  pending_count: number;
-  rewarded_count: number;
-  current_tier: string;
-  next_tier_hint: string;
-  rewards_enabled: boolean;
-  reward_mode: "disabled" | "test_card_hours" | "live";
-};
-
-export type InviteRecord = {
-  id: number;
-  invitee_phone: string;
-  status: string;
-  reward_amount: number;
-  created_at?: string;
-  rewarded_at?: string | null;
 };
 
 export type Coupon = { id: number; name: string; amount: number; min_amount: number; status: string; expires_at?: string };
@@ -383,11 +370,26 @@ export function getUserRebate() {
   return apiRequest<RebateSummary>(canonicalApiPath("/user/rebate"));
 }
 
-export function getInviteBundle() {
-  return Promise.all([
-    apiRequest<InviteSummary>(canonicalApiPath("/invite/summary")),
-    apiRequest<{ total: number; items: InviteRecord[] }>(canonicalApiPath("/invite/records")),
+export async function getInviteBundle(): Promise<readonly [InviteSummary, InviteRecordBundle]> {
+  const [summaryResult, recordsResult, commissionsResult] = await Promise.allSettled([
+    apiRequest<unknown>(canonicalApiPath("/invite/summary")),
+    apiRequest<unknown>(canonicalApiPath("/invite/records")),
+    apiRequest<unknown>(canonicalApiPath("/invite/commissions?page=1&page_size=50")),
   ]);
+  if (summaryResult.status === "rejected") throw summaryResult.reason;
+  if (recordsResult.status === "rejected") throw recordsResult.reason;
+
+  const summary = normalizeInviteSummary(summaryResult.value);
+  let commissions: unknown;
+  if (commissionsResult.status === "fulfilled") {
+    commissions = commissionsResult.value;
+  } else if (!summary.isV2 && commissionsResult.reason instanceof ApiError && commissionsResult.reason.status === 404) {
+    commissions = { total: 0, items: [] };
+  } else {
+    throw commissionsResult.reason;
+  }
+
+  return [summary, normalizeInviteRecordBundle(recordsResult.value, commissions)] as const;
 }
 
 export function listCoupons(status = "") {

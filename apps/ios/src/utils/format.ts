@@ -149,3 +149,15 @@ export function formatDate(s?: string): string {
   if (!s) return ''
   return s.slice(0, 10)
 }
+
+/** Format API deadlines in the platform's Asia/Shanghai business timezone. */
+export function formatDeadline(s?: string | null): string {
+  if (!s) return ''
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s) ? s : `${s}Z`
+  const timestamp = new Date(normalized).getTime()
+  if (!Number.isFinite(timestamp)) return s.replace('T', ' ').slice(0, 16)
+
+  const cst = new Date(timestamp + 8 * 60 * 60 * 1000)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${cst.getUTCFullYear()}-${pad(cst.getUTCMonth() + 1)}-${pad(cst.getUTCDate())} ${pad(cst.getUTCHours())}:${pad(cst.getUTCMinutes())} UTC+8`
+}

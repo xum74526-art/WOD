@@ -337,9 +337,15 @@ function order(value: unknown, supplierView = false) {
   const mappedStatus = mapOrderStatus(text(item.status));
   const supplierName = text(item.supplier_name, "北斗 kai 商家");
   const available: string[] = [];
-  if (!supplierView && item.status === "delivering") available.push("complete");
-  if (!supplierView && item.status === "paid") available.push("cancel");
+  // Buyer mutations are advertised by FastAPI after ownership and state
+  // checks. The BFF must not recreate a second order state machine.
+  if (!supplierView && Boolean(item.can_confirm)) available.push("complete");
+  if (!supplierView && Boolean(item.can_cancel)) available.push("cancel");
+  if (!supplierView && Boolean(item.can_dispute)) available.push("dispute");
   if (!supplierView && purchaseHours != null && ["completed", "running"].includes(text(item.status)) && text(item.purchase_type, "usage") === "usage") available.push("renew");
+  // Supplier delivery remains a compatibility action until the canonical API
+  // publishes a caller-aware supplier action list. FastAPI still owns the
+  // authorization and transition check for this endpoint.
   if (supplierView && item.status === "paid") available.push("mark_delivered");
   return {
     id: number(item.id),
@@ -376,15 +382,24 @@ function order(value: unknown, supplierView = false) {
         unit_price: "",
       },
     },
-    buyer_confirmed_at: item.status === "completed" || item.status === "running" ? item.start_at : null,
+    buyer_confirmed_at: text(item.confirmed_at) || (item.status === "completed" || item.status === "running" ? item.start_at : null),
     supplier_confirmed_at: item.status === "delivering" || item.status === "completed" || item.status === "running" ? item.created_at : null,
-    confirmed_at: item.start_at || null,
+    confirmed_at: text(item.confirmed_at) || null,
     delivery_started_at: item.status === "delivering" ? item.created_at : null,
-    delivered_at: item.status === "delivering" ? item.created_at : null,
+    delivered_at: text(item.delivered_at) || (item.status === "delivering" ? text(item.created_at) || null : null),
     completed_at: item.status === "completed" || item.status === "running" ? item.start_at : null,
-    cancelled_at: item.status === "canceled" ? item.created_at : null,
+    cancelled_at: text(item.canceled_at) || (item.status === "canceled" ? text(item.created_at) || null : null),
     cancel_reason: null,
     delivery_note: text(item.ssh_info) || null,
+    fulfillment_status: text(item.fulfillment_status) || null,
+    delivery_due_at: text(item.delivery_due_at) || null,
+    confirmation_due_at: text(item.confirmation_due_at) || null,
+    disputed_at: text(item.disputed_at) || null,
+    dispute_due_at: text(item.dispute_due_at) || null,
+    dispute_reason: text(item.dispute_reason) || null,
+    dispute_resolution: text(item.dispute_resolution) || null,
+    dispute_resolution_note: text(item.dispute_resolution_note) || null,
+    dispute_resolved_at: text(item.dispute_resolved_at) || null,
     created_at: text(item.created_at),
     updated_at: text(item.created_at),
     version: 1,
@@ -676,7 +691,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     });
     return result.ok ? apiSuccess({ order: order(result.body.data) }) : upstreamFailure(result);
   }
-  const accountOrder = path.match(/^account\/orders(?:\/(\d+))?(?:\/(confirm|complete|cancel|renew))?$/);
+  const accountOrder = path.match(/^account\/orders(?:\/(\d+))?(?:\/(confirm|complete|cancel|dispute|renew))?$/);
   if (accountOrder) {
     const id = accountOrder[1];
     const action = accountOrder[2];
@@ -698,10 +713,14 @@ export async function handleApi(request: NextRequest, segments: string[]) {
       const upstreamAction = action === "complete" ? "confirm" : action;
       const result = await upstream(request, `/api/orders/${id}/${upstreamAction}`, {
         method: "POST",
-        body: action === "renew" ? {
-          hours: number(body.hours),
-          client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64),
-        } : undefined,
+        body: action === "renew"
+          ? {
+              hours: number(body.hours),
+              client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64),
+            }
+          : action === "dispute"
+            ? { reason: text(body.reason) }
+            : undefined,
       });
       if (!result.ok) return upstreamFailure(result);
       const detail = await upstream(request, `/api/orders/${id}`);

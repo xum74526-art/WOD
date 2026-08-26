@@ -18,7 +18,7 @@ export const accountFeatures: Record<string, WorkspaceFeature> = {
   verification: { title: "实名认证", description: "提交个人或企业主体信息，由平台管理员人工核验。", status: "人工 KYC 审核已启用", available: ["证件字段独立加密", "用户端末四位脱敏", "管理员审核与权限门禁"], pending: ["可选的第三方 Hosted KYC", "证件照片私有对象存储"] },
   addresses: { title: "地址管理", description: "维护设备交付和线下采购地址。", status: "地址数据库已启用", available: ["新增、编辑、删除和默认地址", "所有权与版本冲突保护"], pending: ["地址标准化服务"] },
   notifications: { title: "通知中心", description: "查看订单、设备、审核与系统通知。", status: "站内通知已启用", available: ["未读状态、业务跳转和批量已读", "团队与争议通知"], pending: ["邮件与短信发送渠道"] },
-  disputes: { title: "争议工单", description: "在 T+1 结算前针对真实订单发起并跟踪争议。", status: "争议与退款联动已启用", available: ["订单所有权和争议期校验", "买家胜诉退款与 SSH 撤权", "Ping++ 原路退款", "商家胜诉继续结算"], pending: [] },
+  disputes: { title: "订单争议", description: "待验收订单可直接在订单详情中提交交付问题。", status: "争议入口已合并到订单页", available: ["后端校验订单所有权和可争议状态", "展示处理期限和争议原因"], pending: ["独立争议工单列表"] },
   teams: { title: "团队管理", description: "创建团队、邀请成员并分配角色。", status: "团队数据库已启用", available: ["团队成员与邀请", "站内通知联动"], pending: ["细粒度资源授权"] },
   "api-keys": { title: "API Key", description: "管理自动化程序使用的最小权限凭据。", status: "密钥生命周期已启用", available: ["一次性明文", "哈希存储和吊销"], pending: ["API Key 请求认证中间件"] },
   settings: { title: "账户与设置", description: "管理资料、安全、语言、主题和登录设备。", status: "账户安全台已启用", available: ["设备会话管理", "密码修改", "安全 Cookie 会话"], pending: ["邮箱验证", "手机号绑定"] },

@@ -16,6 +16,7 @@ from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
 from app.services.market_candle_sync import dispatch_market_candle_sync, sync_market_candles
+from app.services.merchant_settlement import assert_merchant_settlement_configuration_safe
 from app.services.reward_entitlements import settle_reward_entitlements_job
 from app.services.reward_program import assert_reward_configuration_safe
 from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     # writers. Fail closed before any scheduler starts if deployment flags are
     # inconsistent.
     assert_reward_configuration_safe()
+    assert_merchant_settlement_configuration_safe()
     try:
         community_timezone = ZoneInfo(settings.COMMUNITY_TIMEZONE)
     except ZoneInfoNotFoundError:

@@ -10,7 +10,7 @@ export const quoteStatusLabel: Record<QuoteStatus, string> = {
 };
 export const orderStatusLabel: Record<OrderStatus, string> = {
   pending_confirmation: "待商家确认", confirmed: "双方已确认", delivering: "交付中",
-  delivered: "待买家验收", completed: "已完成", cancelled: "已取消",
+  delivered: "待买家验收", disputed: "争议处理中", completed: "已完成", cancelled: "已取消",
 };
 export const unitLabel: Record<string, string> = { server_hour: "整机·小时", gpu_hour: "GPU·小时", gpu_day: "GPU·天", unit: "台" };
 

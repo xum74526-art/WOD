@@ -59,6 +59,18 @@ class Settings(BaseSettings):
     # Full payout instructions are sensitive. Finance must use the short-lived,
     # one-time proof returned by the reveal endpoint when recording a payment.
     PAYOUT_INSTRUCTION_REVEAL_TTL_SECONDS: int = 300
+    # Confirmed WOD merchant sales settle independently from promotional
+    # reward card-hours and synthetic asset revenue. Ten percent = 1000 bps.
+    MERCHANT_SERVICE_FEE_BPS: int = 1000
+    # Reserved order funds cannot remain frozen forever. Pending delivery is
+    # refunded, a delivered order auto-confirms if the buyer raises no dispute,
+    # and an unresolved dispute defaults to a buyer refund after the SLA.
+    ORDER_DELIVERY_TIMEOUT_HOURS: int = 24
+    ORDER_CONFIRMATION_TIMEOUT_HOURS: int = 24
+    ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS: int = 72
+    # Existing pending/delivering rows may reflect manual agreements. They are
+    # never auto-migrated into the new SLA until operations explicitly opts in.
+    ORDER_LEGACY_PENDING_MIGRATION_ENABLED: bool = False
     CARD_HOUR_RMB_RATE: float = 1.002
     MAPAY_ENABLED: bool = False
     MAPAY_BASE_URL: str = "https://mzf.mapay.cc/xpay/epayn"
@@ -105,9 +117,9 @@ class Settings(BaseSettings):
     # Registration/invite/consumer/supplier rebates remain disabled until an
     # auditable verification and settlement policy is connected.
     REWARD_SERVICE_ENABLED: bool = False
-    # In-app card-hour rewards are spendable only inside WOD and remain
-    # non-withdrawable while PAYMENT_SERVICE_ENABLED is false.  They use
-    # dedicated ledger types so legacy synthetic rewards stay excluded.
+    # In-app card-hour rewards are spendable only inside WOD and are always
+    # non-withdrawable, independently of recharge or payout configuration.
+    # They use dedicated ledger types so legacy synthetic rewards stay excluded.
     CLOSED_TEST_REWARD_ENABLED: bool = False
     # Versioned reward programs are deliberately independent. Enabling one
     # never activates legacy reward ledger rows or either of the other
@@ -115,6 +127,10 @@ class Settings(BaseSettings):
     CONSUMER_REWARD_ENABLED: bool = False
     SUPPLIER_REWARD_ENABLED: bool = False
     INVITE_REWARD_ENABLED: bool = False
+    # Invitation V2 is independent from the retired first-order percentage
+    # writer. It uses verified identity, daily qualification slots and
+    # cash-backed consumption snapshots.
+    INVITE_V2_ENABLED: bool = False
     # Emergency settlement pause. Program switches above stop new accruals;
     # this separate switch controls payment of already-promised accruals.
     REWARD_SETTLEMENT_ENABLED: bool = False

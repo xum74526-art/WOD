@@ -17,6 +17,8 @@ REWARD_MODE_LIVE = "live"
 PROGRAM_CONSUMER = "consumer_purchase"
 PROGRAM_SUPPLIER = "supplier_sales"
 PROGRAM_INVITE = "invite_first_order"
+PROGRAM_INVITE_QUALIFICATION = "invite_qualification_bonus"
+PROGRAM_INVITE_COMMISSION = "invite_consumption_commission"
 
 _LIVE_LEDGER_TYPES = {
     "consumer": "rebate",
@@ -34,12 +36,16 @@ _PROGRAM_LEDGER_TYPES = {
     PROGRAM_CONSUMER: "consumer_purchase_rebate",
     PROGRAM_SUPPLIER: "supplier_sales_rebate",
     PROGRAM_INVITE: "invite_first_order_reward",
+    PROGRAM_INVITE_QUALIFICATION: "invite_qualification_bonus",
+    PROGRAM_INVITE_COMMISSION: "invite_consumption_commission",
 }
 
 _PROGRAM_PUBLIC_TYPES = {
     PROGRAM_CONSUMER: "rebate",
     PROGRAM_SUPPLIER: "supplier_rebate",
     PROGRAM_INVITE: "invite_reward",
+    PROGRAM_INVITE_QUALIFICATION: "invite_reward",
+    PROGRAM_INVITE_COMMISSION: "invite_reward",
 }
 
 
@@ -48,6 +54,8 @@ def program_enabled(program_code: str) -> bool:
         PROGRAM_CONSUMER: settings.CONSUMER_REWARD_ENABLED,
         PROGRAM_SUPPLIER: settings.SUPPLIER_REWARD_ENABLED,
         PROGRAM_INVITE: settings.INVITE_REWARD_ENABLED,
+        PROGRAM_INVITE_QUALIFICATION: settings.INVITE_V2_ENABLED,
+        PROGRAM_INVITE_COMMISSION: settings.INVITE_V2_ENABLED,
     }
     if program_code not in switches:
         raise ValueError(f"unsupported reward program: {program_code}")
@@ -71,6 +79,10 @@ def assert_reward_configuration_safe() -> None:
     if legacy_enabled:
         raise RuntimeError(
             "legacy reward writers are retired; enable only versioned reward programs"
+        )
+    if settings.INVITE_REWARD_ENABLED and settings.INVITE_V2_ENABLED:
+        raise RuntimeError(
+            "invite V1 and V2 writers cannot be enabled together"
         )
     try:
         ZoneInfo(settings.REWARD_TIMEZONE)

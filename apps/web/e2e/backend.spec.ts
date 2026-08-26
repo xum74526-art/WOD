@@ -83,6 +83,7 @@ test("新增的个人中心功能全部通过 BFF 使用统一业务接口", asy
     "/api/v1/canonical/user/rebate",
     "/api/v1/canonical/invite/summary",
     "/api/v1/canonical/invite/records",
+    "/api/v1/canonical/invite/commissions?page=1&page_size=50",
     "/api/v1/canonical/coupons",
     "/api/v1/canonical/bank-cards",
     "/api/v1/canonical/bank-cards/config",

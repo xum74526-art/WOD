@@ -18,6 +18,15 @@ class Wallet(Base):
     # the wallet/ledger credit.
     balance: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
     frozen: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
+    # Promotional card-hours are a strict subset of ``balance``/``frozen``.
+    # They may be spent inside WOD, but never withdrawn and never counted as
+    # cash-backed consumption for invitation commission.
+    promotional_balance: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), default=Decimal("0"), server_default="0"
+    )
+    promotional_frozen: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), default=Decimal("0"), server_default="0"
+    )
     # Only funds backed by an auditable, settled earnings source may be moved
     # into this bucket.  Historical wallets, recharge card-hours, test rebates,
     # and synthetic revenue migrate as zero-withdrawable by design.

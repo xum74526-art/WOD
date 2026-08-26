@@ -33,6 +33,15 @@
           <view v-if="order.end_at" class="row"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ orderRemaining }}</text></view>
           <view class="row" v-if="order.purchase_type !== 'holding' && order.revenue_settlement_enabled"><text class="sk">{{ t('cumulativeRevenue') }}</text><text class="sv up">{{ fmtCH(order.accumulated_revenue ?? 0) }}</text></view>
           <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ order.gpu_model || '-' }}</text></view>
+          <view v-if="order.status === 'paid' && order.delivery_due_at" class="row"><text class="sk">{{ t('交付截止时间') }}</text><text class="sv">{{ formatDeadline(order.delivery_due_at) }}</text></view>
+          <view v-if="order.status === 'delivering' && order.confirmation_due_at" class="row"><text class="sk">{{ t('验收截止时间') }}</text><text class="sv">{{ formatDeadline(order.confirmation_due_at) }}</text></view>
+          <view v-if="order.status === 'disputed' && order.dispute_due_at" class="row"><text class="sk">{{ t('争议处理截止时间') }}</text><text class="sv">{{ formatDeadline(order.dispute_due_at) }}</text></view>
+        </view>
+
+        <view v-if="order.status === 'disputed'" class="card dispute-card">
+          <text class="dispute-title">{{ t('订单正在争议处理中') }}</text>
+          <text class="dispute-desc">{{ t('争议期间卡时继续冻结，不会释放给商家；平台逾期未处理将自动退款。') }}</text>
+          <text v-if="order.dispute_reason" class="dispute-reason">{{ order.dispute_reason }}</text>
         </view>
 
         <!-- SSH交付信息（使用模式） -->
@@ -55,17 +64,21 @@
 
     <BottomActionBar v-if="order">
       <view v-if="order.status === 'delivering'" class="bar-row">
-        <view class="btn primary full" @tap="onConfirm">{{ t('确认交付') }}</view>
+        <view v-if="canDisputeOrder" class="btn ghost" @tap="showDispute = true">{{ t('发起争议') }}</view>
+        <view v-if="canConfirmOrder" class="btn primary" @tap="onConfirm">{{ t('确认交付') }}</view>
       </view>
       <view v-else-if="order.status === 'paid'" class="bar-row">
         <view class="info-text">{{ t('waitingForValidSshDelivery') }}</view>
-        <view class="btn ghost cancel-pending" @tap="showCancel = true">{{ t('取消订单') }}</view>
+        <view v-if="canCancelOrder" class="btn ghost cancel-pending" @tap="showCancel = true">{{ t('取消订单') }}</view>
       </view>
       <view v-else-if="canRenew" class="bar-row">
         <view class="btn primary full" @tap="openRenew">{{ t('renew') }}</view>
       </view>
       <view v-else-if="order.status === 'completed' && order.purchase_type === 'holding'" class="bar-row">
         <view class="info-text">{{ t('holdingSaleUnavailableNotice') }}</view>
+      </view>
+      <view v-else-if="order.status === 'disputed'" class="bar-row">
+        <view class="info-text">{{ t('等待平台处理争议') }}</view>
       </view>
     </BottomActionBar>
 
@@ -98,6 +111,18 @@
       @cancel="showCancel = false"
       @confirm="onCancel"
     />
+
+    <ConfirmSheet
+      :visible="showDispute"
+      :title="t('发起争议')"
+      :desc="t('请说明 SSH 无法连接、配置不符或其他交付问题。提交后卡时保持冻结。')"
+      :cancelText="t('取消')"
+      :confirmText="t('提交争议')"
+      @cancel="showDispute = false"
+      @confirm="onDispute"
+    >
+      <textarea v-model="disputeReason" class="dispute-input" :placeholder="t('至少填写 5 个字的问题说明')" maxlength="500" />
+    </ConfirmSheet>
   </view>
 </template>
 
@@ -105,8 +130,8 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '@/api/request'
-import { getOrder, renewOrder, cancelOrder, type OrderItem } from '@/api/order'
-import { formatDate, fmtCH } from '@/utils/format'
+import { getOrder, renewOrder, cancelOrder, disputeOrder, type OrderItem } from '@/api/order'
+import { formatDate, formatDeadline, fmtCH } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -131,6 +156,8 @@ const renewHours = ref(24)
 const pendingRenewRequestId = ref('')
 const pendingRenewKey = ref('')
 const showCancel = ref(false)
+const showDispute = ref(false)
+const disputeReason = ref('')
 const submitting = ref(false)
 
 onLoad(async (opts) => {
@@ -158,11 +185,16 @@ const badge = computed(() => {
   if (s === 'delivering') return { text: '待确认', type: 'running' as const }
   if (s === 'running') return { text: '运行中', type: 'running' as const }
   if (s === 'completed') return { text: '已完成', type: 'done' as const }
+  if (s === 'disputed') return { text: t('争议处理中'), type: 'running' as const }
+  if (s === 'done') return { text: t('已到期'), type: 'expired' as const }
   if (s === 'canceled') return { text: '已取消', type: 'canceled' as const }
   if (s === 'expired') return { text: '已到期', type: 'expired' as const }
   return { text: s || '待处理', type: 'default' as const }
 })
 const isHourlyOrder = computed(() => order.value?.purchase_unit === 'hour' || Number(order.value?.duration_hours ?? order.value?.purchase_hours) > 0)
+const canCancelOrder = computed(() => Boolean(order.value && (order.value.can_cancel ?? order.value.status === 'paid')))
+const canConfirmOrder = computed(() => Boolean(order.value && (order.value.can_confirm ?? order.value.status === 'delivering')))
+const canDisputeOrder = computed(() => Boolean(order.value && (order.value.can_dispute ?? order.value.status === 'delivering')))
 const canRenew = computed(() => Boolean(
   order.value
   && isHourlyOrder.value
@@ -187,16 +219,22 @@ function copySSH() {
 }
 
 async function onConfirm() {
+  if (submitting.value || !canConfirmOrder.value) return
   uni.showModal({
     title: t('确认交付'),
     content: t('确认收到商家提供的SSH连接信息，释放冻结资金给商家？'),
     success: async (r) => {
-      if (!r.confirm) return
+      if (!r.confirm || submitting.value || !canConfirmOrder.value) return
+      submitting.value = true
       try {
         await request({ url: `/orders/${oid.value}/confirm`, method: 'POST' })
         uni.showToast({ title: t('确认成功'), icon: 'success' })
         await fetchOrder()
-      } catch {}
+      } catch {
+        /* request 已 toast */
+      } finally {
+        submitting.value = false
+      }
     },
   })
 }
@@ -219,11 +257,32 @@ async function onRenew() {
 
 async function onCancel() {
   showCancel.value = false
-  if (submitting.value || order.value?.status !== 'paid') return
+  if (submitting.value || !canCancelOrder.value) return
   submitting.value = true
   try {
     await cancelOrder(oid.value)
     uni.showToast({ title: t('已取消'), icon: 'success' })
+    await fetchOrder()
+  } catch {
+    /* request 已 toast */
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function onDispute() {
+  const reason = disputeReason.value.trim()
+  if (reason.length < 5) {
+    uni.showToast({ title: t('至少填写 5 个字的问题说明'), icon: 'none' })
+    return
+  }
+  if (submitting.value || !canDisputeOrder.value) return
+  submitting.value = true
+  try {
+    await disputeOrder(oid.value, reason)
+    showDispute.value = false
+    disputeReason.value = ''
+    uni.showToast({ title: t('争议已提交'), icon: 'success' })
     await fetchOrder()
   } catch {
     /* request 已 toast */
@@ -309,4 +368,9 @@ function goAsset() {
 .copy-text { color: var(--primary); }
 .btn.primary.full { flex: 1; }
 .info-text { flex: 1; text-align: center; color: var(--text-sub); font-size: 26rpx; padding: 28rpx 0; }
+.dispute-card { margin-top: 24rpx; padding: 28rpx 32rpx; }
+.dispute-title { display: block; color: var(--text); font-size: 28rpx; font-weight: 700; }
+.dispute-desc { display: block; margin-top: 10rpx; color: var(--text-sub); font-size: 24rpx; line-height: 1.6; }
+.dispute-reason { display: block; margin-top: 18rpx; padding: 18rpx; color: var(--text); background: var(--bg-2); border-radius: 12rpx; font-size: 24rpx; line-height: 1.6; }
+.dispute-input { box-sizing: border-box; width: 100%; min-height: 180rpx; padding: 20rpx; color: var(--text); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; }
 </style>

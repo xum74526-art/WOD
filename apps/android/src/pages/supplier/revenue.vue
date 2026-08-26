@@ -26,7 +26,11 @@
         <text>{{ t('supplierLoadFailedDesc') }}</text>
         <text class="load-retry" @tap="load">{{ t('retry') }}</text>
       </view>
-      <view v-else-if="!records.length" class="card ph"><EmptyState :text="t('暂无交易记录')" /></view>
+
+      <view v-if="wallet?.historical_unreconciled_count" class="audit-note">
+        {{ t('历史订单待财务核账（{count} 笔），不会自动计入可提现余额。', { count: wallet.historical_unreconciled_count }) }}
+      </view>
+      <view v-if="!loadError && !records.length" class="card ph"><EmptyState :text="t('暂无交易记录')" /></view>
       <view v-for="r in records" :key="r.order_no" class="card rrow">
         <view class="rl">
           <text class="rn">{{ localizeProductName(r.product_name, i18n.lang) }}</text>
@@ -34,12 +38,12 @@
           <view class="rtags">
             <text class="rtag" v-if="r.purchase_type === 'holding'">{{ t('k_fdeb9cd3') }}</text>
             <text class="rtag" v-else>{{ t('k_ecff77a8') }}</text>
-            <text class="rtag status" :class="r.status">{{ t(r.status === 'completed' ? '已结算' : r.status === 'paid' ? '待交付' : '待确认') }}</text>
+            <text class="rtag status" :class="r.settlement_status">{{ settlementText(r.settlement_status, r.status) }}</text>
           </view>
         </view>
         <view class="rr">
-          <text class="rv" :class="{ up: r.status === 'completed' }">{{ r.status === 'completed' ? '+' + fmtCH(r.net_income) : t('pendingSettlement') }}</text>
-          <text class="rs">{{ t('订单') }} {{ fmtCH(r.amount) }} · {{ t(r.status === 'completed' ? '服务费' : 'estimatedServiceFee') }} {{ fmtCH(r.service_fee) }}</text>
+          <text class="rv" :class="{ up: r.settlement_status === 'settled' }">{{ r.settlement_status === 'settled' ? '+' + fmtCH(r.net_income) : r.settlement_status === 'historical_unreconciled' ? t('待财务核账') : t('pendingSettlement') }}</text>
+          <text class="rs">{{ t('订单') }} {{ fmtCH(r.amount) }} · {{ t('服务费') }} {{ r.settlement_status === 'settled' ? fmtCH(r.service_fee) : '—' }}</text>
         </view>
       </view>
     </view>
@@ -76,6 +80,13 @@ onShow(() => load())
 
 function goDevices() { nav('/pages/supplier/devices') }
 function onWithdraw() { nav('/pages/wallet/index') }
+function settlementText(settlementStatus: string, orderStatus: string) {
+  if (settlementStatus === 'settled') return t('已结算')
+  if (settlementStatus === 'historical_unreconciled') return t('待财务核账')
+  if (orderStatus === 'paid') return t('待交付')
+  if (orderStatus === 'disputed') return t('争议处理中')
+  return t('待确认')
+}
 </script>
 
 <style lang="scss" scoped>
@@ -101,13 +112,15 @@ function onWithdraw() { nav('/pages/wallet/index') }
 .rg { color: var(--text-sub); font-size: 22rpx; margin-top: 8rpx; display: block; }
 .rtags { display: flex; gap: 8rpx; margin-top: 8rpx; }
 .rtag { font-size: 20rpx; padding: 4rpx 12rpx; border-radius: 8rpx; background: var(--primary-soft); color: var(--primary); }
-.rtag.status.completed { background: var(--up-soft); color: var(--up); }
-.rtag.status.paid { background: var(--down-soft); color: var(--down); }
+.rtag.status.settled { background: var(--up-soft); color: var(--up); }
+.rtag.status.pending { background: var(--down-soft); color: var(--down); }
+.rtag.status.historical_unreconciled { background: var(--bg-2); color: var(--text-sub); }
 .rr { text-align: right; flex-shrink: 0; }
 .rv { font-size: 32rpx; font-weight: 700; font-variant-numeric: tabular-nums; display: block; }
 .rs { color: var(--text-dim); font-size: 20rpx; margin-top: 4rpx; display: block; }
 .ph { color: var(--text-dim); }
 .load-error { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 20rpx 24rpx; margin-bottom: 20rpx; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 23rpx; line-height: 1.5; }
 .load-retry { flex-shrink: 0; color: var(--primary); font-weight: 700; min-height: 64rpx; display: flex; align-items: center; }
+.audit-note { margin: -8rpx 0 24rpx; padding: 20rpx 24rpx; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 23rpx; line-height: 1.6; }
 
 </style>

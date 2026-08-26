@@ -20,7 +20,11 @@ _ENSURE = {
     "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
     "orders": [
         "purchase_type", "ssh_info", "quantity", "client_request_id",
-        "purchase_hours", "created_platform", "last_modified_platform",
+        "purchase_hours", "created_platform", "last_modified_platform", "lifecycle_policy_version",
+        "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
+        "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_reason",
+        "dispute_resolution", "dispute_resolution_note", "dispute_resolved_at",
+        "dispute_resolved_by",
     ],
     "order_renewals": ["created_platform"],
     "products": [
@@ -46,19 +50,30 @@ _ENSURE = {
         "ocr_status", "ocr_summary", "ocr_error_code", "ocr_updated_at",
         "ocr_input_token", "consent_at", "created_platform", "last_modified_platform",
     ],
-    "wallets": ["withdrawable_balance", "withdraw_frozen"],
+    "wallets": [
+        "withdrawable_balance", "withdraw_frozen",
+        "promotional_balance", "promotional_frozen",
+    ],
     "bank_cards": [
         "card_fingerprint", "status", "verification_mode", "review_reason",
         "reviewed_by", "reviewed_at", "updated_at", "created_platform",
         "last_modified_platform",
     ],
-    "ledger": ["ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id", "event_key"],
+    "ledger": [
+        "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id",
+        "ref_merchant_settlement_id", "event_key",
+    ],
     "payment_orders": [
         "provider_checkout_url", "checkout_started_at", "created_platform",
         "last_modified_platform",
     ],
     "withdrawal_orders": ["created_platform", "last_modified_platform"],
-    "invite_records": ["created_platform", "last_modified_platform"],
+    "invite_records": [
+        "created_platform", "last_modified_platform", "qualification_status",
+        "qualification_policy_version", "identity_verified_at", "qualified_at",
+        "qualification_day", "daily_slot", "qualification_order_id",
+        "qualification_reason", "fixed_reward_accrual_id",
+    ],
     "external_auth_flows": ["user_id", "platform", "client_id"],
     "external_auth_tickets": ["platform", "client_id"],
 }
@@ -69,13 +84,23 @@ _DATETIME_COLS = {
     "ocr_updated_at",
     "consent_at",
     "checkout_started_at",
+    "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
+    "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_resolved_at",
+    "identity_verified_at", "qualified_at",
 }
+_DATE_COLS = {"qualification_day"}
 _INTEGER_COLS = {
     "quantity", "purchase_hours", "video_duration", "stock", "supplier_id",
-    "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id", "reviewed_by", "user_id",
+    "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id",
+    "ref_merchant_settlement_id", "reviewed_by", "dispute_resolved_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
+    "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
 }
-_NUMERIC_COLS = {"sell_price", "source_price", "exchange_rate", "reliability", "withdrawable_balance", "withdraw_frozen"}
+_NUMERIC_COLS = {
+    "sell_price", "source_price", "exchange_rate", "reliability",
+    "withdrawable_balance", "withdraw_frozen", "promotional_balance",
+    "promotional_frozen",
+}
 _BOOLEAN_COLS = {"phone_bound"}
 
 def _ensure_columns(db_engine=None):
@@ -89,6 +114,8 @@ def _ensure_columns(db_engine=None):
             if col not in existing:
                 if col in _DATETIME_COLS:
                     col_type = "DATETIME"
+                elif col in _DATE_COLS:
+                    col_type = "DATE"
                 elif col in _INTEGER_COLS:
                     col_type = "INTEGER"
                 elif col in _NUMERIC_COLS:
@@ -613,6 +640,8 @@ def _ensure_user_wallets(db_session=None):
                 frozen=Decimal("0"),
                 withdrawable_balance=Decimal("0"),
                 withdraw_frozen=Decimal("0"),
+                promotional_balance=Decimal("0"),
+                promotional_frozen=Decimal("0"),
             ))
         db.commit()
         if missing_user_ids:
@@ -651,6 +680,8 @@ def _migrate_payment_precision_and_pending_deadlines(
             ("wallets", "frozen"),
             ("wallets", "withdrawable_balance"),
             ("wallets", "withdraw_frozen"),
+            ("wallets", "promotional_balance"),
+            ("wallets", "promotional_frozen"),
             ("ledger", "amount"),
             ("ledger", "balance_after"),
         )
@@ -882,6 +913,136 @@ def _migrate_manual_payout_fields(db_engine=None, db_session=None):
             db.close()
 
 
+def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
+    """Conservatively classify historical balances before Invitation V2.
+
+    Historical wallet history cannot prove which reward card-hours were spent.
+    The safe migration therefore marks up to the current consumable balance as
+    promotional using all reward credits as an upper bound. This may
+    understate cash-backed consumption but can never overstate it. Historical
+    frozen funds are entirely promotional until each old order claims an
+    auditable allocation during capture/refund.
+    """
+
+    from decimal import Decimal
+
+    from sqlalchemy import func
+
+    from app.models.ledger import Ledger
+    from app.models.wallet import Wallet
+    from app.services.wallet_balance import spendable_wallet_balance
+
+    target_engine = db_engine or engine
+    target_inspector = inspect(target_engine)
+    tables = set(target_inspector.get_table_names())
+    if "wallets" not in tables:
+        return {"wallets_backfilled": 0}
+
+    owns_session = db_session is None
+    db = db_session or Session(bind=target_engine)
+    marker = "20260826_invite_v2_promotional_funding_v1"
+    reward_types = (
+        "rebate",
+        "supplier_rebate",
+        "invite_reward",
+        "test_rebate",
+        "test_supplier",
+        "test_invite",
+        "consumer_purchase_rebate",
+        "supplier_sales_rebate",
+        "invite_first_order_reward",
+        "invite_qualification_bonus",
+        "invite_consumption_commission",
+    )
+    try:
+        if "invite_records" in tables:
+            duplicates = db.execute(text(
+                "SELECT invitee_id, COUNT(*) AS duplicate_count "
+                "FROM invite_records GROUP BY invitee_id HAVING COUNT(*) > 1 "
+                "ORDER BY invitee_id LIMIT 10"
+            )).all()
+            if duplicates:
+                ids = ", ".join(str(row[0]) for row in duplicates)
+                raise RuntimeError(
+                    "duplicate invite relationships require manual audit before V2; "
+                    f"invitee_id sample: {ids}"
+                )
+
+        db.execute(text(
+            "CREATE TABLE IF NOT EXISTS app_migrations ("
+            "name VARCHAR(128) PRIMARY KEY, "
+            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        claim = db.execute(
+            text(
+                "INSERT INTO app_migrations (name) VALUES (:name) "
+                "ON CONFLICT (name) DO NOTHING"
+            ),
+            {"name": marker},
+        )
+        owns_migration = claim.rowcount == 1
+        changed = 0
+        if owns_migration:
+            wallets = db.query(Wallet).with_for_update().order_by(Wallet.id.asc()).all()
+            for wallet in wallets:
+                current_spendable = max(
+                    Decimal("0"), Decimal(str(spendable_wallet_balance(wallet, db)))
+                )
+                reward_credits = db.query(func.coalesce(func.sum(Ledger.amount), 0)).filter(
+                    Ledger.user_id == wallet.user_id,
+                    Ledger.direction == "in",
+                    Ledger.type.in_(reward_types),
+                ).scalar()
+                reward_upper_bound = max(Decimal("0"), Decimal(str(reward_credits or 0)))
+                existing_promotional = max(
+                    Decimal("0"), Decimal(str(wallet.promotional_balance or 0))
+                )
+                wallet.promotional_balance = min(
+                    current_spendable,
+                    max(existing_promotional, reward_upper_bound),
+                )
+                # No historical per-order split exists. Marking all frozen
+                # funds promotional is the only non-inflating cash policy.
+                wallet.promotional_frozen = max(
+                    Decimal("0"), Decimal(str(wallet.frozen or 0))
+                )
+                changed += 1
+        # Validate on every run so a future writer cannot silently turn a
+        # promotional reward into a cash-backed commission base.
+        wallets = db.query(Wallet).order_by(Wallet.id.asc()).all()
+        for wallet in wallets:
+            promotional = Decimal(str(wallet.promotional_balance or 0))
+            promotional_frozen = Decimal(str(wallet.promotional_frozen or 0))
+            spendable = Decimal(str(spendable_wallet_balance(wallet, db)))
+            frozen = Decimal(str(wallet.frozen or 0))
+            if (
+                promotional < 0
+                or promotional_frozen < 0
+                or promotional > spendable
+                or promotional_frozen > frozen
+            ):
+                raise RuntimeError(
+                    f"wallet promotional invariant failed for wallet_id={wallet.id}"
+                )
+
+        db.commit()
+        if "invite_records" in tables:
+            with target_engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_invite_records_invitee_unique "
+                    "ON invite_records (invitee_id)"
+                ))
+        if changed:
+            print(f"[init_db] 邀请V2资金分层: 保守归类钱包 {changed} 个")
+        return {"wallets_backfilled": changed}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if owns_session:
+            db.close()
+
+
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
@@ -891,6 +1052,7 @@ def init():
     _migrate_unverified_phone_flags()
     _migrate_payment_precision_and_pending_deadlines()
     _migrate_manual_payout_fields()
+    _migrate_invite_v2_funding_fields()
     if engine.dialect.name == "sqlite":
         # WAL permits App reads to continue while independent market-source
         # collectors persist fresh snapshots.  The setting is durable for the
@@ -944,6 +1106,10 @@ def init():
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_reward_accrual "
             "ON ledger (ref_reward_accrual_id) WHERE ref_reward_accrual_id IS NOT NULL"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_merchant_settlement "
+            "ON ledger (ref_merchant_settlement_id) WHERE ref_merchant_settlement_id IS NOT NULL"
         ))
     _migrate_offline_purchases()
     _migrate_legacy_market_history()

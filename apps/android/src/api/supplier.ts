@@ -107,6 +107,7 @@ export function getSupplierWallet() {
     withdrawn: number
     available: number
     today_revenue: number
+    historical_unreconciled_count: number
     payment_service_enabled: boolean
   }>({ url: '/supplier/wallet' })
 }
@@ -119,6 +120,7 @@ export function getRevenueDetail() {
     amount: number
     service_fee: number
     net_income: number
+    settlement_status: 'settled' | 'pending' | 'historical_unreconciled'
     status: string
     purchase_type: string | null
     created_at: string | null
@@ -140,6 +142,8 @@ export interface SupplierRebate {
   next_tier_hint: string
   monthly_cap: number
   service_fee_rate: number
+  rebate_basis_percent: number
+  platform_service_fee_percent: number
   rewards_enabled: boolean
   reward_mode: 'disabled' | 'test_card_hours' | 'live'
   cap_used: number

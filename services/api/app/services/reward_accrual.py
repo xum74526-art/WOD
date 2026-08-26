@@ -12,6 +12,7 @@ from app.models.wallet import Wallet
 from app.core.config import settings
 from app.services.reward_program import program_ledger_type
 from app.services.wallet_balance import spendable_wallet_balance
+from app.services.funding_allocation import assert_wallet_funding_invariants
 
 
 def reward_money(value: Decimal | float | int | None) -> Decimal:
@@ -108,10 +109,15 @@ def settle_reward_accrual(accrual_id: int, db: Session) -> Decimal:
         return Decimal("0")
 
     wallet.balance = Decimal(str(wallet.balance or 0)) + amount
+    # Every versioned reward is promotional: spendable in-app, never
+    # withdrawable and never a cash-backed invitation-commission base.
+    wallet.promotional_balance = Decimal(str(wallet.promotional_balance or 0)) + amount
     remarks = {
         "consumer_purchase": f"购买到期返佣 计提#{accrual.id}",
         "supplier_sales": f"商家月度销售返佣 计提#{accrual.id}",
         "invite_first_order": f"邀请好友首单返利 计提#{accrual.id}",
+        "invite_qualification_bonus": f"邀请好友达标奖励 计提#{accrual.id}",
+        "invite_consumption_commission": f"邀请好友消费返佣 计提#{accrual.id}",
     }
     ledger = Ledger(
         user_id=accrual.beneficiary_user_id,
@@ -131,6 +137,7 @@ def settle_reward_accrual(accrual_id: int, db: Session) -> Decimal:
     )
     db.add(ledger)
     db.flush()
+    assert_wallet_funding_invariants(wallet, db)
     accrual.status = "settled"
     accrual.settled_ledger_id = ledger.id
     accrual.settled_at = datetime.now(timezone.utc)

@@ -3,7 +3,7 @@ import string
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -15,10 +15,38 @@ from app.models.reward_accrual import RewardAccrual
 from app.models.user import User
 from app.services.reward_program import (
     PROGRAM_INVITE,
+    PROGRAM_INVITE_COMMISSION,
+    PROGRAM_INVITE_QUALIFICATION,
     program_enabled,
 )
 from app.services.reward_entitlements import INVITE_POLICY_VERSION, create_invite_accrual
 from app.services.auth_session import normalize_platform
+from app.services.invite_rewards_v2 import (
+    INVITE_V2_DAILY_LIMIT,
+    INVITE_V2_FIXED_REWARD,
+    INVITE_V2_POLICY_VERSION,
+    INVITE_V2_RELATIONSHIP_VERSION,
+    INVITE_V2_TIMEZONE,
+    STATUS_DAILY_CAP_EXCEEDED,
+    STATUS_PENDING_IDENTITY,
+    STATUS_PENDING_ORDER,
+    STATUS_QUALIFIED,
+    STATUS_RISK_REJECTED,
+    STATUS_RISK_REVIEW,
+    business_day,
+    initialize_v2_relationship,
+    invite_v2_enabled,
+    invite_v2_reward_totals,
+    next_reset_at,
+    tier_rate_bps,
+    tier_rows,
+)
+from app.models.invite import InviteDailyQuota
+from app.schemas.invite import (
+    InviteCommissionListResponse,
+    InviteRelationshipListResponse,
+    InviteSummaryResponse,
+)
 from app.utils.response import success
 
 router = APIRouter(prefix="/api/invite", tags=["invite"])
@@ -78,6 +106,11 @@ def create_invite_relationship(
         created_platform=source_platform,
         last_modified_platform=source_platform,
     )
+    # The active writer at relationship creation is the immutable cutover
+    # boundary. A V1/offline relationship is never upgraded later merely by
+    # flipping the V2 switch.
+    if invite_v2_enabled():
+        initialize_v2_relationship(record)
     db.add(record)
     if user.phone_bound:
         code = db.query(InviteCode).filter(InviteCode.user_id == inviter_id).first()
@@ -160,11 +193,118 @@ def process_first_order_reward(user_id: int, order_id: int, db: Session) -> Deci
     return Decimal(str(accrual.reward_amount)) if accrual.status == "settled" else Decimal("0")
 
 
-@router.get("/summary")
+def _v2_next_tier_hint(qualified_count: int) -> str:
+    for threshold, rate in ((5, 2), (10, 4), (15, 6), (20, 8)):
+        if qualified_count < threshold:
+            return f"再有 {threshold - qualified_count} 位好友达标升级至 {rate}%"
+    return "已达最高 8% 返佣等级"
+
+
+@router.get("/summary", response_model=InviteSummaryResponse)
 def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     invite_code = _get_or_create_code(user, db)
     records_query = db.query(InviteRecord).filter(InviteRecord.inviter_id == user.id)
     invited_count = records_query.count()
+    now = datetime.now(timezone.utc)
+    v2_active = invite_v2_enabled()
+    has_v2_history = records_query.filter(
+        InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+    ).count() > 0 or db.query(RewardAccrual).filter(
+        RewardAccrual.beneficiary_user_id == user.id,
+        RewardAccrual.program_code.in_((
+            PROGRAM_INVITE_COMMISSION,
+            PROGRAM_INVITE_QUALIFICATION,
+        )),
+    ).count() > 0
+    if v2_active or has_v2_history:
+        qualified_count = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_QUALIFIED,
+        ).count()
+        pending_identity = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_PENDING_IDENTITY,
+        ).count()
+        pending_order = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_PENDING_ORDER,
+        ).count()
+        daily_cap_exceeded = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_DAILY_CAP_EXCEEDED,
+        ).count()
+        risk_rejected = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_RISK_REJECTED,
+        ).count()
+        risk_review = records_query.filter(
+            InviteRecord.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION,
+            InviteRecord.qualification_status == STATUS_RISK_REVIEW,
+        ).count()
+        quota = db.query(InviteDailyQuota).filter(
+            InviteDailyQuota.inviter_id == user.id,
+            InviteDailyQuota.business_day == business_day(now),
+        ).first()
+        slots_used = min(int(quota.used_count or 0), INVITE_V2_DAILY_LIMIT) if quota else 0
+        totals = invite_v2_reward_totals(user.id, db)
+        fixed_total = totals["fixed_reward_total"]
+        fixed_pending = totals["fixed_reward_pending"]
+        commission_total = totals["commission_total"]
+        commission_pending = totals["commission_pending"]
+        rate_bps = tier_rate_bps(qualified_count)
+        rewarded_count = records_query.join(
+            RewardAccrual,
+            RewardAccrual.id == InviteRecord.fixed_reward_accrual_id,
+        ).filter(RewardAccrual.status == "settled").count()
+        return success({
+            "code": invite_code.code,
+            "invited_count": invited_count,
+            "qualified_count": qualified_count,
+            "pending_identity_count": pending_identity,
+            "pending_order_count": pending_order,
+            "daily_cap_exceeded_count": daily_cap_exceeded,
+            "risk_rejected_count": risk_rejected,
+            "risk_review_count": risk_review,
+            "unverified_count": pending_identity,
+            "pending_count": pending_identity + pending_order,
+            "rewarded_count": rewarded_count,
+            "current_tier": f"{rate_bps / 100:g}%",
+            "current_rate_bps": rate_bps,
+            "next_tier_hint": (
+                _v2_next_tier_hint(qualified_count)
+                if v2_active
+                else "返佣计划当前暂停，新消费暂不计提"
+            ),
+            "tiers": tier_rows(),
+            "fixed_reward_card_hours": float(INVITE_V2_FIXED_REWARD),
+            "fixed_reward_total": round(float(fixed_total), 2),
+            "fixed_reward_pending": round(float(fixed_pending), 2),
+            "commission_total": round(float(commission_total), 2),
+            "commission_pending": round(float(commission_pending), 2),
+            "total_eligible_consumption_card_hours": round(
+                float(totals["eligible_consumption_total"]), 6
+            ),
+            "eligible_friend_spend_card_hours": round(
+                float(totals["eligible_consumption_total"]), 6
+            ),
+            "total_reward": round(float(fixed_total + commission_total), 2),
+            "pending_reward": round(float(fixed_pending + commission_pending), 2),
+            "daily_limit": INVITE_V2_DAILY_LIMIT,
+            "daily_used": slots_used,
+            "daily_remaining": INVITE_V2_DAILY_LIMIT - slots_used,
+            "daily_slots_used": slots_used,
+            "daily_slots_remaining": INVITE_V2_DAILY_LIMIT - slots_used,
+            "next_reset_at": next_reset_at(now),
+            "rewards_enabled": v2_active,
+            "rewards_withdrawable": False,
+            "rewards_transferable": False,
+            "reward_mode": "live" if v2_active else "disabled",
+            "program_code": "invite_v2",
+            "policy_version": INVITE_V2_POLICY_VERSION,
+            "business_timezone": INVITE_V2_TIMEZONE,
+            "qualification_requirement": "verified_identity_and_first_cash_order",
+        })
+
     qualified_count = records_query.filter(
         InviteRecord.status.in_(["registered", "ordered", "rewarded"])
     ).count()
@@ -200,27 +340,118 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         "pending_count": pending,
         "rewarded_count": rewarded,
         "current_tier": f"{int(rate * 100)}%",
+        "current_rate_bps": int(rate * Decimal("10000")),
         "next_tier_hint": next_tier if program_enabled(PROGRAM_INVITE) else "返佣计划当前未开启",
+        "tiers": [
+            {"min_qualified_count": 0, "max_qualified_count": 5, "rate_bps": 1500},
+            {"min_qualified_count": 6, "max_qualified_count": 20, "rate_bps": 2000},
+            {"min_qualified_count": 21, "max_qualified_count": None, "rate_bps": 2500},
+        ],
+        "pending_identity_count": unverified,
+        "pending_order_count": pending,
+        "daily_cap_exceeded_count": 0,
+        "risk_rejected_count": 0,
+        "risk_review_count": 0,
+        "fixed_reward_card_hours": float(INVITE_V2_FIXED_REWARD),
+        "fixed_reward_total": 0,
+        "fixed_reward_pending": 0,
+        "commission_total": round(float(total_reward), 2),
+        "commission_pending": round(float(pending_reward), 2),
+        "total_eligible_consumption_card_hours": 0,
+        "eligible_friend_spend_card_hours": 0,
+        "daily_limit": INVITE_V2_DAILY_LIMIT,
+        "daily_used": 0,
+        "daily_remaining": INVITE_V2_DAILY_LIMIT,
+        "daily_slots_used": 0,
+        "daily_slots_remaining": INVITE_V2_DAILY_LIMIT,
+        "next_reset_at": next_reset_at(now),
         "rewards_enabled": program_enabled(PROGRAM_INVITE),
+        "rewards_withdrawable": False,
+        "rewards_transferable": False,
         "reward_mode": "live" if program_enabled(PROGRAM_INVITE) else "disabled",
         "program_code": "invite_first_order_reward",
         "policy_version": INVITE_POLICY_VERSION,
+        "business_timezone": INVITE_V2_TIMEZONE,
+        "qualification_requirement": "verified_identity_and_first_cash_order",
     })
 
 
-@router.get("/records")
-def records(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    items = db.query(InviteRecord).filter(
-        InviteRecord.inviter_id == user.id
-    ).order_by(InviteRecord.created_at.desc()).limit(50).all()
+@router.get("/records", response_model=InviteRelationshipListResponse)
+def records(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(InviteRecord).filter(InviteRecord.inviter_id == user.id)
+    total = query.count()
+    items = query.order_by(InviteRecord.created_at.desc(), InviteRecord.id.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+    output = []
+    for item in items:
+        accrual = db.query(RewardAccrual).filter(
+            RewardAccrual.id == item.fixed_reward_accrual_id,
+        ).first() if item.fixed_reward_accrual_id else None
+        is_v2 = item.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION
+        masked_phone = _mask_phone(item.invitee_phone)
+        output.append({
+            "id": item.id,
+            "invitee_phone_masked": masked_phone,
+            "invitee_phone": masked_phone,
+            "status": item.status,
+            "legacy_status": item.status,
+            "reward_amount": item.reward_amount,
+            "rewarded_at": item.rewarded_at,
+            "qualification_status": item.qualification_status if is_v2 else "legacy_v1",
+            "qualification_reason": item.qualification_reason if is_v2 else None,
+            "identity_verified_at": item.identity_verified_at if is_v2 else None,
+            "qualified_at": item.qualified_at if is_v2 else None,
+            "qualification_day": item.qualification_day if is_v2 else None,
+            "daily_slot": item.daily_slot if is_v2 else None,
+            "qualification_order_id": item.qualification_order_id if is_v2 else None,
+            "fixed_reward_amount": float(accrual.reward_amount) if accrual else 0,
+            "fixed_reward_status": accrual.status if accrual else "not_applicable",
+            "created_at": item.created_at,
+        })
     return success({
-        "total": len(items),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": output,
+    })
+
+
+@router.get("/commissions", response_model=InviteCommissionListResponse)
+def commissions(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(RewardAccrual).filter(
+        RewardAccrual.beneficiary_user_id == user.id,
+        RewardAccrual.program_code == PROGRAM_INVITE_COMMISSION,
+    )
+    total = query.count()
+    items = query.order_by(RewardAccrual.created_at.desc(), RewardAccrual.id.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+    return success({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
         "items": [{
             "id": item.id,
-            "invitee_phone": item.invitee_phone,
+            "source_type": item.source_type,
+            "order_id": item.order_id,
+            "order_renewal_id": item.order_renewal_id,
+            "base_card_hours": float(item.base_amount),
+            "rate_bps": item.rate_bps,
+            "reward_card_hours": float(item.reward_amount),
             "status": item.status,
-            "reward_amount": item.reward_amount,
-            "created_at": item.created_at.isoformat() if item.created_at else None,
-            "rewarded_at": item.rewarded_at.isoformat() if item.rewarded_at else None,
+            "policy_version": item.policy_version,
+            "created_at": item.created_at,
+            "settled_at": item.settled_at,
         } for item in items],
     })

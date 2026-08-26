@@ -24,6 +24,21 @@ export interface OrderItem {
   asset_id?: number
   market_source?: 'wod' | 'kai' | 'vast' | 'autodl'
   fulfillment_status?: string
+  delivery_due_at?: string | null
+  delivered_at?: string | null
+  confirmation_due_at?: string | null
+  confirmed_at?: string | null
+  canceled_at?: string | null
+  stock_released_at?: string | null
+  disputed_at?: string | null
+  dispute_due_at?: string | null
+  dispute_reason?: string | null
+  dispute_resolution?: 'refund' | 'release' | string | null
+  dispute_resolution_note?: string | null
+  dispute_resolved_at?: string | null
+  can_cancel?: boolean
+  can_confirm?: boolean
+  can_dispute?: boolean
   accumulated_revenue?: number
   historical_test_revenue?: number
   revenue_settlement_enabled?: boolean
@@ -31,7 +46,9 @@ export interface OrderItem {
   remaining_hours?: number
 }
 
-export type PurchaseType = 'usage' | 'holding'
+// The API currently rejects new holding purchases. Historical orders may still
+// report purchase_type="holding" through OrderItem, but checkout is usage-only.
+export type PurchaseType = 'usage'
 
 export function createOrder(
   product_id: number,
@@ -65,4 +82,12 @@ export function renewOrder(id: number, hours: number, client_request_id: string)
 
 export function cancelOrder(id: number) {
   return request<OrderItem>({ url: `/orders/${id}/cancel`, method: 'POST' })
+}
+
+export function disputeOrder(id: number, reason: string) {
+  return request<OrderItem>({
+    url: `/orders/${id}/dispute`,
+    method: 'POST',
+    data: { reason },
+  })
 }

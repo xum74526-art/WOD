@@ -33,6 +33,7 @@ from app.services.reward_program import (
     PROGRAM_SUPPLIER,
     PROGRAM_INVITE,
 )
+from app.services.invite_rewards_v2 import invite_v2_enabled
 
 router = APIRouter(prefix="/api/wallet", tags=["wallet"])
 
@@ -58,6 +59,8 @@ def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(ge
         "balance": float(spendable_wallet_balance(w, db)),
         "total_available_balance": float(w.balance or 0),
         "frozen": float(w.frozen),
+        "promotional_balance": float(w.promotional_balance or 0),
+        "promotional_frozen": float(w.promotional_frozen or 0),
         "withdrawable_balance": float(w.withdrawable_balance or 0),
         "withdraw_frozen": float(w.withdraw_frozen or 0),
         "total_income": round(float(total_income), 2) if settings.REVENUE_SETTLEMENT_ENABLED else 0,
@@ -67,7 +70,8 @@ def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(ge
         "reward_service_enabled": any_reward_program_enabled(),
         "consumer_reward_enabled": program_enabled(PROGRAM_CONSUMER),
         "supplier_reward_enabled": program_enabled(PROGRAM_SUPPLIER),
-        "invite_reward_enabled": program_enabled(PROGRAM_INVITE),
+        "invite_reward_enabled": program_enabled(PROGRAM_INVITE) or invite_v2_enabled(),
+        "invite_v2_enabled": invite_v2_enabled(),
         "legacy_reward_service_enabled": reward_program_enabled(),
         "reward_mode": "live" if any_reward_program_enabled() else "disabled",
         "has_bank_card": has_bank_card,

@@ -4,7 +4,7 @@ import { hourlyOrderBody, webRequestId } from "@/lib/web-business-contract";
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
 export type QuoteStatus = "draft" | "submitted" | "shortlisted" | "accepted" | "rejected" | "withdrawn" | "expired";
-export type OrderStatus = "pending_confirmation" | "confirmed" | "delivering" | "delivered" | "completed" | "cancelled";
+export type OrderStatus = "pending_confirmation" | "confirmed" | "delivering" | "delivered" | "disputed" | "completed" | "cancelled";
 export type ResourceStatus = "draft" | "pending_review" | "approved" | "published" | "rejected" | "archived";
 export type ReservationStatus = "reserved" | "allocated" | "released";
 
@@ -137,12 +137,21 @@ export type Order = {
   cancelled_at: string | null;
   cancel_reason: string | null;
   delivery_note: string | null;
+  fulfillment_status?: string | null;
+  delivery_due_at: string | null;
+  confirmation_due_at: string | null;
+  disputed_at: string | null;
+  dispute_due_at: string | null;
+  dispute_reason: string | null;
+  dispute_resolution: "refund" | "release" | string | null;
+  dispute_resolution_note: string | null;
+  dispute_resolved_at: string | null;
   created_at: string;
   updated_at: string;
   version: number;
   buyer: { display_name: string };
   supplier: { display_name: string; company_name: string | null };
-  available_actions: Array<"confirm" | "cancel" | "start_delivery" | "mark_delivered" | "complete" | "renew">;
+  available_actions: Array<"confirm" | "cancel" | "dispute" | "start_delivery" | "mark_delivered" | "complete" | "renew">;
   events?: OrderEvent[];
 };
 
@@ -362,6 +371,7 @@ export function cancelOrder(scope: "account" | "supplier", id: number, version: 
 export function startOrderDelivery(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/start-delivery`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function markOrderDelivered(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/mark-delivered`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function completeOrder(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/complete`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
+export function disputeOrder(id: number, reason: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/dispute`, { method: "POST", body: JSON.stringify({ reason }) }); }
 export function renewOrder(id: number, hours: number) {
   const clientRequestId = webRequestId("renew", crypto.randomUUID());
   return apiRequest<Order>(`/api/v1/account/orders/${id}/renew`, {

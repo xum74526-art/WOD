@@ -63,9 +63,9 @@ test('new purchases and renewals are integer-hour only', () => {
   assert.match(gpuApi, /purchase_hour_options\?: number\[\]/)
   assert.match(productPage, /DEFAULT_PURCHASE_HOURS = \[1, 6, 12, 24, 72, 168, 720\]/)
   assert.match(productPage, /v-model\.number="hours"/)
-  assert.match(productPage, /createOrder\(pid\.value, hours\.value, purchaseType\.value, quantity\.value/)
+  assert.match(productPage, /createOrder\(pid\.value, hours\.value, purchaseType, quantity\.value/)
   assert.doesNotMatch(productPage, /purchaseCycles|cycleLabel/)
-  assert.match(orderApi, /export type PurchaseType = 'usage' \| 'holding'/)
+  assert.match(orderApi, /export type PurchaseType = 'usage'/)
   assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id \}/)
   assert.match(orderApi, /renewOrder\(id: number, hours: number, client_request_id: string\)/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
@@ -75,15 +75,12 @@ test('new purchases and renewals are integer-hour only', () => {
   assert.doesNotMatch(renewBlock, /product_id/)
 })
 
-test('hourly checkout restores usage and holding without changing the duration contract', () => {
-  assert.match(productPage, /const purchaseType = ref<'usage' \| 'holding'>\('usage'\)/)
-  assert.match(productPage, /purchaseType === 'usage'/)
-  assert.match(productPage, /purchaseType === 'holding'/)
+test('hourly checkout exposes usage only while retaining historical holding display elsewhere', () => {
+  assert.match(productPage, /const purchaseType = 'usage' as const/)
   assert.match(productPage, /t\('usageMode'\)/)
-  assert.match(productPage, /t\('holdingMode'\)/)
-  assert.match(productPage, /purchaseType === 'usage'/)
-  assert.match(productPage, /purchaseType === 'holding' \? 'confirmHoldingPurchase' : 'confirmUsagePurchase'/)
-  assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\.value\}`/)
+  assert.match(productPage, /createOrder\(pid\.value, hours\.value, purchaseType, quantity\.value/)
+  assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\}`/)
+  assert.doesNotMatch(productPage, /t\('holdingMode'\)|confirmHoldingPurchase|buyHolding|purchaseType\s*=\s*'holding'/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   assert.match(createBlock, /hours: number/)
   assert.match(createBlock, /purchase_type: PurchaseType/)
@@ -107,8 +104,8 @@ test('usage expiry rebate follows server tiers and the remaining monthly cap', (
   assert.match(productPage, /rebate\.value\?\.month_spent/)
   assert.match(productPage, /rebate\.value\?\.cap_remaining/)
   assert.match(productPage, /estimatedExpiryRebate/)
-  assert.match(productPage, /purchaseType === 'usage' && rebate && estRebate > 0/)
-  assert.doesNotMatch(productPage, /v-if="purchaseType === 'holding'"[^>]*estimatedExpiryRebate/)
+  assert.match(productPage, /v-if="rebate && estRebate > 0"/)
+  assert.doesNotMatch(productPage, /purchaseType === 'holding'/)
 })
 
 test('personal and seller rebate mechanisms are separate and explain their bases', () => {
@@ -162,7 +159,9 @@ test('new order views prefer hour duration while retaining legacy day fallback',
   assert.match(orderDetail, /\['running', 'completed'\]\.includes\(order\.value\.status\)/)
   assert.match(orderDetail, /v-else-if="canRenew"/)
   assert.doesNotMatch(orderDetail, /order\.status === 'running' && isHourlyOrder/)
-  assert.match(orderDetail, /order\.value\?\.status !== 'paid'/)
+  assert.match(orderDetail, /order\.value\.can_cancel/)
+  assert.match(orderDetail, /order\.value\.can_confirm/)
+  assert.match(orderDetail, /order\.value\.can_dispute/)
   assert.match(orderDetail, /holdingSaleUnavailableNotice/)
   assert.doesNotMatch(orderDetail, /前往资产页可出售/)
 })

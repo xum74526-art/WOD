@@ -541,6 +541,661 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InviteCommissionListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InviteCommissionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "items"
+        ],
+        "title": "InviteCommissionListOut",
+        "type": "object"
+      },
+      "InviteCommissionListResponse": {
+        "properties": {
+          "code": {
+            "const": 0,
+            "default": 0,
+            "enum": [
+              0
+            ],
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InviteCommissionListOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "InviteCommissionListResponse",
+        "type": "object"
+      },
+      "InviteCommissionOut": {
+        "properties": {
+          "base_card_hours": {
+            "title": "Base Card Hours",
+            "type": "number"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "order_renewal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Renewal Id"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "rate_bps": {
+            "title": "Rate Bps",
+            "type": "integer"
+          },
+          "reward_card_hours": {
+            "title": "Reward Card Hours",
+            "type": "number"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "source_type": {
+            "enum": [
+              "order",
+              "renewal"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "settled",
+              "forfeited"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_type",
+          "base_card_hours",
+          "rate_bps",
+          "reward_card_hours",
+          "status",
+          "policy_version"
+        ],
+        "title": "InviteCommissionOut",
+        "type": "object"
+      },
+      "InviteRelationshipListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InviteRelationshipOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "items"
+        ],
+        "title": "InviteRelationshipListOut",
+        "type": "object"
+      },
+      "InviteRelationshipListResponse": {
+        "properties": {
+          "code": {
+            "const": 0,
+            "default": 0,
+            "enum": [
+              0
+            ],
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InviteRelationshipListOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "InviteRelationshipListResponse",
+        "type": "object"
+      },
+      "InviteRelationshipOut": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "daily_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Slot"
+          },
+          "fixed_reward_amount": {
+            "default": 0,
+            "title": "Fixed Reward Amount",
+            "type": "number"
+          },
+          "fixed_reward_status": {
+            "default": "not_applicable",
+            "enum": [
+              "not_applicable",
+              "pending",
+              "settled",
+              "forfeited"
+            ],
+            "title": "Fixed Reward Status",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "identity_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Verified At"
+          },
+          "invitee_phone": {
+            "title": "Invitee Phone",
+            "type": "string"
+          },
+          "invitee_phone_masked": {
+            "title": "Invitee Phone Masked",
+            "type": "string"
+          },
+          "legacy_status": {
+            "title": "Legacy Status",
+            "type": "string"
+          },
+          "qualification_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Day"
+          },
+          "qualification_order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Order Id"
+          },
+          "qualification_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "verified_identity_required",
+                  "first_cash_backed_order_required",
+                  "verified_identity_and_first_cash_order",
+                  "daily_qualified_limit_reached",
+                  "self_invite",
+                  "same_verified_identity",
+                  "identity_comparison_unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Reason"
+          },
+          "qualification_status": {
+            "enum": [
+              "pending_identity",
+              "pending_order",
+              "qualified",
+              "daily_cap_exceeded",
+              "risk_rejected",
+              "risk_review",
+              "legacy_v1"
+            ],
+            "title": "Qualification Status",
+            "type": "string"
+          },
+          "qualified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualified At"
+          },
+          "reward_amount": {
+            "default": 0,
+            "title": "Reward Amount",
+            "type": "number"
+          },
+          "rewarded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewarded At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "invitee_phone_masked",
+          "invitee_phone",
+          "status",
+          "legacy_status",
+          "qualification_status"
+        ],
+        "title": "InviteRelationshipOut",
+        "type": "object"
+      },
+      "InviteSummaryOut": {
+        "properties": {
+          "business_timezone": {
+            "default": "Asia/Shanghai",
+            "title": "Business Timezone",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "commission_pending": {
+            "default": 0,
+            "title": "Commission Pending",
+            "type": "number"
+          },
+          "commission_total": {
+            "default": 0,
+            "title": "Commission Total",
+            "type": "number"
+          },
+          "current_rate_bps": {
+            "default": 0,
+            "title": "Current Rate Bps",
+            "type": "integer"
+          },
+          "current_tier": {
+            "title": "Current Tier",
+            "type": "string"
+          },
+          "daily_cap_exceeded_count": {
+            "default": 0,
+            "title": "Daily Cap Exceeded Count",
+            "type": "integer"
+          },
+          "daily_limit": {
+            "default": 5,
+            "title": "Daily Limit",
+            "type": "integer"
+          },
+          "daily_remaining": {
+            "default": 5,
+            "title": "Daily Remaining",
+            "type": "integer"
+          },
+          "daily_slots_remaining": {
+            "default": 5,
+            "title": "Daily Slots Remaining",
+            "type": "integer"
+          },
+          "daily_slots_used": {
+            "default": 0,
+            "title": "Daily Slots Used",
+            "type": "integer"
+          },
+          "daily_used": {
+            "default": 0,
+            "title": "Daily Used",
+            "type": "integer"
+          },
+          "eligible_friend_spend_card_hours": {
+            "default": 0,
+            "title": "Eligible Friend Spend Card Hours",
+            "type": "number"
+          },
+          "fixed_reward_card_hours": {
+            "default": 58.0,
+            "title": "Fixed Reward Card Hours",
+            "type": "number"
+          },
+          "fixed_reward_pending": {
+            "default": 0,
+            "title": "Fixed Reward Pending",
+            "type": "number"
+          },
+          "fixed_reward_total": {
+            "default": 0,
+            "title": "Fixed Reward Total",
+            "type": "number"
+          },
+          "invited_count": {
+            "title": "Invited Count",
+            "type": "integer"
+          },
+          "next_reset_at": {
+            "format": "date-time",
+            "title": "Next Reset At",
+            "type": "string"
+          },
+          "next_tier_hint": {
+            "title": "Next Tier Hint",
+            "type": "string"
+          },
+          "pending_count": {
+            "default": 0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "pending_identity_count": {
+            "default": 0,
+            "title": "Pending Identity Count",
+            "type": "integer"
+          },
+          "pending_order_count": {
+            "default": 0,
+            "title": "Pending Order Count",
+            "type": "integer"
+          },
+          "pending_reward": {
+            "default": 0,
+            "title": "Pending Reward",
+            "type": "number"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "program_code": {
+            "title": "Program Code",
+            "type": "string"
+          },
+          "qualification_requirement": {
+            "const": "verified_identity_and_first_cash_order",
+            "default": "verified_identity_and_first_cash_order",
+            "enum": [
+              "verified_identity_and_first_cash_order"
+            ],
+            "title": "Qualification Requirement",
+            "type": "string"
+          },
+          "qualified_count": {
+            "title": "Qualified Count",
+            "type": "integer"
+          },
+          "reward_mode": {
+            "enum": [
+              "live",
+              "disabled"
+            ],
+            "title": "Reward Mode",
+            "type": "string"
+          },
+          "rewarded_count": {
+            "default": 0,
+            "title": "Rewarded Count",
+            "type": "integer"
+          },
+          "rewards_enabled": {
+            "title": "Rewards Enabled",
+            "type": "boolean"
+          },
+          "rewards_transferable": {
+            "const": false,
+            "default": false,
+            "enum": [
+              false
+            ],
+            "title": "Rewards Transferable",
+            "type": "boolean"
+          },
+          "rewards_withdrawable": {
+            "const": false,
+            "default": false,
+            "enum": [
+              false
+            ],
+            "title": "Rewards Withdrawable",
+            "type": "boolean"
+          },
+          "risk_rejected_count": {
+            "default": 0,
+            "title": "Risk Rejected Count",
+            "type": "integer"
+          },
+          "risk_review_count": {
+            "default": 0,
+            "title": "Risk Review Count",
+            "type": "integer"
+          },
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/InviteTierOut"
+            },
+            "title": "Tiers",
+            "type": "array"
+          },
+          "total_eligible_consumption_card_hours": {
+            "default": 0,
+            "title": "Total Eligible Consumption Card Hours",
+            "type": "number"
+          },
+          "total_reward": {
+            "default": 0,
+            "title": "Total Reward",
+            "type": "number"
+          },
+          "unverified_count": {
+            "default": 0,
+            "title": "Unverified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "invited_count",
+          "qualified_count",
+          "current_tier",
+          "next_tier_hint",
+          "next_reset_at",
+          "rewards_enabled",
+          "reward_mode",
+          "program_code",
+          "policy_version"
+        ],
+        "title": "InviteSummaryOut",
+        "type": "object"
+      },
+      "InviteSummaryResponse": {
+        "properties": {
+          "code": {
+            "const": 0,
+            "default": 0,
+            "enum": [
+              0
+            ],
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InviteSummaryOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "InviteSummaryResponse",
+        "type": "object"
+      },
+      "InviteTierOut": {
+        "properties": {
+          "max_qualified_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Qualified Count"
+          },
+          "min_qualified_count": {
+            "title": "Min Qualified Count",
+            "type": "integer"
+          },
+          "rate_bps": {
+            "title": "Rate Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "min_qualified_count",
+          "max_qualified_count",
+          "rate_bps"
+        ],
+        "title": "InviteTierOut",
+        "type": "object"
+      },
       "KaiBindStartIn": {
         "properties": {
           "return_url": {
@@ -1542,6 +2197,45 @@
           "product_id"
         ],
         "title": "OrderCreateIn",
+        "type": "object"
+      },
+      "OrderDisputeIn": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "OrderDisputeIn",
+        "type": "object"
+      },
+      "OrderDisputeResolveIn": {
+        "properties": {
+          "action": {
+            "enum": [
+              "refund",
+              "release"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "note"
+        ],
+        "title": "OrderDisputeResolveIn",
         "type": "object"
       },
       "OrderRenewIn": {
@@ -5772,17 +6466,115 @@
         ]
       }
     },
-    "/api/invite/records": {
+    "/api/invite/commissions": {
       "get": {
-        "operationId": "records_api_invite_records_get",
+        "operationId": "commissions_api_invite_commissions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCommissionListResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Commissions",
+        "tags": [
+          "invite"
+        ]
+      }
+    },
+    "/api/invite/records": {
+      "get": {
+        "operationId": "records_api_invite_records_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteRelationshipListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -5803,7 +6595,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/InviteSummaryResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6779,6 +7573,116 @@
           }
         ],
         "summary": "Deliver Ssh",
+        "tags": [
+          "order"
+        ]
+      }
+    },
+    "/api/orders/{oid}/dispute": {
+      "post": {
+        "operationId": "dispute_delivery_api_orders__oid__dispute_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "oid",
+            "required": true,
+            "schema": {
+              "title": "Oid",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDisputeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Dispute Delivery",
+        "tags": [
+          "order"
+        ]
+      }
+    },
+    "/api/orders/{oid}/dispute/resolve": {
+      "post": {
+        "operationId": "resolve_delivery_dispute_api_orders__oid__dispute_resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "oid",
+            "required": true,
+            "schema": {
+              "title": "Oid",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDisputeResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Resolve Delivery Dispute",
         "tags": [
           "order"
         ]
