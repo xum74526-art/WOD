@@ -43,8 +43,10 @@ test("static review package never contacts a backend or external service", () =>
 test("approved production layout and safe copy are fixed in the package", () => {
   const combined = html + script + styles + showcaseStyles;
   assert.match(script, /^const showcaseMode = true;/);
-  assert.match(html, /备案信息将在核准后公示/);
-  assert.doesNotMatch(combined, /9103|noindex|XXXXXXXX|KAI Pricing|订购|订单|购买|供应商|结算/);
+  assert.match(html, /粤ICP备案号待提供/);
+  assert.match(html, /粤公网安备号待提供/);
+  assert.match(html, /<span aria-hidden="true">\|<\/span>/);
+  assert.doesNotMatch(combined, /9103|noindex|XXXXXXXX|备案信息将在核准后公示|KAI Pricing|订购|订单|购买|供应商|结算/);
   assert.equal((html.match(/id="view-/g) ?? []).length, 6);
   assert.equal((script.match(/^    id: "/gm) ?? []).length, 6);
 });

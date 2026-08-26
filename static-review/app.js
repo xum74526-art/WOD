@@ -279,9 +279,6 @@ function applyShowcaseCopy() {
     if (replacement) node.nodeValue = source.replace(trimmed, replacement);
   });
 
-  const filing = document.querySelector(".icp");
-  if (filing) filing.replaceChildren(createElement("span", "", "备案信息将在核准后公示"));
-
   const contact = document.querySelector('.footer-links [data-toast]');
   if (contact) contact.dataset.toast = "联系方式将在正式资料确认后补充。";
 }

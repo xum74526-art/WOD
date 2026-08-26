@@ -27,7 +27,9 @@ test("/info always uses the approved second layout without preview-port coupling
   assert.doesNotMatch(html + script + styles + showcaseStyles, /9103|document\.baseURI|location\.port/);
   assert.match(script, /wod\.info\.requests\.v1/);
   assert.match(html, /企业算力资源信息服务/);
-  assert.match(html, /备案信息将在核准后公示/);
+  assert.match(html, /粤ICP备案号待提供/);
+  assert.match(html, /粤公网安备号待提供/);
+  assert.match(html, /<span aria-hidden="true">\|<\/span>/);
 });
 
 test("/info remains browser-only and does not call application or external services", () => {
@@ -55,6 +57,7 @@ test("/info public source contains no preview placeholders or retired commercial
   const retiredTerms = [
     "noindex",
     "XXXXXXXX",
+    "备案信息将在核准后公示",
     "静态预览",
     "KAI Pricing",
     "订购",
