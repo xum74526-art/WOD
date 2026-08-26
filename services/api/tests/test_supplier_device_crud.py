@@ -1,0 +1,206 @@
+import unittest
+from decimal import Decimal
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.deps import get_current_user
+from app.db.base import Base
+from app.db.session import get_db
+from app.models import Product, Supplier, User
+from app.routers import supplier as supplier_router
+from app.utils.response import BizError, error
+
+
+class SupplierDeviceCrudTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(self.engine)
+        self.db = sessionmaker(bind=self.engine)()
+
+        self.owner = self._add_supplier_user(1, "approved")
+        self.other_supplier = self._add_supplier_user(2, "approved")
+        self.pending_supplier = self._add_supplier_user(3, "pending")
+        self.rejected_supplier = self._add_supplier_user(4, "rejected")
+        self.db.commit()
+        self.current_user = self.owner
+
+        app = FastAPI()
+
+        @app.exception_handler(BizError)
+        async def biz_error_handler(request: Request, exc: BizError):
+            del request
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=error(exc.msg, exc.code),
+            )
+
+        def db_override():
+            yield self.db
+
+        app.include_router(supplier_router.router)
+        app.dependency_overrides[get_db] = db_override
+        app.dependency_overrides[get_current_user] = lambda: self.current_user
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        self.client.close()
+        self.db.close()
+        self.engine.dispose()
+
+    def _add_supplier_user(self, suffix: int, status: str) -> User:
+        user = User(
+            username=f"商家测试{suffix}",
+            phone=f"139000001{suffix:02d}",
+            password="!",
+            role="supplier" if status == "approved" else "personal",
+            supplier_status=status,
+        )
+        self.db.add(user)
+        self.db.flush()
+        self.db.add(Supplier(
+            user_id=user.id,
+            company_name=f"测试商家{suffix}",
+            contact=f"联系人{suffix}",
+            phone=user.phone,
+            status=status,
+        ))
+        self.db.flush()
+        return user
+
+    @staticmethod
+    def _device_payload(**overrides):
+        payload = {
+            "name": "RTX 5090 32GB",
+            "gpu_model": "RTX 5090",
+            "memory": "32GB",
+            "cuda": "12.8",
+            "price": "12.3456",
+            "stock": 8,
+            "desc": "商家自有算力资源",
+            "region_code": "east_china",
+            "region_name": "华东",
+            "city": "上海",
+        }
+        payload.update(overrides)
+        return payload
+
+    def _create_owned_device(self) -> Product:
+        self.current_user = self.owner
+        response = self.client.post(
+            "/api/supplier/devices",
+            json=self._device_payload(),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        product_id = response.json()["data"]["id"]
+        return self.db.query(Product).filter(Product.id == product_id).one()
+
+    def test_approved_supplier_creates_resource_without_price_conversion(self):
+        product = self._create_owned_device()
+        owner_record = self.db.query(Supplier).filter(
+            Supplier.user_id == self.owner.id,
+        ).one()
+
+        self.assertEqual(product.supplier_id, owner_record.id)
+        self.assertEqual(product.price, Decimal("12.3456"))
+        self.assertEqual(product.stock, 8)
+        self.assertEqual(product.status, "on")
+        self.assertEqual(product.region_code, "east_china")
+
+    def test_supplier_cannot_update_another_suppliers_resource(self):
+        product = self._create_owned_device()
+        self.current_user = self.other_supplier
+
+        response = self.client.put(
+            f"/api/supplier/devices/{product.id}",
+            json={"name": "越权修改", "price": "1.0000", "stock": 1},
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        self.db.refresh(product)
+        self.assertEqual(product.name, "RTX 5090 32GB")
+        self.assertEqual(product.price, Decimal("12.3456"))
+        self.assertEqual(product.stock, 8)
+
+    def test_pending_and_rejected_suppliers_cannot_write_resources(self):
+        product = self._create_owned_device()
+
+        for user in (self.pending_supplier, self.rejected_supplier):
+            with self.subTest(status=user.supplier_status, operation="create"):
+                self.current_user = user
+                response = self.client.post(
+                    "/api/supplier/devices",
+                    json=self._device_payload(name=f"未审核资源{user.id}"),
+                )
+                self.assertEqual(response.status_code, 403, response.text)
+
+            with self.subTest(status=user.supplier_status, operation="update"):
+                response = self.client.put(
+                    f"/api/supplier/devices/{product.id}",
+                    json={"stock": 0},
+                )
+                self.assertEqual(response.status_code, 403, response.text)
+
+        self.db.refresh(product)
+        self.assertEqual(product.stock, 8)
+
+    def test_create_and_update_reject_out_of_range_price_and_stock(self):
+        self.current_user = self.owner
+        invalid_create_values = (
+            {"price": "0"},
+            {"price": "100000.0001"},
+            {"stock": -1},
+            {"stock": 100001},
+        )
+        for overrides in invalid_create_values:
+            with self.subTest(operation="create", overrides=overrides):
+                response = self.client.post(
+                    "/api/supplier/devices",
+                    json=self._device_payload(**overrides),
+                )
+                self.assertEqual(response.status_code, 422, response.text)
+
+        product = self._create_owned_device()
+        invalid_updates = (
+            {"price": "0"},
+            {"price": "100000.0001"},
+            {"stock": -1},
+            {"stock": 100001},
+        )
+        for payload in invalid_updates:
+            with self.subTest(operation="update", payload=payload):
+                response = self.client.put(
+                    f"/api/supplier/devices/{product.id}",
+                    json=payload,
+                )
+                self.assertEqual(response.status_code, 422, response.text)
+
+        self.db.refresh(product)
+        self.assertEqual(product.price, Decimal("12.3456"))
+        self.assertEqual(product.stock, 8)
+
+    def test_supplier_can_delist_and_relist_owned_resource(self):
+        product = self._create_owned_device()
+
+        for expected_status in ("off", "on"):
+            with self.subTest(status=expected_status):
+                response = self.client.put(
+                    f"/api/supplier/devices/{product.id}",
+                    json={"status": expected_status},
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertTrue(response.json()["data"]["updated"])
+                self.db.refresh(product)
+                self.assertEqual(product.status, expected_status)
+
+
+if __name__ == "__main__":
+    unittest.main()

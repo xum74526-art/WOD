@@ -28,6 +28,34 @@ export interface SupplierDeviceItem {
   image_url: string | null
 }
 
+export interface SupplierDeviceCreateInput {
+  name: string
+  gpu_model: string
+  memory: string
+  cuda?: string | null
+  price: number
+  stock: number
+  desc?: string | null
+  image_url?: string | null
+  region_code: string
+  region_name: string
+  city: string
+}
+
+export interface SupplierDeviceUpdateInput {
+  name?: string
+  price?: number
+  stock?: number
+  status?: 'on' | 'off'
+}
+
+export interface SupplierDeviceMutationResult {
+  id: number
+  name?: string
+  status?: 'on' | 'off'
+  updated?: boolean
+}
+
 export function getMySupplier() {
   return request<SupplierInfo | { status: string }>({ url: '/supplier/mine' })
 }
@@ -36,6 +64,22 @@ export function getMyProducts() {
 }
 export function getSupplierDevices(status_filter: 'on' | 'off' | 'all' = 'all') {
   return request<SupplierDeviceItem[]>({ url: '/supplier/devices', data: { status_filter } })
+}
+export function createSupplierDevice(data: SupplierDeviceCreateInput) {
+  return request<SupplierDeviceMutationResult>({
+    url: '/supplier/devices',
+    method: 'POST',
+    data,
+    silent: true,
+  })
+}
+export function updateSupplierDevice(id: number, data: SupplierDeviceUpdateInput) {
+  return request<SupplierDeviceMutationResult>({
+    url: `/supplier/devices/${id}`,
+    method: 'PUT',
+    data,
+    silent: true,
+  })
 }
 export function getStore(id: number) {
   return request<{ supplier: SupplierInfo; products: Product[] }>({ url: `/supplier/${id}` })

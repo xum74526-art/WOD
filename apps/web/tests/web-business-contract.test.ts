@@ -110,6 +110,14 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
   assert.doesNotMatch(chart, /close_price_cny/);
 });
 
+test("seller resource workspace uses the backend card-hour price contract", () => {
+  const resource = fs.readFileSync(new URL("../components/resource-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(resource, /每 GPU 小时价格（卡时）/);
+  assert.match(resource, /selected\.price\.toFixed\(4\).*卡时 \/ GPU·小时/);
+  assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|selected\.price\.toFixed\(4\).*CNY/);
+});
+
 test("Web recharge orders expose the same query, safe cancel, and restart workflow as App", () => {
   const wallet = fs.readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/mobile-business-api.ts", import.meta.url), "utf8");

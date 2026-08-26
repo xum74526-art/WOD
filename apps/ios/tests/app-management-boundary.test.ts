@@ -12,7 +12,7 @@ function walk(directory: URL): URL[] {
   })
 }
 
-test('mobile excludes Web-only finance and merchant management writes', () => {
+test('mobile limits writes to approved-seller resource management', () => {
   const offenders: string[] = []
   for (const file of walk(srcRoot)) {
     if (!['.ts', '.vue', '.json'].includes(extname(file.pathname))) continue
@@ -20,9 +20,9 @@ test('mobile excludes Web-only finance and merchant management writes', () => {
     const source = readFileSync(file, 'utf8')
     const checks: Array<[RegExp, string]> = [
       [/\/finance\//, 'finance administration route'],
-      [/\/pages\/supplier\/(?:register|product-create)/, 'merchant write page'],
+      [/\/pages\/supplier\/register/, 'merchant registration page'],
       [/\/supplier\/(?:register|profile)[`'"]?[\s\S]{0,100}?method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/, 'merchant profile write'],
-      [/\/supplier\/devices(?:\/\$\{[^}]+\})?[`'"]?[\s\S]{0,100}?method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/, 'merchant device write'],
+      [/\/supplier\/devices(?:\/\$\{[^}]+\})?[`'"]?[\s\S]{0,100}?method:\s*['"](?:PATCH|DELETE)['"]/, 'unsupported merchant resource write'],
       [/\/orders\/\$\{[^}]+\}\/deliver/, 'merchant delivery write'],
       [/\/buy-requests\/\$\{[^}]+\}\/quotes[`'"][\s\S]{0,100}?method:\s*['"]POST['"]/, 'merchant quote write'],
     ]

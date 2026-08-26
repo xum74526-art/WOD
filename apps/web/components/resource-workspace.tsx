@@ -191,7 +191,7 @@ export function ResourceWorkspace() {
                   <input required disabled={Boolean(selected)} value={form.memory} onChange={(event) => setForm({ ...form, memory: event.target.value })} />
                 </label>
                 <label>
-                  <span>每 GPU 小时价格（CNY）</span>
+                  <span>每 GPU 小时价格（卡时）</span>
                   <input required type="number" min="0.0001" step="0.0001" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
                 </label>
                 <label>
@@ -242,7 +242,7 @@ export function ResourceWorkspace() {
               <div className="order-facts">
                 <div>
                   <small>每小时价格</small>
-                  <strong>{selected.price.toFixed(4)} CNY</strong>
+                  <strong>{selected.price.toFixed(4)} 卡时 / GPU·小时</strong>
                 </div>
                 <div>
                   <small>当前库存</small>

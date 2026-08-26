@@ -8,8 +8,8 @@
 | 目录 | 发布目标 | 功能边界 | 数据访问 |
 |---|---|---|---|
 | `apps/web` | 桌面与移动浏览器 | 功能最完整；通过 Next.js BFF 提供业务与管理界面 | 同源 `/api/v1/canonical/*` |
-| `apps/ios` | iPhone/iPad | 行情、小时购买、充值、订单、资产等必要能力；管理能力只读 | FastAPI `/api/*` |
-| `apps/android` | Android | 行情、小时购买、充值、订单、资产等必要能力；管理能力只读 | FastAPI `/api/*` |
+| `apps/ios` | iPhone/iPad | 行情、小时购买、充值、订单、资产等必要能力；已审核商家可管理自己的算力资源 | FastAPI `/api/*` |
+| `apps/android` | Android | 行情、小时购买、充值、订单、资产等必要能力；已审核商家可管理自己的算力资源 | FastAPI `/api/*` |
 | `services/api` | 云端 API | 唯一业务规则、认证、支付、数据库和审计所有者 | 唯一允许访问数据库 |
 | `packages/api-contracts` | 全客户端 | OpenAPI 快照与客户端契约检查 | 不访问数据库 |
 
@@ -48,16 +48,14 @@
 ## 修改规则
 
 1. API 变化先修改 `services/api`，重新导出 OpenAPI，再更新三个客户端。
-2. Web 管理功能可以完整；iOS/Android 管理页面只能读取，不能直接执行财务或审核写操作。
+2. 已审核商家可在 iOS/Android 新增、编辑、上架或下架自己的算力资源；商家资料修改、SSH 交付、财务和平台审核写操作仍只在 Web 端提供。
 3. iOS/Android 若实现相同功能，应保持相同 API 契约和测试用例；平台差异仅限回跳、权限、签名和系统能力。
 4. 正式 Android applicationId 固定为 `com.kai.wod`；签名材料不进入仓库。
 5. 支付密钥只存在于云端 API 环境，任何客户端都不得包含商户密钥。
 
 ## 当前移动端一致性基线
 
-- `apps/ios/src` 与 `apps/android/src` 当前各包含 225 个文件，其中 223 个文件内容一致。
-- 两端文件集合一致，除 `src/manifest.json` 和 `src/utils/client-platform.ts` 外，其他源码
-  SHA-256 一致。
-- 这两个差异分别承载平台打包/回跳配置和服务端 `client_id`，不允许把其中一端的文件直接
-  覆盖到另一端。
+- iOS 与 Android 的共同业务能力和 API 契约必须保持一致。
+- `src/manifest.json` 和 `src/utils/client-platform.ts` 分别承载平台打包/回跳配置和服务端
+  `client_id`，不允许把其中一端的文件直接覆盖到另一端。
 - 任何共同业务修改必须在两端同步，并分别执行单元测试、类型检查、i18n 审计和 App 构建。
