@@ -4,19 +4,26 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, false, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.market_price import MarketSourceStatus
 from app.models.product import Product
+from app.models.supplier import Supplier
 from app.schemas.product import ProductOut
-from app.services.purchase_cycles import PURCHASE_HOUR_OPTIONS, available_purchase_cycles
+from app.services.purchase_cycles import (
+    MAX_PURCHASE_HOURS,
+    MIN_PURCHASE_HOURS,
+    PURCHASE_HOUR_OPTIONS,
+    available_purchase_cycles,
+)
 from app.services.market_freshness import CURRENT_SOURCE_STATES, product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.offer_sync import KAI_PRODUCT_DESCRIPTION
 from app.services.product_purchase import product_purchase_availability
+from app.services.product_provider import product_provider_info
 from app.services.gpu_catalog import canonicalize_gpu, normalize_gpu_variant
 from app.services.region_mapper import REGIONS, map_region
 from app.utils.response import BizError, success
@@ -41,16 +48,27 @@ def _market_source_states(db: Session) -> dict[str, str]:
     }
 
 
-def _current_product_query(db: Session, source_states: dict[str, str] | None = None):
+def _current_product_query(
+    db: Session,
+    source_states: dict[str, str] | None = None,
+    *,
+    include_merchants: bool = True,
+):
     states = source_states if source_states is not None else _market_source_states(db)
     cutoff = utcnow() - timedelta(seconds=max(settings.PRODUCT_OFFER_MAX_AGE_SECONDS, 60))
-    # First-party merchant rows remain in the catalogue. KAI is the only
-    # third-party source allowed to contribute current product cards.
+    # Only approved merchant listings and current KAI self-operated cards are
+    # eligible for the public catalogue. Retired sources remain audit-only.
     legacy_untyped = or_(Product.market_source.is_(None), Product.market_source == "")
-    source_filters = [or_(
-        Product.market_source == "wod",
-        and_(legacy_untyped, Product.source_price.is_(None)),
-    )]
+    approved_supplier_ids = db.query(Supplier.id).filter(Supplier.status == "approved")
+    source_filters = []
+    if include_merchants:
+        source_filters.append(and_(
+            or_(
+                Product.market_source == "wod",
+                and_(legacy_untyped, Product.source_price.is_(None)),
+            ),
+            Product.supplier_id.in_(approved_supplier_ids),
+        ))
     if states.get("kai") in CURRENT_SOURCE_STATES:
         source_filters.append(and_(
                 Product.market_source == "kai",
@@ -58,7 +76,10 @@ def _current_product_query(db: Session, source_states: dict[str, str] | None = N
                 Product.price_updated_at.isnot(None),
                 Product.price_updated_at >= cutoff,
         ))
-    return db.query(Product).filter(Product.status == "on", or_(*source_filters))
+    return db.query(Product).filter(
+        Product.status == "on",
+        or_(*source_filters) if source_filters else false(),
+    )
 
 
 def _product_out(p: Product, db: Session = None, source_states: dict[str, str] | None = None) -> dict:
@@ -85,6 +106,19 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         out["wallet_charge_unit"] = "CARD_HOUR"
         out["purchase_unit"] = "hour"
         out["purchase_hour_options"] = list(PURCHASE_HOUR_OPTIONS)
+        out["min_purchase_hours"] = MIN_PURCHASE_HOURS
+        out["max_purchase_hours"] = MAX_PURCHASE_HOURS
+    elif source == "wod":
+        out["cycle"] = []
+        out["billing_unit"] = "GPU_HOUR"
+        out["price_currency"] = "CARD_HOUR"
+        out["price_cny_per_gpu_hour"] = float(Decimal(str(p.price or 0)) * Decimal(str(settings.CARD_HOUR_RMB_RATE)))
+        out["price_card_hours_per_gpu_hour"] = float(p.price or 0)
+        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["purchase_unit"] = "hour"
+        out["purchase_hour_options"] = list(PURCHASE_HOUR_OPTIONS)
+        out["min_purchase_hours"] = MIN_PURCHASE_HOURS
+        out["max_purchase_hours"] = MAX_PURCHASE_HOURS
     else:
         out["cycle"] = available_purchase_cycles(p.cycle)
         out["billing_unit"] = "GPU_HOUR"
@@ -94,6 +128,8 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         out["wallet_charge_unit"] = "CARD_HOUR"
         out["purchase_unit"] = "day"
         out["purchase_hour_options"] = []
+        out["min_purchase_hours"] = None
+        out["max_purchase_hours"] = None
     states = source_states if source_states is not None else (_market_source_states(db) if db else {})
     market_state = product_market_state(p, states, utcnow(), settings.PRODUCT_OFFER_MAX_AGE_SECONDS)
     reported_stock = max(int(p.stock or 0), 0)
@@ -129,7 +165,7 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         reliability = 0
     out["stability"] = round(reliability, 1) if reliability > 0 else None
     out["tags"] = []
-    out["supplier_id"] = p.supplier_id
+    out.update(product_provider_info(p, db))
     purchasable, unavailable_reason = product_purchase_availability(p, db) if db else (False, None)
     effective_purchase_capacity = reported_stock
     if source == "kai":
@@ -143,11 +179,6 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         if not purchasable
         else ("当前无可售额度" if effective_purchase_capacity <= 0 else ("报价已过期或来源暂不可用" if market_state != "live" else None))
     )
-    # 关联供应商名
-    if p.supplier_id and db:
-        from app.models.supplier import Supplier
-        s = db.query(Supplier).filter(Supplier.id == p.supplier_id).first()
-        out["supplier_name"] = s.company_name if s else None
     return out
 
 
@@ -160,7 +191,16 @@ def _representative_products(
     representatives: dict[str, dict] = {}
     for product in products:
         item = _product_out(product, db, source_states)
-        identity = f"{str(item.get('gpu_model') or '').strip().casefold()}|{str(item.get('memory') or '').strip().casefold()}"
+        # KAI is a quote catalogue, so one lowest-price representative per
+        # exact GPU/VRAM identity is useful.  Every merchant listing is an
+        # independent seller offer and must remain visible even when hardware
+        # specifications match another merchant's product.
+        identity = (
+            f"kai|{str(item.get('gpu_model') or '').strip().casefold()}|"
+            f"{str(item.get('memory') or '').strip().casefold()}"
+            if item.get("market_source") == "kai"
+            else f"product|{item.get('id')}"
+        )
         current = representatives.get(identity)
         price = Decimal(str(item.get("price_card_hours_per_gpu_hour") or item.get("price") or 0))
         current_price = (
@@ -189,7 +229,7 @@ def list_products(
     sort: str = "default",
     min_price: float | None = None,
     max_price: float | None = None,
-    market_source: Literal["kai"] | None = Query(default=None),
+    market_source: Literal["kai", "wod"] | None = Query(default=None),
     representative: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -244,7 +284,9 @@ def filters(db: Session = Depends(get_db)):
 @router.get("/quote/overview")
 def quote_overview(db: Session = Depends(get_db)):
     """KAI-only current cross-section; observations are not inventory."""
-    current_products = _current_product_query(db).filter(Product.market_source == "kai").all()
+    current_products = _current_product_query(
+        db, include_merchants=False,
+    ).filter(Product.market_source == "kai").all()
     grouped = {}
     for product in current_products:
         model = canonicalize_gpu(product.gpu_model) or product.gpu_model
@@ -312,7 +354,9 @@ def quote_regional(
     if variant and not model:
         raise BizError("指定显存时必须同时指定 GPU 型号", status_code=400)
     source_states = _market_source_states(db)
-    products = _current_product_query(db, source_states).filter(Product.market_source == "kai").all()
+    products = _current_product_query(
+        db, source_states, include_merchants=False,
+    ).filter(Product.market_source == "kai").all()
     identities: dict[tuple[str, str], list[Product]] = defaultdict(list)
     for product in products:
         canonical_model = canonicalize_gpu(product.gpu_model) or product.gpu_model
@@ -393,6 +437,16 @@ def get_product(pid: int, db: Session = Depends(get_db)):
     p = db.query(Product).filter(Product.id == pid).first()
     if not p:
         raise BizError("商品不存在", status_code=404)
+    if product_market_source(p) == "wod":
+        approved_supplier = db.query(Supplier.id).filter(
+            Supplier.id == p.supplier_id,
+            Supplier.status == "approved",
+        ).first()
+        if approved_supplier is None:
+            # Keep rejected, revoked and still-pending merchant inventory in
+            # the owner's management view without exposing a public dead card
+            # through a guessed product id.
+            raise BizError("商品不存在", status_code=404)
     return success(_product_out(p, db))
 
 

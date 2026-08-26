@@ -15,8 +15,26 @@ const REGION_EN: Record<string, string> = {
   '中东': 'Middle East',
   '南美': 'South America',
   '非洲': 'Africa',
+  '海外': 'Overseas',
   '全球/未披露': 'Global / Undisclosed',
   '全球／未披露': 'Global / Undisclosed',
+  '全球 / 未披露': 'Global / Undisclosed',
+  '未披露': 'Undisclosed',
+  'north_china': 'North China',
+  'east_china': 'East China',
+  'central_china': 'Central China',
+  'south_china': 'South China',
+  'northeast_china': 'Northeast China',
+  'northwest_china': 'Northwest China',
+  'southwest_china': 'Southwest China',
+  'china_unspecified': 'Mainland China',
+  'asia_pacific': 'Asia Pacific',
+  'north_america': 'North America',
+  'europe': 'Europe',
+  'middle_east': 'Middle East',
+  'south_america': 'South America',
+  'africa': 'Africa',
+  'global_unspecified': 'Global / Undisclosed',
   '北京市': 'Beijing',
   '天津市': 'Tianjin',
   '上海市': 'Shanghai',
@@ -53,9 +71,8 @@ const REGION_EN: Record<string, string> = {
   '澳门特别行政区': 'Macao SAR',
 }
 
-// Keep this list aligned with services/api/app/services/region_mapper.py.
-// KAI products expose both a stable code and a localized display name.  The
-// code must win because older records may retain a raw upstream label.
+// Keep these codes aligned with the canonical backend region mapper. The
+// stable code wins when an older product still carries an upstream label.
 const MARKET_REGION_EN_BY_CODE: Record<string, string> = {
   north_china: 'North China',
   east_china: 'East China',
@@ -83,7 +100,6 @@ const MARKET_REGION_TOKEN_EN: Array<[string, string]> = [
   ['中国大陆-华中', 'Central China'],
   ['中国大陆-华南', 'South China'],
   ['全球/未披露', 'Global / Undisclosed'],
-  ['全球／未披露', 'Global / Undisclosed'],
   ['中国大陆', 'Mainland China'],
   ['亚太', 'Asia Pacific'],
   ['北美', 'North America'],
@@ -121,19 +137,20 @@ export function englishRegionName(name: string, regionCode = ''): string {
   if (REGION_EN[name]) return REGION_EN[name]
   if (REGION_EN[compactName]) return REGION_EN[compactName]
 
-  const marketToken = MARKET_REGION_TOKEN_EN.find(([source]) => compactName.includes(source.replace(/／/g, '/')))
+  const marketToken = MARKET_REGION_TOKEN_EN.find(([source]) => compactName.includes(source))
   if (marketToken) return marketToken[1]
 
-  // Upstream KAI location identifiers such as EU-West or CN-East-1 are
-  // already readable and must not be mangled by the pinyin fallback.
+  // KAI identifiers such as EU-West and CN-East-1 are already readable.
   if (!/[\u3400-\u9fff]/.test(name)) return name
 
-  const directionalZone = name.match(/^(华北|华东|华南|西北|西南)([A-Za-z0-9]+)区$/)
+  const directionalZone = name.match(/^(华北|华东|华中|华南|东北|西北|西南)([A-Za-z0-9]+)区$/)
   if (directionalZone) {
     const direction = {
       '华北': 'North China',
       '华东': 'East China',
+      '华中': 'Central China',
       '华南': 'South China',
+      '东北': 'Northeast China',
       '西北': 'Northwest China',
       '西南': 'Southwest China',
     }[directionalZone[1]]
@@ -161,7 +178,7 @@ export function localizeMarketLocation(
   if (!rawDetail || rawDetail === '-' || rawDetail === rawRegion) return region || rawDetail
 
   const localizedDetail = localizeRegionName(rawDetail, lang)
-  const comparable = (value: string) => value.toLowerCase().replace(/[\s·/_／-]+/g, '')
+  const comparable = (value: string) => value.toLowerCase().replace(/[\s·\/_／-]+/g, '')
   if (!localizedDetail || comparable(localizedDetail) === comparable(region)) return region
   return [region, localizedDetail].filter(Boolean).join(' · ')
 }

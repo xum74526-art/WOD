@@ -13,6 +13,7 @@ from app.models.order_renewal import OrderRenewal
 from app.models.product import Product
 from app.models.supplier import Supplier
 from app.models.wallet import Wallet
+from app.services.market_freshness import product_market_source
 
 
 MERCHANT_SETTLEMENT_POLICY_VERSION = "merchant-sale-v1"
@@ -62,7 +63,14 @@ def settle_merchant_sale(
     """
 
     product = db.query(Product).filter(Product.id == order.product_id).first()
-    if product is None or product.supplier_id is None:
+    # Seller association is not the source-of-truth for market ownership.  A
+    # malformed or legacy KAI row may carry a supplier_id, but KAI self-operated
+    # proceeds must never be routed into the merchant settlement ledger.
+    if (
+        product is None
+        or product_market_source(product) != "wod"
+        or product.supplier_id is None
+    ):
         return None
     supplier = db.query(Supplier).filter(Supplier.id == product.supplier_id).first()
     if supplier is None or int(supplier.user_id) == int(order.user_id):
@@ -118,6 +126,12 @@ def settle_merchant_sale(
     )
     db.add(settlement)
     db.flush()  # claim the unique business event before mutating the wallet
+
+    # ``Supplier.order_count`` is the public completed-sale reputation signal,
+    # not a count of merely created or disputed orders.  The event-key guard
+    # above makes this increment idempotent as well.
+    if renewal is None:
+        supplier.order_count = int(supplier.order_count or 0) + 1
 
     wallet.balance = settlement_money(wallet.balance) + net
     wallet.withdrawable_balance = settlement_money(wallet.withdrawable_balance) + net

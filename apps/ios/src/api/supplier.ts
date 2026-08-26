@@ -1,5 +1,6 @@
 import { request } from './request'
 import type { Product } from './gpu'
+import type { OrderItem } from './order'
 
 export interface SupplierInfo {
   id: number
@@ -56,8 +57,24 @@ export interface SupplierDeviceMutationResult {
   updated?: boolean
 }
 
+export interface SupplierRegisterInput {
+  company_name: string
+  contact: string
+  phone: string
+  region?: string | null
+  desc?: string | null
+}
+
+export interface SupplierOrderItem extends OrderItem {
+  buyer_name?: string
+  buyer_phone?: string
+}
+
 export function getMySupplier() {
   return request<SupplierInfo | { status: string }>({ url: '/supplier/mine' })
+}
+export function registerSupplier(data: SupplierRegisterInput) {
+  return request<SupplierInfo>({ url: '/supplier/register', method: 'POST', data, silent: true })
 }
 export function getMyProducts() {
   return request<Product[]>({ url: '/supplier/products' })
@@ -98,6 +115,22 @@ export function getDashboard() {
     devices: { id: number; name: string; gpu_model: string; stock: number; price: number; region: string; status: string }[]
     trend: { date: string; amount: number }[]
   }>({ url: '/supplier/dashboard' })
+}
+
+export function getSupplierOrders(status_filter?: string) {
+  return request<SupplierOrderItem[]>({
+    url: '/supplier/orders',
+    data: status_filter ? { status_filter } : {},
+  })
+}
+
+export function deliverSupplierOrder(id: number, ssh_info: string) {
+  return request<OrderItem>({
+    url: `/orders/${id}/deliver`,
+    method: 'POST',
+    data: { ssh_info },
+    silent: true,
+  })
 }
 
 export function getSupplierWallet() {

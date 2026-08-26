@@ -13,16 +13,24 @@
       </view>
       <image class="pimage" :src="productImageUrl" mode="aspectFill" @error="productImageFailed = true" />
       <view class="ph">
-        <text class="pn">{{ localizeProductName(product.name, i18n.lang) }}</text>
+        <view class="product-heading">
+          <text class="pn">{{ localizeProductName(product.name, i18n.lang) }}</text>
+          <text class="seller-badge" :class="{ merchant: isMerchantProduct }">{{ t(isMerchantProduct ? 'merchantResource' : 'kaiSelfOperated') }}</text>
+        </view>
         <text class="pmem">{{ product.memory }}</text>
       </view>
       <view class="card price-box">
-        <view class="price-primary">
+        <view v-if="isKaiProduct" class="price-primary">
           <text class="currency">¥</text>
           <text class="pp">{{ formatNumber(unitPriceCny) }}</text>
           <text class="pu">{{ t('perGpuHour') }}</text>
         </view>
-        <text class="daily muted">{{ formatNumber(unitPriceCardHours) }} {{ t('cardHourPerGpuHour') }}</text>
+        <view v-else class="price-primary">
+          <text class="pp merchant-price">{{ formatNumber(unitPriceCardHours) }}</text>
+          <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
+        </view>
+        <text v-if="isKaiProduct" class="daily muted">{{ formatNumber(unitPriceCardHours) }} {{ t('cardHourPerGpuHour') }}</text>
+        <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
       </view>
       <view class="card specs">
         <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ product.gpu_model }}</text></view>
@@ -31,24 +39,30 @@
         <view class="row"><text class="sk">{{ t("region") }}</text><text class="sv">{{ localizeMarketLocation(product.region_name, product.region_code, product.city, i18n.lang) || '-' }}</text></view>
         <view class="row"><text class="sk">{{ t(isKaiProduct ? 'kaiFulfillmentAllocation' : 'k_40a4b798') }}</text><text class="sv">{{ product.stock ?? 0 }} {{ t('units') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_262a2599') }}</text><text class="sv">{{ product.stability != null ? `${formatNumber(product.stability)}%` : '-' }}</text></view>
+        <view class="row"><text class="sk">{{ t('seller') }}</text><text class="sv" :class="{ 'seller-link': isMerchantProduct && product.supplier_id }" @tap="goStore">{{ sellerDisplayName }}</text></view>
+        <view class="row"><text class="sk">{{ t('resourceAssurance') }}</text><text class="sv assurance-value">{{ assuranceLabel }}</text></view>
+        <view class="row"><text class="sk">{{ t('deliveryMethod') }}</text><text class="sv">{{ deliveryLabel }}</text></view>
         <view v-if="product.market_source && product.market_source !== 'wod'" class="row"><text class="sk">{{ t('marketOfferSource') }}</text><text class="sv">{{ sourceName }}</text></view>
         <view v-if="product.market_source && product.market_source !== 'wod'" class="row"><text class="sk">{{ t('marketOfferUpdated') }}</text><text class="sv" :class="{ stale: !product.is_market_current }">{{ offerUpdateText }}</text></view>
         <view class="row"><text class="sk">{{ t('k_f411d0f1') }}</text><text class="sv">{{ sourceDescription }}</text></view>
       </view>
 
       <view v-if="!canBuy" class="offer-warning">{{ purchaseUnavailableText }}</view>
-      <view v-else-if="isKaiProduct" class="provider-notice">{{ t('kaiFulfillmentAllocationNotice') }}</view>
+      <view v-else class="provider-notice">{{ fulfillmentNotice }}</view>
 
-      <SectionHeader v-if="product.supplier_name" :title="t('k_bab268d5')" />
-      <view v-if="product.supplier_name" class="card store-link" @tap="goStore">
+      <SectionHeader v-if="isMerchantProduct" :title="t('sellerInformation')" />
+      <view v-if="isMerchantProduct" class="card store-link" @tap="goStore">
         <view class="sl-info">
-          <view class="sl-avatar">{{ supplierName.slice(0, 1).toUpperCase() }}</view>
-          <text class="sl-name">{{ supplierName }}</text>
+          <view class="sl-avatar">{{ sellerDisplayName.slice(0, 1).toUpperCase() }}</view>
+          <view>
+            <text class="sl-name">{{ sellerDisplayName }}</text>
+            <text class="sl-meta">{{ sellerStats }}</text>
+          </view>
         </view>
-        <view class="sl-go">{{ t('进店') }} ›</view>
+        <view v-if="product.supplier_id" class="sl-go">{{ t('进店') }} ›</view>
       </view>
-      <SectionHeader :title="t('k_31f03d15')" />
-      <view class="card trend-card">
+      <SectionHeader v-if="isKaiProduct" :title="t('k_31f03d15')" />
+      <view v-if="isKaiProduct" class="card trend-card">
         <CandlestickChart
           :candles="candles?.candles || []"
           :source-note="historySourceText"
@@ -99,7 +113,7 @@
         <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
         <view class="row"><text class="sk">{{ t('purchaseDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text></view>
-        <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ t('sshDelivery') }}</text></view>
+        <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ deliveryLabel }}</text></view>
         <view class="row" v-if="rebate && estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} ({{ formatNumber(estRebateRate) }}%)</text></view>
         <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
       </view>
@@ -110,7 +124,7 @@
       <view class="buy-btn" :class="{ disabled: submitting || !canBuy }" @tap="openConfirm">{{ t(submitting ? '处理中...' : (!canBuy ? unavailableActionLabel : 'buyUsage')) }}</view>
     </BottomActionBar>
     <ConfirmSheet :visible="showConfirm" :title="t('confirmUsagePurchase')" :desc="product ? `${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(amount)} ${t('cardHour')}` : ''" :confirmText="t('k_936de2c4')" @cancel="showConfirm = false" @confirm="onBuy">
-      <view v-if="isKaiProduct" class="provider-notice">{{ t('kaiFulfillmentAllocationNotice') }}</view>
+      <view class="provider-notice">{{ fulfillmentNotice }}</view>
       <view class="confirm-fee">
         <text>{{ t('k_99b6bb88') }}</text>
         <text class="cf-val up">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text>
@@ -171,7 +185,13 @@ const pendingRequestId = ref('')
 const pendingRequestSignature = ref('')
 let candleTimer: ReturnType<typeof setInterval> | null = null
 const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168, 720]
-const supplierName = computed(() => localizePersonName(product.value?.supplier_name || '', i18n.lang))
+const isKaiProduct = computed(() => product.value?.seller_type === 'kai_self_operated' || product.value?.market_source === 'kai')
+const isMerchantProduct = computed(() => product.value?.seller_type === 'merchant' || (product.value?.market_source === 'wod' && Boolean(product.value?.supplier_id)))
+const sellerDisplayName = computed(() => {
+  if (isKaiProduct.value) return t('kaiSelfOperated')
+  const name = product.value?.seller_name || product.value?.supplier_name
+  return name ? localizePersonName(name, i18n.lang) : t('verifiedMerchant')
+})
 const productImageUrl = computed(() => productImageFailed.value
   ? fallbackProductImage(product.value?.gpu_model)
   : resolveProductImage(product.value?.image_url, product.value?.gpu_model))
@@ -184,7 +204,11 @@ const purchaseHourOptions = computed(() => {
 })
 const maxPurchaseHours = computed(() => Math.max(...purchaseHourOptions.value, 720))
 const unitPriceCny = computed(() => Number(product.value?.price_cny_per_gpu_hour ?? product.value?.price ?? 0))
-const unitPriceCardHours = computed(() => Number(product.value?.price_card_hours_per_gpu_hour ?? toCardHours(unitPriceCny.value)))
+const unitPriceCardHours = computed(() => Number(
+  product.value?.price_card_hours_per_gpu_hour
+    ?? (isMerchantProduct.value ? product.value?.price : toCardHours(unitPriceCny.value))
+    ?? 0,
+))
 const maxQuantity = computed(() => {
   const stock = Number(product.value?.stock || 0)
   const remaining = Math.max(0, Math.floor(stock))
@@ -194,17 +218,17 @@ const maxQuantity = computed(() => {
   }
   return Math.min(remaining, 99)
 })
-const canBuy = computed(() => Boolean(product.value?.market_source === 'kai' && product.value?.purchasable === true && maxQuantity.value > 0))
-const isKaiProduct = computed(() => product.value?.market_source === 'kai')
+const canBuy = computed(() => Boolean((isKaiProduct.value || isMerchantProduct.value) && product.value?.purchasable === true && maxQuantity.value > 0))
 const purchaseUnavailableText = computed(() => {
-  if (product.value?.market_source && product.value.market_source !== 'kai') return t('retiredMarketSourceUnavailable')
+  if (!isKaiProduct.value && !isMerchantProduct.value) return t('retiredMarketSourceUnavailable')
   if (maxQuantity.value <= 0) return t(isKaiProduct.value ? 'kaiAllocationUnavailable' : 'noStockAvailable')
-  if (product.value?.is_market_current === false) return t('marketOfferUnavailable')
-  return t('wodListingUnavailable')
+  if (isKaiProduct.value && product.value?.is_market_current === false) return t('marketOfferUnavailable')
+  return product.value?.purchase_unavailable_reason ? tr(product.value.purchase_unavailable_reason) : t('wodListingUnavailable')
 })
 const unavailableActionLabel = computed(() => {
-  if (isKaiProduct.value && maxQuantity.value <= 0) return 'kaiAllocationUnavailableShort'
-  return product.value?.market_source !== 'kai' ? 'retiredMarketSourceUnavailableShort' : 'marketOfferUnavailableShort'
+  if (!isKaiProduct.value && !isMerchantProduct.value) return 'retiredMarketSourceUnavailableShort'
+  if (maxQuantity.value <= 0) return isKaiProduct.value ? 'kaiAllocationUnavailableShort' : 'soldOutShort'
+  return 'marketOfferUnavailableShort'
 })
 const sourceName = computed(() => {
   return marketSourceDisplayName(product.value?.market_source || 'wod', t)
@@ -212,6 +236,15 @@ const sourceName = computed(() => {
 const sourceDescription = computed(() => isKaiProduct.value
   ? t('kaiProductDescription')
   : localizeMarketSourceText(tr(product.value?.desc || '-'), t))
+const assuranceLabel = computed(() => product.value?.assurance_label ? tr(product.value.assurance_label) : t(isMerchantProduct.value ? 'merchantDeclaredResource' : 'platformManualFulfillment'))
+const deliveryLabel = computed(() => t(product.value?.fulfillment_mode === 'merchant_manual' || isMerchantProduct.value ? 'merchantManualSshDelivery' : 'platformManualSshDelivery'))
+const fulfillmentNotice = computed(() => product.value?.assurance_description ? tr(product.value.assurance_description) : t(isMerchantProduct.value ? 'merchantFulfillmentNotice' : 'kaiFulfillmentAllocationNotice'))
+const sellerStats = computed(() => {
+  const parts = [assuranceLabel.value]
+  if (product.value?.supplier_rating != null) parts.push(t('sellerRatingValue', { rating: formatNumber(product.value.supplier_rating) }))
+  if (product.value?.supplier_order_count != null) parts.push(t('sellerOrderCountValue', { count: product.value.supplier_order_count }))
+  return parts.join(' · ')
+})
 const chartHistoryState = computed(() => marketHistoryDisplayState(candles.value))
 const chartObservedDays = computed(() => marketObservedDayCount(candles.value))
 const chartReferenceSampleCount = computed(() => {
@@ -386,7 +419,14 @@ async function onBuy() {
   if (submitting.value || !canBuy.value) return
   submitting.value = true
   try {
-    const created = await createOrder(pid.value, hours.value, purchaseType, quantity.value, ensureRequestId())
+    const created = await createOrder(
+      pid.value,
+      hours.value,
+      purchaseType,
+      quantity.value,
+      ensureRequestId(),
+      unitPriceCardHours.value,
+    )
     pendingRequestId.value = ''
     pendingRequestSignature.value = ''
     uni.showToast({ title: t('购买成功'), icon: 'success' })
@@ -407,7 +447,7 @@ function openConfirm() {
 }
 
 function ensureRequestId() {
-  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType}`
+  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType}:${unitPriceCardHours.value}`
   if (!pendingRequestId.value || pendingRequestSignature.value !== signature) {
     pendingRequestSignature.value = signature
     pendingRequestId.value = `wod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
@@ -431,8 +471,11 @@ function goStore() {
 .partial-warning { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 20rpx 24rpx; margin: 24rpx 0 0; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 23rpx; line-height: 1.5; }
 .partial-retry { flex-shrink: 0; min-height: 64rpx; display: flex; align-items: center; color: var(--primary); font-weight: 700; }
 .pimage { width: 100%; height: 320rpx; background: var(--divider); border-radius: var(--radius); margin: 24rpx 0; display: block; }
-.ph { display: flex; justify-content: space-between; align-items: center; padding: 24rpx 0 32rpx; }
+.ph { display: flex; justify-content: space-between; align-items: center; gap: 20rpx; padding: 24rpx 0 32rpx; }
+.product-heading { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10rpx; }
 .pn { color: var(--text); font-size: 44rpx; font-weight: 700; }
+.seller-badge { padding: 6rpx 14rpx; color: var(--primary); background: var(--primary-soft); border-radius: 999rpx; font-size: 20rpx; font-weight: 700; }
+.seller-badge.merchant { color: var(--up); background: var(--up-soft); }
 .pmem { color: var(--primary); font-size: 24rpx; background: var(--primary-soft); padding: 6rpx 18rpx; border-radius: var(--radius); }
 .card { background: var(--card); border-radius: var(--radius); border: 1rpx solid var(--border); }
 .trend-card { padding: 12rpx 12rpx 4rpx; overflow: hidden; }
@@ -441,6 +484,7 @@ function goStore() {
 .price-primary { display: flex; align-items: baseline; gap: 8rpx; }
 .currency { color: var(--text-sub); font-size: 28rpx; font-weight: 700; }
 .pp { color: var(--text); font-size: 56rpx; font-weight: 800; font-variant-numeric: tabular-nums; }
+.merchant-price { color: var(--up); }
 .pu { color: var(--text-sub); font-size: 26rpx; }
 .daily { display: block; color: var(--up); font-size: 26rpx; margin-top: 12rpx; }
 .daily.muted { color: var(--text-sub); }
@@ -450,6 +494,8 @@ function goStore() {
 .sk { color: var(--text-sub); font-size: 28rpx; }
 .sv { color: var(--text); font-size: 28rpx; font-variant-numeric: tabular-nums; }
 .sv.stale { color: var(--down); }
+.seller-link { color: var(--primary); }
+.assurance-value { max-width: 62%; text-align: right; line-height: 1.45; }
 .up { color: var(--up); }
 .offer-warning { color: var(--down); background: rgba(217, 72, 72, 0.08); border: 1rpx solid rgba(217, 72, 72, 0.22); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
 .provider-notice { color: var(--text-sub); background: var(--primary-soft); border: 1rpx solid var(--card-border); border-radius: var(--radius); padding: 20rpx 24rpx; margin-bottom: 24rpx; font-size: 24rpx; line-height: 1.5; }
@@ -492,5 +538,6 @@ function goStore() {
 .sl-info { display: flex; align-items: center; gap: 20rpx; }
 .sl-avatar { width: 64rpx; height: 64rpx; border-radius: 32rpx; background: linear-gradient(135deg, var(--primary), var(--primary)); color: #fff; font-size: 28rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .sl-name { color: var(--text); font-size: 30rpx; font-weight: 600; }
+.sl-meta { display: block; max-width: 430rpx; margin-top: 6rpx; color: var(--text-sub); font-size: 21rpx; line-height: 1.4; }
 .sl-go { color: var(--primary); font-size: 26rpx; }
 </style>

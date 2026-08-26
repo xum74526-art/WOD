@@ -7,6 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.db.base import Base
+from app.models import Supplier, User
 from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
 from app.models.product import Product
 from app.utils.response import BizError
@@ -416,9 +418,27 @@ class MarketDataTests(unittest.TestCase):
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
-        Product.__table__.create(engine)
+        Base.metadata.create_all(engine)
         db = sessionmaker(bind=engine)()
         observed_at = datetime.now() - timedelta(minutes=1)
+        merchant_user = User(
+            username="行情测试商家",
+            phone="13900009001",
+            password="!",
+            role="supplier",
+            supplier_status="approved",
+        )
+        db.add(merchant_user)
+        db.flush()
+        merchant = Supplier(
+            user_id=merchant_user.id,
+            company_name="行情测试商家",
+            contact="联系人",
+            phone=merchant_user.phone,
+            status="approved",
+        )
+        db.add(merchant)
+        db.flush()
 
         def product(name: str, source: str, currency: str | None):
             return Product(
@@ -441,6 +461,8 @@ class MarketDataTests(unittest.TestCase):
             product("AutoDL offer", "autodl", "CNY"),
             product("WOD listing", "wod", None),
         ])
+        wod_listing = db.query(Product).filter(Product.name == "WOD listing").one()
+        wod_listing.supplier_id = merchant.id
         db.commit()
 
         delayed = _current_product_query(db, {"kai": "delayed"}).all()

@@ -100,6 +100,11 @@ test("Web market and detail use image_url, hourly input, rebate estimate, and an
   assert.match(detail, /role="dialog"/);
   assert.match(detail, /确认并下单/);
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=kai&representative=true/);
+  assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=wod/);
+  assert.match(market, /market\.kai\.title/);
+  assert.match(market, /market\.merchant\.title/);
+  assert.match(market, /row\.assurance_description/);
+  assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
   assert.doesNotMatch(`${market}\n${detail}\n${browser}`, /GetDeploying|getdeploying|AutoDL|算力云/i);
 });
 

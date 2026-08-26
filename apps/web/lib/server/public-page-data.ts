@@ -69,13 +69,35 @@ function rankingItem(value: unknown): PublicMarketRankingItem {
 
 function publicProduct(value: unknown): PublicProduct {
   const item = object(value);
+  const marketSource = text(item.market_source, "kai");
+  const sellerType = text(item.seller_type, marketSource === "kai" ? "kai_self_operated" : "merchant") === "merchant"
+    ? "merchant"
+    : "kai_self_operated";
+  const supplierId = number(item.supplier_id);
+  const sellerName = text(item.seller_name, text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI 自营" : "第三方商家"));
+  const fulfillmentMode = text(item.fulfillment_mode, sellerType === "kai_self_operated" ? "platform_manual" : "merchant_manual") === "merchant_manual"
+    ? "merchant_manual"
+    : "platform_manual";
   const memory = text(item.memory);
   const price = number(item.price_cny_per_gpu_hour, number(item.price));
   const stock = number(item.stock);
-  const purchaseUnit = text(item.purchase_unit, text(item.market_source) === "kai" ? "hour" : "day");
+  const purchaseUnit = text(item.purchase_unit, "hour");
   return {
     id: number(item.id),
-    supplier_id: number(item.supplier_id),
+    supplier_id: supplierId || undefined,
+    supplier_name: text(item.supplier_name) || null,
+    supplier_rating: item.supplier_rating == null ? null : number(item.supplier_rating),
+    supplier_order_count: number(item.supplier_order_count),
+    seller_type: sellerType,
+    seller_name: sellerName,
+    fulfillment_mode: fulfillmentMode,
+    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "KAI 自营" : "商家入驻资料已审核"),
+    assurance_description: text(
+      item.assurance_description,
+      sellerType === "kai_self_operated"
+        ? "价格与商品由 KAI 发布，平台安排人工交付。"
+        : "商家入驻资料已审核；资源参数与库存由商家自行发布并负责交付。",
+    ),
     name: text(item.name),
     gpu_model: text(item.gpu_model),
     memory,
@@ -90,7 +112,7 @@ function publicProduct(value: unknown): PublicProduct {
     price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
     total_quantity: number(item.reported_stock, stock),
     available_quantity: stock,
-    source_name: text(item.supplier_name, text(item.market_source) === "kai" ? "KAI Pricing" : "北斗 kai"),
+    source_name: text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),
     source_observed_at: text(item.price_updated_at) || null,
     server_online: Boolean(item.purchasable),
     purchasable: Boolean(item.purchasable),
@@ -100,7 +122,7 @@ function publicProduct(value: unknown): PublicProduct {
     purchase_hour_options: Array.isArray(item.purchase_hour_options) ? item.purchase_hour_options.map((entry) => number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0) : [],
     billing_unit: text(item.billing_unit, "GPU_HOUR"),
     image_url: text(item.image_url) || null,
-    market_source: text(item.market_source, "kai"),
+    market_source: marketSource,
   };
 }
 
@@ -146,12 +168,14 @@ export async function getInitialMarketRanking(): Promise<PublicMarketRanking | n
 }
 
 export async function getInitialPublicProducts(): Promise<PublicProduct[] | null> {
-  try {
-    const raw = object(await cachedCanonicalData("/api/products?page=1&page_size=100&market_source=kai&representative=true", 15));
-    return array(raw.items).map(publicProduct);
-  } catch {
-    return null;
-  }
+  const results = await Promise.allSettled([
+    cachedCanonicalData("/api/products?page=1&page_size=100&market_source=kai&representative=true", 15),
+    cachedCanonicalData("/api/products?page=1&page_size=100&market_source=wod", 15),
+  ]);
+  const available = results
+    .filter((result): result is PromiseFulfilledResult<unknown> => result.status === "fulfilled")
+    .flatMap((result) => array(object(result.value).items).map(publicProduct));
+  return results.every((result) => result.status === "rejected") ? null : available;
 }
 
 export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): Promise<InitialGpuTrend | null> {

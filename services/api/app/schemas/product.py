@@ -20,12 +20,24 @@ class ProductOut(OrmModel):
     wallet_charge_unit: str | None = None
     purchase_unit: str | None = None
     purchase_hour_options: list[int] = Field(default_factory=list)
+    min_purchase_hours: int | None = None
+    max_purchase_hours: int | None = None
     desc: str | None = None
     image_url: str | None = None
     region_code: str | None = None
     region_name: str | None = None
     city: str | None = None
     market_source: str | None = None
+    supplier_id: int | None = None
+    supplier_name: str | None = None
+    supplier_rating: float | None = None
+    supplier_order_count: int | None = None
+    seller_type: str | None = None
+    seller_name: str | None = None
+    fulfillment_mode: str | None = None
+    resource_claim_source: str | None = None
+    assurance_label: str | None = None
+    assurance_description: str | None = None
     external_product_id: str | None = None
     stock_semantics: str | None = None
     source_max_configurable_quantity: int | None = None

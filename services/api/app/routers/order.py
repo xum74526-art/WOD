@@ -1,7 +1,7 @@
 import uuid
 import re
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from threading import Lock
 
 from fastapi import APIRouter, Depends
@@ -28,6 +28,7 @@ from app.schemas.order import (
     OrderCreateIn,
     OrderDisputeIn,
     OrderDisputeResolveIn,
+    OrderDeliverIn,
     OrderOut,
     OrderRenewIn,
 )
@@ -36,6 +37,7 @@ from app.services.auth_session import PLATFORMS
 from app.services.market_freshness import product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.product_purchase import product_purchase_availability
+from app.services.product_provider import product_provider_info
 from app.services.merchant_settlement import settle_merchant_sale
 from app.services.reward_entitlements import (
     create_consumer_order_accrual,
@@ -60,6 +62,7 @@ router = APIRouter(prefix="/api/orders", tags=["order"])
 
 _RENEW_LOCK = Lock()
 RENEWABLE_ORDER_STATUSES = {"completed", "running"}
+UNIT_PRICE_QUANTUM = Decimal("0.0001")
 
 
 def _trusted_platform(value: object) -> str:
@@ -126,6 +129,18 @@ def valid_ssh_info(value: str | None) -> bool:
     return True
 
 
+def can_deliver_order(order: Order, *, now: datetime | None = None) -> bool:
+    """Return the backend-owned seller action state for a pending order."""
+
+    if order.status != "paid":
+        return False
+    current = now or datetime.now(timezone.utc)
+    due = order.delivery_due_at
+    if due is not None and due.tzinfo is None:
+        due = due.replace(tzinfo=timezone.utc)
+    return due is None or due > current
+
+
 def _same_order_request(order: Order, data: OrderCreateIn) -> bool:
     duration_matches = (
         int(order.purchase_hours) == int(data.hours) and data.cycle_days is None
@@ -169,6 +184,11 @@ def _order_out(o: Order, db: Session) -> dict:
     out["gpu_model"] = p.gpu_model if p else None
     market_source = product_market_source(p) if p else None
     out["market_source"] = market_source
+    if p:
+        provider = product_provider_info(p, db)
+        out["seller_type"] = provider["seller_type"]
+        out["seller_name"] = provider["seller_name"]
+        out["fulfillment_mode"] = provider["fulfillment_mode"]
     out["billing_unit"] = "GPU_HOUR"
     out["amount_card_hours"] = float(o.amount)
     # Reconstruct the effective booked unit price from the immutable order
@@ -204,6 +224,12 @@ def _order_out(o: Order, db: Session) -> dict:
     }.get(o.status, o.status)
     out["can_cancel"] = o.status == "paid"
     out["can_confirm"] = o.status == "delivering"
+    out["can_deliver"] = False
+    out["can_renew"] = bool(
+        p
+        and o.status in RENEWABLE_ORDER_STATUSES
+        and not (market_source == "wod" and o.purchase_hours is not None)
+    )
     confirmation_due = o.confirmation_due_at
     if confirmation_due is not None and confirmation_due.tzinfo is None:
         confirmation_due = confirmation_due.replace(tzinfo=timezone.utc)
@@ -246,6 +272,65 @@ def _calc_kai_hour_amount(p: Product, hours: int, quantity: int = 1) -> Decimal:
     return (
         Decimal(str(p.price)) * Decimal(hours) * Decimal(quantity) / rate
     ).quantize(Decimal("0.0001"))
+
+
+def _calc_merchant_hour_amount(p: Product, hours: int, quantity: int = 1) -> Decimal:
+    """Charge a merchant's card-hour/GPU-hour listing without CNY conversion."""
+
+    return (
+        Decimal(str(p.price)) * Decimal(hours) * Decimal(quantity)
+    ).quantize(Decimal("0.0001"))
+
+
+def _normalized_unit_price(value: object) -> Decimal:
+    return Decimal(str(value)).quantize(UNIT_PRICE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _current_unit_price_card_hours(product: Product, source: str) -> Decimal:
+    if source == "kai":
+        rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
+        if rate <= 0:
+            raise BizError("卡时兑换率配置无效，请联系管理员", status_code=503)
+        return _normalized_unit_price(Decimal(str(product.price)) / rate)
+    return _normalized_unit_price(product.price)
+
+
+def _validate_expected_unit_price(
+    product: Product,
+    source: str,
+    expected: Decimal | None,
+) -> None:
+    """Reject a stale checkout before inventory or wallet funds are touched."""
+
+    if source == "wod":
+        if expected is None:
+            raise BizError("请确认当前商品单价后再下单", status_code=422)
+        current = _current_unit_price_card_hours(product, source)
+    elif source == "kai" and expected is not None:
+        current = _current_unit_price_card_hours(product, source)
+    else:
+        return
+    if _normalized_unit_price(expected) != current:
+        raise BizError("价格已更新，请刷新后重新确认", status_code=409)
+
+
+def _product_snapshot(product: Product, source: str, db: Session) -> dict:
+    provider = product_provider_info(product, db)
+    return {
+        "product_name": product.name,
+        "gpu_model": product.gpu_model,
+        "memory": product.memory,
+        "region_code": product.region_code,
+        "region_name": product.region_name,
+        "city": product.city,
+        "confirmed_unit_price_card_hours": format(
+            _current_unit_price_card_hours(product, source), "f"
+        ),
+        "seller_id": product.supplier_id,
+        "seller_type": provider["seller_type"],
+        "seller_name": provider["seller_name"],
+        "market_source": source,
+    }
 
 
 def _begin_serialized_write_transaction(db: Session) -> None:
@@ -312,6 +397,8 @@ def create_order(
         raise BizError(unavailable_reason or "该资源暂不可在 WOD 内下单", status_code=409)
     _ensure_current_market_product(p, db)
     source = product_market_source(p)
+    _validate_expected_unit_price(p, source, data.expected_unit_price_card_hours)
+    product_snapshot = _product_snapshot(p, source, db)
     purchase_hours: int | None = None
     cycle_days = 0
     if source == "kai":
@@ -320,10 +407,18 @@ def create_order(
         if not valid_purchase_hours(data.hours):
             raise BizError("购买时长必须是 1 至 720 的整数小时", status_code=422)
         purchase_hours = int(data.hours)
+    elif source == "wod" and data.hours is not None:
+        if data.cycle_days is not None:
+            raise BizError("按小时购买时不能同时提交日周期", status_code=422)
+        if not valid_purchase_hours(data.hours):
+            raise BizError("购买时长必须是 1 至 720 的整数小时", status_code=422)
+        purchase_hours = int(data.hours)
     else:
-        if data.hours is not None:
-            raise BizError("该历史日周期商品不支持小时参数", status_code=422)
-        cycle_days = int(data.cycle_days if data.cycle_days is not None else 30)
+        # Compatibility for already-published clients that explicitly submit a
+        # legacy day cycle.  New merchant product responses advertise hours.
+        if data.cycle_days is None:
+            raise BizError("购买时长必须是 1 至 720 的整数小时", status_code=422)
+        cycle_days = int(data.cycle_days)
         allowed = available_purchase_cycles(p.cycle)
         if cycle_days not in allowed:
             raise BizError(f"不支持的周期，可选 {allowed}")
@@ -342,9 +437,13 @@ def create_order(
         raise BizError(f"库存不足，当前最多可购买 {available_stock} 台")
     amount = (
         _calc_kai_hour_amount(p, purchase_hours, data.quantity)
-        if purchase_hours is not None
+        if purchase_hours is not None and source == "kai"
+        else _calc_merchant_hour_amount(p, purchase_hours, data.quantity)
+        if purchase_hours is not None and source == "wod"
         else _calc_legacy_day_amount(p, cycle_days, data.quantity)
     )
+    if amount <= 0:
+        raise BizError("订单金额无效，请刷新后重试", status_code=409)
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).with_for_update().first()
     if not wallet:
         raise BizError("钱包不存在", status_code=404)
@@ -365,6 +464,7 @@ def create_order(
             cycle_days=cycle_days, purchase_hours=purchase_hours,
             created_platform=platform, last_modified_platform=platform,
             amount=amount, status="paid", purchase_type=data.purchase_type,
+            product_snapshot=product_snapshot,
             lifecycle_policy_version="reserved-v1",
             start_at=now, end_at=None,
             delivery_due_at=now + timedelta(
@@ -405,7 +505,7 @@ def create_order(
 @router.post("/{oid}/deliver")
 def deliver_ssh(
     oid: int,
-    data: dict,
+    data: OrderDeliverIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
@@ -419,14 +519,26 @@ def deliver_ssh(
     p = db.query(Product).filter(Product.id == o.product_id).first()
     if not p:
         raise BizError("商品不存在", status_code=404)
-    if product_market_source(p) == "wod":
+    source = product_market_source(p)
+    if source == "wod":
         s = db.query(Supplier).filter(Supplier.user_id == user.id).first()
         authorized = bool(s and s.status == "approved" and int(p.supplier_id or 0) == s.id)
-    else:
+    elif source == "kai":
         authorized = is_platform_fulfiller(user)
+    else:
+        # Retired quote sources are audit-only and cannot be revived through
+        # the manual delivery endpoint, even by a platform fulfiller.
+        authorized = False
     if not authorized:
         raise BizError("无权操作此订单", status_code=403)
-    ssh_info = str(data.get("ssh_info", "")).strip()
+    # Direct service tests and older internal callers may still pass the former
+    # dictionary shape.  HTTP callers are governed by ``OrderDeliverIn`` and
+    # therefore receive a precise OpenAPI contract.
+    ssh_info = (
+        data.ssh_info
+        if isinstance(data, OrderDeliverIn)
+        else str(data.get("ssh_info", "")).strip()
+    )
     if not valid_ssh_info(ssh_info):
         raise BizError("SSH 信息格式无效，请填写用户名、主机地址及有效端口")
     now = datetime.now(timezone.utc)
@@ -820,6 +932,8 @@ def renew_order(
             p = db.query(Product).filter(Product.id == o.product_id).first()
             if not p:
                 raise BizError("商品不存在或已下架", status_code=404)
+            if product_market_source(p) == "wod" and o.purchase_hours is not None:
+                raise BizError("商家算力续费需重新下单并完成交付验收", status_code=409)
             purchasable, unavailable_reason = product_purchase_availability(p, db)
             if not purchasable:
                 raise BizError(unavailable_reason or "该资源暂不可在 WOD 内续费", status_code=409)
@@ -830,8 +944,12 @@ def renew_order(
                     raise BizError("该订单仅支持按 1 至 720 的整数小时续费", status_code=422)
                 renewal_hours = int(data.hours)
                 renewal_days = None
-                unit_amount = _calc_kai_hour_amount(p, renewal_hours)
-                amount = _calc_kai_hour_amount(p, renewal_hours, quantity)
+                if product_market_source(p) == "kai":
+                    unit_amount = _calc_kai_hour_amount(p, renewal_hours)
+                    amount = _calc_kai_hour_amount(p, renewal_hours, quantity)
+                else:
+                    unit_amount = _calc_merchant_hour_amount(p, renewal_hours)
+                    amount = _calc_merchant_hour_amount(p, renewal_hours, quantity)
             else:
                 if data.hours is not None or data.cycle_days is None:
                     raise BizError("历史日周期订单仅支持 cycle_days 参数", status_code=422)

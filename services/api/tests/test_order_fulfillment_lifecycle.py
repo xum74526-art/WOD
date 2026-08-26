@@ -113,6 +113,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
             product_id=self.product.id,
             quantity=1,
             cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.01"),
             purchase_type="usage",
             client_request_id=f"lifecycle-order-{self.db.query(Order).count() + 1:04d}",
         )
@@ -350,6 +351,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
                             product_id=product_id,
                             quantity=1,
                             cycle_days=30,
+                            expected_unit_price_card_hours=Decimal("0.01"),
                             purchase_type="usage",
                             client_request_id=f"concurrent-checkout-{suffix}",
                         ),

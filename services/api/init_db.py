@@ -24,7 +24,7 @@ _ENSURE = {
         "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
         "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_reason",
         "dispute_resolution", "dispute_resolution_note", "dispute_resolved_at",
-        "dispute_resolved_by",
+        "dispute_resolved_by", "product_snapshot",
     ],
     "order_renewals": ["created_platform"],
     "products": [
@@ -102,6 +102,7 @@ _NUMERIC_COLS = {
     "promotional_frozen",
 }
 _BOOLEAN_COLS = {"phone_bound"}
+_JSON_COLS = {"product_snapshot"}
 
 def _ensure_columns(db_engine=None):
     target_engine = db_engine or engine
@@ -122,6 +123,8 @@ def _ensure_columns(db_engine=None):
                     col_type = "NUMERIC"
                 elif col in _BOOLEAN_COLS:
                     col_type = "BOOLEAN DEFAULT FALSE"
+                elif col in _JSON_COLS:
+                    col_type = "JSON"
                 else:
                     col_type = "TEXT"
                 with target_engine.begin() as conn:
@@ -256,6 +259,28 @@ def _migrate_product_market_sources(db_engine=None):
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_products_market_external "
             "ON products (market_source, external_product_id) "
             "WHERE external_product_id IS NOT NULL"
+        ))
+
+
+def _reconcile_supplier_completed_order_counts(db_engine=None):
+    """Backfill the public merchant completed-sale count from settlement facts."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    tables = set(inspector.get_table_names())
+    if not {"suppliers", "merchant_settlements"}.issubset(tables):
+        return
+    supplier_columns = {item["name"] for item in inspector.get_columns("suppliers")}
+    if "order_count" not in supplier_columns:
+        return
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE suppliers SET order_count = ("
+            "SELECT COUNT(*) FROM merchant_settlements "
+            "WHERE merchant_settlements.supplier_id = suppliers.id "
+            "AND merchant_settlements.source_type = 'order' "
+            "AND merchant_settlements.status = 'settled'"
+            ")"
         ))
 
 
@@ -1048,6 +1073,7 @@ def init():
     _ensure_columns()
     _migrate_order_request_scope()
     _migrate_product_market_sources()
+    _reconcile_supplier_completed_order_counts()
     _ensure_auth_identity_constraints()
     _migrate_unverified_phone_flags()
     _migrate_payment_precision_and_pending_deadlines()

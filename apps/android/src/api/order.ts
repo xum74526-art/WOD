@@ -23,6 +23,9 @@ export interface OrderItem {
   gpu_model?: string
   asset_id?: number
   market_source?: 'wod' | 'kai' | 'vast' | 'autodl'
+  seller_type?: 'kai_self_operated' | 'merchant'
+  seller_name?: string
+  fulfillment_mode?: 'platform_manual' | 'merchant_manual'
   fulfillment_status?: string
   delivery_due_at?: string | null
   delivered_at?: string | null
@@ -39,6 +42,8 @@ export interface OrderItem {
   can_cancel?: boolean
   can_confirm?: boolean
   can_dispute?: boolean
+  can_deliver?: boolean
+  can_renew?: boolean
   accumulated_revenue?: number
   historical_test_revenue?: number
   revenue_settlement_enabled?: boolean
@@ -56,11 +61,12 @@ export function createOrder(
   purchase_type: PurchaseType,
   quantity = 1,
   client_request_id?: string,
+  expected_unit_price_card_hours?: number,
 ) {
   return request<OrderItem>({
     url: '/orders',
     method: 'POST',
-    data: { product_id, hours, purchase_type, quantity, client_request_id },
+    data: { product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours },
   })
 }
 

@@ -52,7 +52,7 @@ class SupplierDeviceCreateIn(BaseModel):
     gpu_model: str = Field(..., min_length=2, max_length=64)
     memory: str = Field(default="-", min_length=1, max_length=32)
     cuda: str | None = Field(default=None, max_length=32)
-    price: Decimal = Field(..., gt=0, le=100000)
+    price: Decimal = Field(..., ge=Decimal("0.0001"), le=100000)
     stock: int = Field(default=1, ge=0, le=100000)
     desc: str | None = Field(default="供应商上架", max_length=255)
     image_url: str | None = Field(default="/static/gpu/gpu.png", max_length=255)
@@ -62,7 +62,7 @@ class SupplierDeviceCreateIn(BaseModel):
 
 
 class SupplierDeviceUpdateIn(BaseModel):
-    price: Decimal | None = Field(default=None, gt=0, le=100000)
+    price: Decimal | None = Field(default=None, ge=Decimal("0.0001"), le=100000)
     stock: int | None = Field(default=None, ge=0, le=100000)
     name: str | None = Field(default=None, min_length=2, max_length=128)
     status: Literal["on", "off"] | None = None

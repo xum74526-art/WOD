@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from typing import Literal
 
@@ -12,6 +13,7 @@ class OrderCreateIn(BaseModel):
     quantity: int = Field(default=1, ge=1, le=99)
     hours: int | None = Field(default=None, ge=1, le=720)
     cycle_days: int | None = Field(default=None, ge=1, le=3650)
+    expected_unit_price_card_hours: Decimal | None = None
     purchase_type: str | None = "usage"  # usage / holding
     client_request_id: str | None = Field(default=None, min_length=12, max_length=64)
 
@@ -32,6 +34,15 @@ class OrderDisputeIn(BaseModel):
         if len(normalized) < 5:
             raise ValueError("争议原因至少填写 5 个字符")
         return normalized
+
+
+class OrderDeliverIn(BaseModel):
+    ssh_info: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("ssh_info")
+    @classmethod
+    def normalize_ssh_info(cls, value: str) -> str:
+        return value.strip()
 
 
 class OrderDisputeResolveIn(BaseModel):
@@ -65,6 +76,7 @@ class OrderOut(OrmModel):
     price_cny_per_gpu_hour: float | None = None
     status: str
     purchase_type: str | None = "usage"
+    product_snapshot: dict | None = None
     ssh_info: str | None = None
     delivery_due_at: datetime | None = None
     delivered_at: datetime | None = None
@@ -81,6 +93,8 @@ class OrderOut(OrmModel):
     can_cancel: bool = False
     can_confirm: bool = False
     can_dispute: bool = False
+    can_deliver: bool = False
+    can_renew: bool = False
     start_at: datetime | None = None
     end_at: datetime | None = None
     created_at: datetime | None = None
@@ -88,6 +102,9 @@ class OrderOut(OrmModel):
     gpu_model: str | None = None
     asset_id: int | None = None
     market_source: str | None = None
+    seller_type: str | None = None
+    seller_name: str | None = None
+    fulfillment_mode: str | None = None
     fulfillment_status: str | None = None
     accumulated_revenue: float = 0
     remaining_days: int | None = None

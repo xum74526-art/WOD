@@ -5,6 +5,7 @@ export type ProductStockSemantics =
   // Compatibility with older API responses; current public responses use the neutral value above.
   | 'platform_closed_test_manual_fulfillment_allocation'
   | 'supplier_reported_inventory'
+  | 'merchant_declared_inventory'
   | 'reported_available_units'
   | 'max_configurable_quantity_not_live_inventory'
 
@@ -26,6 +27,13 @@ export interface Product {
   desc?: string
   supplier_id?: number
   supplier_name?: string
+  supplier_rating?: number | null
+  supplier_order_count?: number | null
+  seller_type?: 'kai_self_operated' | 'merchant'
+  seller_name?: string
+  fulfillment_mode?: 'platform_manual' | 'merchant_manual'
+  assurance_label?: string
+  assurance_description?: string
   status: string
   daily_revenue?: number | null
   revenue_estimate_available?: boolean
@@ -63,7 +71,7 @@ export interface ProductQuery {
   max_price?: number
   page?: number
   page_size?: number
-  market_source?: 'kai'
+  market_source?: 'kai' | 'wod'
   representative?: boolean
 }
 

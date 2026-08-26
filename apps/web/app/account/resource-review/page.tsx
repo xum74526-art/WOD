@@ -1,2 +1,2 @@
 import { redirect } from "next/navigation";
-export default function ResourceReviewPage() { redirect("/admin/resources"); }
+export default function ResourceReviewPage() { redirect("/admin/suppliers"); }

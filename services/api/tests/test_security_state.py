@@ -182,6 +182,7 @@ class SecurityStateTests(unittest.TestCase):
             product_id=product.id,
             quantity=2,
             cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.01"),
             purchase_type="usage",
         ), self.user, self.db)
         self.db.refresh(product)
@@ -202,7 +203,8 @@ class SecurityStateTests(unittest.TestCase):
         self.db.add(product)
         self.db.commit()
         result = create_order(OrderCreateIn(
-            product_id=product.id, quantity=2, cycle_days=30, purchase_type="usage",
+            product_id=product.id, quantity=2, cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.01"), purchase_type="usage",
         ), self.user, self.db)
         order_id = result["data"]["id"]
         self.db.refresh(self.wallet)
@@ -246,7 +248,11 @@ class SecurityStateTests(unittest.TestCase):
         )
         self.db.add(product)
         self.db.commit()
-        result = create_order(OrderCreateIn(product_id=product.id, cycle_days=30), self.user, self.db)
+        result = create_order(OrderCreateIn(
+            product_id=product.id,
+            cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.01"),
+        ), self.user, self.db)
         deliver_ssh(result["data"]["id"], {"ssh_info": "ssh ubuntu@192.0.2.10 -p 22"}, self.seller, self.db)
         with self.assertRaises(BizError):
             cancel_order(result["data"]["id"], self.user, self.db)
@@ -262,6 +268,9 @@ class SecurityStateTests(unittest.TestCase):
             price=Decimal("0.1002"), source_price=Decimal("0.1002"), source_currency="CNY",
             price_updated_at=now, cycle=[], stock=9, status="on",
             market_source="kai", external_product_id="security-kai-4090",
+            # Even malformed legacy association data must not turn a KAI
+            # self-operated order into merchant proceeds.
+            supplier_id=self.supplier.id,
             source_max_configurable_quantity=9, platform_stock_cap=9,
         )
         local = Product(
@@ -271,6 +280,7 @@ class SecurityStateTests(unittest.TestCase):
         )
         self.db.add_all([external, local])
         self.db.commit()
+        settings.PLATFORM_FULFILLMENT_USER_IDS = str(self.seller.id)
         external_result = create_order(OrderCreateIn(
             product_id=external.id, hours=72, purchase_type="usage",
             client_request_id="external-usage-0001",
@@ -278,6 +288,7 @@ class SecurityStateTests(unittest.TestCase):
         with self.assertRaises(BizError):
             create_order(OrderCreateIn(
                 product_id=local.id, cycle_days=30, purchase_type="holding",
+                expected_unit_price_card_hours=Decimal("0.01"),
                 client_request_id="local-holding-0001",
             ), self.user, self.db)
         self.db.refresh(self.wallet)
@@ -286,7 +297,6 @@ class SecurityStateTests(unittest.TestCase):
         self.assertEqual(self.db.query(Asset).count(), 0)
         self.assertIsNone(external_result["data"]["ssh_info"])
 
-        settings.PLATFORM_FULFILLMENT_USER_IDS = str(self.seller.id)
         with self.assertRaises(BizError):
             deliver_ssh(external_result["data"]["id"], {"ssh_info": "pending credentials"}, self.seller, self.db)
         deliver_ssh(
@@ -301,6 +311,12 @@ class SecurityStateTests(unittest.TestCase):
         ).one()
         self.assertEqual(external_asset.purchase_type, "usage")
         self.assertEqual(Decimal(str(external_asset.daily_rate)), Decimal("0.000000"))
+        self.assertEqual(self.db.query(MerchantSettlement).filter(
+            MerchantSettlement.order_id == external_result["data"]["id"],
+        ).count(), 0)
+        self.db.refresh(self.seller_wallet)
+        self.assertEqual(self.seller_wallet.balance, Decimal("10"))
+        self.assertEqual(self.seller_wallet.withdrawable_balance, Decimal("0"))
 
     def test_order_client_request_id_is_idempotent(self):
         product = Product(
@@ -312,6 +328,7 @@ class SecurityStateTests(unittest.TestCase):
         self.db.commit()
         payload = OrderCreateIn(
             product_id=product.id, quantity=2, cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.01"),
             purchase_type="usage", client_request_id="idempotent-order-0001",
         )
         first = create_order(payload, self.user, self.db)
@@ -351,7 +368,12 @@ class SecurityStateTests(unittest.TestCase):
         self.db.add(product)
         self.db.commit()
         with self.assertRaises(BizError):
-            create_order(OrderCreateIn(product_id=product.id, quantity=1, cycle_days=30), self.user, self.db)
+            create_order(OrderCreateIn(
+                product_id=product.id,
+                quantity=1,
+                cycle_days=30,
+                expected_unit_price_card_hours=Decimal("0.01"),
+            ), self.user, self.db)
 
     def test_supplier_device_payload_rejects_invalid_price_stock_and_empty_update(self):
         with self.assertRaises(ValidationError):

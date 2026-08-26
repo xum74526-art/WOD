@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import String, DateTime, Numeric, ForeignKey, Integer, Text, UniqueConstraint, func
+from sqlalchemy import JSON, String, DateTime, Numeric, ForeignKey, Integer, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -30,6 +30,7 @@ class Order(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 4))
     status: Mapped[str] = mapped_column(String(16), default="running")  # paid/delivering/disputed/completed/running/done/canceled
     purchase_type: Mapped[str] = mapped_column(String(16), default="usage")  # usage(使用) / holding(持有)
+    product_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Existing rows remain NULL after schema upgrade and require explicit stock
     # reconciliation. New reserved-fund orders use the versioned lifecycle.
     lifecycle_policy_version: Mapped[str | None] = mapped_column(

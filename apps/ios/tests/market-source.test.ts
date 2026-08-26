@@ -26,13 +26,15 @@ test('current market requests are locked to KAI with no source selector', () => 
   assert.match(marketApiSource, /return \['kai'\]/)
 })
 
-test('retired sources never generate current market, catalog, detail, or buy-request calls', () => {
+test('KAI quotes stay isolated while the catalogue exposes KAI Direct and merchant offers', () => {
   assert.doesNotMatch(quoteSource, /\b(?:autodl|vast|wod_listing)\b/i)
   assert.match(quoteSource, /getLatestMarket\(model\.gpu_model, model\.gpu_variant, sources, silent\)/)
   assert.match(quoteSource, /getMarketCandles\(model\.gpu_model, model\.gpu_variant, range, sources/)
   assert.match(homeSource, /getProducts\(\{ page_size: 100, market_source: 'kai', representative: true \}\)/)
-  assert.match(marketSource, /market_source: 'kai'/)
-  assert.match(marketSource, /representative: true/)
+  assert.match(marketSource, /type MarketSourceFilter = 'kai' \| 'wod'/)
+  assert.match(marketSource, /market_source: marketSource\.value/)
+  assert.match(marketSource, /representative: marketSource\.value === 'kai'/)
+  assert.match(marketSource, /const sourceItems = res\.items\.filter\(\(item\) => item\.market_source === marketSource\.value\)/)
   assert.match(productSource, /const candleRequest = source === 'kai'[\s\S]*?Promise\.resolve<MarketCandles \| null>\(null\)/)
   assert.match(productSource, /if \(source !== 'kai'\) return/)
   assert.match(buyRequestSource, /items\.filter\(\(item\) => item\.sources\.includes\('kai'\)\)/)
@@ -41,14 +43,16 @@ test('retired sources never generate current market, catalog, detail, or buy-req
   assert.doesNotMatch(source('../src/utils/home-market-policy.ts'), /sources:\s*\['(?:autodl|vast|wod)'\]/i)
 })
 
-test('current screens identify KAI while legacy detail labels use a neutral retired-source name', () => {
-  assert.match(marketSource, /const name = t\('kaiPricingSource'\)/)
+test('current screens distinguish KAI Direct, merchants with reviewed onboarding materials, and neutral retired sources', () => {
+  assert.match(marketSource, /label: 'kaiSelfOperated'/)
+  assert.match(marketSource, /label: 'merchantResources'/)
+  assert.match(marketSource, /product\.seller_type === 'merchant'/)
   assert.match(productSource, /marketSourceDisplayName\(product\.value\?\.market_source \|\| 'wod', t\)/)
   assert.match(quoteSource, /marketSourceDisplayName\(item\.source, t, item\.source_name\)/)
   assert.doesNotMatch([homeSource, marketSource, productSource, quoteSource, agreementSource, buyRequestSource].join('\n'), /AutoDL|Vast\.ai|WOD quotes|WOD 报价/i)
 })
 
-test('legacy protocol types remain readable while the agreement describes KAI-only hourly ordering', () => {
+test('legacy protocol types remain readable while the agreement describes separated hourly ordering', () => {
   assert.match(gpuApiSource, /market_source\?: 'wod' \| 'kai' \| 'vast' \| 'autodl'/)
   assert.match(gpuApiSource, /external_product_id\?: string \| null/)
   assert.match(orderApiSource, /market_source\?: 'wod' \| 'kai' \| 'vast' \| 'autodl'/)
@@ -59,13 +63,21 @@ test('legacy protocol types remain readable while the agreement describes KAI-on
   assert.ok(kaiColor)
   assert.ok(vastColor)
   assert.notEqual(kaiColor, vastColor)
-  assert.match(agreementSource, /当前仅接入 KAI 算力价格与可用报价/)
-  assert.match(agreementSource, /Only current KAI pricing and available KAI offers are connected/)
+  assert.match(agreementSource, /算力市场分为 KAI 自营和入驻资料已审核商家资源/)
+  assert.match(agreementSource, /compute market separates KAI Direct resources from offers by merchants with reviewed onboarding materials/)
   assert.match(agreementSource, /算力订单仅按整数小时购买/)
   assert.match(i18nSource, /kaiPricingSource: 'KAI 算力价格'/)
   assert.match(i18nSource, /kaiPricingSource: 'KAI Pricing'/)
   assert.match(i18nSource, /retiredMarketSourceUnavailableShort: '历史来源已停用'/)
   assert.match(i18nSource, /retiredMarketSourceUnavailableShort: 'Retired source'/)
+  assert.match(i18nSource, /merchantResourcesHint: '入驻资料已审核商家自行发布与交付'/)
+  assert.match(i18nSource, /verifiedMerchant: '资料已审核商家'/)
+  assert.match(i18nSource, /merchantDeclaredResource: '资料已审核商家发布 · 参数由商家提供'/)
+  assert.match(i18nSource, /merchantManualSshDelivery: '资料已审核商家人工交付 SSH'/)
+  assert.match(i18nSource, /merchantResourcesHint: 'Published and fulfilled by merchants with reviewed onboarding materials'/)
+  assert.match(i18nSource, /verifiedMerchant: 'Merchant with Reviewed Onboarding Materials'/)
+  assert.match(i18nSource, /merchantApplicationReviewNote: '平台将核对商家主体与联系方式；批准前，申请账号需完成实名认证。/)
+  assert.match(i18nSource, /'商家入驻资料已审核 · 商家人工交付': 'Merchant with reviewed onboarding materials · Merchant manual fulfillment'/)
 })
 
 test('KAI product detail scopes candles to its external product while aggregate charts stay unscoped', () => {

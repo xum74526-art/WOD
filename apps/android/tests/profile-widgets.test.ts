@@ -48,10 +48,12 @@ test('personal and supplier profiles expose distinct role-aware widget counts', 
   const supplier = flatten('supplier', true)
 
   assert.equal(personalWithMerchantAccess.length, 12)
-  assert.equal(personalBeforeOnboarding.length, 12)
+  assert.equal(personalBeforeOnboarding.length, 13)
   assert.equal(supplier.length, 15)
   assert.ok(!personalBeforeOnboarding.some((item) => item.key === 'onboarding'))
   assert.ok(!personalWithMerchantAccess.some((item) => item.key === 'onboarding'))
+  assert.ok(personalBeforeOnboarding.some((item) => item.route === '/pages/supplier/apply'))
+  assert.ok(!personalWithMerchantAccess.some((item) => item.route === '/pages/supplier/apply'))
   assert.ok(supplier.some((item) => item.route === '/pages/supplier/stats'))
   assert.ok(!personalWithMerchantAccess.some((item) => item.route === '/pages/supplier/stats'))
 })

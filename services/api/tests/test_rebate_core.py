@@ -113,6 +113,7 @@ class RebateCoreTests(unittest.TestCase):
             product_id=self.product.id,
             quantity=1,
             cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.02"),
             purchase_type="usage",
             client_request_id="rebate-order-0001",
         ), self.buyer, self.db)
@@ -253,6 +254,7 @@ class RebateCoreTests(unittest.TestCase):
             product_id=self.product.id,
             quantity=2,
             cycle_days=30,
+            expected_unit_price_card_hours=Decimal("0.02"),
             purchase_type="usage",
             client_request_id="rebate-order-quantity-0001",
         ), self.buyer, self.db)
@@ -294,6 +296,7 @@ class RebateCoreTests(unittest.TestCase):
                 product_id=self.product.id,
                 quantity=1,
                 cycle_days=30,
+                expected_unit_price_card_hours=Decimal("0.02"),
                 purchase_type="usage",
             ), self.seller, self.db)
         self.assertEqual(self.db.query(Order).filter(Order.user_id == self.seller.id).count(), 0)

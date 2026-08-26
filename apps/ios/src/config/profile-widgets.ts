@@ -22,6 +22,13 @@ const PERSONAL_SERVICE_ITEMS: ProfileWidget[] = [
   { key: 'procurement', label: 'buyRequests', icon: 'search', route: '/pages/buy-request/index' },
 ]
 
+const MERCHANT_APPLICATION_ITEM: ProfileWidget = {
+  key: 'merchant-join',
+  label: 'merchantJoin',
+  icon: 'gpu',
+  route: '/pages/supplier/apply',
+}
+
 const PERSONAL_ACCOUNT_ITEMS: ProfileWidget[] = [
   { key: 'bank', label: '银行卡', icon: 'bank-card', route: '/pages/bank-cards/index' },
   { key: 'verified', label: '实名认证', icon: 'verified', route: '/pages/verification/index' },
@@ -54,7 +61,7 @@ const SUPPLIER_ACCOUNT_ITEMS: ProfileWidget[] = [
 
 export function getProfileWidgetGroups(
   role: ProfileRole,
-  _hasSupplierAccess: boolean,
+  hasSupplierAccess: boolean,
 ): ProfileWidgetGroup[] {
   if (role === 'supplier') {
     return [
@@ -64,7 +71,7 @@ export function getProfileWidgetGroups(
   }
 
   return [
-    { key: 'personal-services', label: 'personalServices', items: [...PERSONAL_SERVICE_ITEMS] },
+    { key: 'personal-services', label: 'personalServices', items: hasSupplierAccess ? [...PERSONAL_SERVICE_ITEMS] : [...PERSONAL_SERVICE_ITEMS, MERCHANT_APPLICATION_ITEM] },
     { key: 'account-tools', label: 'accountTools', items: [...PERSONAL_ACCOUNT_ITEMS] },
   ]
 }

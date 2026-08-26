@@ -1,46 +1,129 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Gavel, ShieldWarning, X } from "@phosphor-icons/react";
-import { listAdminDisputes, resolveAdminDispute, type Dispute } from "@/lib/internal-api";
+import { Check, Gavel, X } from "@phosphor-icons/react";
+import { listAdminOrders, resolveAdminOrderDispute, type AdminOrderItem } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 
-const statusLabels: Record<string, string> = { open: "待处理", under_review: "处理中", resolved: "已解决", rejected: "已驳回", cancelled: "已取消" };
-const reasonLabels: Record<string, string> = { not_delivered: "未按约交付", service_unavailable: "服务不可用", configuration_mismatch: "配置不符", billing_issue: "计费问题", other: "其他" };
+const DISPUTE_PAGE_SIZE = 30;
+
+function sellerName(order: AdminOrderItem) {
+  return order.seller_name || (order.seller_type === "kai_self_operated" ? "KAI 自营" : "第三方商家");
+}
+
+function fulfillmentName(order: AdminOrderItem) {
+  return order.fulfillment_mode === "platform_manual" ? "平台人工交付" : "商家人工交付";
+}
+
+function mergeOrders(current: AdminOrderItem[], incoming: AdminOrderItem[]) {
+  const orders = new Map(current.map((row) => [row.id, row]));
+  incoming.forEach((row) => orders.set(row.id, row));
+  return Array.from(orders.values());
+}
 
 export function AdminDisputeWorkspace() {
-  const [rows, setRows] = useState<Dispute[]>([]);
-  const [selected, setSelected] = useState<Dispute | null>(null);
-  const [status, setStatus] = useState("open");
+  const [rows, setRows] = useState<AdminOrderItem[]>([]);
+  const [selected, setSelected] = useState<AdminOrderItem | null>(null);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [resolution, setResolution] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
 
-  const load = useCallback(async (nextStatus = status) => {
+  const load = useCallback(async (nextPage = 1, append = false) => {
     setError("");
+    setLoadingPage(true);
     try {
-      const result = await listAdminDisputes(nextStatus);
-      setRows(result);
-      setSelected((current) => result.find((row) => row.id === current?.id) ?? result[0] ?? null);
-    } catch (reason) { setError(errorMessage(reason)); }
-  }, [status]);
+      const result = await listAdminOrders({ status: "disputed", page: nextPage, pageSize: DISPUTE_PAGE_SIZE });
+      setRows((current) => append ? mergeOrders(current, result.items) : mergeOrders([], result.items));
+      setSelected((current) => append
+        ? current ?? result.items[0] ?? null
+        : result.items.find((row) => row.id === current?.id) ?? result.items[0] ?? null);
+      setPage(result.page);
+      setTotal(result.total);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setLoadingPage(false);
+    }
+  }, []);
 
   useEffect(() => { void load(); }, [load]);
 
-  async function decide(nextStatus: "under_review" | "resolved" | "rejected", resolutionAction?: "release_to_supplier" | "refund_buyer") {
+  async function decide(action: "refund" | "release") {
     if (!selected) return;
-    if (["resolved", "rejected"].includes(nextStatus) && !resolution.trim()) { setError("关闭争议前请填写处理结论"); return; }
-    setBusy(true); setError("");
+    const note = resolution.trim();
+    if (!note) { setError("处理争议前请填写证据与处理结论"); return; }
+    const actionLabel = action === "refund" ? "退回买家冻结卡时" : "放行订单资金并继续商家结算";
+    if (!window.confirm(`确认${actionLabel}？该动作会直接写入真实订单账本。`)) return;
+    setBusy(true); setError(""); setSuccess("");
     try {
-      await resolveAdminDispute(selected.id, { version: selected.version, status: nextStatus, resolution: resolution.trim() || undefined, resolution_action: resolutionAction });
+      await resolveAdminOrderDispute(selected.id, { action, note });
       setResolution("");
-      await load(status);
-    } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(false); }
+      setSuccess(`订单 ${selected.order_no} 已处理：${actionLabel}`);
+      await load(1, false);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  return <section className="workspace-page commerce-workspace"><div className="workspace-page__head"><p>ADMIN / DISPUTE RESOLUTION</p><h1>订单争议仲裁</h1><span>买家胜诉会冻结 SSH 权限并生成退款；商家胜诉后订单继续按 T+1 规则结算。</span></div>
-    <div className="review-console admin-dispute-console"><aside><form><label className="admin-filter-label"><Gavel size={15}/><span>争议状态</span></label><select aria-label="争议状态" value={status} onChange={(event) => { setStatus(event.target.value); void load(event.target.value); }}><option value="open">待处理</option><option value="under_review">处理中</option><option value="resolved">已解决</option><option value="rejected">已驳回</option><option value="">全部</option></select></form>
-      {rows.length === 0 ? <div className="commerce-empty"><Gavel size={24}/><strong>当前队列为空</strong></div> : <div className="review-queue">{rows.map((row) => <button type="button" className={selected?.id === row.id ? "active" : ""} onClick={() => { setSelected(row); setResolution(row.resolution || ""); }} key={row.id}><span><small>{row.dispute_no} · {formatDate(row.updated_at)}</small><strong>{reasonLabels[row.reason] || row.reason}</strong><em>订单 #{row.order_id}</em></span><b className={`status-chip status-chip--${row.status}`}>{statusLabels[row.status] || row.status}</b></button>)}</div>}
-    </aside><article className="review-dossier">{selected ? <><header><div><p>{selected.dispute_no} / V{selected.version}</p><h2>{reasonLabels[selected.reason] || selected.reason}</h2></div><span className={`status-chip status-chip--${selected.status}`}>{statusLabels[selected.status] || selected.status}</span></header><section><h3>用户提交的问题</h3><p>{selected.description}</p></section><dl><div><dt>关联订单</dt><dd>#{selected.order_id}</dd></div><div><dt>创建时间</dt><dd>{formatDate(selected.created_at)}</dd></div></dl>{selected.resolution && <section><h3>当前处理结论</h3><p>{selected.resolution}</p>{selected.resolution_action && <small>{selected.resolution_action === "refund_buyer" ? "资金动作：生成买家退款" : "资金动作：继续商家结算"}</small>}</section>}{!["resolved", "rejected", "cancelled"].includes(selected.status) && <footer><label><span>处理结论</span><textarea rows={5} maxLength={2000} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="说明证据、责任判断以及选择退款或继续结算的原因" /></label><div><button disabled={busy} onClick={() => void decide("rejected", "release_to_supplier")}><X size={15}/>商家胜诉 · 继续结算</button>{selected.status === "open" && <button disabled={busy} onClick={() => void decide("under_review")}><ShieldWarning size={15}/>开始处理</button>}<button disabled={busy} onClick={() => void decide("resolved", "refund_buyer")} className="commerce-danger"><Check size={15}/>买家胜诉 · 生成退款</button></div></footer>}</> : <div className="commerce-empty"><Gavel size={25}/><strong>选择一条争议查看详情</strong></div>}</article></div>{error && <div className="commerce-error">{error}</div>}
+  const hasMore = page * DISPUTE_PAGE_SIZE < total;
+  const snapshot = selected?.product_snapshot;
+  const sshFingerprint = selected?.ssh_fingerprint || selected?.ssh_info_fingerprint;
+  const snapshotName = snapshot?.name || snapshot?.product_name;
+  const snapshotRegion = snapshot?.region_name || snapshot?.region || snapshot?.city || snapshot?.region_code;
+  const snapshotUnitPrice = snapshot?.unit_price_card_hours ?? snapshot?.confirmed_unit_price_card_hours;
+  const hasDeliveryEvidence = Boolean(selected && (
+    selected.delivered_at
+    || selected.confirmation_due_at
+    || selected.ssh_info_present != null
+    || sshFingerprint
+  ));
+
+  return <section className="workspace-page commerce-workspace">
+    <div className="workspace-page__head"><p>ADMIN / DISPUTE RESOLUTION</p><h1>订单争议仲裁</h1><span>这里只显示真实的争议订单；退款会退回买家冻结卡时，放行会完成订单资金结算。</span></div>
+    <div className="review-console admin-dispute-console">
+      <aside>
+        <form><label className="admin-filter-label"><Gavel size={15}/><span>争议状态</span></label><select aria-label="争议状态" value="disputed" disabled><option value="disputed">待仲裁</option></select></form>
+        {rows.length === 0
+          ? <div className="commerce-empty"><Gavel size={24}/><strong>{loadingPage ? "正在读取待仲裁订单…" : "当前没有待仲裁订单"}</strong></div>
+          : <div className="review-queue">{rows.map((row) => <button type="button" className={selected?.id === row.id ? "active" : ""} onClick={() => { setSelected(row); setResolution(""); setError(""); }} key={row.id}><span><small>{row.order_no} · {formatDate(row.disputed_at || row.updated_at || row.created_at)}</small><strong>{row.product.name || row.product.gpu_model || "算力订单"}</strong><em>{row.user.username || `用户 ${row.user.id}`} · {sellerName(row)}</em></span><b className="status-chip status-chip--disputed">待仲裁</b></button>)}</div>}
+        {hasMore && <button className="admin-dispute-load-more" type="button" disabled={loadingPage} onClick={() => void load(page + 1, true)}>{loadingPage ? "正在加载…" : `加载更多（已显示 ${rows.length} / ${total}）`}</button>}
+      </aside>
+      <article className="review-dossier">
+        {selected ? <>
+          <header><div><p>{selected.order_no} / ORDER #{selected.id}</p><h2>{selected.product.name || selected.product.gpu_model || "算力订单争议"}</h2></div><span className="status-chip status-chip--disputed">待仲裁</span></header>
+          <section><h3>买家提交的问题</h3><p>{selected.dispute_reason || "买家未补充文字说明，请结合订单交付记录核验。"}</p></section>
+          <dl>
+            <div><dt>买家</dt><dd>{selected.user.username || `用户 ${selected.user.id}`}</dd></div>
+            <div><dt>卖方</dt><dd>{sellerName(selected)} · {fulfillmentName(selected)}</dd></div>
+            <div><dt>订单金额</dt><dd>{Number(selected.amount_card_hours || 0).toFixed(4)} 卡时</dd></div>
+            <div><dt>发起时间</dt><dd>{formatDate(selected.disputed_at || selected.created_at)}</dd></div>
+            {selected.dispute_due_at && <div><dt>处理截止</dt><dd>{formatDate(selected.dispute_due_at)}</dd></div>}
+          </dl>
+          {hasDeliveryEvidence && <section><h3>安全交付证据</h3><p>
+            {selected.delivered_at && <>提交交付：{formatDate(selected.delivered_at)}<br/></>}
+            {selected.confirmation_due_at && <>买家确认截止：{formatDate(selected.confirmation_due_at)}<br/></>}
+            {selected.ssh_info_present != null && <>SSH 交付资料：{selected.ssh_info_present ? "已提交（敏感连接内容不在此页展示）" : "未提交"}<br/></>}
+            {sshFingerprint && <>SSH 交付记录指纹：{sshFingerprint}</>}
+          </p></section>}
+          {snapshot && <section><h3>下单商品快照</h3><p>
+            {snapshotName && <>商品：{snapshotName}<br/></>}
+            {snapshot.gpu_model && <>GPU：{snapshot.gpu_model}{snapshot.memory ? ` / ${snapshot.memory}` : ""}<br/></>}
+            {snapshotRegion && <>区域：{snapshotRegion}<br/></>}
+            <>{`数量：${snapshot.quantity ?? selected.quantity} 台`}<br/></>
+            {(snapshot.purchase_hours ?? selected.purchase_hours) != null && <>购买时长：{snapshot.purchase_hours ?? selected.purchase_hours} 小时<br/></>}
+            {snapshotUnitPrice != null && <>下单单价：{Number(snapshotUnitPrice).toFixed(6)} 卡时 / GPU·小时</>}
+          </p></section>}
+          {selected.dispute_resolution_note && <section><h3>已有处理记录</h3><p>{selected.dispute_resolution_note}</p></section>}
+          <footer><label><span>证据与处理结论</span><textarea rows={5} maxLength={2000} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="说明 SSH 交付证据、资源参数核验结果，以及退款或放行的理由" /></label><div><button disabled={busy} onClick={() => void decide("release")}><Check size={15}/>交付有效 · 放行结算</button><button disabled={busy} onClick={() => void decide("refund")} className="commerce-danger"><X size={15}/>买家申诉成立 · 退回卡时</button></div></footer>
+        </> : <div className="commerce-empty"><Gavel size={25}/><strong>选择一笔争议订单查看详情</strong></div>}
+      </article>
+    </div>
+    {error && <div className="commerce-error">{error}</div>}{success && <div className="commerce-success">{success}</div>}
   </section>;
 }

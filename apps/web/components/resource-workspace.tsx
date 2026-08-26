@@ -124,7 +124,7 @@ export function ResourceWorkspace() {
         <div>
           <p>SUPPLIER / PRODUCTS</p>
           <h1>算力商品</h1>
-          <span>统一管理商品、库存、价格和上下架状态。</span>
+          <span>统一管理商品、库存、价格和上下架状态；资源参数与可售库存由商家自行申报。</span>
         </div>
         <button className="commerce-primary" onClick={startCreate}>
           <Plus size={16} />

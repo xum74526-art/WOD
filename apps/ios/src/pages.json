@@ -32,6 +32,7 @@
     { "path": "pages/buy-request/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/compute-onboarding/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/supplier/dashboard", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/supplier/apply", "style": { "navigationStyle": "custom" } },
     { "path": "pages/supplier/devices", "style": { "navigationStyle": "custom" } },
     { "path": "pages/supplier/product-create", "style": { "navigationStyle": "custom" } },
     { "path": "pages/supplier/orders", "style": { "navigationStyle": "custom" } },

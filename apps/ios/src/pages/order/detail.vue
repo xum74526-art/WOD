@@ -195,12 +195,7 @@ const isHourlyOrder = computed(() => order.value?.purchase_unit === 'hour' || Nu
 const canCancelOrder = computed(() => Boolean(order.value && (order.value.can_cancel ?? order.value.status === 'paid')))
 const canConfirmOrder = computed(() => Boolean(order.value && (order.value.can_confirm ?? order.value.status === 'delivering')))
 const canDisputeOrder = computed(() => Boolean(order.value && (order.value.can_dispute ?? order.value.status === 'delivering')))
-const canRenew = computed(() => Boolean(
-  order.value
-  && isHourlyOrder.value
-  && order.value.purchase_type === 'usage'
-  && ['running', 'completed'].includes(order.value.status),
-))
+const canRenew = computed(() => order.value?.can_renew === true)
 const orderDuration = computed(() => {
   if (!order.value) return '-'
   if (isHourlyOrder.value) return t('hoursValue', { count: Number(order.value.duration_hours ?? order.value.purchase_hours ?? 0) })

@@ -21,7 +21,7 @@ test('frontend contract prefers neutral KAI manual-fulfillment semantics and rea
 })
 
 test('KAI stock is never presented as live rentable inventory', () => {
-  assert.match(marketPage, /t\('kaiFulfillmentAllocation'\)/)
+  assert.match(marketPage, /isKaiProduct\(p\) \? 'kaiFulfillmentAllocation' : 'availableQuantity'/)
   assert.match(productPage, /isKaiProduct \? 'kaiFulfillmentAllocation' : 'k_40a4b798'/)
   assert.match(productPage, /kaiFulfillmentAllocationNotice/)
   assert.match(productPage, /kaiProductDescription/)
@@ -30,12 +30,12 @@ test('KAI stock is never presented as live rentable inventory', () => {
 
 test('KAI purchase affordances and checkout use the real remaining platform allocation', () => {
   assert.match(homePage, /product\.market_source === 'kai' && product\.purchasable === true && Number\(product\.stock \|\| 0\) > 0/)
-  assert.match(marketPage, /product\.market_source === 'kai' && product\.purchasable === true && Number\(product\.stock \|\| 0\) > 0/)
+  assert.match(marketPage, /\(isKaiProduct\(product\) \|\| isMerchantProduct\(product\)\) && product\.purchasable === true/)
   assert.match(gpuApi, /source_max_configurable_quantity\?: number \| null/)
   assert.match(productPage, /sourceOrderLimit = Math\.max/)
   assert.match(productPage, /Math\.min\(remaining, sourceOrderLimit\)/)
   assert.match(productPage, /isKaiProduct \? 'kaiAvailableAllocationHint' : 'availableQuantityHint'/)
-  assert.match(productPage, /v-if="isKaiProduct" class="provider-notice"/)
+  assert.match(productPage, /isMerchantProduct\.value \? 'merchantFulfillmentNotice' : 'kaiFulfillmentAllocationNotice'/)
   assert.doesNotMatch(orderPage, /rentable|实时库存|live inventory/i)
 })
 

@@ -45,8 +45,8 @@ const AGREEMENT_ZH: LegalSection[] = [
   {
     title: '三、算力交易',
     paragraphs: [
-      '1. 当前仅接入 KAI 算力价格与可用报价；过期报价、来源不可用或无平台履约额度的资源不可购买。',
-      '2. 算力订单仅按整数小时购买，价格单位为人民币/GPU 小时，钱包按页面展示的卡时/GPU 小时换算后扣减。',
+      '1. 算力市场分为 KAI 自营和入驻资料已审核商家资源；下架、来源不可用、库存不足或无履约额度的资源不可购买。',
+      '2. 算力订单仅按整数小时购买。KAI 自营展示人民币/GPU 小时并换算卡时扣减；商家资源按商家发布的卡时/GPU 小时价格扣减。',
       '3. 订单金额会全额冻结，由 WOD 平台或已审核商家人工交付有效 SSH，用户确认后才创建对应资产。',
       '4. 商家交付 SSH 前可取消订单并退回冻结卡时；SSH 交付后不可自行取消。',
       '5. 平台服务费从商家结算额中计算，不会作为买家额外扣款。',
@@ -117,8 +117,8 @@ const AGREEMENT_EN: LegalSection[] = [
   {
     title: '3. Compute Transactions',
     paragraphs: [
-      '1. Only current KAI pricing and available KAI offers are connected. Expired, unavailable-source offers or resources without platform fulfillment allocation cannot be purchased.',
-      '2. Compute orders are purchased in whole hours only. Prices are shown in CNY per GPU-hour and the wallet debit is converted to CH per GPU-hour as shown at checkout.',
+      '1. The compute market separates KAI Direct resources from offers by merchants with reviewed onboarding materials. Delisted, unavailable, out-of-stock, or unfulfillable resources cannot be purchased.',
+      '2. Compute orders use whole hours only. KAI Direct prices are shown in CNY per GPU-hour and converted to CH; merchant offers debit the seller-listed CH per GPU-hour price.',
       '3. The full order amount is frozen. WOD or an approved merchant manually provides valid SSH access, and the matching asset is created only after buyer confirmation.',
       '4. An order may be canceled before SSH delivery and its frozen CH returned. It cannot be self-canceled after SSH delivery.',
       '5. The service fee is calculated from the merchant settlement and is not an additional buyer charge.',

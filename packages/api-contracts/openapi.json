@@ -2156,6 +2156,20 @@
             ],
             "title": "Cycle Days"
           },
+          "expected_unit_price_card_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Unit Price Card Hours"
+          },
           "hours": {
             "anyOf": [
               {
@@ -2197,6 +2211,21 @@
           "product_id"
         ],
         "title": "OrderCreateIn",
+        "type": "object"
+      },
+      "OrderDeliverIn": {
+        "properties": {
+          "ssh_info": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Ssh Info",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ssh_info"
+        ],
+        "title": "OrderDeliverIn",
         "type": "object"
       },
       "OrderDisputeIn": {
@@ -2646,8 +2675,8 @@
           "price": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0.0,
                 "maximum": 100000.0,
+                "minimum": 0.0001,
                 "type": "number"
               },
               {
@@ -2704,8 +2733,8 @@
           "price": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0.0,
                 "maximum": 100000.0,
+                "minimum": 0.0001,
                 "type": "number"
               },
               {
@@ -7540,8 +7569,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "title": "Data",
-                "type": "object"
+                "$ref": "#/components/schemas/OrderDeliverIn"
               }
             }
           },
@@ -8471,9 +8499,9 @@
             "schema": {
               "anyOf": [
                 {
-                  "const": "kai",
                   "enum": [
-                    "kai"
+                    "kai",
+                    "wod"
                   ],
                   "type": "string"
                 },

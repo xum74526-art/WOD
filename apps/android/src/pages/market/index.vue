@@ -9,6 +9,20 @@
         <AppIcon name="search" :size="36" />
         <input class="sinput" v-model="keyword" :placeholder="t('searchGPU')" placeholder-class="ph" @confirm="doSearch" />
       </view>
+      <view class="source-switch" role="tablist">
+        <view
+          v-for="item in sourceTabs"
+          :key="item.key"
+          class="source-tab"
+          :class="{ active: marketSource === item.key }"
+          role="tab"
+          :aria-selected="marketSource === item.key"
+          @tap="setMarketSource(item.key)"
+        >
+          <text class="source-tab-title">{{ t(item.label) }}</text>
+          <text class="source-tab-hint">{{ t(item.hint) }}</text>
+        </view>
+      </view>
       <scroll-view scroll-x class="filters" :show-scrollbar="false">
         <view v-for="item in types" :key="item.code" class="filter" :class="{ active: category === item.code }" @tap="category = item.code; load(true)">{{ t(item.name) }}</view>
       </scroll-view>
@@ -26,7 +40,7 @@
         <text>{{ t('dataUnavailable') }}</text>
         <view class="retry-button" role="button" @tap="load(true)">{{ t('retry') }}</view>
       </view>
-      <view v-else-if="!list.length" class="state">{{ t('k_e3a7209e') }}</view>
+      <view v-else-if="!list.length" class="state">{{ t(marketSource === 'kai' ? 'noKaiListings' : 'noMerchantListings') }}</view>
       <view v-for="p in list" :key="p.id" class="card prod" @tap="go(p.id)">
         <image
           class="pimg"
@@ -37,25 +51,32 @@
           @error="markImageFailed(p.id)"
         />
         <view class="pbody">
+          <view class="seller-line">
+            <text class="seller-badge" :class="{ merchant: isMerchantProduct(p) }">{{ t(isMerchantProduct(p) ? 'merchantResource' : 'kaiSelfOperated') }}</text>
+            <text class="seller-assurance">{{ assuranceText(p) }}</text>
+          </view>
           <view class="pt">
             <text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text>
             <text class="pmem">{{ p.memory }}</text>
           </view>
           <view class="pmid">
-            <view class="info"><text class="il">{{ t('kaiFulfillmentAllocation') }}</text><text class="iv">{{ p.stock ?? 0 }}</text></view>
+            <view class="info"><text class="il">{{ t(isKaiProduct(p) ? 'kaiFulfillmentAllocation' : 'availableQuantity') }}</text><text class="iv">{{ p.stock ?? 0 }}</text></view>
             <view class="info"><text class="il">{{ t("region") }}</text><text class="iv">{{ localizeRegionName(p.region_name || '-', i18n.lang, p.region_code) }}</text></view>
-            <view v-if="p.supplier_id" class="info"><text class="il">{{ t("merchant") }}</text><text class="iv info-link" @tap.stop="goStore(p.supplier_id)">{{ t("view") }}</text></view>
-            <view v-else class="info"><text class="il">{{ t('marketOfferSource') }}</text><text class="iv">{{ marketSourceLabel(p) }}</text></view>
+            <view class="info">
+              <text class="il">{{ t('seller') }}</text>
+              <text class="iv" :class="{ 'info-link': p.supplier_id }" @tap.stop="goStore(p.supplier_id)">{{ sellerName(p) }}</text>
+            </view>
           </view>
           <view class="pbot">
             <view class="pprice">
               <view class="hourly-price"><text class="pp">{{ formatNumber(productPriceCardHours(p)) }}</text><text class="pu">{{ t('cardHourPerGpuHour') }}</text></view>
-              <text class="price-cny">¥{{ formatNumber(productPriceCny(p)) }}{{ t('perGpuHour') }}</text>
-              <view class="market-card-metrics">
+              <text v-if="isKaiProduct(p)" class="price-cny">¥{{ formatNumber(productPriceCny(p)) }}{{ t('perGpuHour') }}</text>
+              <view v-if="isKaiProduct(p)" class="market-card-metrics">
                 <text class="pch" :class="changeTone(modelChange(p))">{{ modelChangeText(p) }}</text>
                 <text class="pch-range">{{ modelPriceRangeText(p) }}</text>
                 <text v-if="modelHistorySourceText(p)" class="pch-source">{{ modelHistorySourceText(p) }}</text>
               </view>
+              <text v-else class="merchant-meta">{{ merchantMeta(p) }}</text>
             </view>
             <view class="buy" :class="{ disabled: !productPurchasable(p) }">{{ t(productActionLabel(p)) }}</view>
           </view>
@@ -77,7 +98,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { fmtCHn, formatNumber, toCardHours } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
-import { localizeProductName } from '@/utils/localize-content'
+import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { marketSourceDisplayName } from '@/utils/market-history'
@@ -94,7 +115,7 @@ import {
 } from '@/utils/market-list'
 
 const i18n = useI18nStore()
-const { t } = i18n
+const { t, tr } = i18n
 const list = ref<Product[]>([])
 const loading = ref(false)
 const loadError = ref(false)
@@ -106,6 +127,8 @@ const mem = ref('')
 const region = ref('')
 const category = ref('')
 const sort = ref('default')
+type MarketSourceFilter = 'kai' | 'wod'
+const marketSource = ref<MarketSourceFilter>('kai')
 type ModelRange = Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours' | 'market_status' | 'history_provenance'>
 const volatilityMap = ref<MarketRangeMap & Record<string, ModelRange>>({})
 const failedImages = ref<Record<number, boolean>>({})
@@ -113,6 +136,11 @@ let quoteLoadedAt = 0
 let quoteInFlight: Promise<void> | null = null
 let loadGeneration = 0
 let productsLoadedAt = 0
+
+const sourceTabs: Array<{ key: MarketSourceFilter; label: string; hint: string }> = [
+  { key: 'kai', label: 'kaiSelfOperated', hint: 'kaiSelfOperatedHint' },
+  { key: 'wod', label: 'merchantResources', hint: 'merchantResourcesHint' },
+]
 
 async function loadQuote() {
   if (Date.now() - quoteLoadedAt < 30_000) return
@@ -122,7 +150,7 @@ async function loadQuote() {
       const ranking = await getMarketRanking(true)
       volatilityMap.value = buildMarketRangeMap(ranking.items.filter((item) => item.sources.includes('kai'))) as MarketRangeMap & Record<string, ModelRange>
       quoteLoadedAt = Date.now()
-      if (sort.value === 'default' && list.value.length) {
+      if (marketSource.value === 'kai' && sort.value === 'default' && list.value.length) {
         list.value = sortByMarketPriority(list.value, volatilityMap.value)
       }
     } catch {
@@ -179,13 +207,13 @@ async function load(reset = false) {
       sort: sort.value,
       page: requestedPage,
       page_size: 100,
-      market_source: 'kai',
-      representative: true,
-    })
-    if (generation !== loadGeneration) return
-    const kaiItems = res.items.filter((item) => item.market_source === 'kai')
-    list.value = requestedPage === 1 ? kaiItems : mergeUniqueProducts(list.value, kaiItems)
-    if (sort.value === 'default') list.value = sortByMarketPriority(list.value, volatilityMap.value)
+       market_source: marketSource.value,
+       representative: marketSource.value === 'kai',
+     })
+     if (generation !== loadGeneration) return
+     const sourceItems = res.items.filter((item) => item.market_source === marketSource.value)
+     list.value = requestedPage === 1 ? sourceItems : mergeUniqueProducts(list.value, sourceItems)
+     if (marketSource.value === 'kai' && sort.value === 'default') list.value = sortByMarketPriority(list.value, volatilityMap.value)
     total.value = res.total
     if (requestedPage === 1) productsLoadedAt = Date.now()
     if (list.value.length >= res.total) finished.value = true
@@ -213,25 +241,46 @@ onShow(() => {
 })
 onReachBottom(() => load())
 function doSearch() { load(true) }
+function setMarketSource(source: MarketSourceFilter) {
+  if (marketSource.value === source) return
+  marketSource.value = source
+  load(true)
+}
 function go(id: number) { nav('/pages/product/detail?id=' + id) }
 function goStore(sid?: number) { if (sid) nav('/pages/store/index?id=' + sid) }
-function productPurchasable(product: Pick<Product, 'market_source' | 'purchasable' | 'stock'>): boolean {
-  return product.market_source === 'kai' && product.purchasable === true && Number(product.stock || 0) > 0
+function isMerchantProduct(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id'>): boolean {
+  return product.seller_type === 'merchant' || (product.market_source === 'wod' && Boolean(product.supplier_id))
 }
-function productActionLabel(product: Pick<Product, 'market_source' | 'purchasable' | 'stock'>): string {
-  if (product.market_source !== 'kai') return 'retiredMarketSourceUnavailableShort'
-  if (product.market_source === 'kai' && Number(product.stock || 0) <= 0) return 'kaiAllocationUnavailableShort'
+function isKaiProduct(product: Pick<Product, 'market_source' | 'seller_type'>): boolean {
+  return product.seller_type === 'kai_self_operated' || product.market_source === 'kai'
+}
+function productPurchasable(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'purchasable' | 'stock'>): boolean {
+  return (isKaiProduct(product) || isMerchantProduct(product)) && product.purchasable === true && Number(product.stock || 0) > 0
+}
+function productActionLabel(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'purchasable' | 'stock'>): string {
+  if (!isKaiProduct(product) && !isMerchantProduct(product)) return 'retiredMarketSourceUnavailableShort'
+  if (Number(product.stock || 0) <= 0) return isKaiProduct(product) ? 'kaiAllocationUnavailableShort' : 'soldOutShort'
   return productPurchasable(product) ? 'buyUsage' : 'marketOfferUnavailableShort'
 }
-function marketSourceLabel(product: Pick<Product, 'market_source' | 'market_source_status'>) {
-  const name = t('kaiPricingSource')
-  return product.market_source_status === 'delayed' ? `${name} · ${t('delayedData')}` : name
+function sellerName(product: Pick<Product, 'market_source' | 'seller_type' | 'seller_name' | 'supplier_name'>) {
+  if (isKaiProduct(product)) return t('kaiSelfOperated')
+  const name = product.seller_name || product.supplier_name
+  return name ? localizePersonName(name, i18n.lang) : t('verifiedMerchant')
+}
+function assuranceText(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'assurance_label'>) {
+  return product.assurance_label ? tr(product.assurance_label) : t(isMerchantProduct(product) ? 'merchantDeclaredResource' : 'platformManualFulfillment')
+}
+function merchantMeta(product: Pick<Product, 'supplier_rating' | 'supplier_order_count' | 'fulfillment_mode'>) {
+  const parts = [t(product.fulfillment_mode === 'platform_manual' ? 'platformManualFulfillment' : 'merchantManualFulfillment')]
+  if (product.supplier_rating != null) parts.push(t('sellerRatingValue', { rating: formatNumber(product.supplier_rating) }))
+  if (product.supplier_order_count != null) parts.push(t('sellerOrderCountValue', { count: product.supplier_order_count }))
+  return parts.join(' · ')
 }
 function productPriceCny(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour'>): number {
   return Number(product.price_cny_per_gpu_hour ?? product.price ?? 0)
 }
-function productPriceCardHours(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): number {
-  return Number(product.price_card_hours_per_gpu_hour ?? toCardHours(productPriceCny(product)))
+function productPriceCardHours(product: Pick<Product, 'market_source' | 'seller_type' | 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): number {
+  return Number(product.price_card_hours_per_gpu_hour ?? (isKaiProduct(product) ? toCardHours(productPriceCny(product)) : product.price ?? 0))
 }
 function modelRange(p: Pick<Product, 'gpu_model' | 'memory'>): ModelRange | undefined { return volatilityMap.value[gpuMarketKey(p.gpu_model, p.memory)] }
 function modelChange(p: Pick<Product, 'gpu_model' | 'memory'>): number | null {
@@ -282,6 +331,11 @@ function markImageFailed(id: number) {
 .search { display: flex; align-items: center; background: var(--card); border: 1rpx solid var(--primary-soft); border-radius: var(--radius); padding: 0 24rpx; margin-bottom: 20rpx; }
 .sinput { flex: 1; color: var(--text); font-size: 28rpx; height: 80rpx; margin-left: 16rpx; }
 .ph { color: var(--text-dim); }
+.source-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-bottom: 20rpx; }
+.source-tab { min-width: 0; padding: 18rpx 20rpx; color: var(--text-sub); background: var(--card); border: 1rpx solid var(--border); border-radius: var(--radius); }
+.source-tab.active { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); }
+.source-tab-title { display: block; font-size: 27rpx; font-weight: 700; }
+.source-tab-hint { display: block; margin-top: 4rpx; font-size: 19rpx; line-height: 1.35; }
 .filters { white-space: nowrap; margin-bottom: 16rpx; }
 .filter { min-height: 72rpx; display: inline-flex; align-items: center; padding: 10rpx 28rpx; margin-right: 16rpx; background: var(--card); border-radius: var(--radius); color: var(--text-sub); font-size: 24rpx; border: 1rpx solid var(--primary-soft); }
 .filter.active { background: var(--card-border); color: var(--primary); border-color: transparent; }
@@ -296,6 +350,10 @@ function markImageFailed(id: number) {
 .prod { overflow: hidden; margin-bottom: 24rpx; }
 .pimg { width: 100%; height: 240rpx; display: block; }
 .pbody { padding: 32rpx; }
+.seller-line { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-bottom: 18rpx; }
+.seller-badge { flex-shrink: 0; padding: 6rpx 14rpx; color: var(--primary); background: var(--primary-soft); border-radius: 999rpx; font-size: 20rpx; font-weight: 700; }
+.seller-badge.merchant { color: var(--up); background: var(--up-soft); }
+.seller-assurance { min-width: 0; color: var(--text-dim); font-size: 19rpx; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pt { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24rpx; }
 .pn { color: var(--text); font-size: 34rpx; font-weight: 600; }
 .pmem { color: var(--primary); font-size: 24rpx; background: rgba(24,175,196,0.14); padding: 6rpx 18rpx; border-radius: 10rpx; }
@@ -315,6 +373,7 @@ function markImageFailed(id: number) {
 .pch.neutral { color: var(--text-sub); background: var(--bg-2); }
 .pch-range { color: var(--text-sub); font-size: 20rpx; line-height: 1.35; font-variant-numeric: tabular-nums; }
 .pch-source { color: var(--text-dim); font-size: 18rpx; line-height: 1.3; }
+.merchant-meta { color: var(--text-sub); font-size: 20rpx; line-height: 1.4; }
 .pbot { display: flex; justify-content: space-between; align-items: flex-end; gap: 18rpx; }
 .pp { color: var(--up); font-size: 40rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pu { color: var(--text-sub); font-size: 24rpx; }

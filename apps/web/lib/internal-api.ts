@@ -69,13 +69,9 @@ export function revokeApiKey(id: number) { return apiRequest<ApiCredential>(`/ap
 
 export function listDisputes() { return apiRequest<Dispute[]>("/api/v1/account/disputes"); }
 export function createDispute(input: { order_id: number; reason: string; description: string }) { return apiRequest<Dispute>("/api/v1/account/disputes", { method: "POST", body: JSON.stringify(input) }); }
-export function listAdminDisputes(status = "") { return apiRequest<Dispute[]>(`/api/v1/admin/disputes${status ? `?status=${encodeURIComponent(status)}` : ""}`); }
-export function resolveAdminDispute(id: number, input: { version: number; status: "under_review" | "resolved" | "rejected"; resolution?: string; resolution_action?: "release_to_supplier" | "refund_buyer" }) {
-  return apiRequest<Dispute>(`/api/v1/admin/disputes/${id}`, { method: "PATCH", body: JSON.stringify(input) });
-}
 export async function listDisputableOrders(): Promise<Order[]> {
   const result = await listOrders("account");
-  return result.data.filter((order) => ["confirmed", "delivering", "delivered", "completed"].includes(order.status));
+  return result.data.filter((order) => ["delivering", "completed", "running"].includes(order.status));
 }
 
 export function getSupplierSettings() { return apiRequest<SupplierSettingsSnapshot>("/api/v1/supplier/settings"); }

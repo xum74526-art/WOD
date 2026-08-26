@@ -113,6 +113,9 @@ class SupplierDeviceCrudTests(unittest.TestCase):
         self.assertEqual(product.price, Decimal("12.3456"))
         self.assertEqual(product.stock, 8)
         self.assertEqual(product.status, "on")
+        self.assertEqual(product.market_source, "wod")
+        self.assertEqual(product.stock_semantics, "supplier_reported_inventory")
+        self.assertEqual(product.cycle, [])
         self.assertEqual(product.region_code, "east_china")
 
     def test_supplier_cannot_update_another_suppliers_resource(self):
@@ -156,6 +159,7 @@ class SupplierDeviceCrudTests(unittest.TestCase):
         self.current_user = self.owner
         invalid_create_values = (
             {"price": "0"},
+            {"price": "0.00001"},
             {"price": "100000.0001"},
             {"stock": -1},
             {"stock": 100001},
@@ -171,6 +175,7 @@ class SupplierDeviceCrudTests(unittest.TestCase):
         product = self._create_owned_device()
         invalid_updates = (
             {"price": "0"},
+            {"price": "0.00001"},
             {"price": "100000.0001"},
             {"stock": -1},
             {"stock": 100001},

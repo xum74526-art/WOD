@@ -7,10 +7,13 @@ boundary: administrator access remains protected by ``require_admin``.
 
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Query as SqlAlchemyQuery, Session
 
 from app.core.deps import require_admin
+from app.core.sensitive import reveal
 from app.db.session import get_db
 from app.models.bank_card import BankCard
 from app.models.external_identity import ExternalIdentity
@@ -21,6 +24,7 @@ from app.models.user import User
 from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
 from app.services.auth_session import AUDIT_PLATFORMS, AuditPlatform
+from app.services.product_provider import product_provider_info
 from app.utils.response import BizError, success
 
 
@@ -144,6 +148,14 @@ def orders(
     for row in rows:
         owner = db.query(User).filter(User.id == row.user_id).first()
         product = db.query(Product).filter(Product.id == row.product_id).first()
+        provider = product_provider_info(product, db) if product else {
+            "seller_type": None,
+            "seller_name": None,
+            "fulfillment_mode": None,
+        }
+        snapshot = dict(row.product_snapshot or {})
+        plain_ssh = reveal(row.ssh_info) or ""
+        ssh_info_present = bool(plain_ssh.strip())
         items.append({
             "id": row.id,
             "order_no": row.order_no,
@@ -159,6 +171,24 @@ def orders(
             "purchase_type": row.purchase_type,
             "amount_card_hours": float(row.amount),
             "status": row.status,
+            "seller_type": snapshot.get("seller_type") or provider["seller_type"],
+            "seller_name": snapshot.get("seller_name") or provider["seller_name"],
+            "fulfillment_mode": provider["fulfillment_mode"],
+            "product_snapshot": snapshot or None,
+            "delivered_at": row.delivered_at,
+            "confirmation_due_at": row.confirmation_due_at,
+            "ssh_info_present": ssh_info_present,
+            "ssh_info_fingerprint": (
+                hashlib.sha256(plain_ssh.encode("utf-8")).hexdigest()[:16]
+                if ssh_info_present else None
+            ),
+            "dispute_reason": row.dispute_reason,
+            "disputed_at": row.disputed_at,
+            "dispute_due_at": row.dispute_due_at,
+            "dispute_resolution": row.dispute_resolution,
+            "dispute_resolution_note": row.dispute_resolution_note,
+            "dispute_resolved_at": row.dispute_resolved_at,
+            "dispute_resolved_by": row.dispute_resolved_by,
             "created_platform": row.created_platform or "legacy",
             "last_modified_platform": row.last_modified_platform or "legacy",
             "start_at": row.start_at,

@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
+from app.core.config import settings
 from app.models import *  # noqa: F401,F403 - register the complete metadata
 from app.models.ledger import Ledger
 from app.models.market_price import MarketSourceStatus
@@ -29,6 +30,7 @@ from init_db import _ensure_columns, _migrate_order_request_scope
 
 class OrderRenewalTests(unittest.TestCase):
     def setUp(self):
+        self.original_fulfillment_users = settings.PLATFORM_FULFILLMENT_USER_IDS
         self.temp_dir = tempfile.TemporaryDirectory()
         database = Path(self.temp_dir.name) / "renewal.sqlite3"
         self.engine = create_engine(
@@ -42,6 +44,7 @@ class OrderRenewalTests(unittest.TestCase):
             user = User(username="renew-user", phone="13900001001", password="test")
             db.add(user)
             db.flush()
+            settings.PLATFORM_FULFILLMENT_USER_IDS = str(user.id)
             db.add(Wallet(user_id=user.id, balance=Decimal("100"), frozen=Decimal("0")))
             db.add(MarketSourceStatus(
                 source="kai", enabled=True, status="ok", refresh_seconds=300,
@@ -70,6 +73,7 @@ class OrderRenewalTests(unittest.TestCase):
             self.order_id = order.id
 
     def tearDown(self):
+        settings.PLATFORM_FULFILLMENT_USER_IDS = self.original_fulfillment_users
         self.engine.dispose()
         self.temp_dir.cleanup()
 
@@ -239,6 +243,7 @@ class OrderRequestScopeMigrationTests(unittest.TestCase):
             columns = {item["name"] for item in inspect(engine).get_columns("orders")}
             self.assertIn("created_platform", columns)
             self.assertIn("last_modified_platform", columns)
+            self.assertIn("product_snapshot", columns)
             with engine.connect() as conn:
                 row = conn.execute(text(
                     "SELECT quantity, created_platform, last_modified_platform FROM orders"

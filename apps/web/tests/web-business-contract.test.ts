@@ -79,21 +79,91 @@ test("Web market summary and chart use the canonical KAI candle contract", () =>
   assert.match(panel, /median_price_card_hours/);
 });
 
-test("Web compute catalogue shows one representative per GPU identity in card hours", () => {
+test("Web compute catalogue separates representative KAI offers from individual merchant listings", () => {
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
+  const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
 
-  assert.match(adapter, /query\.set\("page_size", "100"\)/);
-  assert.match(adapter, /query\.set\("market_source", "kai"\)/);
-  assert.match(adapter, /query\.set\("representative", "true"\)/);
+  assert.match(adapter, /requestedPage = Math\.max\(1,[\s\S]*?query\.set\("page", String\(requestedPage\)\)/);
+  assert.match(adapter, /requestedPageSize[\s\S]*?query\.set\("page_size", String\(requestedPageSize\)\)/);
+  assert.doesNotMatch(adapter, /query\.set\("page", "1"\)/);
+  assert.doesNotMatch(adapter, /total: products\.length, total_pages: 1/);
+  assert.match(adapter, /marketSource === "kai"[\s\S]*?query\.set\("representative", "true"\)/);
+  assert.match(adapter, /else query\.delete\("representative"\)/);
+  assert.match(api, /listPublicProducts\(marketSource\?: "kai" \| "wod", page = 1, pageSize = 24\)/);
+  assert.match(market, /listPublicProducts\(source, page, MARKET_PAGE_SIZE\)/);
+  assert.match(market, /append \? mergeProducts\(current\[source\]\.rows, result\.data\)/);
+  assert.match(market, /loadSourcePage\(activeSource, catalog\.page \+ 1, true\)/);
+  assert.match(market, /market\.kai\.title/);
+  assert.match(market, /market\.merchant\.title/);
+  assert.match(market, /row\.seller_name/);
+  assert.match(market, /row\.assurance_description/);
   assert.match(market, /row\.unit_price_ch/);
   assert.match(market, /卡时 \/ GPU·小时/);
   assert.match(detail, /product\.unit_price_ch/);
+  assert.match(detail, /expected_unit_price_card_hours: product\.unit_price_ch/);
+  assert.match(detail, /reason\.status === 409[\s\S]*?价格已发生变化/);
+  assert.match(detail, /product\.seller_name/);
+  assert.match(detail, /product\.fulfillment_mode/);
+  assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
   assert.match(detail, /卡时 \/ GPU·小时/);
   assert.doesNotMatch(detail, /KAI 行情估值|¥|product\.price\.amount/);
+  assert.match(adapter, /expected_unit_price_card_hours: number\(body\.expected_unit_price_card_hours\)/);
+  assert.match(adapter, /const purchaseUnit = text\(item\.purchase_unit, "hour"\)/);
+  assert.doesNotMatch(adapter, /marketSource === "kai" \? "hour" : "day"/);
+  assert.match(adapter, /Boolean\(item\.can_renew\)/);
+  assert.doesNotMatch(adapter, /\["completed", "running"\][\s\S]*?available\.push\("renew"\)/);
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=kai&representative=true/);
+  assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=wod/);
+  assert.match(serverData, /const purchaseUnit = text\(item\.purchase_unit, "hour"\)/);
+});
+
+test("Web supplier order workspace exposes the canonical SSH delivery action and seller state", () => {
+  const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+  const orders = fs.readFileSync(new URL("../components/order-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(adapter, /\/api\/orders\/\$\{id\}\/deliver/);
+  assert.match(adapter, /seller_type: sellerType/);
+  assert.match(adapter, /fulfillment_mode: fulfillmentMode/);
+  assert.match(adapter, /status: canonicalStatus/);
+  assert.doesNotMatch(adapter, /function mapOrderStatus/);
+  assert.match(adapter, /delivered_at: text\(item\.delivered_at\) \|\| null/);
+  assert.match(adapter, /buyer_confirmed_at: text\(item\.confirmed_at\) \|\| null/);
+  assert.doesNotMatch(adapter, /item\.status === "delivering" \? item\.created_at/);
+  assert.match(orders, /markOrderDelivered/);
+  assert.match(orders, /提交 SSH 交付/);
+  assert.match(orders, /当前履约状态/);
+  assert.match(orders, /卖方提交交付/);
+  assert.match(orders, /买家验收/);
+  assert.doesNotMatch(orders, /Agent 已下发买家 SSH 公钥/);
+});
+
+test("Web exposes real merchant operations and keeps admission separate from identity review", () => {
+  const header = fs.readFileSync(new URL("../components/site-header.tsx", import.meta.url), "utf8");
+  const shell = fs.readFileSync(new URL("../components/product-shell.tsx", import.meta.url), "utf8");
+  const apply = fs.readFileSync(new URL("../app/supplier/apply/page.tsx", import.meta.url), "utf8");
+  const review = fs.readFileSync(new URL("../components/supplier-review.tsx", import.meta.url), "utf8");
+  const resources = fs.readFileSync(new URL("../components/resource-workspace.tsx", import.meta.url), "utf8");
+  const oldSupplierServers = fs.readFileSync(new URL("../app/supplier/servers/page.tsx", import.meta.url), "utf8");
+  const oldAdminResources = fs.readFileSync(new URL("../app/admin/resources/page.tsx", import.meta.url), "utf8");
+  const adminDashboard = fs.readFileSync(new URL("../components/admin-dashboard.tsx", import.meta.url), "utf8");
+
+  assert.match(header, /href="\/supplier\/resources"/);
+  assert.match(shell, /href: "\/supplier\/resources"/);
+  assert.match(shell, /href: "\/admin\/suppliers"/);
+  assert.match(shell, /href: "\/admin\/disputes"/);
+  assert.match(apply, /入驻资料和主体实名认证分别提交、分别审核/);
+  assert.match(apply, /可以先提交入驻资料/);
+  assert.doesNotMatch(apply, /先完成主体实名认证，再提交商家入驻申请/);
+  assert.match(review, /identity_verified/);
+  assert.match(review, /page_size: PAGE_SIZE/);
+  assert.match(review, /load\(status, search, page \+ 1, true\)/);
+  assert.match(resources, /资源参数与可售库存由商家自行申报/);
+  assert.match(oldSupplierServers, /redirect\("\/supplier\/resources"\)/);
+  assert.match(oldAdminResources, /redirect\("\/admin\/suppliers"\)/);
+  assert.doesNotMatch(adminDashboard, /SERVER VERIFIED/);
 });
 
 test("Web market chart and pulse consistently render KAI prices in card hours", () => {

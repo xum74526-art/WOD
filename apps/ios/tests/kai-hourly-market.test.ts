@@ -28,17 +28,20 @@ test('KAI product contract distinguishes CNY pricing from wallet card-hours', ()
   assert.match(gpuApi, /price_card_hours_per_gpu_hour\?: number/)
   assert.match(gpuApi, /wallet_charge_unit\?: 'CARD_HOUR'/)
   assert.match(productPage, /price_cny_per_gpu_hour \?\? product\.value\?\.price/)
-  assert.match(productPage, /price_card_hours_per_gpu_hour \?\? toCardHours/)
+  assert.match(productPage, /price_card_hours_per_gpu_hour[\s\S]*?isMerchantProduct\.value \? product\.value\?\.price : toCardHours/)
   assert.match(productPage, /unitPriceCardHours\.value \* hours\.value \* quantity\.value/)
   assert.match(marketPage, /productPriceCardHours/)
   assert.match(marketPage, /cardHourPerGpuHour/)
   assert.match(marketPage, /productPriceCny/)
 })
 
-test('home and market request the complete representative KAI catalogue', () => {
+test('home keeps representative KAI cards while market separates KAI and merchant catalogues', () => {
   assert.match(gpuApi, /representative\?: boolean/)
   assert.match(homePage, /page_size: 100, market_source: 'kai', representative: true/)
-  assert.match(marketPage, /page_size: 100,[\s\S]*?market_source: 'kai',[\s\S]*?representative: true/)
+  assert.match(marketPage, /type MarketSourceFilter = 'kai' \| 'wod'/)
+  assert.match(marketPage, /market_source: marketSource\.value/)
+  assert.match(marketPage, /representative: marketSource\.value === 'kai'/)
+  assert.match(marketPage, /merchantResourcesHint/)
 })
 
 test('quote views render raw KAI CNY while shared charts keep explicit display units', () => {
@@ -63,10 +66,11 @@ test('new purchases and renewals are integer-hour only', () => {
   assert.match(gpuApi, /purchase_hour_options\?: number\[\]/)
   assert.match(productPage, /DEFAULT_PURCHASE_HOURS = \[1, 6, 12, 24, 72, 168, 720\]/)
   assert.match(productPage, /v-model\.number="hours"/)
-  assert.match(productPage, /createOrder\(pid\.value, hours\.value, purchaseType, quantity\.value/)
+  assert.match(productPage, /createOrder\([\s\S]*?pid\.value,[\s\S]*?hours\.value,[\s\S]*?purchaseType,[\s\S]*?quantity\.value,[\s\S]*?ensureRequestId\(\),[\s\S]*?unitPriceCardHours\.value/)
   assert.doesNotMatch(productPage, /purchaseCycles|cycleLabel/)
   assert.match(orderApi, /export type PurchaseType = 'usage'/)
-  assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id \}/)
+  assert.match(orderApi, /expected_unit_price_card_hours\?: number/)
+  assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours \}/)
   assert.match(orderApi, /renewOrder\(id: number, hours: number, client_request_id: string\)/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   const renewBlock = orderApi.match(/export function renewOrder[\s\S]*?\n\}/)?.[0] || ''
@@ -78,8 +82,8 @@ test('new purchases and renewals are integer-hour only', () => {
 test('hourly checkout exposes usage only while retaining historical holding display elsewhere', () => {
   assert.match(productPage, /const purchaseType = 'usage' as const/)
   assert.match(productPage, /t\('usageMode'\)/)
-  assert.match(productPage, /createOrder\(pid\.value, hours\.value, purchaseType, quantity\.value/)
-  assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\}`/)
+  assert.match(productPage, /createOrder\([\s\S]*?pid\.value,[\s\S]*?hours\.value,[\s\S]*?purchaseType,[\s\S]*?quantity\.value,[\s\S]*?ensureRequestId\(\),[\s\S]*?unitPriceCardHours\.value/)
+  assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\}:\$\{unitPriceCardHours\.value\}`/)
   assert.doesNotMatch(productPage, /t\('holdingMode'\)|confirmHoldingPurchase|buyHolding|purchaseType\s*=\s*'holding'/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   assert.match(createBlock, /hours: number/)
@@ -155,8 +159,8 @@ test('new order views prefer hour duration while retaining legacy day fallback',
   assert.match(orderDetail, /pendingRenewRequestId/)
   assert.match(orderDetail, /pendingRenewKey/)
   assert.match(orderDetail, /clearRenewRequest\(\)[\s\S]*?续费成功/)
-  assert.match(orderDetail, /order\.value\.purchase_type === 'usage'/)
-  assert.match(orderDetail, /\['running', 'completed'\]\.includes\(order\.value\.status\)/)
+  assert.match(orderApi, /can_renew\?: boolean/)
+  assert.match(orderDetail, /order\.value\?\.can_renew === true/)
   assert.match(orderDetail, /v-else-if="canRenew"/)
   assert.doesNotMatch(orderDetail, /order\.status === 'running' && isHourlyOrder/)
   assert.match(orderDetail, /order\.value\.can_cancel/)

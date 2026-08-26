@@ -29,19 +29,17 @@ import { errorMessage, formatDate, formatMoney, orderStatusLabel } from "@/lib/c
 
 const filters: Array<[OrderStatus | "", string]> = [
   ["", "全部"],
-  ["pending_confirmation", "待确认"],
-  ["confirmed", "已确认"],
-  ["delivering", "交付中"],
-  ["delivered", "待验收"],
+  ["paid", "待交付"],
+  ["delivering", "待验收"],
   ["disputed", "争议处理中"],
   ["completed", "已完成"],
-  ["cancelled", "已取消"],
+  ["canceled", "已取消"],
 ];
 
 const eventLabels: Record<string, string> = {
   created_from_accepted_quote: "买家接受报价并创建订单",
   direct_order_created: "买家从商家商品创建订单",
-  ssh_access_authorized: "Agent 已下发买家 SSH 公钥",
+  ssh_access_authorized: "系统已下发买家 SSH 公钥",
   ssh_access_queued: "SSH 公钥授权命令已进入队列",
   lease_renewed: "买家已延长服务器租期",
   buyer_confirmed: "买家确认订单",
@@ -140,6 +138,21 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (order.payment_status !== "paid") return { title: "等待统一钱包处理", body: "余额与冻结金额以统一账本为准。" };
     return { title: "统一钱包已冻结订单金额", body: "商家交付并经买家确认后，订单状态会写回同一数据库。" };
   }
+  function sellerCopy(order: Order) {
+    return order.seller_name || order.supplier.company_name || order.supplier.display_name;
+  }
+  function fulfillmentCopy(order: Order) {
+    return order.fulfillment_mode === "platform_manual" ? "平台人工交付 SSH" : "商家人工交付 SSH";
+  }
+  function fulfillmentStatusCopy(order: Order) {
+    return ({
+      pending_ssh: "等待卖方提交 SSH",
+      awaiting_confirmation: "SSH 已提交，等待买家验收",
+      active: "买家已验收，服务生效",
+      under_review: "争议处理中",
+      canceled: "订单已取消",
+    } as Record<string, string>)[order.fulfillment_status || ""] || "以订单状态为准";
+  }
   function durationCopy(order: Order) {
     if (order.purchase_hours) return `${order.purchase_hours} 小时`;
     if (order.cycle_days) return `${order.cycle_days} 天（历史订单）`;
@@ -153,21 +166,22 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   }
 
   return <section className="workspace-page commerce-workspace order-workspace">
-    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / ORDERS" : "BUYER / ORDERS"}</p><h1>{supplierView ? "交付订单" : "我的订单"}</h1><span>{supplierView ? "已付款后填写 SSH 信息完成交付。" : "查看订单、交付信息和资产状态。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>统一订单账本<br />SSH 私钥不进入平台</span></div></div>
+    <div className="workspace-page__head commerce-head"><div><p>{supplierView ? "SUPPLIER / ORDERS" : "BUYER / ORDERS"}</p><h1>{supplierView ? "接单与交付" : "我的订单"}</h1><span>{supplierView ? "已付款订单在这里提交有效 SSH，买家验收后完成结算。" : "查看卖方、履约方式、SSH 交付、验收与争议状态。"}</span></div><div className="order-policy"><ShieldCheck size={17} /><span>统一订单账本<br />SSH 私钥不进入平台</span></div></div>
     <div className="commerce-tabs">{filters.map(([value, label]) => <button className={status === value ? "active" : ""} key={value || "all"} onClick={() => { setStatus(value); void load(value); }}>{label}</button>)}</div>
     {error && <div className="commerce-error">{error}</div>}{success && <div className="commerce-success">{success}</div>}
     <div className="order-console">
       <aside><header><span>订单队列</span><strong>{rows.length}</strong></header>{loading ? <div className="commerce-loading">正在读取订单…</div> : rows.length === 0 ? <div className="commerce-empty"><Receipt size={25} /><strong>暂无订单</strong><span>买家租用服务器后，订单会显示在这里。</span></div> : <div className="order-queue">{rows.map((order) => <button className={selectedId === order.id ? "active" : ""} key={order.id} onClick={() => void loadDetail(order.id)}><span><small>{order.order_no}</small><strong>{orderTitle(order)}</strong><em>{supplierView ? order.buyer.display_name : order.supplier.company_name || order.supplier.display_name}</em></span><b className={`status-chip status-chip--${order.status}`}>{orderStatusLabel[order.status]}</b></button>)}</div>}</aside>
       <div className="order-dossier">{detail ? <>
         <header><div><p>{detail.order_no} · V{detail.version}</p><h2>{orderTitle(detail)}</h2><span>{orderReference(detail)} · {orderSpec(detail)} × {detail.quantity}</span></div><b className={`status-chip status-chip--${detail.status}`}>{orderStatusLabel[detail.status]}</b></header>
-        {detail.order_source === "direct" && <div className={`sandbox-order-banner sandbox-order-banner--${detail.payment_status}`}><ShieldCheck size={18}/><div><strong>服务器租赁订单 · {paymentCopy(detail).title}</strong><span>{paymentCopy(detail).body}</span></div></div>}
-        <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "商家"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
-        <section className="confirmation-grid"><div className={detail.buyer_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家确认</small><strong>{detail.buyer_confirmed_at ? formatDate(detail.buyer_confirmed_at) : "等待确认"}</strong></span></div><div className={detail.supplier_confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>商家确认</small><strong>{detail.supplier_confirmed_at ? formatDate(detail.supplier_confirmed_at) : "等待确认"}</strong></span></div></section>
+          {detail.order_source === "direct" && <div className={`sandbox-order-banner sandbox-order-banner--${detail.payment_status}`}><ShieldCheck size={18}/><div><strong>{detail.seller_type === "kai_self_operated" ? "KAI 自营订单" : "商家订单"} · {paymentCopy(detail).title}</strong><span>卖方：{sellerCopy(detail)} · {fulfillmentCopy(detail)}。{paymentCopy(detail).body}</span></div></div>}
+        <div className="order-facts"><div><small>{detail.order_source === "direct" ? "订单总额" : "单位报价"}</small><strong>{formatMoney(detail.amount, detail.currency, detail.price_unit)}</strong></div><div><small>{supplierView ? "买家" : "卖方"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
+        <section className="confirmation-grid"><div className={detail.delivered_at ? "done" : ""}><Package size={20} /><span><small>卖方提交交付</small><strong>{detail.delivered_at ? formatDate(detail.delivered_at) : "等待有效 SSH"}</strong></span></div><div className={detail.confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家验收</small><strong>{detail.confirmed_at ? formatDate(detail.confirmed_at) : "等待验收"}</strong></span></div></section>
+        <div className="order-fulfillment-status"><Package size={18}/><span><small>当前履约状态</small><strong>{fulfillmentStatusCopy(detail)}</strong></span><em>{fulfillmentCopy(detail)}</em></div>
         {detail.delivery_note && <div className="delivery-note"><Package size={18} /><div><strong>最近交付说明</strong><p>{detail.delivery_note}</p></div></div>}
         {deadlineCopy(detail) && <div className="delivery-note"><ClockCountdown size={18} /><div><strong>{deadlineCopy(detail)?.title}</strong><p>{formatDate(deadlineCopy(detail)?.value)}</p></div></div>}
         {detail.status === "disputed" && detail.dispute_reason && <div className="delivery-note"><ShieldWarning size={18} /><div><strong>争议说明</strong><p>{detail.dispute_reason}</p></div></div>}
         {detail.available_actions.includes("renew") && <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><div>{renewalHours.map((hours) => <button type="button" className={renewalHour === hours ? "active" : ""} key={hours} onClick={() => setRenewalHour(hours)}>{hours} 小时</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用统一钱包续费 ${renewalHour} 小时？`)) void act("renew", () => renewOrder(detail.id, renewalHour), `已续费 ${renewalHour} 小时`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>}
-        <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events?.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>
+        {detail.events && detail.events.length > 0 && <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>}
         <footer className="order-actions">
           {detail.available_actions.includes("confirm") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("confirm", () => confirmOrder(scope, detail.id, detail.version, "确认资源与交付计划"), "订单已确认") }><CheckCircle size={16} />{busy === "confirm" ? "确认中…" : "确认接单"}</button>}
           {detail.available_actions.includes("start_delivery") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => deliveryNote("填写交付进度说明（可选）", (note) => startOrderDelivery(detail.id, detail.version, note), "start", "订单已进入交付中") }><RocketLaunch size={16} />开始交付</button>}

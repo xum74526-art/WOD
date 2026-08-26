@@ -238,18 +238,47 @@ async function proxyCheckout(request: NextRequest, provider: "mapay" | "qixiang"
 
 function product(value: unknown) {
   const item = object(value);
+  const marketSource = text(item.market_source, "kai");
+  const sellerType = text(item.seller_type, marketSource === "kai" ? "kai_self_operated" : "merchant") === "merchant"
+    ? "merchant"
+    : "kai_self_operated";
+  const supplierId = number(item.supplier_id);
+  const sellerName = text(
+    item.seller_name,
+    text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI 自营" : "第三方商家"),
+  );
+  const fulfillmentMode = text(
+    item.fulfillment_mode,
+    sellerType === "kai_self_operated" ? "platform_manual" : "merchant_manual",
+  ) === "merchant_manual" ? "merchant_manual" : "platform_manual";
   const memory = text(item.memory);
   const memoryGb = number(memory.match(/\d+(?:\.\d+)?/)?.[0]);
   const price = number(item.price_cny_per_gpu_hour, number(item.price));
   const walletPrice = number(item.price_card_hours_per_gpu_hour, price);
   const stock = number(item.stock);
-  const purchaseUnit = text(item.purchase_unit, text(item.market_source) === "kai" ? "hour" : "day");
+  // KAI and merchant listings share the same hourly purchase contract.  Older
+  // API deployments may omit this newly-added field, so the compatibility
+  // fallback must not silently turn merchant products back into day products.
+  const purchaseUnit = text(item.purchase_unit, "hour");
   const hourOptions = Array.isArray(item.purchase_hour_options)
     ? item.purchase_hour_options.map((entry) => number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0)
     : [];
   return {
     id: number(item.id),
-    supplier_id: number(item.supplier_id),
+    supplier_id: supplierId || undefined,
+    supplier_name: text(item.supplier_name) || null,
+    supplier_rating: item.supplier_rating == null ? null : number(item.supplier_rating),
+    supplier_order_count: number(item.supplier_order_count),
+    seller_type: sellerType,
+    seller_name: sellerName,
+    fulfillment_mode: fulfillmentMode,
+    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "KAI 自营" : "商家入驻资料已审核"),
+    assurance_description: text(
+      item.assurance_description,
+      sellerType === "kai_self_operated"
+        ? "价格与商品由 KAI 发布，平台安排人工交付。"
+        : "商家入驻资料已审核；资源参数与库存由商家自行发布并负责交付。",
+    ),
     name: text(item.name),
     gpu_model: text(item.gpu_model),
     memory,
@@ -264,7 +293,7 @@ function product(value: unknown) {
     price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
     total_quantity: number(item.reported_stock, stock),
     available_quantity: stock,
-    source_name: text(item.supplier_name, text(item.market_source) === "kai" ? "KAI Pricing" : "北斗 kai"),
+    source_name: text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),
     source_observed_at: text(item.price_updated_at) || null,
     server_online: Boolean(item.purchasable),
     purchasable: Boolean(item.purchasable),
@@ -274,7 +303,7 @@ function product(value: unknown) {
     purchase_hour_options: hourOptions,
     billing_unit: text(item.billing_unit, "GPU_HOUR"),
     image_url: text(item.image_url) || null,
-    market_source: text(item.market_source, "kai"),
+    market_source: marketSource,
   };
 }
 
@@ -284,9 +313,10 @@ function pageEnvelope(value: unknown) {
   const current = number(page.page, 1);
   const size = number(page.page_size, Math.max(items.length, 1));
   const total = number(page.total, items.length);
+  const totalPages = number(page.total_pages, Math.max(1, Math.ceil(total / size)));
   return {
     data: items,
-    meta: { page: current, page_size: size, total, total_pages: Math.max(1, Math.ceil(total / size)) },
+    meta: { page: current, page_size: size, total, total_pages: totalPages },
   };
 }
 
@@ -324,33 +354,36 @@ function notice(value: unknown) {
   };
 }
 
-function mapOrderStatus(status: string) {
-  return ({ paid: "confirmed", delivering: "delivered", running: "completed", canceled: "cancelled" } as Record<string, string>)[status] || status;
-}
-
 function order(value: unknown, supplierView = false) {
   const item = object(value);
+  const productSnapshot = object(item.product_snapshot);
   const cycleDays = item.cycle_days == null ? null : number(item.cycle_days);
   const purchaseHours = item.purchase_hours == null
     ? (item.purchase_unit === "hour" && item.duration_hours != null ? number(item.duration_hours) : null)
     : number(item.purchase_hours);
-  const mappedStatus = mapOrderStatus(text(item.status));
+  const canonicalStatus = text(item.status);
   const supplierName = text(item.supplier_name, "北斗 kai 商家");
+  const sellerType = text(item.seller_type, text(item.market_source) === "kai" ? "kai_self_operated" : "merchant") === "kai_self_operated"
+    ? "kai_self_operated"
+    : "merchant";
+  const sellerName = text(item.seller_name, supplierName);
+  const fulfillmentMode = text(item.fulfillment_mode, sellerType === "kai_self_operated" ? "platform_manual" : "merchant_manual") === "platform_manual"
+    ? "platform_manual"
+    : "merchant_manual";
   const available: string[] = [];
   // Buyer mutations are advertised by FastAPI after ownership and state
   // checks. The BFF must not recreate a second order state machine.
   if (!supplierView && Boolean(item.can_confirm)) available.push("complete");
   if (!supplierView && Boolean(item.can_cancel)) available.push("cancel");
   if (!supplierView && Boolean(item.can_dispute)) available.push("dispute");
-  if (!supplierView && purchaseHours != null && ["completed", "running"].includes(text(item.status)) && text(item.purchase_type, "usage") === "usage") available.push("renew");
-  // Supplier delivery remains a compatibility action until the canonical API
-  // publishes a caller-aware supplier action list. FastAPI still owns the
-  // authorization and transition check for this endpoint.
-  if (supplierView && item.status === "paid") available.push("mark_delivered");
+  if (!supplierView && Boolean(item.can_renew)) available.push("renew");
+  // FastAPI owns delivery authorization. The paid-state branch only protects
+  // older deployed API versions that do not expose can_deliver yet.
+  if (supplierView && (Boolean(item.can_deliver) || (item.can_deliver == null && item.status === "paid"))) available.push("mark_delivered");
   return {
     id: number(item.id),
     order_no: text(item.order_no),
-    status: mappedStatus,
+    status: canonicalStatus,
     buyer_id: number(item.user_id),
     supplier_id: number(item.supplier_id),
     buy_request_id: null,
@@ -376,22 +409,25 @@ function order(value: unknown, supplierView = false) {
       payment_mode: "mobile_wallet",
       product: {
         resource_no: `WOD-P-${number(item.product_id)}`,
-        name: text(item.product_name, "算力资源"),
-        gpu_model: text(item.gpu_model),
-        region: "",
-        unit_price: "",
+        name: text(productSnapshot.product_name, text(item.product_name, "算力资源")),
+        gpu_model: text(productSnapshot.gpu_model, text(item.gpu_model)),
+        region: text(productSnapshot.region_name, text(productSnapshot.region_code, text(productSnapshot.city))),
+        unit_price: text(productSnapshot.confirmed_unit_price_card_hours),
       },
     },
-    buyer_confirmed_at: text(item.confirmed_at) || (item.status === "completed" || item.status === "running" ? item.start_at : null),
-    supplier_confirmed_at: item.status === "delivering" || item.status === "completed" || item.status === "running" ? item.created_at : null,
+    buyer_confirmed_at: text(item.confirmed_at) || null,
+    supplier_confirmed_at: null,
     confirmed_at: text(item.confirmed_at) || null,
-    delivery_started_at: item.status === "delivering" ? item.created_at : null,
-    delivered_at: text(item.delivered_at) || (item.status === "delivering" ? text(item.created_at) || null : null),
-    completed_at: item.status === "completed" || item.status === "running" ? item.start_at : null,
-    cancelled_at: text(item.canceled_at) || (item.status === "canceled" ? text(item.created_at) || null : null),
+    delivery_started_at: null,
+    delivered_at: text(item.delivered_at) || null,
+    completed_at: text(item.confirmed_at) || null,
+    cancelled_at: text(item.canceled_at) || null,
     cancel_reason: null,
     delivery_note: text(item.ssh_info) || null,
     fulfillment_status: text(item.fulfillment_status) || null,
+    seller_type: sellerType,
+    seller_name: sellerName,
+    fulfillment_mode: fulfillmentMode,
     delivery_due_at: text(item.delivery_due_at) || null,
     confirmation_due_at: text(item.confirmation_due_at) || null,
     disputed_at: text(item.disputed_at) || null,
@@ -404,7 +440,7 @@ function order(value: unknown, supplierView = false) {
     updated_at: text(item.created_at),
     version: 1,
     buyer: { display_name: text(item.buyer_name, "买家") },
-    supplier: { display_name: supplierName, company_name: supplierName },
+    supplier: { display_name: sellerName, company_name: sellerName },
     available_actions: available,
     events: [],
   };
@@ -659,15 +695,19 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   }
   if (path === "public/products" && request.method === "GET") {
     const query = new URLSearchParams(request.nextUrl.searchParams);
-    query.set("page", "1");
-    query.set("page_size", "100");
-    query.set("market_source", "kai");
-    query.set("representative", "true");
+    const marketSource = query.get("market_source");
+    const requestedPage = Math.max(1, Math.trunc(number(query.get("page") ?? undefined, 1)));
+    const requestedPageSize = Math.min(100, Math.max(1, Math.trunc(number(query.get("page_size") ?? undefined, 24))));
+    query.set("page", String(requestedPage));
+    query.set("page_size", String(requestedPageSize));
+    if (marketSource !== "kai" && marketSource !== "wod") query.delete("market_source");
+    if (marketSource === "kai") query.set("representative", "true");
+    else query.delete("representative");
     const result = await upstream(request, "/api/products", { query, auth: false, revalidate: 15 });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
     const products = page.data.map((item) => product(item));
-    return publicApiSuccess(products, { ...page.meta, count: products.length, total: products.length, total_pages: 1, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
+    return publicApiSuccess(products, { ...page.meta, count: products.length, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);
   if (productMatch && request.method === "GET") {
@@ -686,6 +726,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
         quantity: number(body.quantity, 1),
         hours: number(body.hours),
         purchase_type: text(body.purchase_type, "usage"),
+        expected_unit_price_card_hours: number(body.expected_unit_price_card_hours),
         client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64) || undefined,
       },
     });
@@ -699,7 +740,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
       const query = new URLSearchParams(request.nextUrl.searchParams);
       const status = query.get("status");
       query.delete("status");
-      if (status) query.set("status_filter", ({ confirmed: "paid", delivered: "delivering", cancelled: "canceled" } as Record<string, string>)[status] || status);
+      if (status) query.set("status_filter", status);
       const result = await upstream(request, "/api/orders", { query });
       if (!result.ok) return upstreamFailure(result);
       const items = Array.isArray(result.body.data) ? result.body.data : [];
@@ -736,7 +777,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
       const query = new URLSearchParams(request.nextUrl.searchParams);
       const status = query.get("status");
       query.delete("status");
-      if (status) query.set("status_filter", ({ confirmed: "paid", delivered: "delivering", cancelled: "canceled" } as Record<string, string>)[status] || status);
+      if (status) query.set("status_filter", status);
       return upstream(request, "/api/supplier/orders", { query });
     };
     if (!id && request.method === "GET") {

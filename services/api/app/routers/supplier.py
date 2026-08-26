@@ -16,6 +16,7 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.supplier import Supplier
 from app.models.user import User
+from app.models.verification import Verification
 from app.models.wallet import Wallet
 from app.schemas.supplier import (
     SupplierDeviceCreateIn,
@@ -24,7 +25,6 @@ from app.schemas.supplier import (
     SupplierProfileUpdateIn,
     SupplierRegisterIn,
 )
-from app.services.purchase_cycles import PURCHASE_CYCLE_DAYS
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/supplier", tags=["supplier"])
@@ -35,7 +35,19 @@ class SupplierReviewIn(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
-def _admin_application_out(supplier: Supplier, applicant: User) -> dict:
+def _identity_verified(user_id: int, db: Session) -> bool:
+    return db.query(Verification.id).filter(
+        Verification.user_id == user_id,
+        Verification.status == "verified",
+    ).first() is not None
+
+
+def _admin_application_out(
+    supplier: Supplier,
+    applicant: User,
+    *,
+    identity_verified: bool,
+) -> dict:
     return {
         "id": supplier.id,
         "company_name": supplier.company_name,
@@ -44,6 +56,7 @@ def _admin_application_out(supplier: Supplier, applicant: User) -> dict:
         "region": supplier.region,
         "description": supplier.desc,
         "status": supplier.status,
+        "identity_verified": identity_verified,
         # The mobile database predates review-event columns. Keep the Web
         # contract explicit without inventing reviewer or audit data.
         "review_note": None,
@@ -186,13 +199,15 @@ def add_device(data: SupplierDeviceCreateIn, user: User = Depends(get_current_us
     p = Product(
         name=data.name, gpu_model=data.gpu_model,
         memory=data.memory, cuda=data.cuda,
-        price=Decimal(str(data.price)), cycle=list(PURCHASE_CYCLE_DAYS),
+        price=Decimal(str(data.price)), cycle=[],
         desc=data.desc, image_url=data.image_url,
         region_code=data.region_code,
         region_name=data.region_name,
         country_code="CN", city=data.city,
         stock=data.stock, reliability=98.0,
         supplier_id=s.id, status="on",
+        market_source="wod",
+        stock_semantics="supplier_reported_inventory",
     )
     db.add(p)
     db.commit()
@@ -383,7 +398,7 @@ def supplier_stats(user: User = Depends(get_current_user), db: Session = Depends
 
 @router.get("/orders")
 def supplier_orders(status_filter: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.routers.order import _order_out, is_platform_fulfiller
+    from app.routers.order import _order_out, can_deliver_order, is_platform_fulfiller
 
     platform_operator = is_platform_fulfiller(user)
     supplier = db.query(Supplier).filter(
@@ -399,7 +414,13 @@ def supplier_orders(status_filter: str | None = None, user: User = Depends(get_c
     ]
     if platform_operator:
         product_ids.extend(
-            pid for (pid,) in db.query(Product.id).filter(Product.source_price.isnot(None)).all()
+            # Platform fulfilment is an explicit KAI self-operated boundary.
+            # ``source_price`` is shared historical quote metadata and would
+            # also admit retired external sources while potentially omitting a
+            # valid KAI row with incomplete legacy metadata.
+            pid for (pid,) in db.query(Product.id).filter(
+                Product.market_source == "kai",
+            ).all()
         )
     product_ids = list(set(product_ids))
     if not product_ids:
@@ -407,14 +428,16 @@ def supplier_orders(status_filter: str | None = None, user: User = Depends(get_c
     q = db.query(Order).filter(Order.product_id.in_(product_ids))
     if status_filter:
         q = q.filter(Order.status == status_filter)
-    items = q.order_by(Order.created_at.desc()).limit(50).all()
+    items = q.order_by(Order.created_at.desc()).all()
     result = []
     for o in items:
         out = _order_out(o, db)
+        out["can_deliver"] = can_deliver_order(o)
         # 加买家信息
         buyer = db.query(User).filter(User.id == o.user_id).first()
         out["buyer_name"] = buyer.username if buyer else "匿名"
-        out["buyer_phone"] = buyer.phone if buyer else "-"
+        phone = str(buyer.phone or "") if buyer else ""
+        out["buyer_phone"] = f"{phone[:3]}****{phone[-4:]}" if len(phone) >= 7 else "-"
         result.append(out)
     return success(result)
 
@@ -471,7 +494,14 @@ def admin_list_applications(
     total = query.count()
     rows = query.order_by(Supplier.created_at.desc(), Supplier.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return success({
-        "items": [_admin_application_out(supplier, applicant) for supplier, applicant in rows],
+        "items": [
+            _admin_application_out(
+                supplier,
+                applicant,
+                identity_verified=_identity_verified(applicant.id, db),
+            )
+            for supplier, applicant in rows
+        ],
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -503,6 +533,9 @@ def admin_review_application(
         raise BizError("管理员不能审核自己的商家申请", status_code=403)
     if supplier.status != "pending":
         raise BizError("该商家入驻申请已完成审核", status_code=409)
+    identity_verified = _identity_verified(applicant.id, db)
+    if action == "approve" and not identity_verified:
+        raise BizError("申请人尚未完成实名认证，不能通过商家审核", status_code=409)
     supplier.status = "approved" if action == "approve" else "rejected"
     applicant.supplier_status = supplier.status
     if action == "reject" and applicant.role == "supplier":
@@ -510,7 +543,11 @@ def admin_review_application(
     db.commit()
     db.refresh(supplier)
     db.refresh(applicant)
-    return success(_admin_application_out(supplier, applicant))
+    return success(_admin_application_out(
+        supplier,
+        applicant,
+        identity_verified=identity_verified,
+    ))
 
 
 @router.put("/profile")

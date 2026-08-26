@@ -1,6 +1,5 @@
-import { ProductShell } from "@/components/product-shell";
-import { SupplierServerWorkspace } from "@/components/supplier-server-workspace";
+import { redirect } from "next/navigation";
 
 export default function SupplierServersPage() {
-  return <ProductShell variant="supplier"><SupplierServerWorkspace /></ProductShell>;
+  redirect("/supplier/resources");
 }

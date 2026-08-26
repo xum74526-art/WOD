@@ -5,7 +5,7 @@ const supplierNames: Record<string, string> = {
   "成都西部算力": "Chengdu West Compute",
   "上海云算力": "Shanghai Cloud Compute",
   "西安智链科技": "Xi'an Intelligent Chain Technology",
-  "已审核商家": "Verified Supplier",
+  "第三方商家": "Third-party Merchant",
 };
 
 const regionNames: Record<string, string> = {
@@ -45,7 +45,7 @@ const regionNames: Record<string, string> = {
 };
 
 export function localizeSupplierName(value: string | null | undefined, locale: KaiLocale) {
-  const source = value?.trim() || "已审核商家";
+  const source = value?.trim() || "第三方商家";
   return locale === "en" ? supplierNames[source] ?? source : source;
 }
 

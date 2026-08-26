@@ -171,8 +171,8 @@ class Settings(BaseSettings):
     MARKET_CANDLE_HISTORY_DAYS: int = 100
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
     # Authenticated users allowed to fulfil KAI-backed manually delivered orders.
-    # Use comma-separated numeric user IDs.  An empty value means that external
-    # orders can be purchased and cancelled, but only remain pending delivery.
+    # Use comma-separated numeric user IDs.  KAI purchases fail closed when no
+    # configured ID resolves to an existing fulfilment operator account.
     PLATFORM_FULFILLMENT_USER_IDS: str = ""
     # Support AI adapter. Empty provider/key keeps the built-in FAQ and durable
     # ticket service fully usable in truthful "self_service" mode.

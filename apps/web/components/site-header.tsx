@@ -183,6 +183,7 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
               </>}
               {user.role === "supplier" && <>
                 <Link href="/supplier"><Storefront size={15}/>{t("nav.supplierOverview", "商家总览")}</Link>
+                <Link href="/supplier/resources"><HardDrives size={15}/>{t("nav.supplierProducts", "算力商品")}</Link>
                 <Link href="/supplier/orders"><Receipt size={15}/>{t("nav.deliveryOrders", "交付订单")}</Link>
                 <Link href="/account"><House size={15}/>{t("nav.personalAccount", "个人账户")}</Link>
               </>}
@@ -209,6 +210,8 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
           <div className="site-mobile-settings"><UiSettings/></div>
           {user ? <>
             <Link href={consoleHref(user)}>{consoleLabel}</Link>
+            {user.role === "supplier" && <Link href="/supplier/resources">{t("nav.supplierProducts", "算力商品")}</Link>}
+            {user.role === "supplier" && <Link href="/supplier/orders">{t("nav.deliveryOrders", "交付订单")}</Link>}
             {user.role !== "admin" && <Link href="/account/settings">{t("nav.accountSecurity", "账户与安全")}</Link>}
             <button type="button" onClick={() => void logout()}><SignOut size={16}/>{t("nav.logout", "退出登录")}</button>
           </> : <><Link href="/register">{t("nav.register", "注册")}</Link><Link className="site-mobile-primary" href="/login">{t("nav.login", "登录")}</Link></>}

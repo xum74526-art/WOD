@@ -12,7 +12,7 @@ function walk(directory: URL): URL[] {
   })
 }
 
-test('mobile limits writes to approved-seller resource management', () => {
+test('mobile writes stay inside the approved merchant transaction loop', () => {
   const offenders: string[] = []
   for (const file of walk(srcRoot)) {
     if (!['.ts', '.vue', '.json'].includes(extname(file.pathname))) continue
@@ -20,10 +20,8 @@ test('mobile limits writes to approved-seller resource management', () => {
     const source = readFileSync(file, 'utf8')
     const checks: Array<[RegExp, string]> = [
       [/\/finance\//, 'finance administration route'],
-      [/\/pages\/supplier\/register/, 'merchant registration page'],
-      [/\/supplier\/(?:register|profile)[`'"]?[\s\S]{0,100}?method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/, 'merchant profile write'],
+      [/\/supplier\/profile[`'"]?[\s\S]{0,100}?method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/, 'merchant profile write'],
       [/\/supplier\/devices(?:\/\$\{[^}]+\})?[`'"]?[\s\S]{0,100}?method:\s*['"](?:PATCH|DELETE)['"]/, 'unsupported merchant resource write'],
-      [/\/orders\/\$\{[^}]+\}\/deliver/, 'merchant delivery write'],
       [/\/buy-requests\/\$\{[^}]+\}\/quotes[`'"][\s\S]{0,100}?method:\s*['"]POST['"]/, 'merchant quote write'],
     ]
     for (const [pattern, label] of checks) {
@@ -31,4 +29,10 @@ test('mobile limits writes to approved-seller resource management', () => {
     }
   }
   assert.deepEqual(offenders, [])
+
+  const supplierApi = readFileSync(new URL('api/supplier.ts', srcRoot), 'utf8')
+  const supplierOrders = readFileSync(new URL('pages/supplier/orders.vue', srcRoot), 'utf8')
+  assert.match(supplierApi, /url: '\/supplier\/register', method: 'POST'/)
+  assert.match(supplierApi, /url: `\/orders\/\$\{id\}\/deliver`/)
+  assert.match(supplierOrders, /order\.can_deliver \?\? order\.status === 'paid'/)
 })

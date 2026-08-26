@@ -4,7 +4,7 @@ import { hourlyOrderBody, webRequestId } from "@/lib/web-business-contract";
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
 export type QuoteStatus = "draft" | "submitted" | "shortlisted" | "accepted" | "rejected" | "withdrawn" | "expired";
-export type OrderStatus = "pending_confirmation" | "confirmed" | "delivering" | "delivered" | "disputed" | "completed" | "cancelled";
+export type OrderStatus = "paid" | "delivering" | "disputed" | "completed" | "running" | "done" | "canceled";
 export type ResourceStatus = "draft" | "pending_review" | "approved" | "published" | "rejected" | "archived";
 export type ReservationStatus = "reserved" | "allocated" | "released";
 
@@ -70,6 +70,7 @@ export type Quote = {
 
 export type SupplierApplication = {
   id: number;
+  identity_verified: boolean;
   company_name: string;
   contact_name: string;
   contact_phone: string;
@@ -138,6 +139,9 @@ export type Order = {
   cancel_reason: string | null;
   delivery_note: string | null;
   fulfillment_status?: string | null;
+  seller_type?: "kai_self_operated" | "merchant";
+  seller_name?: string;
+  fulfillment_mode?: "platform_manual" | "merchant_manual";
   delivery_due_at: string | null;
   confirmation_due_at: string | null;
   disputed_at: string | null;
@@ -158,6 +162,14 @@ export type Order = {
 export type PublicProduct = {
   id: number;
   supplier_id?: number;
+  supplier_name?: string | null;
+  supplier_rating?: number | null;
+  supplier_order_count?: number;
+  seller_type: "kai_self_operated" | "merchant";
+  seller_name: string;
+  fulfillment_mode: "platform_manual" | "merchant_manual";
+  assurance_label: string;
+  assurance_description: string;
   name: string;
   gpu_model: string;
   memory: string;
@@ -380,7 +392,7 @@ export function renewOrder(id: number, hours: number) {
     body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
   });
 }
-export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage" | "holding" }) {
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }) {
   const clientRequestId = webRequestId("order", crypto.randomUUID());
   return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
     method: "POST",
@@ -440,7 +452,12 @@ export function approveAdminWithdrawal(id: number, version: number, note?: strin
 export function rejectAdminWithdrawal(id: number, version: number, note: string) { return apiRequest<SupplierWithdrawal>(`/api/v1/admin/withdrawals/${id}/reject`, { method: "POST", body: JSON.stringify({ version, note }) }); }
 export function completeAdminWithdrawal(id: number, version: number, paymentReference: string, note?: string) { return apiRequest<SupplierWithdrawal>(`/api/v1/admin/withdrawals/${id}/complete`, { method: "POST", body: JSON.stringify({ version, payment_reference: paymentReference, note: note || null }) }); }
 
-export function listPublicProducts() { return publicApiEnvelopeRequest<PublicProduct[], { count: number; real_data_only: boolean; server_rental_available: boolean; payment_mode: "local_placeholder" | "pingxx" }>("/api/v1/public/products", 15_000); }
+export function listPublicProducts(marketSource?: "kai" | "wod", page = 1, pageSize = 24) {
+  return publicApiEnvelopeRequest<PublicProduct[], PageMeta & { count: number; real_data_only: boolean; server_rental_available: boolean; payment_mode: "local_placeholder" | "pingxx" | "mobile_wallet" }>(
+    `/api/v1/public/products${queryString({ market_source: marketSource, page, page_size: pageSize })}`,
+    15_000,
+  );
+}
 export function getPublicProduct(id: number) { return apiEnvelopeRequest<PublicProduct, { real_data_only: boolean; server_rental_available: boolean; payment_mode: "local_placeholder" | "pingxx" }>(`/api/v1/public/products/${id}`); }
 
 export function listSupplierResources(status?: ResourceStatus) { return apiEnvelopeRequest<Resource[], PageMeta>(`/api/v1/supplier/resources${queryString({ status })}`); }
@@ -455,7 +472,7 @@ export function releaseInventoryReservation(id: number, version: number, reason:
 export function listAdminResources(filters: { status?: ResourceStatus; search?: string } = {}) { return apiEnvelopeRequest<Resource[], PageMeta>(`/api/v1/admin/resources${queryString(filters)}`); }
 export function reviewResource(id: number, action: "approve" | "reject", version: number, note: string) { return apiRequest<Resource>(`/api/v1/admin/resources/${id}/${action}`, { method: "POST", body: JSON.stringify({ version, note: note || (action === "reject" ? "资源资料不完整" : null) }) }); }
 
-export function listSupplierApplications(filters: { status?: string; search?: string } = {}) { return apiEnvelopeRequest<SupplierApplication[], PageMeta>(`/api/v1/admin/supplier-applications${queryString(filters)}`); }
+export function listSupplierApplications(filters: { status?: string; search?: string; page?: number; page_size?: number } = {}) { return apiEnvelopeRequest<SupplierApplication[], PageMeta>(`/api/v1/admin/supplier-applications${queryString(filters)}`); }
 export function reviewSupplierApplication(id: number, action: "approve" | "reject", version: number, note: string) { return apiRequest<SupplierApplication>(`/api/v1/admin/supplier-applications/${id}/${action}`, { method: "POST", body: JSON.stringify({ version, note: note || (action === "reject" ? "资料不符合要求" : null) }) }); }
 
 export type { ApiEnvelope };
