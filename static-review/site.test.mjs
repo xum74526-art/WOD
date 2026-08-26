@@ -8,13 +8,16 @@ const script = read("./app.js");
 const styles = read("./styles.css");
 const showcaseStyles = read("./showcase.css");
 const manifest = JSON.parse(read("./review-manifest.json"));
+const vercelConfig = JSON.parse(read("./vercel.json"));
 
 test("package is explicitly marked for static review", () => {
   assert.equal(manifest.label, "静态审核");
   assert.equal(manifest.type, "static");
   assert.equal(manifest.backendRequired, false);
   assert.equal(manifest.externalNetworkAccess, false);
+  assert.equal(manifest.reviewUrl, "https://static-review.vercel.app");
   assert.match(html, /<meta name="review-mode" content="static-review" \/>/);
+  assert.equal(vercelConfig.headers[0].headers.find((header) => header.key === "X-Frame-Options")?.value, "DENY");
 });
 
 test("standalone entry uses only relative local assets", () => {

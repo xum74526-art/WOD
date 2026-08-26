@@ -7,5 +7,7 @@
   "externalNetworkAccess": false,
   "storage": "browser-local-only",
   "canonicalUrl": "https://wod.kai.com/info",
+  "reviewUrl": "https://static-review.vercel.app",
+  "deploymentProvider": "vercel",
   "preparedAt": "2026-08-26"
 }
