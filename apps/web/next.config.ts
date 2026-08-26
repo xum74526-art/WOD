@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {
+    const infoContentSecurityPolicy = {
+      key: "Content-Security-Policy",
+      value:
+        "default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'",
+    };
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "X-Frame-Options", value: "DENY" },
@@ -15,7 +20,11 @@ const nextConfig: NextConfig = {
         ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }]
         : []),
     ];
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/info", headers: [infoContentSecurityPolicy] },
+      { source: "/info/:path*", headers: [infoContentSecurityPolicy] },
+      { source: "/:path*", headers: securityHeaders },
+    ];
   },
   async redirects() {
     return [
@@ -24,6 +33,9 @@ const nextConfig: NextConfig = {
       { source: "/account/resource-review", destination: "/admin/resources", permanent: false },
       { source: "/account/moderation", destination: "/admin/moderation", permanent: false },
     ];
+  },
+  async rewrites() {
+    return [{ source: "/info", destination: "/info/index.html" }];
   },
 };
 
