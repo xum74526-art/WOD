@@ -1,0 +1,11 @@
+{
+  "name": "WOD 算力资源信息",
+  "label": "静态审核",
+  "entry": "index.html",
+  "type": "static",
+  "backendRequired": false,
+  "externalNetworkAccess": false,
+  "storage": "browser-local-only",
+  "canonicalUrl": "https://wod.kai.com/info",
+  "preparedAt": "2026-08-26"
+}

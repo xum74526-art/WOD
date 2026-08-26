@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-CN">
+  <!-- 静态审核专用页面：纯前端展示，不连接业务后端。 -->
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'" />
+    <meta name="robots" content="index, follow" />
+    <meta name="review-mode" content="static-review" />
+    <meta name="description" content="WOD 算力资源信息页，提供 GPU 资源信息、需求咨询、服务记录与合作申请说明。" />
+    <link rel="canonical" href="https://wod.kai.com/info" />
+    <title>WOD 算力资源信息</title>
+    <link rel="icon" href="./assets/kai-logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./showcase.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <button class="brand" type="button" data-nav="resources" aria-label="打开资源信息">
+          <img src="./assets/kai-logo.svg" alt="KAI" width="58" height="30" />
+          <span>WOD<span class="brand-sub">算力资源信息</span></span>
+        </button>
+        <div class="topbar-right">
+          <span class="service-state"><span class="live-dot" aria-hidden="true"></span>服务预览</span>
+          <button class="enterprise-badge" type="button" data-nav="supplier">企业服务</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="side-rail">
+        <span class="side-caption">服务导航</span>
+        <nav class="nav" aria-label="主要导航">
+          <button type="button" data-nav="resources" class="active" aria-current="page">资源信息</button>
+          <button type="button" data-nav="manage">服务记录</button>
+          <button type="button" data-nav="schedule">方案适配</button>
+          <button type="button" data-nav="quote">需求咨询</button>
+          <button type="button" data-nav="supplier">合作方申请</button>
+          <button type="button" data-nav="about">关于我们</button>
+        </nav>
+      </aside>
+
+      <main id="main-content" tabindex="-1">
+      <section class="view active" id="view-resources" aria-labelledby="resources-page-title">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">企业算力资源信息服务</span>
+            <h1 id="resources-page-title">按产品、地区和使用需求，<em>了解适合业务场景的算力方案。</em></h1>
+            <p>统一了解 GPU 计算资源、模型运行支持与设备资源服务，具体条件以正式沟通结果为准。</p>
+            <div class="hero-actions">
+              <button class="btn btn-primary" type="button" data-nav="quote">提交需求</button>
+              <button class="btn btn-outline" type="button" data-nav="supplier">合作方申请</button>
+            </div>
+          </div>
+
+          <aside class="hero-brief" aria-label="资源信息概览">
+            <h2>资源信息概览</h2>
+            <div class="brief-row"><span>GPU 资源目录</span><b>多种</b></div>
+            <div class="brief-row"><span>信息参考</span><b>KAI 数据参考</b></div>
+            <div class="brief-row"><span>服务周期</span><b>按使用需求</b></div>
+          </aside>
+        </div>
+
+        <div class="catalog-layout">
+          <aside class="catalog-sidebar" aria-labelledby="catalog-title">
+            <div class="catalog-heading">
+              <h2 id="catalog-title">资源信息</h2>
+              <p>按产品类型筛选</p>
+            </div>
+            <div class="filters" role="group" aria-label="筛选资源信息">
+              <button class="chip active" type="button" data-filter="all" aria-pressed="true">全部信息</button>
+              <button class="chip" type="button" data-filter="gpu" aria-pressed="false">GPU 计算资源</button>
+              <button class="chip" type="button" data-filter="ai" aria-pressed="false">模型运行支持</button>
+              <button class="chip" type="button" data-filter="rack" aria-pressed="false">设备资源服务</button>
+            </div>
+            <p class="catalog-note">规格与服务条件以正式沟通结果为准</p>
+          </aside>
+
+          <div class="catalog-results">
+            <div class="catalog-toolbar">
+              <strong>信息目录</strong>
+              <span id="resourceCount" aria-live="polite">当前展示 6 项</span>
+            </div>
+            <div class="grid" id="resourceGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-manage" aria-labelledby="manage-title" hidden>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">本地服务记录</span>
+            <h2 id="manage-title">服务记录</h2>
+            <p>查看本页模拟提交的需求记录，不读取真实账户信息。</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn btn-outline" type="button" id="clearOrders">清空记录</button>
+            <button class="btn btn-primary" type="button" data-nav="resources">查看资源</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>需求记录</h3>
+            <span id="orderCount">共 0 条本地记录</span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>记录编号</th><th>资源名称</th><th>数量</th><th>使用时长</th><th>状态</th><th>操作</th></tr>
+              </thead>
+              <tbody id="orderTableBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-panel" id="orderEmpty">
+            <strong>暂无本地需求记录</strong>
+            <span>从资源信息选择任一方案，即可模拟提交需求。</span>
+            <button class="btn btn-primary" type="button" data-nav="resources">查看资源信息</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-schedule" aria-labelledby="schedule-title" hidden>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">方案适配</span>
+            <h2 id="schedule-title">方案适配</h2>
+            <p>根据本地需求记录调整更适合当前任务的资源方案。</p>
+          </div>
+        </div>
+
+        <form class="form-card" id="scheduleForm" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="scheduleCurrent">当前资源</label>
+              <select id="scheduleCurrent" name="current" required></select>
+              <p class="field-error" data-error-for="scheduleCurrent"></p>
+            </div>
+            <div class="field">
+              <label for="scheduleTarget">目标资源</label>
+              <select id="scheduleTarget" name="target" required></select>
+              <p class="field-error" data-error-for="scheduleTarget"></p>
+            </div>
+            <div class="field">
+              <label for="scheduleHours">需求数量（GPU时）</label>
+              <input id="scheduleHours" name="hours" type="number" value="24" min="1" required />
+              <p class="field-error" data-error-for="scheduleHours"></p>
+            </div>
+          </div>
+          <p class="form-note">提交后仅生成本地适配反馈，不会修改实际服务记录。</p>
+          <button class="btn btn-primary form-submit" type="submit">提交适配需求</button>
+        </form>
+      </section>
+
+      <section class="view" id="view-quote" aria-labelledby="quote-title" hidden>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">需求登记</span>
+            <h2 id="quote-title">需求咨询</h2>
+            <p>选择资源、地区和使用时长，生成一条可查询的本地需求记录。</p>
+          </div>
+        </div>
+
+        <form class="form-card wide-form" id="quoteForm" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="quoteResource">资源信息</label>
+              <select id="quoteResource" name="resource" required></select>
+              <p class="field-error" data-error-for="quoteResource"></p>
+            </div>
+            <div class="field">
+              <label for="quoteRegion">使用地区</label>
+              <select id="quoteRegion" name="region" required>
+                <option value="华北">华北</option>
+                <option value="华东">华东</option>
+                <option value="华南">华南</option>
+                <option value="西南">西南</option>
+                <option value="海外">海外</option>
+              </select>
+              <p class="field-error" data-error-for="quoteRegion"></p>
+            </div>
+            <div class="field">
+              <label for="quoteQuantity">需求数量</label>
+              <input id="quoteQuantity" name="quantity" type="number" value="1" min="1" max="99" required />
+              <p class="field-error" data-error-for="quoteQuantity"></p>
+            </div>
+            <div class="field">
+              <label for="quoteHours">使用时长（小时）</label>
+              <input id="quoteHours" name="hours" type="number" value="24" min="1" required />
+              <p class="field-error" data-error-for="quoteHours"></p>
+            </div>
+            <div class="field">
+              <label for="quoteStart">开始日期</label>
+              <input id="quoteStart" name="start" type="date" required />
+              <p class="field-error" data-error-for="quoteStart"></p>
+            </div>
+            <div class="field">
+              <label for="quoteMode">使用方式</label>
+              <select id="quoteMode" name="mode" required>
+                <option value="使用">使用</option>
+                <option value="长期使用">长期使用</option>
+              </select>
+              <p class="field-error" data-error-for="quoteMode"></p>
+            </div>
+          </div>
+
+          <fieldset class="service-level">
+            <legend>服务方式</legend>
+            <div class="radio-row">
+              <label><input type="radio" name="delivery" value="标准服务" checked /><span><b>标准服务</b><small>按所选时长使用</small></span></label>
+              <label><input type="radio" name="delivery" value="人工确认" /><span><b>人工确认</b><small>确认后沟通服务信息</small></span></label>
+            </div>
+          </fieldset>
+
+          <p class="form-note">本页用于展示需求填写流程。提交后仅生成本地记录，可在服务记录中查看或取消。</p>
+          <button class="btn btn-primary form-submit" type="submit">提交需求</button>
+        </form>
+      </section>
+
+      <section class="view" id="view-supplier" aria-labelledby="supplier-title" hidden>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">合作申请</span>
+            <h2 id="supplier-title">合作方申请</h2>
+            <p>填写可提供的资源服务信息，模拟提交合作申请。</p>
+          </div>
+        </div>
+
+        <form class="form-card wide-form" id="supplierForm" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="supplierType">资源类型</label>
+              <select id="supplierType" name="type" required></select>
+              <p class="field-error" data-error-for="supplierType"></p>
+            </div>
+            <div class="field">
+              <label for="supplierHours">可服务时长（GPU时）</label>
+              <input id="supplierHours" name="hours" type="number" value="500" min="1" required />
+              <p class="field-error" data-error-for="supplierHours"></p>
+            </div>
+            <div class="field">
+              <label for="supplierStart">可用开始时间</label>
+              <input id="supplierStart" name="start" type="datetime-local" required />
+              <p class="field-error" data-error-for="supplierStart"></p>
+            </div>
+            <div class="field">
+              <label for="supplierEnd">可用结束时间</label>
+              <input id="supplierEnd" name="end" type="datetime-local" required />
+              <p class="field-error" data-error-for="supplierEnd"></p>
+            </div>
+            <div class="field">
+              <label for="supplierHosting">资源环境</label>
+              <select id="supplierHosting" name="hosting" required>
+                <option value="已登记资源">已登记资源</option>
+                <option value="合作数据中心">合作数据中心</option>
+                <option value="企业自有环境">企业自有环境</option>
+              </select>
+              <p class="field-error" data-error-for="supplierHosting"></p>
+            </div>
+            <div class="field">
+              <label for="supplierNetwork">网络条件</label>
+              <select id="supplierNetwork" name="network" required>
+                <option value="高速互联">高速互联</option>
+                <option value="标准网络">标准网络</option>
+                <option value="网络条件待确认">网络条件待确认</option>
+              </select>
+              <p class="field-error" data-error-for="supplierNetwork"></p>
+            </div>
+          </div>
+
+          <label class="consent-row" for="supplierConsent">
+            <input id="supplierConsent" name="consent" type="checkbox" required />
+            <span>同意合作信息在正式展示前接受审核与确认</span>
+          </label>
+          <p class="field-error" data-error-for="supplierConsent"></p>
+          <p class="form-note">提交后仅显示本地成功反馈，不会向外部系统发送数据。</p>
+          <button class="btn btn-primary form-submit" type="submit">提交合作申请</button>
+        </form>
+      </section>
+
+      <section class="view" id="view-about" aria-labelledby="about-title" hidden>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">关于 WOD</span>
+            <h2 id="about-title">关于我们</h2>
+            <p>了解 WOD 的服务定位、资源范围与需求服务流程。</p>
+          </div>
+        </div>
+        <div class="about-layout">
+          <section class="about about-intro" aria-labelledby="about-positioning-title">
+            <div class="about-copy">
+              <h3 id="about-positioning-title">连接算力需求与可用资源</h3>
+              <p>WOD 面向资源需求企业与资源合作方，提供 GPU 资源信息、需求登记、服务记录和合作申请等统一服务入口。</p>
+              <p>平台围绕算力产品、使用地区、使用时长和服务方式组织信息，帮助企业清楚表达需求，也让合作方能够按统一字段登记资源信息。</p>
+            </div>
+            <dl class="about-facts" aria-label="WOD 服务概览">
+              <div><dt>服务对象</dt><dd>资源需求企业与资源合作方</dd></div>
+              <div><dt>资源范围</dt><dd>GPU 计算、模型运行与设备资源服务</dd></div>
+              <div><dt>数据参考</dt><dd>KAI 数据参考</dd></div>
+              <div><dt>需求方式</dt><dd>提交需求，沟通确认</dd></div>
+            </dl>
+          </section>
+
+          <section class="about-section" aria-labelledby="about-services-title">
+            <div class="about-section-heading">
+              <h3 id="about-services-title">我们提供什么</h3>
+              <p>从了解资源到管理需求记录，为需求企业和资源合作方提供清晰入口。</p>
+            </div>
+            <div class="about-service-list">
+              <article>
+                <strong>了解与比较</strong>
+                <p>按资源类型查看 GPU 计算资源、模型运行支持和设备资源服务，了解统一规格与信息参考。</p>
+              </article>
+              <article>
+                <strong>需求登记</strong>
+                <p>选择地区、数量、使用时长和服务方式，形成结构化需求，减少信息遗漏。</p>
+              </article>
+              <article>
+                <strong>记录与适配</strong>
+                <p>集中查看需求记录，支持取消、再次提交和方案适配，保持每次操作路径清楚可查。</p>
+              </article>
+              <article>
+                <strong>合作申请</strong>
+                <p>合作方可填写资源类型、可服务时长、资源环境和网络条件，为后续审核确认准备资料。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="about-section" aria-labelledby="about-flow-title">
+            <div class="about-section-heading">
+              <h3 id="about-flow-title">服务如何衔接</h3>
+              <p>当前静态页面保留前端操作，正式服务条件以沟通确认结果为准。</p>
+            </div>
+            <div class="about-flow">
+              <div><strong>了解资源</strong><span>按产品类型了解资源和服务说明。</span></div>
+              <div><strong>填写需求</strong><span>补充地区、数量、时长和服务方式。</span></div>
+              <div><strong>管理记录</strong><span>查看需求状态，支持取消和再次提交。</span></div>
+              <div><strong>确认服务</strong><span>具体规格、服务条件和实施安排以正式沟通结果为准。</span></div>
+            </div>
+          </section>
+
+          <section class="about-section about-faq" aria-labelledby="about-faq-title">
+            <div class="about-section-heading">
+              <h3 id="about-faq-title">常见问题</h3>
+              <p>这些说明帮助访客了解资源信息与需求服务流程。</p>
+            </div>
+            <div class="faq-list">
+              <details>
+                <summary>如何选择合适的算力资源？</summary>
+                <p>可根据 GPU 型号、显存、使用地区、需求数量和时长查看信息。无法确定时，可先提交需求咨询。</p>
+              </details>
+              <details>
+                <summary>需求记录保存在哪里？</summary>
+                <p>需求记录保存在当前浏览器的本地存储中，不会发送到服务器。清除浏览器数据后，记录可能被删除。</p>
+              </details>
+              <details>
+                <summary>服务条件如何确认？</summary>
+                <p>页面提供 KAI 数据参考，不展示固定服务价格。具体规格、服务条件和实施安排以正式沟通结果为准。</p>
+              </details>
+              <details>
+                <summary>合作方提交后会立即展示吗？</summary>
+                <p>不会。当前提交仅演示前端流程，正式展示还需完成资料核对与业务审核。</p>
+              </details>
+            </div>
+          </section>
+
+          <div class="about-cta">
+            <div>
+              <h3>从资源信息开始</h3>
+              <p>浏览资源信息，或者进入合作方申请登记服务信息。</p>
+            </div>
+            <div class="about-actions">
+              <button class="btn btn-primary" type="button" data-nav="resources">查看资源信息</button>
+              <button class="btn btn-outline" type="button" data-nav="supplier">提交合作申请</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      </main>
+    </div>
+
+    <footer>
+      <div class="footer-inner">
+        <div>
+          <div class="footer-title">WOD 算力资源信息</div>
+          <div class="footer-copy">© 2026 WOD. 保留所有权利。</div>
+        </div>
+        <div class="footer-links">
+          <button type="button" data-nav="about">关于我们</button>
+          <button type="button" data-toast="联系方式将在正式资料确认后补充。">联系我们</button>
+          <button type="button" data-nav="resources">资源信息</button>
+        </div>
+        <div class="icp">
+          <span>备案信息将在核准后公示</span>
+        </div>
+      </div>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <b id="toastTitle">操作成功</b>
+      <span id="toastMsg"></span>
+    </div>
+
+    <div class="modal" id="orderModal" hidden>
+      <div class="modal-backdrop" data-modal-close></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle" aria-describedby="orderModalDescription">
+        <button class="modal-close" type="button" data-modal-close aria-label="关闭">×</button>
+        <span class="modal-kicker">本地需求记录</span>
+        <h2 id="orderModalTitle">需求记录已生成</h2>
+        <p id="orderModalDescription">记录已保存在当前浏览器，可前往服务记录查看、取消或再次提交。</p>
+        <dl class="order-summary" id="orderSummary"></dl>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="button" id="viewOrderButton">查看记录</button>
+          <button class="btn btn-outline" type="button" data-modal-close data-nav="resources">继续查看</button>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
