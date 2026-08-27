@@ -11,10 +11,17 @@ from __future__ import annotations
 import atexit
 import asyncio
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
-from dataclasses import dataclass
+from concurrent.futures import (
+    CancelledError as FutureCancelledError,
+    ThreadPoolExecutor,
+    TimeoutError as FutureTimeoutError,
+    wait,
+)
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+import logging
+import os
 import re
 from threading import BoundedSemaphore, Condition, Event, Lock, Thread
 import time
@@ -38,6 +45,7 @@ EXPECTED_CURRENCY = "CNY"
 EXPECTED_UNIT = "GPU_HOUR"
 _MIN_REFRESH_INTERVAL_MS = 30_000
 _MAX_REFRESH_INTERVAL_MS = 600_000
+logger = logging.getLogger(__name__)
 
 
 class KaiPricingError(RuntimeError):
@@ -138,6 +146,31 @@ _CANDLE_EXECUTOR = ThreadPoolExecutor(
 atexit.register(_CANDLE_EXECUTOR.shutdown, wait=False, cancel_futures=True)
 
 
+@dataclass
+class _ClientGeneration:
+    identifier: int
+    client: httpx.AsyncClient
+    slots: BoundedSemaphore
+    accepting: bool = True
+    pending: int = 0
+    active: int = 0
+    leases: dict[int, "_RequestLease"] = field(default_factory=dict)
+    close_pending: bool = False
+    close_timed_out: bool = False
+
+
+@dataclass
+class _RequestLease:
+    identifier: int
+    generation: _ClientGeneration
+    deadline: float
+    lock: Lock = field(default_factory=Lock)
+    started: bool = False
+    released: bool = False
+    cancel_requested_at: float | None = None
+    cancel_reason: str | None = None
+
+
 class _AsyncHttpRunner:
     """One bounded async transport enforcing a true end-to-end deadline.
 
@@ -149,17 +182,59 @@ class _AsyncHttpRunner:
     the connection instead of leaving an unbounded executor backlog.
     """
 
-    def __init__(self, max_pending: int):
+    def __init__(
+        self,
+        max_pending: int,
+        *,
+        name: str = "kai",
+        client_factory: Callable[[], httpx.AsyncClient] | None = None,
+        cleanup_grace: float = 0.25,
+        watchdog_interval: float = 0.05,
+        max_retired_generations: int = 1,
+        restart_limit: int = 3,
+        restart_window_seconds: float = 300,
+        restart_retry_seconds: float = 5,
+        fatal_recovery_threshold: float = 30,
+        fatal_recovery_callback: Callable[[str, str], None] | None = None,
+    ):
+        self.name = str(name or "kai")
         self.max_pending = max(1, int(max_pending))
-        self._slots = BoundedSemaphore(self.max_pending)
+        self.cleanup_grace = max(float(cleanup_grace), 0.05)
+        self.watchdog_interval = max(float(watchdog_interval), 0.01)
+        self.max_retired_generations = max(int(max_retired_generations), 1)
+        self.restart_limit = max(int(restart_limit), 1)
+        self.restart_window_seconds = max(float(restart_window_seconds), 1)
+        self.restart_retry_seconds = max(float(restart_retry_seconds), 0.1)
+        self.fatal_recovery_threshold = max(float(fatal_recovery_threshold), 0.05)
+        self._fatal_recovery_callback = fatal_recovery_callback
+        self._client_factory = client_factory or self._default_client_factory
         self._state_lock = Lock()
-        self._pending = 0
+        self._restart_lock = Lock()
+        self._current: _ClientGeneration | None = None
+        self._retired: dict[int, _ClientGeneration] = {}
+        self._unused_clients: set[httpx.AsyncClient] = set()
+        self._next_generation = 1
+        self._next_lease = 1
         self._peak_pending = 0
-        self._active = 0
         self._peak_active = 0
+        self._restart_count = 0
+        self._restart_suppressed_count = 0
+        self._restart_failure_count = 0
+        self._fatal_recovery_count = 0
+        self._restart_times: list[float] = []
+        self._next_restart_attempt_at = 0.0
+        self._restart_pending_generation: int | None = None
+        self._restart_pending_since: float | None = None
+        self._unrecoverable_since: float | None = None
+        self._fatal_recovery_triggered = False
+        self._last_restart_reason: str | None = None
+        self._last_restart_at: str | None = None
+        self._close_timeout_count = 0
+        self._loop_heartbeat_at = time.monotonic()
+        self._closed = False
         self._ready = Event()
+        self._watchdog_stop = Event()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._client: httpx.AsyncClient | None = None
         self._startup_error: BaseException | None = None
         self._thread = Thread(target=self._run, name="kai-http-loop", daemon=True)
         self._thread.start()
@@ -168,11 +243,45 @@ class _AsyncHttpRunner:
         # confused with an upstream request deadline.
         if not self._ready.wait(timeout=15) or self._startup_error:
             raise RuntimeError("failed to initialize KAI HTTP transport") from self._startup_error
+        self._watchdog_thread = Thread(
+            target=self._watchdog,
+            name=f"{self.name}-http-watchdog",
+            daemon=True,
+        )
+        self._watchdog_thread.start()
+
+    def _default_client_factory(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            follow_redirects=True,
+            headers={"Accept": "application/json", "User-Agent": "WOD-KAI-Pricing/1.0"},
+            limits=httpx.Limits(
+                max_connections=self.max_pending,
+                max_keepalive_connections=self.max_pending,
+                # The publication cadence is five minutes.  Retaining idle
+                # sockets for that entire interval caused half-closed peers to
+                # be reused at the next boundary, so expire them well before it.
+                keepalive_expiry=max(float(settings.KAI_PRICING_HTTP_KEEPALIVE_SECONDS), 1),
+            ),
+        )
+
+    def _all_generations_locked(self) -> list[_ClientGeneration]:
+        generations = list(self._retired.values())
+        if self._current is not None:
+            generations.append(self._current)
+        return generations
+
+    def _prune_retired_locked(self) -> None:
+        removable = [
+            identifier for identifier, generation in self._retired.items()
+            if generation.pending == 0 and generation.active == 0 and not generation.close_pending
+        ]
+        for identifier in removable:
+            self._retired.pop(identifier, None)
 
     @property
     def pending_count(self) -> int:
         with self._state_lock:
-            return self._pending
+            return sum(item.pending for item in self._all_generations_locked())
 
     @property
     def peak_pending(self) -> int:
@@ -184,27 +293,114 @@ class _AsyncHttpRunner:
         """Number of request coroutines that have actually entered the loop."""
 
         with self._state_lock:
-            return self._active
+            return sum(item.active for item in self._all_generations_locked())
 
     @property
     def peak_active(self) -> int:
         with self._state_lock:
             return self._peak_active
 
+    def snapshot(self) -> dict[str, Any]:
+        """Return a non-sensitive transport health snapshot for monitoring."""
+
+        now = time.monotonic()
+        with self._state_lock:
+            self._prune_retired_locked()
+            current = self._current
+            pending = current.pending if current else 0
+            active = current.active if current else 0
+            retired_pending = sum(item.pending for item in self._retired.values())
+            retired_active = sum(item.active for item in self._retired.values())
+            retired_count = len(self._retired)
+            leases = [
+                lease
+                for generation in self._all_generations_locked()
+                for lease in list(generation.leases.values())
+            ]
+            values = {
+                "generation": current.identifier if current else 0,
+                "peak_pending": self._peak_pending,
+                "peak_active": self._peak_active,
+                "restart_count": self._restart_count,
+                "restart_suppressed_count": self._restart_suppressed_count,
+                "restart_failure_count": self._restart_failure_count,
+                "fatal_recovery_count": self._fatal_recovery_count,
+                "close_timeout_count": self._close_timeout_count,
+                "last_restart_reason": self._last_restart_reason,
+                "last_restart_at": self._last_restart_at,
+                "heartbeat_age_ms": max(int((now - self._loop_heartbeat_at) * 1000), 0),
+                "rebuild_backoff_remaining_ms": max(
+                    int((self._next_restart_attempt_at - now) * 1000),
+                    0,
+                ),
+                "unrecoverable_age_ms": (
+                    max(int((now - self._unrecoverable_since) * 1000), 0)
+                    if self._unrecoverable_since is not None
+                    else 0
+                ),
+                "unrecoverable": self._unrecoverable_since is not None,
+                "closed": self._closed,
+            }
+        stuck_requests = 0
+        for lease in leases:
+            with lease.lock:
+                if (
+                    lease.cancel_requested_at is not None
+                    and not lease.released
+                    and now - lease.cancel_requested_at >= self.cleanup_grace
+                ):
+                    stuck_requests += 1
+        if values.pop("closed") or self._loop is None or not self._loop.is_running():
+            state = "loop_down"
+        elif values.pop("unrecoverable"):
+            state = "unrecoverable"
+        elif retired_count or stuck_requests:
+            state = "recovering"
+        elif pending >= self.max_pending:
+            state = "saturated"
+        elif pending:
+            state = "busy"
+        else:
+            state = "idle"
+        return {
+            "name": self.name,
+            "state": state,
+            "generation": values["generation"],
+            "capacity": self.max_pending,
+            "pending": pending,
+            "active": active,
+            "peak_pending": values["peak_pending"],
+            "peak_active": values["peak_active"],
+            "retired_generation_count": retired_count,
+            "retired_pending": retired_pending,
+            "retired_active": retired_active,
+            "stuck_requests": stuck_requests,
+            "restart_count": values["restart_count"],
+            "restart_suppressed_count": values["restart_suppressed_count"],
+            "restart_failure_count": values["restart_failure_count"],
+            "rebuild_backoff_remaining_ms": values["rebuild_backoff_remaining_ms"],
+            "fatal_recovery_count": values["fatal_recovery_count"],
+            "unrecoverable_age_ms": values["unrecoverable_age_ms"],
+            "close_timeout_count": values["close_timeout_count"],
+            "last_restart_reason": values["last_restart_reason"],
+            "last_restart_at": values["last_restart_at"],
+            "heartbeat_age_ms": values["heartbeat_age_ms"],
+        }
+
     def _run(self) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         self._loop = loop
         try:
-            self._client = httpx.AsyncClient(
-                follow_redirects=True,
-                headers={"Accept": "application/json", "User-Agent": "WOD-KAI-Pricing/1.0"},
-                limits=httpx.Limits(
-                    max_connections=self.max_pending,
-                    max_keepalive_connections=self.max_pending,
-                    keepalive_expiry=300,
-                ),
+            client = self._client_factory()
+            generation = _ClientGeneration(
+                identifier=self._next_generation,
+                client=client,
+                slots=BoundedSemaphore(self.max_pending),
             )
+            self._next_generation += 1
+            with self._state_lock:
+                self._current = generation
         except BaseException as exc:  # startup must fail closed
             self._startup_error = exc
             self._ready.set()
@@ -218,19 +414,71 @@ class _AsyncHttpRunner:
             for task in pending:
                 task.cancel()
             if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            if self._client is not None:
-                loop.run_until_complete(self._client.aclose())
+                loop.run_until_complete(self._bounded_task_drain(pending))
+            with self._state_lock:
+                clients = [
+                    *(item.client for item in self._all_generations_locked()),
+                    *self._unused_clients,
+                ]
+            if clients:
+                loop.run_until_complete(self._bounded_client_close(clients))
             loop.close()
 
-    async def _request(self, url: str, max_bytes: int, total_timeout: float) -> tuple[dict[str, Any], int]:
-        if self._client is None:
-            raise KaiPricingError("upstream_error")
+    async def _bounded_task_drain(self, tasks: Iterable[asyncio.Task]) -> None:
+        await asyncio.wait(set(tasks), timeout=self.cleanup_grace)
+
+    async def _bounded_client_close(self, clients: Iterable[httpx.AsyncClient]) -> None:
+        tasks = {asyncio.create_task(client.aclose()) for client in clients}
+        if not tasks:
+            return
+        _done, pending = await asyncio.wait(tasks, timeout=self.cleanup_grace)
+        for task in pending:
+            task.cancel()
+
+    def _heartbeat(self) -> None:
+        with self._state_lock:
+            self._loop_heartbeat_at = time.monotonic()
+
+    def _watchdog(self) -> None:
+        while not self._watchdog_stop.wait(self.watchdog_interval):
+            loop = self._loop
+            if loop is not None and loop.is_running():
+                loop.call_soon_threadsafe(self._heartbeat)
+            now = time.monotonic()
+            with self._state_lock:
+                generation = self._current
+                leases = list(generation.leases.values()) if generation else []
+            reason = None
+            for lease in leases:
+                with lease.lock:
+                    if (
+                        lease.cancel_requested_at is not None
+                        and not lease.released
+                        and now - lease.cancel_requested_at >= self.cleanup_grace
+                    ):
+                        reason = lease.cancel_reason or "request_deadline_exceeded"
+                        break
+            if generation is not None and reason:
+                self._restart_transport(generation, reason)
+                self._maybe_trigger_fatal_recovery(generation, reason)
+            elif generation is not None:
+                with self._state_lock:
+                    if self._restart_pending_generation is None:
+                        self._unrecoverable_since = None
+                        self._fatal_recovery_triggered = False
+
+    async def _request(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        max_bytes: int,
+        total_timeout: float,
+    ) -> tuple[dict[str, Any], int]:
         content = bytearray()
         try:
             async with asyncio.timeout(total_timeout):
                 timeout = httpx.Timeout(max(total_timeout, 0.1))
-                async with self._client.stream("GET", url, timeout=timeout) as response:
+                async with client.stream("GET", url, timeout=timeout) as response:
                     if response.status_code >= 400:
                         raise _safe_http_error(response)
                     declared = response.headers.get("content-length")
@@ -253,103 +501,457 @@ class _AsyncHttpRunner:
             raise KaiPricingError("upstream_invalid_response")
         return payload, len(content)
 
+    def _lease_started(self, lease: _RequestLease) -> bool:
+        with lease.lock:
+            if lease.released:
+                return False
+            lease.started = True
+            with self._state_lock:
+                lease.generation.active += 1
+                total_active = sum(item.active for item in self._all_generations_locked())
+                self._peak_active = max(self._peak_active, total_active)
+            return True
+
+    def _release_lease(self, lease: _RequestLease) -> bool:
+        release_slot = False
+        with lease.lock:
+            if lease.released:
+                return False
+            lease.released = True
+            with self._state_lock:
+                generation = lease.generation
+                generation.leases.pop(lease.identifier, None)
+                generation.pending = max(generation.pending - 1, 0)
+                if lease.started:
+                    generation.active = max(generation.active - 1, 0)
+                self._prune_retired_locked()
+                release_slot = True
+        if release_slot:
+            lease.generation.slots.release()
+        return release_slot
+
+    def _mark_cancel_requested(self, lease: _RequestLease, reason: str) -> None:
+        with lease.lock:
+            if lease.released or lease.cancel_requested_at is not None:
+                return
+            lease.cancel_requested_at = time.monotonic()
+            lease.cancel_reason = reason
+
     async def _request_and_release(
         self,
+        lease: _RequestLease,
         url: str,
         max_bytes: int,
         total_timeout: float,
-        admission: dict[str, bool],
     ) -> tuple[dict[str, Any], int]:
-        """Keep the admission slot until cancellation has really unwound.
-
-        Releasing from the ``concurrent.futures.Future`` callback is subtly
-        unsafe: cancelling that proxy can mark it done before the event-loop
-        task has left the response context.  The next caller could then start
-        another real request and exceed the transport bound.  This coroutine's
-        ``finally`` executes only after the async request (including response
-        close) has completed or acknowledged cancellation.
-        """
-
-        with self._state_lock:
-            # A proxy future can be cancelled before this coroutine receives
-            # its first event-loop turn.  In that case the done callback below
-            # has already returned the slot and this coroutine must not start
-            # any network I/O.
-            if admission["released"]:
-                raise asyncio.CancelledError
-            admission["started"] = True
-            self._active += 1
-            self._peak_active = max(self._peak_active, self._active)
+        if not self._lease_started(lease):
+            raise asyncio.CancelledError
         try:
-            return await self._request(url, max_bytes, total_timeout)
+            return await self._request(lease.generation.client, url, max_bytes, total_timeout)
         finally:
-            release_slot = False
-            with self._state_lock:
-                self._active -= 1
-                if not admission["released"]:
-                    admission["released"] = True
-                    self._pending -= 1
-                    release_slot = True
-            if release_slot:
-                self._slots.release()
+            self._release_lease(lease)
 
-    def request(self, url: str, max_bytes: int, deadline: float) -> tuple[dict[str, Any], int]:
-        remaining = deadline - time.monotonic()
-        if remaining < 0.1 or not self._slots.acquire(timeout=max(remaining, 0)):
-            raise KaiPricingError("upstream_timeout")
-        with self._state_lock:
-            self._pending += 1
-            self._peak_pending = max(self._peak_pending, self._pending)
+    def _close_generation_in_loop(self, generation: _ClientGeneration) -> None:
         loop = self._loop
         if loop is None or not loop.is_running():
+            return
+        with self._state_lock:
+            generation.close_pending = True
+        task = loop.create_task(generation.client.aclose())
+
+        def completed(close_task: asyncio.Task) -> None:
+            try:
+                close_task.exception()
+            except (asyncio.CancelledError, Exception):
+                pass
             with self._state_lock:
-                self._pending -= 1
-            self._slots.release()
+                generation.close_pending = False
+                self._prune_retired_locked()
+
+        def timed_out() -> None:
+            if task.done():
+                return
+            task.cancel()
+            with self._state_lock:
+                generation.close_timed_out = True
+                self._close_timeout_count += 1
+            logger.warning(
+                "kai_http_retired_client_close_timeout pool=%s generation=%s",
+                self.name,
+                generation.identifier,
+            )
+
+        task.add_done_callback(completed)
+        loop.call_later(self.cleanup_grace, timed_out)
+
+    def _maybe_trigger_fatal_recovery(
+        self,
+        expected: _ClientGeneration,
+        reason: str,
+    ) -> None:
+        """Escalate only after bounded client-level recovery is exhausted.
+
+        The production API is supervised by systemd with ``Restart=always``.
+        Exiting after two independently stuck generations is safer than leaking
+        an unbounded number of event loops or connection pools.  Tests inject a
+        harmless callback; the global runners use the supervised fail-fast
+        callback only when explicitly enabled in settings.
+        """
+
+        now = time.monotonic()
+        with self._state_lock:
+            if self._closed or self._current is not expected:
+                return
+            leases = list(expected.leases.values())
+        for lease in leases:
+            # All request bookkeeping uses lease -> state lock order.  Keep the
+            # stuck lease locked through the non-reentrant supervisor callback
+            # so a concurrent finally/close cannot invalidate the final CAS.
+            with lease.lock:
+                if (
+                    lease.released
+                    or lease.cancel_requested_at is None
+                    or now - lease.cancel_requested_at < self.cleanup_grace
+                ):
+                    continue
+                with self._state_lock:
+                    since = self._unrecoverable_since
+                    callback = self._fatal_recovery_callback
+                    if (
+                        self._closed
+                        or self._current is not expected
+                        or expected.leases.get(lease.identifier) is not lease
+                        or since is None
+                        or now - since < self.fatal_recovery_threshold
+                        or self._fatal_recovery_triggered
+                        or callback is None
+                    ):
+                        return
+                    self._fatal_recovery_triggered = True
+                    self._fatal_recovery_count += 1
+                    logger.critical(
+                        "kai_http_transport_fail_fast pool=%s reason=%s",
+                        self.name,
+                        reason,
+                    )
+                    try:
+                        callback(self.name, reason)
+                    except Exception:
+                        # A failed supervisor hook must not turn the watchdog
+                        # itself into a second failure domain.  Keep serving
+                        # fail-closed and expose the counter for operations.
+                        logger.error(
+                            "kai_http_transport_fail_fast_callback_failed pool=%s",
+                            self.name,
+                        )
+                return
+
+    def _close_unused_client_in_loop(self, client: httpx.AsyncClient) -> None:
+        """Track an uninstalled client until its bounded shutdown completes."""
+
+        loop = self._loop
+        with self._state_lock:
+            self._unused_clients.add(client)
+        if loop is None or not loop.is_running():
+            return
+        try:
+            task = loop.create_task(client.aclose())
+        except RuntimeError:
+            return
+
+        def completed(close_task: asyncio.Task) -> None:
+            try:
+                close_task.exception()
+            except (asyncio.CancelledError, Exception):
+                pass
+            with self._state_lock:
+                self._unused_clients.discard(client)
+
+        task.add_done_callback(completed)
+
+    def _restart_transport(self, expected: _ClientGeneration, reason: str) -> bool:
+        """Schedule a fresh client atomically; never delay a request deadline."""
+
+        if self._closed:
+            return False
+        with self._restart_lock:
+            now = time.monotonic()
+            suppressed = False
+            with self._state_lock:
+                self._prune_retired_locked()
+                if self._current is not expected:
+                    return True
+                if self._restart_pending_generation == expected.identifier:
+                    if self._unrecoverable_since is None:
+                        self._unrecoverable_since = self._restart_pending_since or now
+                    return False
+                if now < self._next_restart_attempt_at:
+                    return False
+                self._restart_times = [
+                    value for value in self._restart_times
+                    if now - value <= self.restart_window_seconds
+                ]
+                if (
+                    len(self._retired) >= self.max_retired_generations
+                    or len(self._restart_times) >= self.restart_limit
+                ):
+                    self._restart_suppressed_count += 1
+                    self._next_restart_attempt_at = now + self.restart_retry_seconds
+                    if self._unrecoverable_since is None:
+                        self._unrecoverable_since = now
+                    suppressed = True
+                else:
+                    self._restart_pending_generation = expected.identifier
+                    self._restart_pending_since = now
+            if suppressed:
+                logger.error(
+                    "kai_http_transport_restart_suppressed pool=%s generation=%s reason=%s",
+                    self.name,
+                    expected.identifier,
+                    reason,
+                )
+                return False
+            loop = self._loop
+            if loop is None or not loop.is_running():
+                with self._state_lock:
+                    if self._restart_pending_generation == expected.identifier:
+                        self._restart_pending_generation = None
+                        self._restart_pending_since = None
+                        self._restart_failure_count += 1
+                        self._next_restart_attempt_at = now + self.restart_retry_seconds
+                        if self._unrecoverable_since is None:
+                            self._unrecoverable_since = now
+                return False
+            outcome = {"ok": False}
+
+            def install() -> None:
+                fresh_client: httpx.AsyncClient | None = None
+                try:
+                    # Avoid constructing a new TLS/client pool after shutdown or
+                    # after another recovery has already replaced this one.
+                    with self._state_lock:
+                        if self._closed or self._current is not expected:
+                            return
+                    fresh_client = self._client_factory()
+                    with self._state_lock:
+                        if self._closed or self._current is not expected:
+                            return
+                        fresh = _ClientGeneration(
+                            identifier=self._next_generation,
+                            client=fresh_client,
+                            slots=BoundedSemaphore(self.max_pending),
+                        )
+                        self._next_generation += 1
+                        expected.accepting = False
+                        self._retired[expected.identifier] = expected
+                        self._current = fresh
+                        self._restart_count += 1
+                        self._restart_times.append(time.monotonic())
+                        self._last_restart_reason = reason
+                        self._last_restart_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                        self._unrecoverable_since = None
+                        self._fatal_recovery_triggered = False
+                        outcome["ok"] = True
+                    self._close_generation_in_loop(expected)
+                    logger.warning(
+                        "kai_http_transport_rebuilt pool=%s old_generation=%s new_generation=%s reason=%s",
+                        self.name,
+                        expected.identifier,
+                        fresh.identifier,
+                        reason,
+                    )
+                except Exception:
+                    with self._state_lock:
+                        self._restart_failure_count += 1
+                        self._next_restart_attempt_at = max(
+                            self._next_restart_attempt_at,
+                            time.monotonic() + self.restart_retry_seconds,
+                        )
+                        if self._unrecoverable_since is None:
+                            self._unrecoverable_since = time.monotonic()
+                    logger.error(
+                        "kai_http_transport_rebuild_failed pool=%s generation=%s reason=client_creation_failed",
+                        self.name,
+                        expected.identifier,
+                    )
+                finally:
+                    with self._state_lock:
+                        if self._restart_pending_generation == expected.identifier:
+                            self._restart_pending_generation = None
+                            self._restart_pending_since = None
+                    if fresh_client is not None and not outcome["ok"]:
+                        self._close_unused_client_in_loop(fresh_client)
+
+            try:
+                loop.call_soon_threadsafe(install)
+            except RuntimeError:
+                with self._state_lock:
+                    if self._restart_pending_generation == expected.identifier:
+                        self._restart_pending_generation = None
+                        self._restart_pending_since = None
+                        self._restart_failure_count += 1
+                        self._next_restart_attempt_at = time.monotonic() + self.restart_retry_seconds
+                        if self._unrecoverable_since is None:
+                            self._unrecoverable_since = time.monotonic()
+                return False
+            return True
+
+    def _admit(self, deadline: float) -> _RequestLease:
+        while True:
+            remaining = deadline - time.monotonic()
+            with self._state_lock:
+                generation = self._current
+                closed = self._closed
+            if closed:
+                raise KaiPricingError("upstream_error")
+            if generation is None or remaining < 0.01:
+                raise KaiPricingError("upstream_timeout")
+            acquired = generation.slots.acquire(timeout=min(max(remaining, 0), 0.05))
+            if not acquired:
+                with self._state_lock:
+                    changed = self._current is not generation
+                if changed:
+                    continue
+                if time.monotonic() >= deadline:
+                    raise KaiPricingError("upstream_timeout")
+                continue
+            with self._state_lock:
+                closed = self._closed
+                if closed or self._current is not generation or not generation.accepting:
+                    stale = True
+                else:
+                    stale = False
+                    lease = _RequestLease(
+                        identifier=self._next_lease,
+                        generation=generation,
+                        deadline=deadline,
+                    )
+                    self._next_lease += 1
+                    generation.leases[lease.identifier] = lease
+                    generation.pending += 1
+                    total_pending = sum(item.pending for item in self._all_generations_locked())
+                    self._peak_pending = max(self._peak_pending, total_pending)
+            if stale:
+                generation.slots.release()
+                if closed:
+                    raise KaiPricingError("upstream_error")
+                continue
+            return lease
+
+    def request(self, url: str, max_bytes: int, deadline: float) -> tuple[dict[str, Any], int]:
+        lease = self._admit(deadline)
+        loop = self._loop
+        if loop is None or not loop.is_running():
+            self._release_lease(lease)
             raise KaiPricingError("upstream_error")
         remaining = deadline - time.monotonic()
-        if remaining < 0.1:
-            with self._state_lock:
-                self._pending -= 1
-            self._slots.release()
+        if remaining < 0.05:
+            self._release_lease(lease)
             raise KaiPricingError("upstream_timeout")
-        admission = {"started": False, "released": False}
-        try:
-            future = asyncio.run_coroutine_threadsafe(
-                self._request_and_release(url, max_bytes, remaining, admission), loop,
-            )
-        except Exception:
-            with self._state_lock:
-                self._pending -= 1
-            self._slots.release()
+        cleanup_budget = min(self.cleanup_grace, max(remaining * 0.25, 0.01))
+        io_timeout = max(remaining - cleanup_budget, 0.01)
+        with self._state_lock:
+            closed = self._closed
+            if closed or self._current is not lease.generation or not lease.generation.accepting:
+                stale = True
+            else:
+                stale = False
+                try:
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._request_and_release(lease, url, max_bytes, io_timeout),
+                        loop,
+                    )
+                except Exception:
+                    future = None
+        if stale or future is None:
+            self._release_lease(lease)
+            if closed:
+                raise KaiPricingError("upstream_error")
+            if stale and time.monotonic() < deadline:
+                return self.request(url, max_bytes, deadline)
             raise KaiPricingError("upstream_error")
 
         def release_if_never_started(_future) -> None:
-            release_slot = False
-            with self._state_lock:
-                if not admission["started"] and not admission["released"]:
-                    admission["released"] = True
-                    self._pending -= 1
-                    release_slot = True
-            if release_slot:
-                self._slots.release()
+            with lease.lock:
+                never_started = not lease.started
+            if never_started:
+                self._release_lease(lease)
 
         future.add_done_callback(release_if_never_started)
-
         try:
             return future.result(timeout=max(deadline - time.monotonic(), 0))
         except FutureTimeoutError as exc:
+            self._mark_cancel_requested(lease, "request_deadline_exceeded")
             future.cancel()
+            raise KaiPricingError("upstream_timeout") from exc
+        except FutureCancelledError as exc:
+            self._mark_cancel_requested(lease, "request_deadline_exceeded")
             raise KaiPricingError("upstream_timeout") from exc
 
     def close(self) -> None:
+        with self._state_lock:
+            if self._closed:
+                return
+            self._closed = True
+        self._watchdog_stop.set()
+        watchdog = getattr(self, "_watchdog_thread", None)
+        if watchdog is not None:
+            watchdog.join(timeout=1)
         loop = self._loop
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(loop.stop)
             self._thread.join(timeout=2)
 
 
-_HTTP_RUNNER = _AsyncHttpRunner(max_pending=max(_CANDLE_WORKERS + 2, 6))
+_RUNNER_OPTIONS = {
+    "cleanup_grace": max(float(settings.KAI_PRICING_HTTP_CLEANUP_GRACE), 0.05),
+    "max_retired_generations": max(int(settings.KAI_PRICING_HTTP_MAX_RETIRED_GENERATIONS), 1),
+    "restart_limit": max(int(settings.KAI_PRICING_HTTP_RESTART_LIMIT), 1),
+    "restart_window_seconds": max(int(settings.KAI_PRICING_HTTP_RESTART_WINDOW_SECONDS), 1),
+    "fatal_recovery_threshold": max(float(settings.KAI_PRICING_HTTP_FAIL_FAST_SECONDS), 1),
+}
+
+
+def _terminate_unrecoverable_transport(pool_name: str, reason: str) -> None:
+    """Let the configured service supervisor replace an unrecoverable process."""
+
+    logger.critical(
+        "kai_http_process_exit_for_transport_recovery pool=%s reason=%s exit_code=70",
+        pool_name,
+        reason,
+    )
+    os._exit(70)
+
+
+# Live quotes and the much wider historical-candle fan-out must not share a
+# failure domain. A wedged history connection can now degrade charts without
+# starving current prices, product visibility, or purchases.
+_CURRENT_RUNNER_OPTIONS = dict(_RUNNER_OPTIONS)
+if settings.KAI_PRICING_HTTP_FAIL_FAST_ENABLED:
+    # Only the purchase-critical live pool may ask the supervised production
+    # process to restart. Historical charts remain an isolated failure domain.
+    _CURRENT_RUNNER_OPTIONS["fatal_recovery_callback"] = _terminate_unrecoverable_transport
+_HTTP_RUNNER = _AsyncHttpRunner(
+    max_pending=max(_CANDLE_WORKERS + 2, 6),
+    name="current_prices",
+    **_CURRENT_RUNNER_OPTIONS,
+)
+_CANDLE_HTTP_RUNNER = _AsyncHttpRunner(
+    max_pending=max(_CANDLE_WORKERS + 2, 6),
+    name="historical_candles",
+    **_RUNNER_OPTIONS,
+)
 atexit.register(_HTTP_RUNNER.close)
+atexit.register(_CANDLE_HTTP_RUNNER.close)
+
+
+def kai_http_transport_snapshot() -> dict[str, dict[str, Any]]:
+    """Expose only bounded counters; never URLs, peers, headers or payloads."""
+
+    return {
+        "current_prices": _HTTP_RUNNER.snapshot(),
+        "historical_candles": _CANDLE_HTTP_RUNNER.snapshot(),
+    }
 
 
 def utcnow() -> datetime:
@@ -390,6 +992,7 @@ def _get_json(
     timeout: float,
     max_bytes: int,
     deadline: float | None = None,
+    runner: _AsyncHttpRunner | None = None,
 ) -> tuple[dict[str, Any], int]:
     url = f"{settings.KAI_PRICING_API_BASE_URL.rstrip('/')}/{path.lstrip('/')}"
     absolute_deadline = deadline or (time.monotonic() + max(float(timeout), 0.1))
@@ -398,7 +1001,7 @@ def _get_json(
     # network phases, not once per phase.
     if absolute_deadline - time.monotonic() < 0.1:
         raise KaiPricingError("upstream_timeout")
-    return _HTTP_RUNNER.request(url, max_bytes, absolute_deadline)
+    return (runner or _HTTP_RUNNER).request(url, max_bytes, absolute_deadline)
 
 
 def _load_price_batch(
@@ -406,6 +1009,7 @@ def _load_price_batch(
     gpu_models: tuple[str, ...] = (),
     product_ids: tuple[str, ...] = (),
     deadline: float | None = None,
+    runner: _AsyncHttpRunner | None = None,
 ) -> KaiPriceBatch:
     params = [*(('gpuModel', value) for value in gpu_models), *(('productId', value) for value in product_ids)]
     path = "/v1/prices"
@@ -416,6 +1020,7 @@ def _load_price_batch(
         timeout=settings.KAI_PRICING_HTTP_TIMEOUT,
         max_bytes=settings.KAI_PRICING_MAX_RESPONSE_BYTES,
         deadline=deadline,
+        runner=runner,
     )
     rows = payload.get("data")
     meta = payload.get("meta")
@@ -500,6 +1105,7 @@ def fetch_price_batch(
     gpu_models: Iterable[str] = (),
     product_ids: Iterable[str] = (),
     deadline: float | None = None,
+    runner: _AsyncHttpRunner | None = None,
 ) -> KaiPriceBatch:
     """Return one validated KAI publication batch.
 
@@ -510,10 +1116,12 @@ def fetch_price_batch(
 
     model_filters = tuple(sorted({str(value).strip() for value in gpu_models if str(value).strip()}))
     product_filters = tuple(sorted({str(value).strip() for value in product_ids if str(value).strip()}))
+    selected_runner = runner or _HTTP_RUNNER
     loader = lambda: _load_price_batch(
         gpu_models=model_filters,
         product_ids=product_filters,
         deadline=deadline,
+        runner=selected_runner,
     )
     if not use_cache:
         return loader()
@@ -523,7 +1131,7 @@ def fetch_price_batch(
         return max(min(until_next_publication, published_interval), 1)
 
     return _PRICE_CACHE.get_or_load(
-        ("prices", model_filters, product_filters),
+        ("prices", selected_runner.name, model_filters, product_filters),
         cache_ttl,
         loader,
         deadline=deadline,
@@ -686,6 +1294,7 @@ def _fetch_product_candles(
         timeout=settings.KAI_CANDLE_HTTP_TIMEOUT,
         max_bytes=settings.KAI_CANDLE_MAX_RESPONSE_BYTES,
         deadline=deadline,
+        runner=_CANDLE_HTTP_RUNNER,
     )
 
 
@@ -809,7 +1418,11 @@ def _aggregate_kai_candles(
     filters = _upstream_gpu_model_filters(model, variant)
     if not filters:
         raise KaiPricingError("history_unavailable")
-    batch = fetch_price_batch(gpu_models=filters, deadline=deadline)
+    batch = fetch_price_batch(
+        gpu_models=filters,
+        deadline=deadline,
+        runner=_CANDLE_HTTP_RUNNER,
+    )
     if time.monotonic() >= deadline:
         raise KaiPricingError("upstream_timeout")
     quotes = [
@@ -1008,7 +1621,11 @@ def _load_exact_product_candles(
     canonical_model = canonicalize_gpu(model) or model
     canonical_variant = normalize_gpu_variant(canonical_model, variant)
     duration, interval, interval_seconds, months = _RANGE_CONFIG[range_name]
-    batch = fetch_price_batch(product_ids=(product_id,), deadline=deadline)
+    batch = fetch_price_batch(
+        product_ids=(product_id,),
+        deadline=deadline,
+        runner=_CANDLE_HTTP_RUNNER,
+    )
     if time.monotonic() >= deadline:
         raise KaiPricingError("upstream_timeout")
     current = {
@@ -1138,7 +1755,11 @@ def _load_ranking_metrics(
     }))
     if not model_filters:
         return {}
-    batch = fetch_price_batch(gpu_models=model_filters, deadline=deadline)
+    batch = fetch_price_batch(
+        gpu_models=model_filters,
+        deadline=deadline,
+        runner=_CANDLE_HTTP_RUNNER,
+    )
     if time.monotonic() >= deadline:
         raise KaiPricingError("upstream_timeout")
     by_identity: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)

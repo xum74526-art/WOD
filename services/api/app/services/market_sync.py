@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 import json
+import logging
 from threading import Lock
 from typing import Any
 
@@ -15,13 +16,19 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.integrations.kai_pricing import KaiPricingError, fetch_price_batch, normalized_current_quotes
+from app.integrations.kai_pricing import (
+    KaiPricingError,
+    fetch_price_batch,
+    kai_http_transport_snapshot,
+    normalized_current_quotes,
+)
 from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
 
 
 _SYNC_LOCK = Lock()
 _SOURCE_LOCKS = {"kai": Lock()}
 _MARKET_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-kai")
+logger = logging.getLogger(__name__)
 
 SOURCE_INTERVALS = {
     "kai": settings.KAI_PRICING_REFRESH_SECONDS,
@@ -221,6 +228,22 @@ def _sync_source(source: str, force: bool) -> dict[str, Any]:
         state.last_error = error_code
         state.last_attempt_at = now
         db.commit()
+        transport = kai_http_transport_snapshot()["current_prices"]
+        logger.warning(
+            "kai_market_sync_failed code=%s state=%s generation=%s pending=%s active=%s "
+            "retired=%s stuck=%s restarts=%s restart_failures=%s backoff_ms=%s fatal_recoveries=%s",
+            error_code,
+            transport["state"],
+            transport["generation"],
+            transport["pending"],
+            transport["active"],
+            transport["retired_generation_count"],
+            transport["stuck_requests"],
+            transport["restart_count"],
+            transport["restart_failure_count"],
+            transport["rebuild_backoff_remaining_ms"],
+            transport["fatal_recovery_count"],
+        )
         return {"source": source, "error_code": error_code}
     finally:
         db.close()

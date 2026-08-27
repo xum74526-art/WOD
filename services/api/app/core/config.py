@@ -145,6 +145,20 @@ class Settings(BaseSettings):
     KAI_PRICING_REFRESH_SECONDS: int = 300
     KAI_PRICING_HTTP_TIMEOUT: float = 10.0
     KAI_PRICING_MAX_RESPONSE_BYTES: int = 2 * 1024 * 1024
+    # Keep idle sockets shorter than the five-minute publication cadence and
+    # reserve bounded time for httpcore to close a cancelled response.  If a
+    # generation still cannot unwind, the runner may quarantine one old pool
+    # and atomically publish a fresh client; restart rate limits prevent leaks.
+    KAI_PRICING_HTTP_KEEPALIVE_SECONDS: float = 30.0
+    KAI_PRICING_HTTP_CLEANUP_GRACE: float = 0.75
+    KAI_PRICING_HTTP_MAX_RETIRED_GENERATIONS: int = 1
+    KAI_PRICING_HTTP_RESTART_LIMIT: int = 3
+    KAI_PRICING_HTTP_RESTART_WINDOW_SECONDS: int = 300
+    # A second independently wedged generation cannot be healed safely inside
+    # one process without leaking connection pools.  The production unit is
+    # supervised with Restart=always, so escalate only after this grace period.
+    KAI_PRICING_HTTP_FAIL_FAST_ENABLED: bool = False
+    KAI_PRICING_HTTP_FAIL_FAST_SECONDS: float = 30.0
     KAI_CANDLE_HTTP_TIMEOUT: float = 6.0
     KAI_CANDLE_TOTAL_TIMEOUT: float = 15.0
     KAI_CANDLE_MAX_RESPONSE_BYTES: int = 1024 * 1024

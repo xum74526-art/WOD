@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.integrations.kai_pricing import kai_http_transport_snapshot
 from app.models.market_price import MarketCandleSyncStatus, MarketPriceCandle, MarketPriceSnapshot, MarketSourceStatus
 from app.models.product import Product
 from app.services.gpu_catalog import canonicalize_gpu, gpu_variant_aliases, normalize_gpu_variant
@@ -896,6 +897,7 @@ def source_status(db: Session = Depends(get_db)):
             "error_code": _public_error_code(row.last_error),
         } for row in rows if row.enabled and row.source in SOURCE_NAMES],
         "history_items": [],
+        "transport": kai_http_transport_snapshot(),
     })
 
 

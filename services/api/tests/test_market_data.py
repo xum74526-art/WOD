@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +14,7 @@ from app.models.market_price import MarketPriceSnapshot, MarketSourceStatus
 from app.models.product import Product
 from app.utils.response import BizError
 from app.services.gpu_catalog import canonicalize_gpu, memory_variant_from_gb, memory_variant_from_text
-from app.routers.market import _build_market_candles, _history_metric_matches_live_sources, _public_error_code, _range_volatility, _seven_day_metrics, _source_range_metric, _source_state, _with_card_hour_candles, latest_prices
+from app.routers.market import _build_market_candles, _history_metric_matches_live_sources, _public_error_code, _range_volatility, _seven_day_metrics, _source_range_metric, _source_state, _with_card_hour_candles, latest_prices, source_status
 from app.core.config import settings
 from app.routers.product import _current_product_query, _product_out, price_trend, quote_regional
 from app.services.market_freshness import product_market_state
@@ -22,6 +23,42 @@ from app.services.market_sync import _aggregate_and_store, _percentile, _without
 
 
 class MarketDataTests(unittest.TestCase):
+    def test_source_status_includes_only_sanitized_transport_monitoring(self):
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        MarketSourceStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime.now()
+        db.add(MarketSourceStatus(
+            source="kai", enabled=True, status="ok", refresh_seconds=300,
+            sample_count=4, last_attempt_at=now, last_success_at=now,
+        ))
+        db.commit()
+        transport = {
+            "current_prices": {
+                "name": "current_prices", "state": "idle", "generation": 2,
+                "capacity": 6, "pending": 0, "active": 0,
+                "retired_generation_count": 0, "stuck_requests": 0,
+                "restart_count": 1,
+            },
+            "historical_candles": {
+                "name": "historical_candles", "state": "busy", "generation": 1,
+                "capacity": 6, "pending": 2, "active": 2,
+                "retired_generation_count": 0, "stuck_requests": 0,
+                "restart_count": 0,
+            },
+        }
+        try:
+            with patch("app.routers.market.kai_http_transport_snapshot", return_value=transport):
+                payload = source_status(db)["data"]
+            self.assertEqual(payload["transport"], transport)
+            rendered = str(payload["transport"]).lower()
+            for forbidden in ("https://", "pricing.kai.com", "authorization", "token"):
+                self.assertNotIn(forbidden, rendered)
+        finally:
+            db.close()
+
     def test_latest_prices_reports_selected_source_refresh_interval(self):
         engine = create_engine(
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,

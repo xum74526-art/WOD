@@ -2,6 +2,8 @@
 Description=KAI canonical API
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -11,6 +13,8 @@ WorkingDirectory=/home/ubuntu/wod/services/api
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/home/ubuntu/wod/runtime/api.env
+# This unit is supervised and rate-limited above; local/Docker defaults remain off.
+Environment=KAI_PRICING_HTTP_FAIL_FAST_ENABLED=true
 ExecStartPre=/home/ubuntu/wod/services/api/.venv/bin/python init_db.py
 ExecStart=/home/ubuntu/wod/services/api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always

@@ -486,7 +486,7 @@ class KaiPricingTests(unittest.TestCase):
         request.assert_not_called()
 
     def test_http_deadline_covers_slow_connect_and_stream_phases(self):
-        async def slow_two_phase(_url, _max_bytes, _timeout):
+        async def slow_two_phase(_client, _url, _max_bytes, _timeout):
             await asyncio.sleep(0.15)  # connect/headers
             await asyncio.sleep(0.15)  # body streaming
             return ({"ok": True}, 12)
@@ -510,12 +510,14 @@ class KaiPricingTests(unittest.TestCase):
         self.assertEqual(_HTTP_RUNNER.active_count, 0)
         self.assertEqual(_HTTP_RUNNER.pending_count, 0)
 
-    def test_cancellation_resistance_cannot_exceed_real_transport_bound(self):
+    def test_cancellation_resistance_keeps_generation_recovery_bounded(self):
         actual_lock = Lock()
         actual_active = 0
         actual_peak = 0
+        initial_snapshot = _HTTP_RUNNER.snapshot()
+        observed_snapshots = []
 
-        async def cancellation_resistant(_url, _max_bytes, _timeout):
+        async def cancellation_resistant(_client, _url, _max_bytes, _timeout):
             nonlocal actual_active, actual_peak
             with actual_lock:
                 actual_active += 1
@@ -547,15 +549,29 @@ class KaiPricingTests(unittest.TestCase):
             for _ in range(3):
                 with ThreadPoolExecutor(max_workers=_HTTP_RUNNER.max_pending) as executor:
                     list(executor.map(lambda _index: one_call(), range(_HTTP_RUNNER.max_pending)))
+                observed_snapshots.append(_HTTP_RUNNER.snapshot())
 
         until = time.monotonic() + 1
-        while (_HTTP_RUNNER.active_count or _HTTP_RUNNER.pending_count) and time.monotonic() < until:
+        while time.monotonic() < until:
+            with actual_lock:
+                all_requests_finished = actual_active == 0
+            if all_requests_finished and _HTTP_RUNNER.snapshot()["retired_generation_count"] == 0:
+                break
             time.sleep(0.01)
-        self.assertLessEqual(actual_peak, _HTTP_RUNNER.max_pending)
-        self.assertLessEqual(_HTTP_RUNNER.peak_active, _HTTP_RUNNER.max_pending)
+        final_snapshot = _HTTP_RUNNER.snapshot()
+        # Recovery is allowed to overlap one retired pool with the replacement
+        # pool.  It must never create an unbounded chain of generations.
+        self.assertLessEqual(actual_peak, _HTTP_RUNNER.max_pending * 2)
+        self.assertLessEqual(_HTTP_RUNNER.peak_active, _HTTP_RUNNER.max_pending * 2)
+        self.assertTrue(all(item["retired_generation_count"] <= 1 for item in observed_snapshots))
+        self.assertLessEqual(
+            final_snapshot["restart_count"] - initial_snapshot["restart_count"],
+            2,
+        )
         self.assertEqual(actual_active, 0)
         self.assertEqual(_HTTP_RUNNER.active_count, 0)
         self.assertEqual(_HTTP_RUNNER.pending_count, 0)
+        self.assertEqual(final_snapshot["retired_generation_count"], 0)
 
     def test_one_slow_region_keeps_fast_official_region_and_executor_is_bounded(self):
         rows = [quote("product-a"), quote("product-b")]
