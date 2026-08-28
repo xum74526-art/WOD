@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_cors_origins, settings
 from app.core.sensitive import assert_sensitive_capabilities_secure
-from app.routers import address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, internal_ingestion, invite, market, notification, offline_purchase, onboarding, order, payment, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
+from app.routers import address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, internal_ingestion, invite, market, notification, offline_purchase, onboarding, order, payment, platform, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
 from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
@@ -191,6 +191,7 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 
 app.include_router(auth.router)
+app.include_router(platform.router)
 app.include_router(admin.router)
 app.include_router(user.router)
 app.include_router(product.router)
@@ -212,6 +213,7 @@ app.include_router(coupon.router)
 app.include_router(address.router)
 app.include_router(offline_purchase.router)
 app.include_router(buy_request.router)
+app.include_router(buy_request.admin_router)
 app.include_router(onboarding.router)
 app.include_router(supplier.router)
 app.include_router(community.router)

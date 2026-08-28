@@ -22,10 +22,17 @@ export interface OrderItem {
   product_name?: string
   gpu_model?: string
   asset_id?: number
-  market_source?: 'wod' | 'kai' | 'vast' | 'autodl'
-  seller_type?: 'kai_self_operated' | 'merchant'
-  seller_name?: string
-  fulfillment_mode?: 'platform_manual' | 'merchant_manual'
+  market_source?: 'wod' | 'kai' | 'vast' | 'autodl' | null
+  supplier_id?: number | null
+  supplier_name?: string | null
+  supplier_rating?: number | null
+  supplier_order_count?: number | null
+  seller_type?: 'kai_self_operated' | 'merchant' | null
+  seller_name?: string | null
+  fulfillment_mode?: 'platform_manual' | 'merchant_manual' | null
+  resource_claim_source?: 'kai_published' | 'merchant_declared' | null
+  assurance_label?: string | null
+  assurance_description?: string | null
   fulfillment_status?: string
   delivery_due_at?: string | null
   delivered_at?: string | null

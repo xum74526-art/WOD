@@ -45,7 +45,8 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
             second = await chat(request, self.user, self.db)
 
         self.assertEqual(first["data"]["service_mode"], "self_service")
-        self.assertIn("KAI 报价", first["data"]["reply"])
+        self.assertIn("提交需求", first["data"]["reply"])
+        self.assertNotIn("冻结站内卡时", first["data"]["reply"])
         self.assertFalse(first["data"]["can_create_ticket"])
         self.assertEqual(first["data"]["message"]["id"], second["data"]["message"]["id"])
         self.assertEqual(self.db.query(SupportConversation).filter_by(user_id=self.user.id).count(), 1)
@@ -111,6 +112,20 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("autodl", combined)
         self.assertIn("kai pricing", combined)
         self.assertIn("server-verified callback", combined)
+
+    def test_trade_support_copy_follows_server_mode_without_losing_future_flow(self):
+        with patch.object(settings, "DIRECT_TRADE_ENABLED", False), patch.object(
+            settings, "MATCHMAKING_ENABLED", True
+        ):
+            purchase = match_faq("怎么购买算力和交付 SSH", "zh")
+            payment = match_faq("怎么充值付款", "zh")
+        self.assertIn("提交需求", purchase.zh)
+        self.assertIn("未开放 App 内充值", payment.zh)
+        self.assertNotIn("冻结站内卡时", purchase.zh)
+
+        with patch.object(settings, "DIRECT_TRADE_ENABLED", True):
+            direct_purchase = match_faq("怎么购买算力和交付 SSH", "zh")
+        self.assertIn("冻结站内卡时", direct_purchase.zh)
 
 
 if __name__ == "__main__":

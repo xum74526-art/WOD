@@ -1,5 +1,5 @@
-import { PingxxCheckout } from "@/components/pingxx-checkout";
+import { CapabilityPaymentCheckout } from "@/components/capability-payment-checkout";
 
 export default function PaymentPage() {
-  return <PingxxCheckout />;
+  return <CapabilityPaymentCheckout/>;
 }

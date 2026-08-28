@@ -21,23 +21,28 @@ export interface Product {
   price_cny_per_gpu_hour?: number
   price_card_hours_per_gpu_hour?: number
   wallet_charge_unit?: 'CARD_HOUR' | string
-  purchase_unit?: 'hour' | string
+  purchase_unit?: 'hour' | 'day' | string
   purchase_hour_options?: number[]
-  cycle?: number[]
+  min_purchase_hours?: number | null
+  max_purchase_hours?: number | null
+  cycle?: number[] | null
   desc?: string
-  supplier_id?: number
-  supplier_name?: string
+  supplier_id?: number | null
+  supplier_name?: string | null
   supplier_rating?: number | null
   supplier_order_count?: number | null
-  seller_type?: 'kai_self_operated' | 'merchant'
-  seller_name?: string
-  fulfillment_mode?: 'platform_manual' | 'merchant_manual'
-  assurance_label?: string
-  assurance_description?: string
+  seller_type?: 'kai_self_operated' | 'merchant' | null
+  seller_name?: string | null
+  fulfillment_mode?: 'platform_manual' | 'merchant_manual' | null
+  resource_claim_source?: 'kai_published' | 'merchant_declared' | null
+  assurance_label?: string | null
+  assurance_description?: string | null
   status: string
   daily_revenue?: number | null
   revenue_estimate_available?: boolean
   purchasable?: boolean
+  inquiry_available?: boolean
+  interaction_mode?: 'matchmaking' | 'direct_trade' | string
   purchase_unavailable_reason?: string | null
   stock?: number
   reported_stock?: number

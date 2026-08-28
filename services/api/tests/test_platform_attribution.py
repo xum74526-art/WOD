@@ -58,6 +58,7 @@ class PlatformAttributionTests(unittest.TestCase):
             "SENSITIVE_DATA_KEY",
             "MANUAL_BANK_CARD_ENABLED",
             "MANUAL_PAYOUT_ENABLED",
+            "DIRECT_TRADE_ENABLED",
             "PAYMENT_SERVICE_ENABLED",
             "QIXIANGPAY_ENABLED",
             "QIXIANGPAY_BASE_URL",
@@ -72,6 +73,7 @@ class PlatformAttributionTests(unittest.TestCase):
         settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
         settings.MANUAL_BANK_CARD_ENABLED = True
         settings.MANUAL_PAYOUT_ENABLED = True
+        settings.DIRECT_TRADE_ENABLED = True
         settings.PAYMENT_SERVICE_ENABLED = True
         settings.QIXIANGPAY_ENABLED = True
         settings.QIXIANGPAY_BASE_URL = "https://pay.example.test"

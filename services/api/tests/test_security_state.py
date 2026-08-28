@@ -27,7 +27,7 @@ from app.routers.wallet import recharge
 from app.routers.order import cancel_order, confirm_delivery, create_order, deliver_ssh
 from app.routers.product import router as product_router
 from app.schemas.bank_card import BankCardIn
-from app.schemas.order import OrderCreateIn
+from app.schemas.order import OrderCreateIn, OrderDeliverIn
 from app.schemas.supplier import SupplierDeviceCreateIn, SupplierDeviceUpdateIn, SupplierRegisterIn
 from app.schemas.wallet import RechargeIn
 from app.services.wallet_balance import (
@@ -69,6 +69,8 @@ class SecurityStateTests(unittest.TestCase):
         self.db.add(self.seller_wallet)
         self.db.commit()
         self.original_payment_state = settings.PAYMENT_SERVICE_ENABLED
+        self.original_direct_trade = settings.DIRECT_TRADE_ENABLED
+        settings.DIRECT_TRADE_ENABLED = True
         self.original_revenue_state = settings.REVENUE_SETTLEMENT_ENABLED
         self.original_reward_state = settings.REWARD_SERVICE_ENABLED
         self.original_closed_test_reward_state = settings.CLOSED_TEST_REWARD_ENABLED
@@ -84,6 +86,7 @@ class SecurityStateTests(unittest.TestCase):
 
     def tearDown(self):
         settings.PAYMENT_SERVICE_ENABLED = self.original_payment_state
+        settings.DIRECT_TRADE_ENABLED = self.original_direct_trade
         settings.REVENUE_SETTLEMENT_ENABLED = self.original_revenue_state
         settings.REWARD_SERVICE_ENABLED = self.original_reward_state
         settings.CLOSED_TEST_REWARD_ENABLED = self.original_closed_test_reward_state
@@ -213,7 +216,12 @@ class SecurityStateTests(unittest.TestCase):
         entries = self.db.query(Ledger).filter(Ledger.ref_order_id == order_id).all()
         self.assertEqual([(entry.type, entry.amount) for entry in entries], [("freeze", Decimal("14.4000"))])
 
-        deliver_ssh(order_id, {"ssh_info": "ssh test@example.com -p 22"}, self.seller, self.db)
+        deliver_ssh(
+            order_id,
+            OrderDeliverIn(ssh_info="ssh test@example.com -p 22"),
+            self.seller,
+            self.db,
+        )
         confirm_delivery(order_id, self.user, self.db)
         self.db.refresh(self.wallet)
         self.db.refresh(self.seller_wallet)
@@ -253,7 +261,12 @@ class SecurityStateTests(unittest.TestCase):
             cycle_days=30,
             expected_unit_price_card_hours=Decimal("0.01"),
         ), self.user, self.db)
-        deliver_ssh(result["data"]["id"], {"ssh_info": "ssh ubuntu@192.0.2.10 -p 22"}, self.seller, self.db)
+        deliver_ssh(
+            result["data"]["id"],
+            OrderDeliverIn(ssh_info="ssh ubuntu@192.0.2.10 -p 22"),
+            self.seller,
+            self.db,
+        )
         with self.assertRaises(BizError):
             cancel_order(result["data"]["id"], self.user, self.db)
 
@@ -298,10 +311,15 @@ class SecurityStateTests(unittest.TestCase):
         self.assertIsNone(external_result["data"]["ssh_info"])
 
         with self.assertRaises(BizError):
-            deliver_ssh(external_result["data"]["id"], {"ssh_info": "pending credentials"}, self.seller, self.db)
+            deliver_ssh(
+                external_result["data"]["id"],
+                OrderDeliverIn(ssh_info="pending credentials"),
+                self.seller,
+                self.db,
+            )
         deliver_ssh(
             external_result["data"]["id"],
-            {"ssh_info": "ssh ubuntu@198.51.100.20 -p 22"},
+            OrderDeliverIn(ssh_info="ssh ubuntu@198.51.100.20 -p 22"),
             self.seller,
             self.db,
         )

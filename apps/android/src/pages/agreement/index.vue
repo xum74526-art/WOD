@@ -20,6 +20,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 
 interface LegalSection {
   title: string
@@ -170,6 +171,58 @@ const AGREEMENT_EN: LegalSection[] = [
   },
 ]
 
+const MATCHMAKING_AGREEMENT_ZH: LegalSection[] = AGREEMENT_ZH.map((section, index) => {
+  if (index === 0) return {
+    ...section,
+    paragraphs: ['WOD（以下简称“本平台”）提供算力行情与资讯、算力需求撮合、设备管理和社区交流等功能。用户注册即视为同意本协议全部条款。'],
+  }
+  if (index === 2) return {
+    title: '三、算力需求撮合',
+    paragraphs: [
+      '1. 算力市场展示 KAI 自营及入驻资料已审核商家的资源信息，相关行情、配置和可用量仅用于需求沟通，不构成即时出售或成交承诺。',
+      '2. 用户可提交算力型号、数量、使用时长、地区和联系方式等需求；提交需求不等于下单、付款或签订交易合同。',
+      '3. 已审核商家可提交服务方案，平台协助用户比较方案并进行沟通协调；采购方个人联系方式不会在公开需求市场直接展示。',
+      '4. 服务范围、交付方式、实际价格及双方权利义务，应在人工联系和必要的资质核验后另行确认。',
+      '5. 当前撮合模式不在线收取交易款项，不扣减或冻结卡时，不自动创建订单或算力资产，也不承诺固定收益。',
+    ],
+  }
+  if (index === 3) return {
+    title: '四、卡时与历史记录',
+    paragraphs: [
+      '1. “卡时”仅为平台功能记账单位，不代表现金、存款或可兑付资产。',
+      '2. 当前撮合模式不开放新充值、新提现或卡时直接购买；需求确认和后续服务通过平台工作人员人工协调。',
+      '3. 已存在的钱包、充值、提现、订单和资产记录仅用于查询与处理历史事项；是否可取消或更新以服务端返回状态为准。',
+    ],
+  }
+  return section
+})
+
+const MATCHMAKING_AGREEMENT_EN: LegalSection[] = AGREEMENT_EN.map((section, index) => {
+  if (index === 0) return {
+    ...section,
+    paragraphs: ['WOD (the “Platform”) provides compute-market information, requirement matchmaking, device management and community features. By registering, you agree to these terms.'],
+  }
+  if (index === 2) return {
+    title: '3. Compute Requirement Matchmaking',
+    paragraphs: [
+      '1. The market presents information about KAI Direct resources and resources from merchants whose onboarding materials have been reviewed. Market data, configurations and availability support discussions only and are not an immediate sale or transaction commitment.',
+      '2. You may submit requirements such as model, quantity, duration, region and contact details. Submitting a requirement is not an order, payment or transaction contract.',
+      '3. Reviewed merchants may provide service proposals, and the Platform may help compare proposals and coordinate communication. Buyer contact details are not displayed publicly in the requirement market.',
+      '4. Service scope, delivery, final pricing and each party’s obligations must be confirmed separately after human communication and any required qualification review.',
+      '5. Matchmaking mode does not collect transaction payments online, debit or freeze CH, automatically create orders or compute assets, or promise fixed returns.',
+    ],
+  }
+  if (index === 3) return {
+    title: '4. Compute Hours and Historical Records',
+    paragraphs: [
+      '1. CH is only a Platform ledger unit. It is not cash, a deposit or a redeemable asset.',
+      '2. Matchmaking mode does not open new top-ups, withdrawals or direct CH purchases. Platform staff coordinate requirement confirmation and follow-up service manually.',
+      '3. Existing wallet, top-up, withdrawal, order and asset records remain available only for history and outstanding matters. Cancellation or status updates follow the server-authorized state.',
+    ],
+  }
+  return section
+})
+
 const PRIVACY_ZH: LegalSection[] = [
   {
     title: '一、信息收集',
@@ -304,12 +357,14 @@ const PRIVACY_EN: LegalSection[] = [
 
 const i18n = useI18nStore()
 const { t } = i18n
+const commerce = useCommerceStore()
 const type = ref<'agreement' | 'privacy'>('agreement')
 const title = computed(() => t(type.value === 'privacy' ? '隐私政策' : '用户协议'))
 const document = computed(() => {
   const english = i18n.lang === 'en'
   if (type.value === 'privacy') return english ? PRIVACY_EN : PRIVACY_ZH
-  return english ? AGREEMENT_EN : AGREEMENT_ZH
+  if (commerce.directTradeEnabled) return english ? AGREEMENT_EN : AGREEMENT_ZH
+  return english ? MATCHMAKING_AGREEMENT_EN : MATCHMAKING_AGREEMENT_ZH
 })
 
 onLoad((opts) => {

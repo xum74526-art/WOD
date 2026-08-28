@@ -19,7 +19,12 @@ from app.routers.order import (
     dispute_delivery,
     resolve_delivery_dispute,
 )
-from app.schemas.order import OrderCreateIn, OrderDisputeIn, OrderDisputeResolveIn
+from app.schemas.order import (
+    OrderCreateIn,
+    OrderDeliverIn,
+    OrderDisputeIn,
+    OrderDisputeResolveIn,
+)
 from app.services.lifecycle import _restore_expired_order_stock, process_order_lifecycle
 from app.services.merchant_settlement import (
     MerchantSettlementError,
@@ -44,6 +49,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
                 "SUPPLIER_REWARD_ENABLED",
                 "INVITE_REWARD_ENABLED",
                 "REWARD_SETTLEMENT_ENABLED",
+                "DIRECT_TRADE_ENABLED",
                 "ORDER_DELIVERY_TIMEOUT_HOURS",
                 "ORDER_CONFIRMATION_TIMEOUT_HOURS",
                 "ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS",
@@ -55,6 +61,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
         settings.SUPPLIER_REWARD_ENABLED = False
         settings.INVITE_REWARD_ENABLED = False
         settings.REWARD_SETTLEMENT_ENABLED = False
+        settings.DIRECT_TRADE_ENABLED = True
         settings.ORDER_DELIVERY_TIMEOUT_HOURS = 24
         settings.ORDER_CONFIRMATION_TIMEOUT_HOURS = 24
         settings.ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS = 72
@@ -123,7 +130,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
     def _deliver(self, order: Order) -> Order:
         deliver_ssh(
             order.id,
-            {"ssh_info": "ssh ubuntu@192.0.2.80 -p 22"},
+            OrderDeliverIn(ssh_info="ssh ubuntu@192.0.2.80 -p 22"),
             self.seller,
             self.db,
             "android",

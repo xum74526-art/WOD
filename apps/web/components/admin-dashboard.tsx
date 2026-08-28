@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Bank, Gavel, IdentificationCard, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, Bank, ClipboardText, Gavel, IdentificationCard, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
 
 const queues = [
+  { eyebrow: "SERVICE REQUESTS", title: "需求管理", description: "查看用户提交的算力需求、指定商家与联系方式，供运营人员线下跟进。", href: "/admin/requests", label: "查看需求", icon: ClipboardText },
   { eyebrow: "PLATFORM DATA", title: "端口数据", description: "统一查看 Web、iOS、Android、管理端及历史来源的用户、订单与充值数据。", href: "/admin/data", label: "查看端口数据", icon: UsersThree },
   { eyebrow: "IDENTITY", title: "实名认证", description: "核验个人或企业主体，结论控制商家准入与提现。", href: "/admin/kyc", label: "进入实名队列", icon: IdentificationCard },
   { eyebrow: "MERCHANT ADMISSION", title: "商家入驻审核", description: "单独审核商家入驻资料；只有已完成实名认证的申请人才能通过。", href: "/admin/suppliers", label: "进入入驻队列", icon: Storefront },
@@ -17,6 +18,6 @@ export function AdminDashboard() {
     <div className="role-overview-grid">{queues.map(({ eyebrow, title, description, href, label, icon: Icon }) => <Link href={href} key={href}>
       <header><Icon size={22} /><small>{eyebrow}</small></header><h2>{title}</h2><p>{description}</p><footer>{label}<ArrowRight size={16} /></footer>
     </Link>)}</div>
-    <div className="workspace-service-note">用户、订单和充值按端口来源统一审计；实名、银行卡和提现仍需独立财务管理员权限。</div>
+    <div className="workspace-service-note">需求、用户、订单和充值统一查看；实名、银行卡和提现仍需独立财务管理员权限。</div>
   </section>;
 }

@@ -69,40 +69,55 @@ function rankingItem(value: unknown): PublicMarketRankingItem {
 
 function publicProduct(value: unknown): PublicProduct {
   const item = object(value);
-  const marketSource = text(item.market_source, "kai");
-  const sellerType = text(item.seller_type, marketSource === "kai" ? "kai_self_operated" : "merchant") === "merchant"
+  const rawSupplierId = item.supplier_id == null ? null : number(item.supplier_id);
+  const rawMarketSource = text(item.market_source).toLowerCase();
+  const rawSellerType = text(item.seller_type).toLowerCase();
+  const legacyMerchant = rawSellerType === "merchant"
+    || text(item.fulfillment_mode).toLowerCase() === "merchant_manual"
+    || text(item.resource_claim_source).toLowerCase() === "merchant_declared"
+    || (rawSupplierId != null && rawSupplierId > 0);
+  const marketSource = rawMarketSource === "kai" || rawMarketSource === "wod"
+    ? rawMarketSource
+    : legacyMerchant ? "wod" : "kai";
+  const sellerType = rawSellerType === "merchant" || (rawSellerType !== "kai_self_operated" && marketSource === "wod")
     ? "merchant"
     : "kai_self_operated";
-  const supplierId = number(item.supplier_id);
-  const sellerName = text(item.seller_name, text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI 自营" : "第三方商家"));
+  const supplierId = sellerType === "merchant" && rawSupplierId != null && rawSupplierId > 0 ? rawSupplierId : null;
+  const supplierName = text(item.supplier_name) || null;
+  const sellerName = text(item.seller_name) || supplierName || (sellerType === "kai_self_operated" ? "KAI 自营" : "第三方商家");
   const fulfillmentMode = text(item.fulfillment_mode, sellerType === "kai_self_operated" ? "platform_manual" : "merchant_manual") === "merchant_manual"
     ? "merchant_manual"
     : "platform_manual";
+  const resourceClaimSource = text(
+    item.resource_claim_source,
+    sellerType === "kai_self_operated" ? "kai_published" : "merchant_declared",
+  ) === "merchant_declared" ? "merchant_declared" : "kai_published";
   const memory = text(item.memory);
   const price = number(item.price_cny_per_gpu_hour, number(item.price));
   const stock = number(item.stock);
   const purchaseUnit = text(item.purchase_unit, "hour");
   return {
     id: number(item.id),
-    supplier_id: supplierId || undefined,
-    supplier_name: text(item.supplier_name) || null,
+    supplier_id: supplierId,
+    supplier_name: supplierName,
     supplier_rating: item.supplier_rating == null ? null : number(item.supplier_rating),
-    supplier_order_count: number(item.supplier_order_count),
+    supplier_order_count: item.supplier_order_count == null ? null : number(item.supplier_order_count),
     seller_type: sellerType,
     seller_name: sellerName,
     fulfillment_mode: fulfillmentMode,
-    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "KAI 自营" : "商家入驻资料已审核"),
+    resource_claim_source: resourceClaimSource,
+    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "KAI 自营 · 平台人工交付" : "商家发布 · 商家人工交付"),
     assurance_description: text(
       item.assurance_description,
       sellerType === "kai_self_operated"
         ? "价格与商品由 KAI 发布，平台安排人工交付。"
-        : "商家入驻资料已审核；资源参数与库存由商家自行发布并负责交付。",
+        : "商品配置与库存由商家自行申报，并由该商家负责人工交付；平台记录订单、验收与争议状态。",
     ),
     name: text(item.name),
     gpu_model: text(item.gpu_model),
     memory,
     gpu_memory_gb: number(memory.match(/\d+(?:\.\d+)?/)?.[0]),
-    region: text(item.region_name, text(item.region_code, text(item.city, "未标注"))),
+    region: text(item.region_name, text(item.region_code, text(item.city, "地区待确认"))),
     description: text(item.desc),
     cpu_cores: null,
     ram_gb: null,
@@ -110,11 +125,14 @@ function publicProduct(value: unknown): PublicProduct {
     bandwidth_mbps: null,
     unit_price_ch: number(item.price_card_hours_per_gpu_hour, price),
     price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
-    total_quantity: number(item.reported_stock, stock),
+    total_quantity: item.reported_stock == null ? stock : number(item.reported_stock, stock),
     available_quantity: stock,
-    source_name: text(item.supplier_name, sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),
+    source_name: supplierName || (sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),
     source_observed_at: text(item.price_updated_at) || null,
-    server_online: Boolean(item.purchasable),
+    inquiry_available: item.inquiry_available !== false,
+    interaction_mode: ["direct_trade", "matchmaking", "history_only"].includes(text(item.interaction_mode))
+      ? text(item.interaction_mode) as PublicProduct["interaction_mode"]
+      : Boolean(item.purchasable) ? "direct_trade" : "matchmaking",
     purchasable: Boolean(item.purchasable),
     purchase_unavailable_reason: text(item.purchase_unavailable_reason) || null,
     cycle: Array.isArray(item.cycle) ? item.cycle.map((entry) => number(entry)).filter(Boolean) : [],

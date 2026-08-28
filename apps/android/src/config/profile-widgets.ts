@@ -40,6 +40,7 @@ const PERSONAL_ACCOUNT_ITEMS: ProfileWidget[] = [
 
 const SUPPLIER_OPERATION_ITEMS: ProfileWidget[] = [
   { key: 'orders', label: 'merchantOrders', icon: 'order', route: '/pages/supplier/orders' },
+  { key: 'request-market', label: 'requestMarket', icon: 'procurement', route: '/pages/buy-request/index?view=seller' },
   { key: 'overview', label: 'merchantOverview', icon: 'gpu', route: '/pages/supplier/dashboard' },
   { key: 'revenue', label: 'revenueSettle', icon: 'revenue', route: '/pages/supplier/revenue' },
   { key: 'rebate', label: 'rebateSummary', icon: 'refresh', route: '/pages/supplier/rebate' },

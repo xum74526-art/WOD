@@ -15,6 +15,7 @@ from app.services.manual_payout import (
 )
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
+from app.services.trade_mode import require_withdrawal_enabled
 
 
 router = APIRouter(prefix="/api/withdrawals", tags=["withdrawal"])
@@ -32,6 +33,7 @@ def create(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    require_withdrawal_enabled()
     order = create_withdrawal(
         db,
         user,

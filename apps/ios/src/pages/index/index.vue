@@ -51,14 +51,36 @@
       <view class="divider"></view>
 
       <view class="quick">
-        <view class="q-item" @tap="go('/pages/wallet/index')">
-          <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
-          <text class="q-text">{{ t('recharge') }}</text>
-        </view>
-        <view class="q-item" @tap="go('/pages/wallet/index')">
-          <view class="q-icon"><AppIcon name="arrow-right" :size="36" /></view>
-          <text class="q-text">{{ t('withdraw') }}</text>
-        </view>
+        <template v-if="commerce.directTradeEnabled">
+          <view class="q-item" @tap="go('/pages/wallet/index')">
+            <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
+            <text class="q-text">{{ t('recharge') }}</text>
+          </view>
+          <view class="q-item" @tap="go('/pages/wallet/index?withdraw=1')">
+            <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
+            <text class="q-text">{{ t('withdraw') }}</text>
+          </view>
+        </template>
+        <template v-else-if="commerce.matchmakingEnabled">
+          <view class="q-item" @tap="go('/pages/buy-request/index?new=1')">
+            <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
+            <text class="q-text">{{ t('submitRequirement') }}</text>
+          </view>
+          <view class="q-item" @tap="go('/pages/buy-request/index')">
+            <view class="q-icon"><AppIcon name="order" :size="36" /></view>
+            <text class="q-text">{{ t('myRequirements') }}</text>
+          </view>
+        </template>
+        <template v-else>
+          <view class="q-item" @tap="go('/pages/quote/index')">
+            <view class="q-icon"><AppIcon name="search" :size="36" /></view>
+            <text class="q-text">{{ t('viewMarket') }}</text>
+          </view>
+          <view class="q-item" @tap="go('/pages/buy-request/index')">
+            <view class="q-icon"><AppIcon name="order" :size="36" /></view>
+            <text class="q-text">{{ t('myRequirements') }}</text>
+          </view>
+        </template>
         <view class="q-item" @tap="goTab('/pages/market/index')">
           <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
           <text class="q-text">{{ t('buyCompute') }}</text>
@@ -166,9 +188,19 @@
             <text class="pm">{{ p.memory }} · {{ t('revenueDataUnavailable') }}</text>
           </view>
           <view class="pr">
-            <text class="pp">{{ productCardHourPrice(p) }}</text>
-            <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
-            <text class="p-buy">{{ t(featuredActionLabel(p)) }}</text>
+            <template v-if="commerce.directTradeEnabled">
+              <text class="pp">{{ fmtCHn(directTradeCardHoursPerGpuHour(p)) }}</text>
+              <text class="p-buy">{{ t(directTradeProductPurchasable(p) ? 'k_25575fc0' : 'viewDetail') }}</text>
+            </template>
+            <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
+              <text class="pp">{{ t('inquiry') }}</text>
+              <text class="pu">{{ t('inquiryContactHintShort') }}</text>
+              <text class="p-buy">{{ t('submitRequirement') }}</text>
+            </template>
+            <template v-else>
+              <text class="pp unavailable">{{ t('dataUnavailable') }}</text>
+              <text class="p-buy">{{ t('viewDetail') }}</text>
+            </template>
           </view>
         </view>
       </template>
@@ -182,6 +214,7 @@ import { onHide, onShow, onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useAssetStore } from '@/store/asset'
 import { useNotificationStore } from '@/store/notification'
+import { useCommerceStore } from '@/store/commerce'
 import { getWallet } from '@/api/wallet'
 import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
@@ -201,6 +234,7 @@ import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
+import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import {
   hasCompleteSevenDayMetric,
   selectFeaturedProducts,
@@ -223,6 +257,7 @@ import {
 const userStore = useUserStore()
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
+const commerce = useCommerceStore()
 const i18n = useI18nStore()
 const { t } = i18n
 const user = computed(() => userStore.userInfo)
@@ -385,9 +420,6 @@ function startMarketTimer() {
   marketTimer = setInterval(() => loadHotMarket(true), 10000)
 }
 
-function featuredActionLabel(product: Pick<Product, 'market_source' | 'purchasable' | 'stock'>): string {
-  return product.market_source === 'kai' && product.purchasable === true && Number(product.stock || 0) > 0 ? 'buyUsage' : 'viewDetail'
-}
 function productCardHourPrice(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): string {
   const cny = Number(product.price_cny_per_gpu_hour ?? product.price ?? 0)
   return formatNumber(product.price_card_hours_per_gpu_hour ?? toCardHours(cny))

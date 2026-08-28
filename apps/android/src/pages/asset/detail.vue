@@ -84,8 +84,9 @@
       </template>
     </scroll-view>
     <BottomActionBar v-if="asset">
-      <view v-if="asset.can_sell" class="sell-btn" @tap="onSell">{{ t('sell') }}</view>
-      <view v-else-if="asset.purchase_type === 'usage'" class="primary-btn" @tap="goRenew">{{ t('renew') }}</view>
+      <DirectTradeAssetActions v-if="commerce.directTradeEnabled" :asset="asset" />
+      <view v-else-if="commerce.matchmakingEnabled && (asset.can_sell || asset.purchase_type === 'usage')" class="primary-btn" @tap="submitFollowUpRequirement">{{ t('submitRequirement') }}</view>
+      <view v-else-if="!commerce.available" class="primary-btn disabled">{{ t('dataUnavailable') }}</view>
       <view v-else class="primary-btn disabled">{{ t('holdingTradingUnavailable') }}</view>
     </BottomActionBar>
   </view>
@@ -94,9 +95,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { sellAsset, getAsset, type AssetItem } from '@/api/asset'
+import { getAsset, type AssetItem } from '@/api/asset'
 import { getRevenueChart, type RevenuePoint } from '@/api/revenue'
-import { formatMoneyShort, formatNumber, fmtCH, fmtCHr, fmtCHn, toCardHours, formatDate } from '@/utils/format'
+import { formatNumber, fmtCH, fmtCHn, toCardHours, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -105,12 +106,16 @@ import Chart from '@/components/Chart.vue'
 import BottomActionBar from '@/components/BottomActionBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AppIcon from '@/components/AppIcon.vue'
-import { navigateTo as nav, navigateBack } from '@/utils/nav'
+import DirectTradeAssetActions from '@/components/direct-trade/DirectTradeAssetActions.vue'
+import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { localizeProductName } from '@/utils/localize-content'
+import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
 
 const i18n = useI18nStore()
 const { t } = i18n
+const commerce = useCommerceStore()
 const asset = ref<AssetItem | null>(null)
 const chart = ref<RevenuePoint[]>([])
 const loading = ref(true)
@@ -142,39 +147,24 @@ const badge = computed(() => {
   return { text: s || '待处理', type: 'default' as const }
 })
 
-function onSell() {
-  const pnl = asset.value?.pnl ?? 0
-  const sellPrice = asset.value?.current_price ?? 0
-  uni.showModal({
-    title: t('确认出售'),
-    content: `${t('k_87165f6a')}: ${fmtCH(sellPrice)}\n${t('k_a8401d10')}: ${pnl >= 0 ? '+' : ''}${fmtCH(pnl)}\n\n${t('确认按当前市价出售？')}`,
-    confirmText: t('确认出售'),
-    success: async (r) => {
-      if (!r.confirm) return
-      try {
-        const res = await sellAsset(asset.value!.id)
-        uni.showToast({ title: `${t('出售成功')} ${t(res.pnl >= 0 ? '盈利' : '亏损')}${fmtCH(res.pnl)}`, icon: 'none' })
-        setTimeout(() => navigateBack(), 1000)
-      } catch {}
-    },
-  })
-}
-
-const ratePct = computed(() => {
-  const r = Number(asset.value?.daily_rate) || 0
-  return formatNumber(r * 100)
-})
-
 function goOrder() {
   const oid = asset.value?.order_id
   if (!oid) return
   nav(`/pages/order/detail?id=${oid}`)
 }
 
-function goRenew() {
-  const pid = asset.value?.product_id
-  if (!pid) return
-  nav(`/pages/product/detail?id=${pid}`)
+function submitFollowUpRequirement() {
+  const current = asset.value
+  if (!current?.product_id) return
+  saveInquiryRequestPrefill({
+    product_id: current.product_id,
+    source: 'existing_asset',
+    gpu_model: current.gpu_model || current.product_name || 'GPU',
+    quantity: Math.max(1, current.quantity || 1),
+    gpu_hours: Math.max(1, Number(current.remaining_days || 1) * 24),
+    product_name: current.product_name,
+  })
+  nav('/pages/buy-request/index?compose=1')
 }
 </script>
 

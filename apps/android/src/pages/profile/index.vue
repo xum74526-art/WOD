@@ -56,7 +56,7 @@
         </view>
         <view class="card invite-card" @tap="go('/pages/supplier/devices')">
           <view class="iv-icons"><AppIcon name="gpu" :size="36" /></view>
-          <text class="iv-label">{{ t('k_25f02e31') }}</text>
+          <text class="iv-label">{{ t('merchantResourceManagement') }}</text>
           <text class="iv-val">{{ dash?.product_count ?? 0 }} {{ t('units') }}</text>
           <text class="iv-reward">{{ t('rentable') }} {{ dash?.total_stock ?? 0 }} {{ t('units') }}</text>
         </view>

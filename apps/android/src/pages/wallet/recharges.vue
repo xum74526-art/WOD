@@ -95,7 +95,7 @@
 
         <text v-if="showFailureReason(order)" class="status-reason">{{ tr(order.failure_reason) }}</text>
 
-        <view v-if="order.can_query || order.can_cancel || canRestartOrder(order)" class="order-actions">
+        <view v-if="order.can_query || order.can_cancel || commerce.directTradeEnabled" class="order-actions">
           <view
             v-if="order.can_query"
             class="query-button"
@@ -112,14 +112,7 @@
             role="button"
             @tap="cancelOrder(order)"
           >{{ cancelingOrderNo === order.order_no ? t('cancelingRechargeOrder') : t('cancelRechargeOrder') }}</view>
-          <view
-            v-if="canRestartOrder(order)"
-            class="restart-button"
-            :class="{ disabled: Boolean(queryingOrderNo || cancelingOrderNo) }"
-            :aria-disabled="Boolean(queryingOrderNo || cancelingOrderNo)"
-            role="button"
-            @tap="restartOrder(order)"
-          >{{ t('restartRecharge') }}</view>
+          <DirectTradeRechargeRestartAction v-if="commerce.directTradeEnabled" :order="order" />
         </view>
       </view>
 
@@ -145,14 +138,16 @@ import {
 import AppIcon from '@/components/AppIcon.vue'
 import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import DirectTradeRechargeRestartAction from '@/components/direct-trade/DirectTradeRechargeRestartAction.vue'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { formatMoney, formatNumber } from '@/utils/format'
-import { createRechargeRestartRoute, rechargeCanRestart, rechargeHistoryPresentation } from '@/utils/recharge-payment'
-import { navigateTo as nav } from '@/utils/nav'
+import { rechargeHistoryPresentation } from '@/utils/recharge-payment'
 
 type RechargeStatusFilter = '' | 'pending' | 'paid' | 'review' | 'canceled' | 'expired' | 'failed'
 
 const { t, tr } = useI18nStore()
+const commerce = useCommerceStore()
 const orders = ref<RechargePaymentOrder[]>([])
 const page = ref(1)
 const hasMore = ref(false)
@@ -180,10 +175,6 @@ function statusLabel(order: RechargePaymentOrder): string {
 
 function statusTone(order: RechargePaymentOrder): string {
   return rechargeHistoryPresentation(order).tone
-}
-
-function canRestartOrder(order: RechargePaymentOrder): boolean {
-  return rechargeCanRestart(order, null)
 }
 
 function channelLabel(channel?: string | null): string {
@@ -259,13 +250,6 @@ function copyOrderNumber(orderNo: string) {
     data: orderNo,
     success: () => uni.showToast({ title: t('orderNumberCopied'), icon: 'success' }),
   })
-}
-
-function restartOrder(order: RechargePaymentOrder) {
-  if (queryingOrderNo.value || cancelingOrderNo.value) return
-  const target = createRechargeRestartRoute(order)
-  if (!target) return
-  nav(target)
 }
 
 async function queryOrder(order: RechargePaymentOrder) {

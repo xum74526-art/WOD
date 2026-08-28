@@ -258,7 +258,7 @@ export type SupplierStats = {
 
 export type MobileStore = {
   supplier: SupplierProfile & { rating?: number; order_count?: number };
-  products: Array<{ id: number; name: string; gpu_model: string; memory: string; price: number; stock?: number; region_name?: string; region_code?: string; purchasable?: boolean }>;
+  products: Array<{ id: number; name: string; gpu_model: string; memory: string; price: number; stock?: number; region_name?: string; region_code?: string; purchasable?: boolean; inquiry_available?: boolean }>;
 };
 
 export type SupplierRebate = {

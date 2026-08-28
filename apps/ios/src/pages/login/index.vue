@@ -95,6 +95,7 @@ import {
   parseKaiAuthUrl,
   type KaiAuthCallback,
 } from '@/utils/kai-auth-callback'
+import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -241,6 +242,10 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
 }
 
 function enterAuthenticatedApp() {
+  if (hasInquiryRequestPrefill()) {
+    uni.reLaunch({ url: '/pages/buy-request/index?new=1' })
+    return
+  }
   uni.switchTab({
     url: '/pages/index/index',
     fail: () => uni.reLaunch({ url: '/pages/index/index' }),
@@ -327,7 +332,7 @@ async function submit() {
     if (mode.value === 'login') await userStore.login(form.phone, form.password)
     else await userStore.register(form.username, form.phone, form.password, form.invite_code || undefined, captchaKey.value, form.captcha_code)
     uni.showToast({ title: t('success'), icon: 'success' })
-    setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+    setTimeout(enterAuthenticatedApp, 500)
   } catch { /* request toast */ }
   submitting.value = false
 }

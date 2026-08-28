@@ -17,7 +17,7 @@
       </view>
 
       <view class="quick-row">
-        <view class="q-btn" @tap="onWithdraw">{{ t("withdraw") }}</view>
+        <DirectTradeSupplierWithdrawalAction v-if="commerce.withdrawEnabled" />
         <view class="q-btn ghost" @tap="goDevices">{{ t('k_53ac00e9') }}</view>
       </view>
 
@@ -55,16 +55,19 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getSupplierWallet, getRevenueDetail } from '@/api/supplier'
-import { formatMoneyShort, fmtCH, fmtCHr, toCardHours, formatDate } from '@/utils/format'
+import { fmtCH, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import DirectTradeSupplierWithdrawalAction from '@/components/direct-trade/DirectTradeSupplierWithdrawalAction.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { localizeProductName } from '@/utils/localize-content'
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
+const commerce = useCommerceStore()
 const wallet = ref<Awaited<ReturnType<typeof getSupplierWallet>> | null>(null)
 const records = ref<Awaited<ReturnType<typeof getRevenueDetail>>>([])
 const loadError = ref(false)
@@ -79,7 +82,6 @@ async function load() {
 onShow(() => load())
 
 function goDevices() { nav('/pages/supplier/devices') }
-function onWithdraw() { nav('/pages/wallet/index') }
 function settlementText(settlementStatus: string, orderStatus: string) {
   if (settlementStatus === 'settled') return t('已结算')
   if (settlementStatus === 'historical_unreconciled') return t('待财务核账')

@@ -1,6 +1,5 @@
 from datetime import datetime
 from decimal import Decimal
-
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -102,9 +101,16 @@ class OrderOut(OrmModel):
     gpu_model: str | None = None
     asset_id: int | None = None
     market_source: str | None = None
-    seller_type: str | None = None
+    supplier_id: int | None = None
+    supplier_name: str | None = None
+    supplier_rating: float | None = None
+    supplier_order_count: int | None = None
+    seller_type: Literal["kai_self_operated", "merchant"] | None = None
     seller_name: str | None = None
-    fulfillment_mode: str | None = None
+    fulfillment_mode: Literal["platform_manual", "merchant_manual"] | None = None
+    resource_claim_source: Literal["kai_published", "merchant_declared"] | None = None
+    assurance_label: str | None = None
+    assurance_description: str | None = None
     fulfillment_status: str | None = None
     accumulated_revenue: float = 0
     remaining_days: int | None = None

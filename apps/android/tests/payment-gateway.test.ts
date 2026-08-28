@@ -21,14 +21,11 @@ test('recharge history supports server-authorized query and cancellation', () =>
   assert.match(rechargeOrdersPage, /cancelRechargePayment\(order\.order_no, true\)/)
 })
 
-test('wrong recharge amounts can be replaced without claiming the provider order was canceled', () => {
-  assert.match(walletPage, /confirmRechargeAmount\(amount\)/)
-  assert.match(walletPage, /async function requestReplaceRecharge\(\)/)
-  const replaceFlow = walletPage.match(/async function requestReplaceRecharge\(\)[\s\S]+?\n}\n\nfunction handleRestartRecharge/)?.[0] || ''
-  assert.match(replaceFlow, /queryRechargePayment\(orderNo, true\)/)
-  assert.match(replaceFlow, /paymentCardState\.value !== 'pending'/)
-  assert.match(replaceFlow, /clearPaymentSession\(\)/)
-  assert.doesNotMatch(replaceFlow, /cancelRechargePayment/)
+test('wallet cannot start, replace, continue, or restart a recharge', () => {
+  assert.doesNotMatch(walletPage, /createRechargePayment|confirmRechargeAmount|requestReplaceRecharge|continueCurrentPayment|handleRestartRecharge|openRecharge/)
+  assert.doesNotMatch(rechargeOrdersPage, /createRechargeRestartRoute|restartOrder|restartRecharge/)
+  assert.match(walletPage, /queryRechargePayment/)
+  assert.match(walletPage, /cancelRechargePayment/)
 })
 
 test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
@@ -37,9 +34,10 @@ test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
   assert.doesNotMatch(locale, /码支付订单号|MaPay order|MaPay has no merchant/)
 })
 
-test('wallet removes the 0.01 test recharge and enforces production minimums', () => {
+test('wallet removes the 0.01 test recharge and all new recharge or withdrawal controls', () => {
   assert.doesNotMatch(walletPage, /0\.01/)
-  assert.match(walletPage, /effectiveRechargeMinimum/)
-  assert.match(walletPage, /effectiveWithdrawalMinimum/)
-  assert.match(walletPage, /quickAmounts = \[MINIMUM_RECHARGE_CNY, 50, 100\]/)
+  assert.doesNotMatch(walletPage, /effectiveRechargeMinimum|effectiveWithdrawalMinimum|quickAmounts|createWithdrawal/)
+  assert.doesNotMatch(walletPage, /@tap="openRecharge"|@tap="openWithdraw"/)
+  assert.match(walletPage, /goRechargeOrders/)
+  assert.match(walletPage, /goWithdrawals/)
 })

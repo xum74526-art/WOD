@@ -18,6 +18,8 @@ const pages = JSON.parse(source('../src/pages.json')) as {
 }
 const supplierApi = source('../src/api/supplier.ts')
 const devicePage = source('../src/pages/supplier/devices.vue')
+const dashboardPage = source('../src/pages/supplier/dashboard.vue')
+const profilePage = source('../src/pages/profile/index.vue')
 const createPageUrl = new URL('../src/pages/supplier/product-create.vue', import.meta.url)
 
 test('approved sellers have a registered mobile resource-creation page', () => {
@@ -44,6 +46,14 @@ test('seller resource list is writable and displays the backend card-hour unit d
   assert.doesNotMatch(devicePage, /fmtCH\s*\(\s*d\.price\s*\)/)
   assert.match(devicePage, /createSupplierDevice|pages\/supplier\/product-create/)
   assert.match(devicePage, /updateSupplierDevice/)
+})
+
+test('seller mode exposes a clearly labelled compute-resource management entry', () => {
+  assert.match(devicePage, /t\('merchantResourceManagement'\)/)
+  assert.match(dashboardPage, /pages\/supplier\/devices/)
+  assert.match(dashboardPage, /t\('merchantResourceManagement'\)/)
+  assert.match(profilePage, /pages\/supplier\/devices/)
+  assert.match(profilePage, /t\('merchantResourceManagement'\)/)
 })
 
 test('resource creation submits card hours without applying the RMB conversion helper', () => {

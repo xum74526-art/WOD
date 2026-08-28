@@ -56,7 +56,7 @@
       <view class="modules">
         <view class="mod-item" @tap="go('/pages/supplier/devices')">
           <view class="mod-icon"><AppIcon name="gpu" :size="48" /></view>
-          <text class="mod-text">{{ t('资产管理') }}</text>
+          <text class="mod-text">{{ t('merchantResourceManagement') }}</text>
           <text class="mod-sub">{{ t('{count} 台设备', { count: dash?.product_count ?? 0 }) }}</text>
         </view>
         <view class="mod-item" @tap="go('/pages/supplier/revenue')">

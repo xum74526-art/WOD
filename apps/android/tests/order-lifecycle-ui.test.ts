@@ -10,6 +10,7 @@ const orderApi = source('../src/api/order.ts')
 const supplierApi = source('../src/api/supplier.ts')
 const orderDetail = source('../src/pages/order/detail.vue')
 const supplierRevenue = source('../src/pages/supplier/revenue.vue')
+const supplierOrders = source('../src/pages/supplier/orders.vue')
 const i18n = source('../src/store/i18n.ts')
 
 test('buyer order contract and detail expose fulfillment deadlines and disputes', () => {
@@ -29,6 +30,17 @@ test('buyer order contract and detail expose fulfillment deadlines and disputes'
   assert.match(orderDetail, /order\.confirmation_due_at/)
   assert.match(orderDetail, /order\.dispute_due_at/)
   assert.match(orderDetail, /disputeOrder\(oid\.value, reason\)/)
+  for (const field of [
+    'supplier_id',
+    'supplier_name',
+    'supplier_rating',
+    'supplier_order_count',
+    'resource_claim_source',
+    'assurance_label',
+    'assurance_description',
+  ]) {
+    assert.match(orderApi, new RegExp(`${field}\\?:`))
+  }
 })
 
 test('buyer actions follow server capability flags with legacy status fallback', () => {
@@ -38,6 +50,18 @@ test('buyer actions follow server capability flags with legacy status fallback',
   assert.match(orderDetail, /v-if="canDisputeOrder"/)
   assert.match(orderDetail, /v-if="canConfirmOrder"/)
   assert.match(orderDetail, /v-if="canCancelOrder"/)
+})
+
+test('seller order queue delivers valid SSH through the canonical order endpoint and refreshes', () => {
+  assert.match(supplierApi, /url: `\/orders\/\$\{id\}\/deliver`/)
+  assert.match(supplierApi, /data: \{ ssh_info \}/)
+  assert.match(supplierOrders, /order\.can_deliver \?\? order\.status === 'paid'/)
+  assert.match(supplierOrders, /isValidSshInfo\(value\)/)
+  assert.match(supplierOrders, /await deliverSupplierOrder\(target\.id, value\)/)
+  assert.match(supplierOrders, /await load\(\)/)
+  assert.match(supplierOrders, /STATUS_FILTERS: Array<string \| undefined> = \['paid', 'delivering', 'disputed', undefined\]/)
+  assert.match(supplierOrders, /HISTORY_STATUSES = new Set\(\['completed', 'running', 'done', 'canceled', 'refunded'\]\)/)
+  assert.match(supplierOrders, /t\('orderHistory'\)/)
 })
 
 test('supplier revenue distinguishes settled, pending and historical unreconciled orders', () => {

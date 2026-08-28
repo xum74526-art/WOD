@@ -83,6 +83,7 @@ test("Web compute catalogue separates representative KAI offers from individual 
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
+  const home = fs.readFileSync(new URL("../components/home-page-content.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
 
   assert.match(adapter, /requestedPage = Math\.max\(1,[\s\S]*?query\.set\("page", String\(requestedPage\)\)/);
@@ -93,24 +94,38 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(adapter, /else query\.delete\("representative"\)/);
   assert.match(api, /listPublicProducts\(marketSource\?: "kai" \| "wod", page = 1, pageSize = 24\)/);
   assert.match(market, /listPublicProducts\(source, page, MARKET_PAGE_SIZE\)/);
+  assert.match(market, /new Map\(current\.map\(\(row\) => \[row\.id, row\]\)\)/);
+  assert.match(market, /key=\{row\.id\}/);
   assert.match(market, /append \? mergeProducts\(current\[source\]\.rows, result\.data\)/);
   assert.match(market, /loadSourcePage\(activeSource, catalog\.page \+ 1, true\)/);
   assert.match(market, /market\.kai\.title/);
   assert.match(market, /market\.merchant\.title/);
   assert.match(market, /row\.seller_name/);
-  assert.match(market, /row\.assurance_description/);
-  assert.match(market, /row\.unit_price_ch/);
-  assert.match(market, /卡时 \/ GPU·小时/);
-  assert.match(detail, /product\.unit_price_ch/);
-  assert.match(detail, /expected_unit_price_card_hours: product\.unit_price_ch/);
-  assert.match(detail, /reason\.status === 409[\s\S]*?价格已发生变化/);
+  assert.match(market, /row\.supplier_rating/);
+  assert.match(market, /row\.supplier_order_count/);
+  assert.match(market, /row\.resource_claim_source/);
+  assert.match(market, /提交需求后由平台人工联系确认方案/);
+  assert.match(market, /提交需求后由对应商家人工联系确认方案/);
+  assert.match(market, /market\.inquiry/);
+  assert.match(market, /market\.submitRequest/);
+  assert.match(market, /row\.unit_price_ch\.toLocaleString/);
+  assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
+  assert.match(detail, /beginInquiry/);
+  assert.match(detail, /\/account\/requests/);
+  assert.match(detail, /createDirectOrder/);
+  assert.match(detail, /if \(!directTradeEnabled \|\| !product\?\.purchasable/);
+  assert.match(detail, /matchmakingEnabled && product\.inquiry_available !== false/);
   assert.match(detail, /product\.seller_name/);
   assert.match(detail, /product\.fulfillment_mode/);
+  assert.match(detail, /product\.resource_claim_source/);
   assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
-  assert.match(detail, /卡时 \/ GPU·小时/);
-  assert.doesNotMatch(detail, /KAI 行情估值|¥|product\.price\.amount/);
+  assert.match(detail, /服务价格/);
+  assert.match(detail, /询价/);
+  assert.match(detail, /预计钱包扣款/);
   assert.match(adapter, /expected_unit_price_card_hours: number\(body\.expected_unit_price_card_hours\)/);
   assert.match(adapter, /const purchaseUnit = text\(item\.purchase_unit, "hour"\)/);
+  assert.match(adapter, /resource_claim_source: resourceClaimSource/);
+  assert.doesNotMatch(adapter, /server_online: Boolean\(item\.purchasable\)/);
   assert.doesNotMatch(adapter, /marketSource === "kai" \? "hour" : "day"/);
   assert.match(adapter, /Boolean\(item\.can_renew\)/);
   assert.doesNotMatch(adapter, /\["completed", "running"\][\s\S]*?available\.push\("renew"\)/);
@@ -118,6 +133,8 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=kai&representative=true/);
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=wod/);
   assert.match(serverData, /const purchaseUnit = text\(item\.purchase_unit, "hour"\)/);
+  assert.match(serverData, /resource_claim_source: resourceClaimSource/);
+  assert.doesNotMatch(`${home}\n${market}\n${detail}`, /Agent (?:在线|自动授权|状态)|已核验的服务器|审核服务器与 Agent/);
 });
 
 test("Web supplier order workspace exposes the canonical SSH delivery action and seller state", () => {
@@ -188,7 +205,7 @@ test("seller resource workspace uses the backend card-hour price contract", () =
   assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|selected\.price\.toFixed\(4\).*CNY/);
 });
 
-test("Web recharge orders expose the same query, safe cancel, and restart workflow as App", () => {
+test("Web wallet keeps safe history actions and capability-gates future money movement", () => {
   const wallet = fs.readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/mobile-business-api.ts", import.meta.url), "utf8");
 
@@ -196,10 +213,7 @@ test("Web recharge orders expose the same query, safe cancel, and restart workfl
   assert.match(wallet, /queryRechargePayment\(row\.order_no\)/);
   assert.match(wallet, /row\.can_cancel/);
   assert.match(wallet, /cancelRechargePayment\(row\.order_no\)/);
-  assert.match(wallet, /rechargeCanRestart\(row\)/);
-  assert.match(wallet, /更换充值金额/);
   assert.match(wallet, /queryRechargePayment\(pendingPayment\.order_no\)/);
-  assert.match(wallet, /确认充值金额/);
   assert.match(wallet, /credited_at/);
   assert.match(wallet, /rechargeStatus/);
   assert.match(wallet, /rechargeOrderNo/);
@@ -208,17 +222,50 @@ test("Web recharge orders expose the same query, safe cancel, and restart workfl
   assert.match(api, /query\.set\("order_no", params\.order_no\)/);
   assert.match(api, /query\.set\("status_filter", params\.status_filter\)/);
   assert.match(wallet, /取消订单/);
-  assert.match(wallet, /再来一单/);
   assert.match(wallet, /到期：/);
   assert.match(wallet, /minimumRechargeAmountCny\(paymentConfig\?\.min_amount_cny\)/);
   assert.match(wallet, /minimumWithdrawalCardHours\(withdrawalConfig\?\.min_card_hours\)/);
   assert.doesNotMatch(wallet, /min=\{paymentConfig\?\.min_amount_cny \|\| 0\.01\}/);
   assert.doesNotMatch(wallet, /min=\{withdrawalConfig\?\.min_card_hours \|\| 0\.01\}/);
 
+  const rendered = wallet.slice(wallet.indexOf("return <section"));
+  assert.match(rendered, /在线充值与提现暂未开放/);
+  assert.match(wallet, /const rechargeEntryEnabled = directTradeEnabled && capabilities\.recharge_enabled === true/);
+  assert.match(wallet, /const withdrawalEntryEnabled = directTradeEnabled && capabilities\.withdraw_enabled === true/);
+  assert.match(rendered, /rechargeEntryEnabled && pendingState === "pending"/);
+  assert.match(rendered, /继续支付/);
+  assert.match(rendered, /更换充值金额/);
+  assert.match(rendered, /再来一单/);
+  assert.match(rendered, /账户充值/);
+  assert.match(rendered, /申请提现/);
+
   const replaceFlow = wallet.slice(wallet.indexOf("async function replaceRechargeAmount"), wallet.indexOf("function continueCheckout"));
   assert.ok(replaceFlow.indexOf("queryRechargePayment") < replaceFlow.indexOf("localStorage.removeItem"));
   const failedQueryBranch = replaceFlow.slice(replaceFlow.indexOf("catch (reason)"), replaceFlow.indexOf("finally"));
   assert.doesNotMatch(failedQueryBranch, /localStorage\.removeItem|setPendingPayment\(null\)/);
+});
+
+test("Web matchmaking selection requests platform coordination without creating a financial order", () => {
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const requestPage = fs.readFileSync(new URL("../app/account/requests/page.tsx", import.meta.url), "utf8");
+  const paymentPage = fs.readFileSync(new URL("../app/payment/[paymentNo]/page.tsx", import.meta.url), "utf8");
+  const paymentGate = fs.readFileSync(new URL("../components/capability-payment-checkout.tsx", import.meta.url), "utf8");
+
+  assert.match(workspace, /contact: form\.contact\.trim\(\)/);
+  assert.match(workspace, /phone: form\.phone\.trim\(\)/);
+  assert.match(workspace, /product_id: initialPrefill\?\.product_id/);
+  assert.match(workspace, /supplier_id: initialPrefill\?\.supplier_id/);
+  assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);
+  assert.match(workspace, /请等待工作人员联系确认/);
+  assert.match(workspace, /selectMobileBuyQuote/);
+  assert.match(workspace, /result\.commerce_mode === "matchmaking"/);
+  assert.match(workspace, /当前未创建资金订单/);
+  assert.match(requestPage, /positiveNumber\(query\.product_id\)/);
+  assert.match(requestPage, /gpu_model: first\(query\.gpu_model\)/);
+  assert.match(paymentPage, /CapabilityPaymentCheckout/);
+  assert.match(paymentGate, /capabilities\.direct_trade_enabled === true && capabilities\.payment_enabled === true/);
+  assert.match(paymentGate, /<PingxxCheckout/);
+  assert.match(paymentGate, /在线支付暂未开放/);
 });
 
 test("Web bank cards require identity, consent, validation, and eligible default cards", () => {

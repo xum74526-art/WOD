@@ -31,6 +31,8 @@ from init_db import _ensure_columns, _migrate_order_request_scope
 class OrderRenewalTests(unittest.TestCase):
     def setUp(self):
         self.original_fulfillment_users = settings.PLATFORM_FULFILLMENT_USER_IDS
+        self.original_direct_trade = settings.DIRECT_TRADE_ENABLED
+        settings.DIRECT_TRADE_ENABLED = True
         self.temp_dir = tempfile.TemporaryDirectory()
         database = Path(self.temp_dir.name) / "renewal.sqlite3"
         self.engine = create_engine(
@@ -74,6 +76,7 @@ class OrderRenewalTests(unittest.TestCase):
 
     def tearDown(self):
         settings.PLATFORM_FULFILLMENT_USER_IDS = self.original_fulfillment_users
+        settings.DIRECT_TRADE_ENABLED = self.original_direct_trade
         self.engine.dispose()
         self.temp_dir.cleanup()
 

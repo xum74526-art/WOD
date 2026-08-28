@@ -68,7 +68,7 @@ test("Web trend normal state auto-refreshes and renders canonical KAI regional s
   assert.doesNotMatch(panel, /GetDeploying|getdeploying/i);
 });
 
-test("Web market and detail use image_url, hourly input, rebate estimate, and an order confirmation", () => {
+test("Web market and detail keep inquiry as the safe default while preserving gated direct trade", () => {
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
   const browser = fs.readFileSync(new URL("../components/market-browser.tsx", import.meta.url), "utf8");
@@ -76,34 +76,36 @@ test("Web market and detail use image_url, hourly input, rebate estimate, and an
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
 
   assert.match(market, /imageUrl=\{row\.image_url\}/);
-  assert.match(market, /row\.purchasable \? t\("market\.buy", "立即购买"\) : t\("market\.details", "查看详情"\)/);
+  assert.match(market, /t\("market\.inquiry", "询价"\)/);
+  assert.match(market, /t\("market\.submitRequest", "提交需求"\)/);
+  assert.match(market, /row\.unit_price_ch\.toLocaleString/);
+  assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
+  assert.match(market, /directTradeEnabled \? row\.purchasable \?/);
   assert.doesNotMatch(market, /href: "\/(supplier|admin)\/resources"/);
   assert.match(detail, /imageUrl=\{product\.image_url\}/);
   assert.match(detail, /type="number"/);
   assert.match(detail, /DEFAULT_PURCHASE_HOURS/);
   assert.doesNotMatch(detail, /purchase_hour_options\.length > 0/);
-  assert.match(detail, /预计到期个人购买返佣/);
-  assert.match(detail, /product\.unit_price_ch \* purchaseHours \* quantity/);
-  assert.match(detail, /estimateProductExpiryRebate\(walletTotal, purchaseType, rebate\)/);
-  assert.match(detail, /getUserRebate\(\)/);
-  assert.match(detail, /rebate\.rewards_enabled/);
-  assert.match(detail, /rebate\?\.cap_remaining/);
-  assert.match(detail, /rebateCapLimited/);
-  assert.match(detail, /当前个人等级 \{current\}%/);
-  assert.match(detail, /product\.rebate\.amount/);
-  assert.match(detail, /product\.rebate\.settlement/);
-  assert.match(detail, /purchaseType === "usage" && <div className="product-rebate-estimate">/);
-  assert.match(detail, /purchaseType === "usage" && <div><dt>\{t\("product\.rebate\.label"/);
+  assert.match(detail, /function beginInquiry\(\)/);
+  assert.match(detail, /new URLSearchParams\(/);
+  assert.match(detail, /\/account\/requests\?\$\{params\.toString\(\)\}/);
+  assert.match(detail, /directTradeEnabled \? `\$\{product\.unit_price_ch[\s\S]*? : "询价"/);
+  assert.match(detail, /提交需求/);
+  assert.match(detail, /if \(!directTradeEnabled \|\| !product\?\.purchasable/);
+  assert.match(detail, /matchmakingEnabled && product\.inquiry_available !== false/);
+  assert.match(detail, /createDirectOrder/);
+  assert.match(detail, /预计钱包扣款/);
+  assert.match(detail, /确认并下单/);
   assert.match(locale, /"product\.rebate\.label": "Estimated personal purchase rebate at expiry"/);
   assert.match(locale, /"product\.rebate\.tierChange": "Your current personal tier is \{current\}%/);
   assert.doesNotMatch(`${detail}\n${locale}`, /fixed 3%|固定3%|到期返佣（3%）|Purchased card hours × 3%/i);
   assert.match(detail, /role="dialog"/);
-  assert.match(detail, /确认并下单/);
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=kai&representative=true/);
   assert.match(serverData, /\/api\/products\?page=1&page_size=100&market_source=wod/);
   assert.match(market, /market\.kai\.title/);
   assert.match(market, /market\.merchant\.title/);
-  assert.match(market, /row\.assurance_description/);
+  assert.match(market, /提交需求后由平台人工联系确认方案/);
+  assert.match(market, /提交需求后由对应商家人工联系确认方案/);
   assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
   assert.doesNotMatch(`${market}\n${detail}\n${browser}`, /GetDeploying|getdeploying|AutoDL|算力云/i);
 });

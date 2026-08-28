@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,10 +33,10 @@ class ProductOut(OrmModel):
     supplier_name: str | None = None
     supplier_rating: float | None = None
     supplier_order_count: int | None = None
-    seller_type: str | None = None
+    seller_type: Literal["kai_self_operated", "merchant"] | None = None
     seller_name: str | None = None
-    fulfillment_mode: str | None = None
-    resource_claim_source: str | None = None
+    fulfillment_mode: Literal["platform_manual", "merchant_manual"] | None = None
+    resource_claim_source: Literal["kai_published", "merchant_declared"] | None = None
     assurance_label: str | None = None
     assurance_description: str | None = None
     external_product_id: str | None = None
@@ -49,6 +50,8 @@ class ProductOut(OrmModel):
     status: str
     daily_revenue: float | None = None
     revenue_estimate_available: bool = False
+    interaction_mode: Literal["direct_trade", "matchmaking", "history_only"] = "history_only"
+    inquiry_available: bool = False
     purchasable: bool = False
     purchase_unavailable_reason: str | None = None
     stock: int | None = None

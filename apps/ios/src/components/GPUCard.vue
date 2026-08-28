@@ -7,16 +7,22 @@
         <text class="gpu-tag">{{ product.memory }}</text>
       </view>
       <view class="gpu-price">
-        <text class="price-label">{{ t('国内参考价') }}</text>
-        <view class="price-row">
-          <text class="price">{{ fmtCH(product.price) }}</text>
+        <text class="price-label">{{ t(commerce.directTradeEnabled ? '国内参考价' : commerce.matchmakingEnabled && product.inquiry_available !== false ? 'servicePrice' : 'operationTemporarilyUnavailable') }}</text>
+        <view v-if="commerce.directTradeEnabled" class="price-row">
+          <text class="price">{{ fmtCH(directTradeCardHoursPerGpuHour(product)) }}</text>
           <text class="unit">/h</text>
         </view>
+        <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="price-row">
+          <text class="price">{{ t('inquiry') }}</text>
+        </view>
+        <view v-else class="price-row"><text class="price unavailable">{{ t('viewDetail') }}</text></view>
       </view>
       <view class="gpu-foot">
         <text class="cuda" v-if="product.cuda">CUDA {{ product.cuda }}</text>
         <text class="cuda" v-else>{{ t('算力商品') }}</text>
-        <view class="btn" :class="{ disabled: !product.purchasable }">{{ t(product.purchasable ? 'buyUsage' : 'viewDetail') }}</view>
+        <view v-if="commerce.directTradeEnabled" class="btn" :class="{ disabled: !directTradeProductPurchasable(product) }">{{ t(directTradeProductPurchasable(product) ? 'k_25575fc0' : 'viewDetail') }}</view>
+        <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="btn">{{ t('submitRequirement') }}</view>
+        <view v-else class="btn disabled">{{ t('viewDetail') }}</view>
       </view>
     </view>
   </view>
@@ -26,9 +32,12 @@
 import { computed, ref, watch } from 'vue'
 import type { Product } from '@/api/gpu'
 import { fmtCH } from '@/utils/format'
+import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 const { t } = useI18nStore()
+const commerce = useCommerceStore()
 const props = defineProps<{ product: Product }>()
 const emit = defineEmits<{ (e: 'tap', p: Product): void }>()
 const imageFailed = ref(false)
@@ -79,6 +88,7 @@ function onTap() {
 .price-label { display: block; color: var(--text-sub); font-size: 22rpx; margin-bottom: 8rpx; }
 .price-row { display: flex; align-items: baseline; }
 .price { color: var(--up); font-size: 44rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.price.unavailable { color: var(--text-sub); font-size: 30rpx; }
 .unit { color: var(--text-sub); font-size: 26rpx; margin-left: 8rpx; }
 .gpu-foot {
   display: flex;

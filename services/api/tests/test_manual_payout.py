@@ -110,7 +110,7 @@ class ManualPayoutTests(unittest.TestCase):
         self.original = {
             name: getattr(settings, name)
             for name in (
-                "MANUAL_BANK_CARD_ENABLED", "MANUAL_PAYOUT_ENABLED",
+                "DIRECT_TRADE_ENABLED", "MANUAL_BANK_CARD_ENABLED", "MANUAL_PAYOUT_ENABLED",
                 "FINANCE_ADMIN_USER_IDS", "PAYOUT_CARD_HOUR_RMB_RATE",
                 "PAYOUT_FEE_RATE", "PAYOUT_MIN_CARD_HOURS",
                 "PAYOUT_MAX_CARD_HOURS", "PAYOUT_RECEIPT_MAX_BYTES", "UPLOAD_ROOT",
@@ -120,6 +120,7 @@ class ManualPayoutTests(unittest.TestCase):
         }
         settings.SECRET_KEY = "unit-test-manual-payout-secret"
         settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
+        settings.DIRECT_TRADE_ENABLED = True
         settings.MANUAL_BANK_CARD_ENABLED = True
         settings.MANUAL_PAYOUT_ENABLED = True
         settings.FINANCE_ADMIN_USER_IDS = str(self.admin.id)
@@ -643,6 +644,7 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             setup.close()
 
             original = {
+                "DIRECT_TRADE_ENABLED": settings.DIRECT_TRADE_ENABLED,
                 "MANUAL_PAYOUT_ENABLED": settings.MANUAL_PAYOUT_ENABLED,
                 "PAYOUT_MIN_CARD_HOURS": settings.PAYOUT_MIN_CARD_HOURS,
                 "SECRET_KEY": settings.SECRET_KEY,
@@ -650,6 +652,7 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             }
             settings.SECRET_KEY = "unit-test-manual-payout-concurrency-secret"
             settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
+            settings.DIRECT_TRADE_ENABLED = True
             settings.MANUAL_PAYOUT_ENABLED = True
             settings.PAYOUT_MIN_CARD_HOURS = 10
             barrier = threading.Barrier(2)

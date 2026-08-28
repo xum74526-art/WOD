@@ -9,6 +9,7 @@ import { errorMessage } from "@/lib/commerce-ui";
 import { useI18n } from "@/components/locale-root";
 import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
 import { ProductImage } from "@/components/product-image";
+import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 
 type ViewerRole = AuthUser["role"] | "guest" | "loading";
 type MarketSource = "kai" | "wod";
@@ -52,6 +53,9 @@ function initialSourceCatalogs(rows: PublicProduct[] | null): SourceCatalogs {
 
 export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: number; initialRows?: PublicProduct[] | null }) {
   const { locale, t } = useI18n();
+  const { capabilities } = usePlatformCapabilities();
+  const directTradeEnabled = capabilities.direct_trade_enabled === true;
+  const matchmakingEnabled = capabilities.matchmaking_enabled === true;
   const [activeSource, setActiveSource] = useState<MarketSource>("kai");
   const [catalogs, setCatalogs] = useState<SourceCatalogs>(() => initialSourceCatalogs(initialRows));
   const [viewerRole, setViewerRole] = useState<ViewerRole>("loading");
@@ -97,15 +101,19 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
   const sourceCopy = useMemo(() => activeSource === "kai" ? {
     eyebrow: "KAI SELF-OPERATED",
     title: t("market.kai.title", "KAI 自营"),
-    description: t("market.kai.description", "KAI 发布商品与价格，由平台统一安排人工交付并记录订单状态。"),
+    description: directTradeEnabled
+      ? t("market.kai.directDescription", "KAI 发布商品与价格，由平台统一安排人工交付并记录订单状态。")
+      : t("market.kai.description", "KAI 发布资源信息，提交需求后由平台人工联系确认配置、价格与交付安排。"),
   } : {
     eyebrow: "MERCHANT LISTINGS",
     title: t("market.merchant.title", "商家资源"),
-    description: t("market.merchant.description", "商家入驻资料已审核；资源参数与库存由商家发布，下单后由对应商家人工交付。"),
-  }, [activeSource, t]);
+    description: directTradeEnabled
+      ? t("market.merchant.directDescription", "商家发布资源参数与库存，下单后由对应商家人工交付。")
+      : t("market.merchant.description", "商家发布资源参数与库存，提交需求后由对应商家人工联系确认方案。"),
+  }, [activeSource, directTradeEnabled, t]);
 
   const roleNote = viewerRole === "supplier" && activeSource === "wod"
-    ? t("market.merchant.supplierView", "这里就是买家看到的商家市场；上架商品、库存与交付订单共用统一业务平台。")
+    ? t("market.merchant.supplierView", "这里就是买家看到的商家市场；上架商品、库存与买家需求共用统一业务平台。")
     : viewerRole === "admin" && activeSource === "wod"
       ? t("market.merchant.adminView", "公开商家市场预览；商家入驻资料审核与交易状态以统一业务平台为准。")
       : sourceCopy.description;
@@ -132,17 +140,23 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
       const fulfillmentLabel = row.fulfillment_mode === "merchant_manual"
         ? t("market.fulfillment.merchant", "商家人工交付")
         : t("market.fulfillment.platform", "平台人工交付");
-      const status = row.purchasable ? t("market.available", "可下单") : t("market.unavailable", "暂不可租");
-      const sellerDetails = !kaiSelfOperated && (row.supplier_rating != null || row.supplier_order_count)
-        ? `${row.supplier_rating != null ? t("market.rating", "评分 {rating}", { rating: row.supplier_rating.toFixed(1) }) : ""}${row.supplier_rating != null && row.supplier_order_count ? " · " : ""}${row.supplier_order_count ? t("market.completedOrders", "已完成 {count} 单", { count: row.supplier_order_count }) : ""}`
+      const resourceClaimLabel = row.resource_claim_source === "merchant_declared" || (!row.resource_claim_source && !kaiSelfOperated)
+        ? t("market.claim.merchant", "配置与库存由商家自行申报")
+        : t("market.claim.kai", "商品信息由 KAI 发布");
+      const inquiryAvailable = matchmakingEnabled && row.inquiry_available !== false;
+      const status = directTradeEnabled
+        ? row.purchasable ? t("market.availableDirect", "可下单") : t("market.unavailableDirect", "暂不可租")
+        : inquiryAvailable ? t("market.available", "可询价") : t("market.unavailable", "需求服务暂未开放");
+      const sellerDetails = !kaiSelfOperated && (row.supplier_id != null || row.supplier_rating != null || row.supplier_order_count != null)
+        ? [row.supplier_id != null ? `ID ${row.supplier_id}` : "", row.supplier_rating != null ? t("market.rating", "评分 {rating}", { rating: row.supplier_rating.toFixed(1) }) : "", row.supplier_order_count != null ? t("market.completedOrders", "已完成 {count} 单", { count: row.supplier_order_count }) : ""].filter(Boolean).join(" · ")
         : "";
       return <article data-market-source={kaiSelfOperated ? "kai" : "wod"} key={row.id}>
         <ProductImage className="merchant-resource-image" imageUrl={row.image_url} gpuModel={row.gpu_model}/>
-        <header><div><small><b>{kaiSelfOperated ? t("market.kai.title", "KAI 自营") : t("market.merchant.verified", "商家入驻资料已审核")}</b> · {row.supplier_id && !kaiSelfOperated ? <Link href={`/stores/${row.supplier_id}`}>{sellerName}</Link> : sellerName}</small><h3>{displayName}</h3>{sellerDetails && <em>{sellerDetails}</em>}</div><span className={!row.purchasable ? "is-offline" : ""}>{status}</span></header>
+        <header><div><small><b>{kaiSelfOperated ? t("market.kai.title", "KAI 自营") : t("market.merchant.listing", "商家资源")}</b> · {row.supplier_id && !kaiSelfOperated ? <Link href={`/stores/${row.supplier_id}`}>{sellerName}</Link> : sellerName}</small><h3>{displayName}</h3>{sellerDetails && <em>{sellerDetails}</em>}</div><span className={(directTradeEnabled ? !row.purchasable : !inquiryAvailable) ? "is-offline" : ""}>{status}</span></header>
         <div className="merchant-resource-gpu"><strong>{row.gpu_model}</strong><span>{row.gpu_memory_gb}GB</span></div>
         <dl><div><dt><MapPin size={13}/>{t("market.region", "区域")}</dt><dd>{localizeMarketRegion(row.region, locale)}</dd></div><div><dt><HardDrives size={13}/>{t("market.stock", "可用库存")}</dt><dd>{row.available_quantity} {t("market.units", "台")}</dd></div><div><dt><TerminalWindow size={13}/>{t("market.fulfillment", "履约方式")}</dt><dd>{fulfillmentLabel}</dd></div></dl>
-        <div className="merchant-resource-assurance"><ShieldCheck size={16}/><span><strong>{row.assurance_label || (kaiSelfOperated ? t("market.kai.title", "KAI 自营") : t("market.merchant.verified", "商家入驻资料已审核"))}</strong><small>{row.assurance_description || (kaiSelfOperated ? t("market.kai.assurance", "商品由 KAI 发布并安排履约。") : t("market.merchant.assurance", "商家入驻资料已审核，资源参数与库存由商家自行发布。"))}</small></span></div>
-        <footer><div><small>{t("market.hourly", "每小时价格")}</small><strong>{row.unit_price_ch.toLocaleString(locale === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: 6 })} {locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}</strong></div><Link href={`/market/products/${row.id}`}>{row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
+        <div className="merchant-resource-assurance"><ShieldCheck size={16}/><span><strong>{row.assurance_label || (kaiSelfOperated ? t("market.kai.title", "KAI 自营") : t("market.merchant.listing", "商家资源"))}</strong><small>{resourceClaimLabel} · {directTradeEnabled ? row.assurance_description : kaiSelfOperated ? t("market.kai.assurance", "提交需求后由平台人工联系确认方案。") : t("market.merchant.assurance", "提交需求后由对应商家人工联系确认方案。")}</small></span></div>
+        <footer><div><small>{directTradeEnabled ? t("market.hourly", "每小时价格") : t("market.servicePrice", "服务价格")}</small><strong>{directTradeEnabled ? `${row.unit_price_ch.toLocaleString(locale === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: 6 })} ${locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}` : inquiryAvailable ? t("market.inquiry", "询价") : "—"}</strong></div><Link href={`/market/products/${row.id}`}>{directTradeEnabled ? row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情") : inquiryAvailable ? t("market.submitRequest", "提交需求") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
       </article>;
     })}</div>}
     {displayRows.length > 0 && typeof limit !== "number" && <div className="merchant-market__pagination" aria-live="polite">

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
+
+from app.services.trade_mode import direct_trade_enabled, matchmaking_enabled
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,54 @@ FAQ_ANSWERS = (
 )
 
 
+MATCHMAKING_FAQ_COPY = {
+    "purchase": {
+        "zh": "当前版本不在 App 内直接下单、扣卡时或收款。您可以在资源详情提交需求，由已认证商家在需求市场报价；选定合适方案后仅提交合作意向，由平台工作人员继续协调交付。双方联系方式和 SSH 等敏感信息不会在报价阶段公开。",
+        "en": "This version does not place paid orders, debit CH, or collect payment in the app. Submit a requirement from a resource page and verified sellers can quote in the request market. Choosing a suitable proposal records a cooperation intention for platform coordination only; contact details and SSH credentials remain private during quoting.",
+    },
+    "compute": {
+        "zh": "算力行情继续展示 KAI Pricing 的人民币/GPU 小时报价、曲线、GPU 型号、显存和地区样本。报价样本用于行情与询价参考，不代表实时库存或成交价；KAI 自营和商家资源会明确区分，当前均通过“提交需求”进入撮合流程。",
+        "en": "The compute market continues to show KAI Pricing observations, charts, GPU models, memory variants, and regions in CNY/GPU-hour. Observations are references for market information and inquiries, not live inventory or a transaction price. KAI-operated and seller resources are identified separately and currently use the Submit Requirement flow.",
+    },
+    "payment": {
+        "zh": "当前撮合版本未开放 App 内充值、支付、扣卡时或退款入口，也不会要求您向个人银行卡、微信或支付宝转账。资源报价与合作意向不等于已付款或已成交，后续安排以平台工作人员核验和确认的方案为准。",
+        "en": "The current matchmaking version does not offer in-app recharge, payment, CH debit, or refund actions and will never ask you to transfer money to a personal bank card, WeChat, or Alipay account. A quote or cooperation intention is not proof of payment or a completed transaction; follow only arrangements verified by platform staff.",
+    },
+    "withdrawal": {
+        "zh": "当前撮合版本未开放提现申请和银行卡登记入口。历史钱包与流水仍可查看，但赠送卡时及邀请奖励仅用于平台内符合条件的消费，不可提现。后续资质和资金通道完备后，相关能力将由独立服务开关启用。",
+        "en": "The current matchmaking version does not accept withdrawal requests or new bank-card registrations. Historical wallet records remain readable, while promotional CH and invitation rewards are for eligible in-platform use only and are not withdrawable. These capabilities can be enabled separately after the required qualifications and payment rails are ready.",
+    },
+}
+
+
+HISTORY_ONLY_FAQ_COPY = {
+    "purchase": {
+        "zh": "当前暂未开放需求撮合或 App 内交易，行情、曲线和历史记录仍可查看。请以页面实时状态为准。",
+        "en": "Requirement matching and in-app transactions are currently unavailable. Market data, charts, and historical records remain readable; follow the live status shown on each page.",
+    },
+    "payment": {
+        "zh": "当前未开放充值、支付、扣卡时或退款入口，历史充值订单和钱包流水仍可查看。",
+        "en": "Recharge, payment, CH debit, and refund actions are currently unavailable. Historical recharge orders and wallet ledger records remain readable.",
+    },
+    "withdrawal": {
+        "zh": "当前未开放提现申请，历史提现记录仍可查看。",
+        "en": "New withdrawal requests are currently unavailable. Historical withdrawal records remain readable.",
+    },
+}
+
+
+def _runtime_answer(answer: FaqAnswer) -> FaqAnswer:
+    """Keep support copy aligned with the effective server commerce mode."""
+
+    if direct_trade_enabled():
+        return answer
+    copy = MATCHMAKING_FAQ_COPY if matchmaking_enabled() else HISTORY_ONLY_FAQ_COPY
+    override = copy.get(answer.topic)
+    if not override:
+        return answer
+    return replace(answer, zh=override["zh"], en=override["en"])
+
+
 HUMAN_KEYWORDS_ZH = ("转人工", "人工客服", "联系人工", "人工工单", "投诉")
 HUMAN_KEYWORDS_EN = ("human support", "human agent", "contact support", "support ticket", "complaint")
 
@@ -92,7 +142,7 @@ def match_faq(message: str, lang: str) -> FaqAnswer | None:
     if not candidates:
         return None
     candidates.sort(key=lambda item: item[0], reverse=True)
-    return candidates[0][1]
+    return _runtime_answer(candidates[0][1])
 
 
 def asks_for_human(message: str, lang: str) -> bool:

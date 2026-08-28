@@ -161,13 +161,14 @@ export type Order = {
 
 export type PublicProduct = {
   id: number;
-  supplier_id?: number;
-  supplier_name?: string | null;
-  supplier_rating?: number | null;
-  supplier_order_count?: number;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  supplier_rating: number | null;
+  supplier_order_count: number | null;
   seller_type: "kai_self_operated" | "merchant";
   seller_name: string;
   fulfillment_mode: "platform_manual" | "merchant_manual";
+  resource_claim_source: "kai_published" | "merchant_declared";
   assurance_label: string;
   assurance_description: string;
   name: string;
@@ -186,7 +187,8 @@ export type PublicProduct = {
   available_quantity: number;
   source_name: string | null;
   source_observed_at: string | null;
-  server_online: boolean;
+  inquiry_available: boolean;
+  interaction_mode: "direct_trade" | "matchmaking" | "history_only";
   purchasable: boolean;
   purchase_unavailable_reason: string | null;
   cycle: number[];
@@ -194,7 +196,7 @@ export type PublicProduct = {
   purchase_hour_options: number[];
   billing_unit: string;
   image_url: string | null;
-  market_source: string;
+  market_source: "kai" | "wod";
 };
 
 export type SshKey = {

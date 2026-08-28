@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.sensitive import fingerprint, last_four, reveal, sensitive_capability_enabled
+from app.core.sensitive import fingerprint, last_four, reveal
 from app.models.bank_card import BankCard, REGISTERED_CARD_STATUSES, public_bank_card_status
 from app.models.ledger import Ledger
 from app.models.user import User
@@ -38,6 +38,7 @@ from app.models.withdrawal import (
 )
 from app.utils.response import BizError
 from app.services.auth_session import normalize_platform
+from app.services.trade_mode import require_withdrawal_enabled, withdrawal_enabled
 
 
 ACTIVE_WITHDRAWAL_STATUSES = ("reviewing", "manual_payment_pending")
@@ -79,7 +80,7 @@ def payout_bounds() -> tuple[Decimal, Decimal]:
 def withdrawal_config() -> dict:
     minimum, maximum = payout_bounds()
     return {
-        "enabled": sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED),
+        "enabled": withdrawal_enabled(),
         "manual_transfer": True,
         "bank_verified": False,
         "rate_cny_per_card_hour": float(payout_rate()),
@@ -287,8 +288,7 @@ def create_withdrawal(
     client_request_id: str,
     created_platform: str = "legacy",
 ) -> WithdrawalOrder:
-    if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
-        raise BizError("人工提现申请尚未启用", status_code=503)
+    require_withdrawal_enabled()
 
     amount, rate, gross, fee = _amounts(amount_card_hours)
     net = gross - fee

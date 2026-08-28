@@ -60,7 +60,7 @@
             <text class="pmem">{{ p.memory }}</text>
           </view>
           <view class="pmid">
-            <view class="info"><text class="il">{{ t(isKaiProduct(p) ? 'kaiFulfillmentAllocation' : 'availableQuantity') }}</text><text class="iv">{{ p.stock ?? 0 }}</text></view>
+            <view class="info"><text class="il">{{ t(commerce.directTradeEnabled ? (isKaiProduct(p) ? 'kaiFulfillmentAllocation' : 'availableQuantity') : 'referenceAvailability') }}</text><text class="iv">{{ p.stock ?? 0 }}</text></view>
             <view class="info"><text class="il">{{ t("region") }}</text><text class="iv">{{ localizeRegionName(p.region_name || '-', i18n.lang, p.region_code) }}</text></view>
             <view class="info">
               <text class="il">{{ t('seller') }}</text>
@@ -69,8 +69,18 @@
           </view>
           <view class="pbot">
             <view class="pprice">
-              <view class="hourly-price"><text class="pp">{{ formatNumber(productPriceCardHours(p)) }}</text><text class="pu">{{ t('cardHourPerGpuHour') }}</text></view>
-              <text v-if="isKaiProduct(p)" class="price-cny">¥{{ formatNumber(productPriceCny(p)) }}{{ t('perGpuHour') }}</text>
+              <template v-if="commerce.directTradeEnabled">
+                <view class="hourly-price"><text class="pp">{{ formatNumber(directTradeCardHoursPerGpuHour(p)) }}</text><text class="pu">{{ t('cardHourPerGpuHour') }}</text></view>
+                <text v-if="isKaiProduct(p)" class="price-cny">¥{{ formatNumber(directTradeCnyPerGpuHour(p)) }}{{ t('perGpuHour') }}</text>
+              </template>
+              <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
+                <view class="hourly-price"><text class="pp">{{ t('inquiry') }}</text></view>
+                <text class="price-cny">{{ t('inquiryContactHintShort') }}</text>
+              </template>
+              <template v-else>
+                <view class="hourly-price"><text class="pp unavailable-price">{{ t('viewDetail') }}</text></view>
+                <text class="price-cny">{{ t('operationTemporarilyUnavailable') }}</text>
+              </template>
               <view v-if="isKaiProduct(p)" class="market-card-metrics">
                 <text class="pch" :class="changeTone(modelChange(p))">{{ modelChangeText(p) }}</text>
                 <text class="pch-range">{{ modelPriceRangeText(p) }}</text>
@@ -78,7 +88,9 @@
               </view>
               <text v-else class="merchant-meta">{{ merchantMeta(p) }}</text>
             </view>
-            <view class="buy" :class="{ disabled: !productPurchasable(p) }">{{ t(productActionLabel(p)) }}</view>
+            <view v-if="commerce.directTradeEnabled" class="buy" :class="{ disabled: !directTradeProductPurchasable(p) }">{{ t(directTradeProductPurchasable(p) ? 'k_25575fc0' : 'viewDetail') }}</view>
+            <view v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false" class="buy">{{ t('submitRequirement') }}</view>
+            <view v-else class="buy disabled">{{ t('viewDetail') }}</view>
           </view>
         </view>
       </view>
@@ -89,15 +101,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getProducts } from '@/api/gpu'
 import { getMarketRanking, type MarketRankingItem } from '@/api/market'
 import type { Product } from '@/api/gpu'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
-import { fmtCHn, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCHn, formatNumber } from '@/utils/format'
+import { directTradeCardHoursPerGpuHour, directTradeCnyPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
@@ -116,6 +130,7 @@ import {
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
+const commerce = useCommerceStore()
 const list = ref<Product[]>([])
 const loading = ref(false)
 const loadError = ref(false)
@@ -180,11 +195,13 @@ const regions = [
   { code: 'northwest_china', name: 'northwest' },
   { code: 'southwest_china', name: 'southwest' },
 ]
-const sorts = [
-  { key: 'default', label: 'hotSort' },
-  { key: 'price_asc', label: 'sortPriceUp' },
-  { key: 'price_desc', label: 'sortPriceDown' },
-]
+const sorts = computed(() => commerce.directTradeEnabled
+  ? [
+      { key: 'default', label: 'hotSort' },
+      { key: 'price_asc', label: 'sortPriceUp' },
+      { key: 'price_desc', label: 'sortPriceDown' },
+    ]
+  : [{ key: 'default', label: 'hotSort' }])
 
 async function load(reset = false) {
   if (!reset && (loading.value || finished.value)) return
@@ -230,6 +247,10 @@ onShow(() => {
   i18n.updateTabBar()
   const storedKeyword = uni.getStorageSync('wod-market-keyword')
   let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= 30_000
+  if (!commerce.directTradeEnabled && sort.value !== 'default') {
+    sort.value = 'default'
+    shouldReload = true
+  }
   if (storedKeyword) {
     keyword.value = String(storedKeyword)
     uni.removeStorageSync('wod-market-keyword')
@@ -247,27 +268,23 @@ function setMarketSource(source: MarketSourceFilter) {
   load(true)
 }
 function go(id: number) { nav('/pages/product/detail?id=' + id) }
-function goStore(sid?: number) { if (sid) nav('/pages/store/index?id=' + sid) }
-function isMerchantProduct(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id'>): boolean {
-  return product.seller_type === 'merchant' || (product.market_source === 'wod' && Boolean(product.supplier_id))
+function goStore(sid?: number | null) { if (sid) nav('/pages/store/index?id=' + sid) }
+function isMerchantProduct(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'resource_claim_source'>): boolean {
+  return product.seller_type === 'merchant'
+    || product.resource_claim_source === 'merchant_declared'
+    || (product.market_source === 'wod' && Boolean(product.supplier_id))
 }
-function isKaiProduct(product: Pick<Product, 'market_source' | 'seller_type'>): boolean {
-  return product.seller_type === 'kai_self_operated' || product.market_source === 'kai'
+function isKaiProduct(product: Pick<Product, 'market_source' | 'seller_type' | 'resource_claim_source'>): boolean {
+  return product.seller_type === 'kai_self_operated'
+    || product.resource_claim_source === 'kai_published'
+    || product.market_source === 'kai'
 }
-function productPurchasable(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'purchasable' | 'stock'>): boolean {
-  return (isKaiProduct(product) || isMerchantProduct(product)) && product.purchasable === true && Number(product.stock || 0) > 0
-}
-function productActionLabel(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'purchasable' | 'stock'>): string {
-  if (!isKaiProduct(product) && !isMerchantProduct(product)) return 'retiredMarketSourceUnavailableShort'
-  if (Number(product.stock || 0) <= 0) return isKaiProduct(product) ? 'kaiAllocationUnavailableShort' : 'soldOutShort'
-  return productPurchasable(product) ? 'buyUsage' : 'marketOfferUnavailableShort'
-}
-function sellerName(product: Pick<Product, 'market_source' | 'seller_type' | 'seller_name' | 'supplier_name'>) {
-  if (isKaiProduct(product)) return t('kaiSelfOperated')
+function sellerName(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'resource_claim_source' | 'seller_name' | 'supplier_name'>) {
   const name = product.seller_name || product.supplier_name
+  if (isKaiProduct(product) && (!name || name === 'KAI 自营')) return t('kaiSelfOperated')
   return name ? localizePersonName(name, i18n.lang) : t('verifiedMerchant')
 }
-function assuranceText(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'assurance_label'>) {
+function assuranceText(product: Pick<Product, 'market_source' | 'seller_type' | 'supplier_id' | 'resource_claim_source' | 'assurance_label'>) {
   return product.assurance_label ? tr(product.assurance_label) : t(isMerchantProduct(product) ? 'merchantDeclaredResource' : 'platformManualFulfillment')
 }
 function merchantMeta(product: Pick<Product, 'supplier_rating' | 'supplier_order_count' | 'fulfillment_mode'>) {
@@ -275,12 +292,6 @@ function merchantMeta(product: Pick<Product, 'supplier_rating' | 'supplier_order
   if (product.supplier_rating != null) parts.push(t('sellerRatingValue', { rating: formatNumber(product.supplier_rating) }))
   if (product.supplier_order_count != null) parts.push(t('sellerOrderCountValue', { count: product.supplier_order_count }))
   return parts.join(' · ')
-}
-function productPriceCny(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour'>): number {
-  return Number(product.price_cny_per_gpu_hour ?? product.price ?? 0)
-}
-function productPriceCardHours(product: Pick<Product, 'market_source' | 'seller_type' | 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): number {
-  return Number(product.price_card_hours_per_gpu_hour ?? (isKaiProduct(product) ? toCardHours(productPriceCny(product)) : product.price ?? 0))
 }
 function modelRange(p: Pick<Product, 'gpu_model' | 'memory'>): ModelRange | undefined { return volatilityMap.value[gpuMarketKey(p.gpu_model, p.memory)] }
 function modelChange(p: Pick<Product, 'gpu_model' | 'memory'>): number | null {

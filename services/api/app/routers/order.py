@@ -56,6 +56,7 @@ from app.services.invite_rewards_v2 import (
     process_invite_order_event,
     process_invite_renewal_event,
 )
+from app.services.trade_mode import require_direct_trade_enabled
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/orders", tags=["order"])
@@ -185,10 +186,7 @@ def _order_out(o: Order, db: Session) -> dict:
     market_source = product_market_source(p) if p else None
     out["market_source"] = market_source
     if p:
-        provider = product_provider_info(p, db)
-        out["seller_type"] = provider["seller_type"]
-        out["seller_name"] = provider["seller_name"]
-        out["fulfillment_mode"] = provider["fulfillment_mode"]
+        out.update(product_provider_info(p, db))
     out["billing_unit"] = "GPU_HOUR"
     out["amount_card_hours"] = float(o.amount)
     # Reconstruct the effective booked unit price from the immutable order
@@ -365,6 +363,7 @@ def create_order(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    require_direct_trade_enabled()
     platform = _trusted_platform(platform)
     # SQLite ignores FOR UPDATE. Serializing before the stock and wallet reads
     # prevents two concurrent checkouts from selling the last unit twice or
@@ -531,14 +530,7 @@ def deliver_ssh(
         authorized = False
     if not authorized:
         raise BizError("无权操作此订单", status_code=403)
-    # Direct service tests and older internal callers may still pass the former
-    # dictionary shape.  HTTP callers are governed by ``OrderDeliverIn`` and
-    # therefore receive a precise OpenAPI contract.
-    ssh_info = (
-        data.ssh_info
-        if isinstance(data, OrderDeliverIn)
-        else str(data.get("ssh_info", "")).strip()
-    )
+    ssh_info = data.ssh_info
     if not valid_ssh_info(ssh_info):
         raise BizError("SSH 信息格式无效，请填写用户名、主机地址及有效端口")
     now = datetime.now(timezone.utc)
@@ -896,6 +888,7 @@ def renew_order(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    require_direct_trade_enabled()
     request_id = str(data.client_request_id or "").strip()
     if not 12 <= len(request_id) <= 64:
         raise BizError("续费请求编号长度必须为 12 至 64 个字符", status_code=422)

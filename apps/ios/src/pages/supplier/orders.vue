@@ -64,6 +64,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { fmtCardHours, formatDeadline, toCardHours } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
+import { isValidSshInfo } from '@/utils/ssh-info'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -76,15 +77,17 @@ const deliveryTarget = ref<SupplierOrderItem | null>(null)
 const sshInfo = ref('')
 const delivering = ref(false)
 
-const STATUS_MAP = ['paid', 'delivering', 'disputed', 'completed']
-const segmentItems = computed(() => [t('pendingDelivery'), t('pendingBuyerAcceptance'), t('disputeInProgress'), t('completed')])
+const STATUS_FILTERS: Array<string | undefined> = ['paid', 'delivering', 'disputed', undefined]
+const HISTORY_STATUSES = new Set(['completed', 'running', 'done', 'canceled', 'refunded'])
+const segmentItems = computed(() => [t('pendingDelivery'), t('pendingBuyerAcceptance'), t('disputeInProgress'), t('orderHistory')])
 
 async function load() {
   loading.value = true
   loadError.value = false
   list.value = []
   try {
-    list.value = await getSupplierOrders(STATUS_MAP[tab.value])
+    const rows = await getSupplierOrders(STATUS_FILTERS[tab.value])
+    list.value = tab.value === 3 ? rows.filter((order) => HISTORY_STATUSES.has(order.status)) : rows
   } catch { loadError.value = true }
   loading.value = false
 }
@@ -92,11 +95,11 @@ onShow(() => load())
 function onTab(v: number) { tab.value = v; load() }
 
 function statusText(s: string) {
-  const m: Record<string, string> = { paid: 'pendingDelivery', delivering: 'pendingBuyerAcceptance', disputed: 'disputeInProgress', completed: 'completed', canceled: 'canceled' }
+  const m: Record<string, string> = { paid: 'pendingDelivery', delivering: 'pendingBuyerAcceptance', disputed: 'disputeInProgress', completed: 'completed', running: 'statusRunning', done: 'expired', canceled: 'canceled', refunded: 'refunded' }
   return t(m[s] || s)
 }
 function statusType(s: string): any {
-  const m: Record<string, string> = { paid: 'running', delivering: 'running', disputed: 'running', completed: 'done', canceled: 'canceled' }
+  const m: Record<string, string> = { paid: 'running', delivering: 'running', disputed: 'running', completed: 'done', running: 'running', done: 'expired', canceled: 'canceled', refunded: 'canceled' }
   return m[s] || 'default'
 }
 
@@ -134,7 +137,7 @@ async function submitDelivery() {
   const target = deliveryTarget.value
   const value = sshInfo.value.trim()
   if (!target || delivering.value) return
-  if (value.length < 5) {
+  if (!isValidSshInfo(value)) {
     uni.showToast({ title: t('enterValidSshInfo'), icon: 'none' })
     return
   }

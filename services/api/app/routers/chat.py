@@ -17,18 +17,41 @@ from app.models.support import SupportConversation, SupportMessage, SupportTicke
 from app.models.user import User
 from app.schemas.support import SupportMessageIn, SupportMessageOut, SupportTicketIn, SupportTicketOut
 from app.services.support import asks_for_human, human_request_reply, match_faq, unknown_reply
+from app.services.trade_mode import direct_trade_enabled, matchmaking_enabled
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/chat", tags=["support"])
 
-SYSTEM_PROMPT = """You are the KAI compute-platform support assistant.
-Only answer from these verified product facts:
-- A current KAI Pricing quote explicitly marked Purchasable can create an hourly
+DIRECT_TRADE_SYSTEM_FACTS = """- A current KAI Pricing quote explicitly marked Purchasable can create an hourly
   order, reserve wallet CH, and wait for manual platform SSH delivery.
 - KAI Pricing is the sole active live quote source. Quote observations are not
-  live inventory, and listings marked reference-only cannot be ordered.
-- Real payment, recharge, refund, withdrawal, SMS verification, push delivery,
-  and human-agent systems may be unavailable unless the server has configured them.
+  live inventory, and listings marked reference-only cannot be ordered."""
+
+MATCHMAKING_SYSTEM_FACTS = """- This release is a matchmaking service: users submit requirements, verified
+  sellers quote, and choosing a quote records only a cooperation intention for
+  platform coordination. It does not create a paid order, debit CH, or collect money.
+- KAI Pricing observations and charts remain visible for inquiry reference; they
+  are not live inventory or a transaction price. KAI-operated and seller resources
+  are identified separately.
+- Buyer contact details, seller contact details, and SSH credentials must not be
+  disclosed during the quote stage."""
+
+HISTORY_ONLY_SYSTEM_FACTS = """- Requirement matching and direct transactions are currently unavailable.
+- Market observations, charts, and historical account records remain readable."""
+
+
+def _system_prompt() -> str:
+    if direct_trade_enabled():
+        commerce_facts = DIRECT_TRADE_SYSTEM_FACTS
+    elif matchmaking_enabled():
+        commerce_facts = MATCHMAKING_SYSTEM_FACTS
+    else:
+        commerce_facts = HISTORY_ONLY_SYSTEM_FACTS
+    return f"""You are the KAI compute-platform support assistant.
+Only answer from these verified product facts:
+{commerce_facts}
+- Payment, recharge, refund, withdrawal, SMS verification, push delivery, and
+  human-agent systems are available only when the server explicitly enables them.
 - Never claim a payment, payout, human handoff, email, phone, SLA, or feature is
   available unless the supplied context explicitly says so.
 - Never request passwords, full identity numbers, bank card numbers, or SSH secrets.
@@ -128,7 +151,7 @@ async def _optional_ai_reply(message: str, lang: str, recent_messages: list[Supp
         if lang == "en"
         else "请始终使用简洁、专业的中文回答，平台单位写作“卡时”。"
     )
-    messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n{language_instruction}"}]
+    messages = [{"role": "system", "content": f"{_system_prompt()}\n{language_instruction}"}]
     for item in recent_messages[-10:]:
         if item.role in {"user", "assistant"}:
             messages.append({"role": item.role, "content": item.content[:1000]})

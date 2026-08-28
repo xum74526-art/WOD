@@ -638,6 +638,52 @@ def _migrate_sensitive_fields(db_session=None):
             db.close()
 
 
+def _migrate_buy_request_quote_revisions(db_session=None):
+    """Backfill one immutable revision for quotes created before negotiation V2."""
+    from app.models.buy_request import BuyRequestQuote, BuyRequestQuoteRevision
+    from app.models.supplier import Supplier
+
+    owns_session = db_session is None
+    db = db_session or SessionLocal()
+    try:
+        migrated = 0
+        quotes = db.query(BuyRequestQuote).all()
+        for quote in quotes:
+            exists = db.query(BuyRequestQuoteRevision.id).filter(
+                BuyRequestQuoteRevision.quote_id == quote.id,
+            ).first()
+            if exists:
+                continue
+            supplier = db.query(Supplier).filter(Supplier.id == quote.supplier_id).first()
+            if not supplier:
+                continue
+            db.add(BuyRequestQuoteRevision(
+                quote_id=quote.id,
+                buy_request_id=quote.buy_request_id,
+                supplier_id=quote.supplier_id,
+                revision_number=1,
+                proposer_role="supplier",
+                proposer_user_id=supplier.user_id,
+                unit_price=quote.unit_price,
+                total_price=quote.total_price,
+                currency=quote.currency,
+                available_at=quote.available_at,
+                message=quote.message,
+                expires_at=quote.expires_at,
+                status=quote.status,
+            ))
+            migrated += 1
+        db.commit()
+        if migrated:
+            print(f"[init_db] 补齐求购报价历史: {migrated} 条")
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if owns_session:
+            db.close()
+
+
 def _ensure_user_wallets(db_session=None):
     """Give every existing account its required zero-value wallet.
 
@@ -1115,6 +1161,22 @@ def init():
             "ON market_history_points (upstream_provider, gpu_model, gpu_variant, billing_mode, dataset_source, observed_at)"
         ))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_buy_request_owner_type ON buy_requests (user_id, request_type, status)"))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_buy_request_deals_active_slot "
+            "ON buy_request_deals (active_slot)"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_buy_request_quote_revision "
+            "ON buy_request_quote_revisions (quote_id, revision_number)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_buy_request_deals_request_created "
+            "ON buy_request_deals (buy_request_id, created_at)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_buy_request_events_request_created "
+            "ON buy_request_events (buy_request_id, created_at)"
+        ))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_created_platform ON orders (created_platform)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_last_modified_platform ON orders (last_modified_platform)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_renewals_created_platform ON order_renewals (created_platform)"))
@@ -1138,6 +1200,7 @@ def init():
             "ON ledger (ref_merchant_settlement_id) WHERE ref_merchant_settlement_id IS NOT NULL"
         ))
     _migrate_offline_purchases()
+    _migrate_buy_request_quote_revisions()
     _migrate_legacy_market_history()
     _migrate_sensitive_fields()
     _ensure_user_wallets()

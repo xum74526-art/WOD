@@ -13,7 +13,7 @@ from app.models.invite import InviteCode, InviteRecord
 from app.routers.invite import process_first_order_reward, summary
 from app.routers.order import confirm_delivery, create_order, deliver_ssh
 from app.routers.wallet import WithdrawInV2, ledger_list, withdraw
-from app.schemas.order import OrderCreateIn
+from app.schemas.order import OrderCreateIn, OrderDeliverIn
 from app.services.reward_entitlements import (
     create_supplier_order_accrual,
     get_asset_consumer_reward,
@@ -36,6 +36,7 @@ class RebateCoreTests(unittest.TestCase):
         self.original_live = settings.REWARD_SERVICE_ENABLED
         self.original_test = settings.CLOSED_TEST_REWARD_ENABLED
         self.original_payment = settings.PAYMENT_SERVICE_ENABLED
+        self.original_direct_trade = settings.DIRECT_TRADE_ENABLED
         self.original_revenue_settlement = settings.REVENUE_SETTLEMENT_ENABLED
         self.original_consumer = settings.CONSUMER_REWARD_ENABLED
         self.original_supplier = settings.SUPPLIER_REWARD_ENABLED
@@ -47,6 +48,7 @@ class RebateCoreTests(unittest.TestCase):
         settings.SUPPLIER_REWARD_ENABLED = True
         settings.INVITE_REWARD_ENABLED = True
         settings.REWARD_SETTLEMENT_ENABLED = True
+        settings.DIRECT_TRADE_ENABLED = True
         settings.REVENUE_SETTLEMENT_ENABLED = False
 
         self.inviter = User(
@@ -101,6 +103,7 @@ class RebateCoreTests(unittest.TestCase):
         settings.REWARD_SERVICE_ENABLED = self.original_live
         settings.CLOSED_TEST_REWARD_ENABLED = self.original_test
         settings.PAYMENT_SERVICE_ENABLED = self.original_payment
+        settings.DIRECT_TRADE_ENABLED = self.original_direct_trade
         settings.REVENUE_SETTLEMENT_ENABLED = self.original_revenue_settlement
         settings.CONSUMER_REWARD_ENABLED = self.original_consumer
         settings.SUPPLIER_REWARD_ENABLED = self.original_supplier
@@ -118,7 +121,12 @@ class RebateCoreTests(unittest.TestCase):
             client_request_id="rebate-order-0001",
         ), self.buyer, self.db)
         order_id = result["data"]["id"]
-        deliver_ssh(order_id, {"ssh_info": "ssh user@192.0.2.20 -p 22"}, self.seller, self.db)
+        deliver_ssh(
+            order_id,
+            OrderDeliverIn(ssh_info="ssh user@192.0.2.20 -p 22"),
+            self.seller,
+            self.db,
+        )
         confirm_delivery(order_id, self.buyer, self.db)
         return order_id
 
@@ -259,7 +267,12 @@ class RebateCoreTests(unittest.TestCase):
             client_request_id="rebate-order-quantity-0001",
         ), self.buyer, self.db)
         order_id = result["data"]["id"]
-        deliver_ssh(order_id, {"ssh_info": "ssh user@192.0.2.21 -p 22"}, self.seller, self.db)
+        deliver_ssh(
+            order_id,
+            OrderDeliverIn(ssh_info="ssh user@192.0.2.21 -p 22"),
+            self.seller,
+            self.db,
+        )
         confirm_delivery(order_id, self.buyer, self.db)
         asset = self.db.query(Asset).filter(Asset.order_id == order_id).one()
         self.assertEqual(asset.quantity, 2)

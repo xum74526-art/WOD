@@ -27,9 +27,16 @@
           <view class="pbody">
             <view class="pt"><text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text><text class="pmem">{{ p.memory }}</text></view>
             <view class="pbot">
-              <text class="pp">{{ fmtCH(p.price) }}</text><text class="pu">/h</text>
+              <template v-if="commerce.directTradeEnabled">
+                <text class="pp">{{ formatNumber(directTradeCardHoursPerGpuHour(p)) }}</text>
+                <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
+              </template>
+              <text v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false" class="pp">{{ t('inquiry') }}</text>
+              <text v-else class="pp unavailable">{{ t('dataUnavailable') }}</text>
               <text class="pstock">{{ t('rentable') }} {{ p.stock }}</text>
-              <text class="p-buy" :class="{ disabled: !p.purchasable }">{{ t(p.purchasable ? 'buyUsage' : 'marketOfferUnavailableShort') }}</text>
+              <text v-if="commerce.directTradeEnabled" class="p-buy">{{ t(directTradeProductPurchasable(p) ? 'k_25575fc0' : 'viewDetail') }}</text>
+              <text v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false" class="p-buy">{{ t('submitRequirement') }}</text>
+              <text v-else class="p-buy disabled">{{ t('viewDetail') }}</text>
             </view>
           </view>
         </view>
@@ -49,13 +56,16 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { navigateTo as nav } from '@/utils/nav'
-import { formatNumber, fmtCH } from '@/utils/format'
+import { formatNumber } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { localizeRegionName } from '@/utils/region-name'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
+import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 
 const i18n = useI18nStore()
+const commerce = useCommerceStore()
 const { t, tr } = i18n
 const info = ref<SupplierInfo | null>(null)
 const products = ref<Product[]>([])

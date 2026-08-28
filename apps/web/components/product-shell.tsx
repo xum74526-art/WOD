@@ -8,6 +8,7 @@ import {
   Bank,
   Bell,
   ChatCircleText,
+  ClipboardText,
   Coins,
   Cube,
   Gavel,
@@ -75,6 +76,7 @@ const supplierAccountNav = [
 
 const supplierNav = [
   { label: "经营总览", href: "/supplier", icon: House },
+  { label: "需求市场", href: "/supplier/requests", icon: ClipboardText },
   { label: "算力商品", href: "/supplier/resources", icon: Cube },
   { label: "交付订单", href: "/supplier/orders", icon: Receipt },
   { label: "收益与提现", href: "/supplier/revenue", icon: Wallet },
@@ -85,6 +87,7 @@ const supplierNav = [
 
 const adminNav = [
   { label: "运营总览", href: "/admin", icon: House },
+  { label: "需求管理", href: "/admin/requests", icon: ClipboardText },
   { label: "端口数据", href: "/admin/data", icon: UsersThree },
   { label: "实名认证", href: "/admin/kyc", icon: IdentificationCard },
   { label: "商家入驻审核", href: "/admin/suppliers", icon: ShieldCheck },
@@ -94,7 +97,7 @@ const adminNav = [
 ];
 
 const englishNavigation: Record<string, string> = {
-  "买家总览": "Buyer Overview", "算力市场": "Compute Market", "个人资产": "My Assets", "设备托管": "Device Hosting", "采购订单": "Orders", "求购与报价": "Requests & Quotes", "钱包与流水": "Wallet & Ledger", "收益与返佣": "Earnings & Rebates", "优惠券": "Coupons", "邀请记录": "Referrals", "银行卡": "Bank Cards", "实名认证": "Identity Verification", "通知中心": "Notifications", "在线客服": "Support", "地址管理": "Addresses", "账户设置": "Account Settings", "账户总览": "Account Overview", "账户资料": "Account Profile", "站内通知": "Notifications", "经营总览": "Operations Overview", "算力商品": "Compute Products", "交付订单": "Delivery Orders", "收益与提现": "Revenue & Withdrawals", "经营统计": "Analytics", "商家返佣": "Supplier Rebates", "商家资料": "Supplier Profile", "运营总览": "Admin Overview", "端口数据": "Platform Data", "商家入驻审核": "Merchant Admission", "订单争议": "Order Disputes", "银行卡复核": "Bank Card Review", "提现结算": "Withdrawal Settlement",
+  "买家总览": "Buyer Overview", "算力市场": "Compute Market", "个人资产": "My Assets", "设备托管": "Device Hosting", "采购订单": "Orders", "求购与报价": "Requests & Quotes", "钱包与流水": "Wallet & Ledger", "收益与返佣": "Earnings & Rebates", "优惠券": "Coupons", "邀请记录": "Referrals", "银行卡": "Bank Cards", "实名认证": "Identity Verification", "通知中心": "Notifications", "在线客服": "Support", "地址管理": "Addresses", "账户设置": "Account Settings", "账户总览": "Account Overview", "账户资料": "Account Profile", "站内通知": "Notifications", "经营总览": "Operations Overview", "需求市场": "Request Market", "算力商品": "Compute Products", "交付订单": "Delivery Orders", "收益与提现": "Revenue & Withdrawals", "经营统计": "Analytics", "商家返佣": "Supplier Rebates", "商家资料": "Supplier Profile", "运营总览": "Admin Overview", "需求管理": "Request Management", "端口数据": "Platform Data", "商家入驻审核": "Merchant Admission", "订单争议": "Order Disputes", "银行卡复核": "Bank Card Review", "提现结算": "Withdrawal Settlement",
 };
 
 function redirectForRole(user: AuthUser, variant: WorkspaceVariant) {

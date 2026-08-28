@@ -5,6 +5,7 @@ import { useThemeStore } from './store/theme'
 import { useI18nStore } from './store/i18n'
 import { useHostingStore } from './store/hosting'
 import { useNotificationStore } from './store/notification'
+import { useCommerceStore } from './store/commerce'
 import { kaiAuthCallbackFingerprint, parseKaiAuthUrl } from './utils/kai-auth-callback'
 
 const HANDLED_KAI_BIND_CALLBACK_KEY = 'wod_kai_bind_callback_fingerprint'
@@ -74,6 +75,7 @@ onLaunch(() => {
   })
   useThemeStore().init()
   useI18nStore().init()
+  void useCommerceStore().refresh(true)
   const user = useUserStore()
   user.restore()
   if (user.isLogin) useNotificationStore().startPolling()
@@ -85,6 +87,7 @@ onShow(() => {
   theme.refreshSystemTheme()
   theme.applyTheme()
   if (useUserStore().isLogin) useNotificationStore().startPolling()
+  void useCommerceStore().refresh()
   probeKaiBindingCallback()
 })
 onHide(() => useNotificationStore().stopPolling())

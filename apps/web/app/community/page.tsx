@@ -4,7 +4,7 @@ import { CommunityFeed } from "@/components/community-feed";
 import { SiteHeader } from "@/components/site-header";
 import { I18nText } from "@/components/locale-root";
 
-export const metadata: Metadata = { title: "算力社区", description: "发现 GPU、AI、云计算与算力行业的最新内容。" };
+export const metadata: Metadata = { title: "资讯", description: "发现 GPU、AI、云计算与算力行业的最新内容。" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -22,7 +22,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Se
             <h1><I18nText id="community.title" zh="看懂算力，再做选择"/></h1>
             <p><I18nText id="community.description" zh="聚合 GPU 价格、硬件、基础设施与产业动态，为服务器采购和租用提供更清晰的判断依据。"/></p>
           </div>
-          <aside className="community-coverage" aria-label="算力社区内容范围">
+          <aside className="community-coverage" aria-label="资讯内容范围">
             <header>
               <div><span><I18nText id="community.scope" zh="情报范围"/></span><strong><I18nText id="community.fourTopics" zh="覆盖 4 个主题"/></strong></div>
               <small>COMPUTE INTELLIGENCE</small>

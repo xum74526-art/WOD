@@ -17,6 +17,7 @@ from app.services.mapay import (
 )
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
+from app.services.trade_mode import recharge_enabled, require_recharge_enabled
 
 
 router = APIRouter(prefix="/api/payments/mapay", tags=["payment"])
@@ -24,7 +25,9 @@ router = APIRouter(prefix="/api/payments/mapay", tags=["payment"])
 
 @router.get("/config")
 def payment_config(user: User = Depends(get_current_user)):
-    return success(public_config())
+    config = public_config()
+    config["enabled"] = bool(config.get("enabled") and recharge_enabled())
+    return success(config)
 
 
 @router.post("/recharge-orders")
@@ -34,6 +37,7 @@ def create_payment(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    require_recharge_enabled()
     return success(
         create_recharge_order(
             db,

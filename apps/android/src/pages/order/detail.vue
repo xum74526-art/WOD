@@ -72,7 +72,9 @@
         <view v-if="canCancelOrder" class="btn ghost cancel-pending" @tap="showCancel = true">{{ t('取消订单') }}</view>
       </view>
       <view v-else-if="canRenew" class="bar-row">
-        <view class="btn primary full" @tap="openRenew">{{ t('renew') }}</view>
+        <DirectTradeOrderRenewAction v-if="commerce.directTradeEnabled" :order-id="oid" @refreshed="fetchOrder" />
+        <view v-else-if="commerce.matchmakingEnabled" class="btn primary full" @tap="submitFollowUpRequirement">{{ t('submitRequirement') }}</view>
+        <view v-else class="info-text">{{ t('dataUnavailable') }}</view>
       </view>
       <view v-else-if="order.status === 'completed' && order.purchase_type === 'holding'" class="bar-row">
         <view class="info-text">{{ t('holdingSaleUnavailableNotice') }}</view>
@@ -81,26 +83,6 @@
         <view class="info-text">{{ t('等待平台处理争议') }}</view>
       </view>
     </BottomActionBar>
-
-    <ConfirmSheet
-      :visible="showRenew"
-      :title="t('续费订单')"
-      :desc="t('renewByHoursHint')"
-      :cancelText="t('取消')"
-      :confirmText="t('确认续费')"
-      @cancel="cancelRenew"
-      @confirm="onRenew"
-    >
-      <view class="cycles">
-        <view
-          v-for="value in RENEW_HOUR_OPTIONS"
-          :key="value"
-          class="cycle"
-          :class="{ active: renewHours === value }"
-          @tap="renewHours = value"
-        >{{ t('hoursValue', { count: value }) }}</view>
-      </view>
-    </ConfirmSheet>
 
     <ConfirmSheet
       :visible="showCancel"
@@ -130,7 +112,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '@/api/request'
-import { getOrder, renewOrder, cancelOrder, disputeOrder, type OrderItem } from '@/api/order'
+import { getOrder, cancelOrder, disputeOrder, type OrderItem } from '@/api/order'
 import { formatDate, formatDeadline, fmtCH } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
@@ -140,21 +122,20 @@ import BottomActionBar from '@/components/BottomActionBar.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import DirectTradeOrderRenewAction from '@/components/direct-trade/DirectTradeOrderRenewAction.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
+import { useCommerceStore } from '@/store/commerce'
 import { localizeProductName } from '@/utils/localize-content'
+import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
 
 const i18n = useI18nStore()
 const { t } = i18n
+const commerce = useCommerceStore()
 const order = ref<OrderItem | null>(null)
 const loading = ref(true)
 const oid = ref(0)
 
-const showRenew = ref(false)
-const RENEW_HOUR_OPTIONS = [1, 6, 12, 24, 72, 168, 720]
-const renewHours = ref(24)
-const pendingRenewRequestId = ref('')
-const pendingRenewKey = ref('')
 const showCancel = ref(false)
 const showDispute = ref(false)
 const disputeReason = ref('')
@@ -234,22 +215,6 @@ async function onConfirm() {
   })
 }
 
-async function onRenew() {
-  showRenew.value = false
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await renewOrder(oid.value, renewHours.value, ensureRenewRequestId())
-    clearRenewRequest()
-    uni.showToast({ title: t('续费成功'), icon: 'success' })
-    await fetchOrder()
-  } catch {
-    /* request 已 toast */
-  } finally {
-    submitting.value = false
-  }
-}
-
 async function onCancel() {
   showCancel.value = false
   if (submitting.value || !canCancelOrder.value) return
@@ -286,32 +251,20 @@ async function onDispute() {
   }
 }
 
-function renewOperationKey(): string {
-  return `${oid.value}:${renewHours.value}`
-}
-
-function ensureRenewRequestId(): string {
-  const key = renewOperationKey()
-  if (!pendingRenewRequestId.value || pendingRenewKey.value !== key) {
-    pendingRenewKey.value = key
-    pendingRenewRequestId.value = `renew-${oid.value}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  }
-  return pendingRenewRequestId.value
-}
-
-function clearRenewRequest() {
-  pendingRenewRequestId.value = ''
-  pendingRenewKey.value = ''
-}
-
-function openRenew() {
-  ensureRenewRequestId()
-  showRenew.value = true
-}
-
-function cancelRenew() {
-  showRenew.value = false
-  clearRenewRequest()
+function submitFollowUpRequirement() {
+  const current = order.value
+  if (!current?.product_id) return
+  saveInquiryRequestPrefill({
+    product_id: current.product_id,
+    supplier_id: current.supplier_id,
+    seller_name: current.seller_name || current.supplier_name || undefined,
+    source: current.market_source || current.seller_type || 'existing_order',
+    gpu_model: current.gpu_model || current.product_name || 'GPU',
+    quantity: Math.max(1, current.quantity || 1),
+    gpu_hours: Math.max(1, Number(current.duration_hours ?? current.purchase_hours ?? 24)),
+    product_name: current.product_name,
+  })
+  nav('/pages/buy-request/index?compose=1')
 }
 
 function goAsset() {

@@ -38,6 +38,7 @@ from app.services.manual_payout import (
     validate_receipt,
 )
 from app.routers.verification import ocr_public_summary
+from app.services.trade_mode import withdrawal_enabled
 from app.utils.response import BizError, success
 from app.services.auth_session import AuditPlatform, normalize_platform
 from app.services.invite_rewards_v2 import reevaluate_invitee_qualification
@@ -65,7 +66,7 @@ def finance_me(user: User = Depends(get_current_user)):
     return success({
         "is_finance_admin": user.id in finance_admin_user_ids(),
         "manual_bank_card_enabled": sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED),
-        "manual_payout_enabled": sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED),
+        "manual_payout_enabled": withdrawal_enabled(),
     })
 
 
@@ -415,8 +416,6 @@ def withdrawal_approve(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
-        raise BizError("人工提现尚未启用", status_code=503)
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
     approve_withdrawal(db, order, actor, data.note, platform=normalize_platform(platform))
@@ -518,8 +517,6 @@ async def withdrawal_mark_paid(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    if not sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED):
-        raise BizError("人工提现尚未启用", status_code=503)
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
     content = await receipt.read(settings.PAYOUT_RECEIPT_MAX_BYTES + 1)

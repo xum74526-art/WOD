@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.deps import get_current_user
-from app.core.sensitive import last_four, sensitive_capability_enabled
+from app.core.sensitive import last_four
 from app.db.session import get_db
 from app.models.bank_card import BankCard
 from app.models.ledger import Ledger
@@ -15,7 +15,7 @@ from app.models.revenue import Revenue
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.schemas.wallet import LedgerOut, RechargeIn, WithdrawIn
-from app.services.payment_gateway import provider_configured, public_config as payment_public_config
+from app.services.payment_gateway import public_config as payment_public_config
 from app.utils.response import BizError, success
 from app.services.wallet_balance import (
     LEGACY_REWARD_TYPES,
@@ -34,6 +34,7 @@ from app.services.reward_program import (
     PROGRAM_INVITE,
 )
 from app.services.invite_rewards_v2 import invite_v2_enabled
+from app.services.trade_mode import recharge_enabled, withdrawal_enabled
 
 router = APIRouter(prefix="/api/wallet", tags=["wallet"])
 
@@ -76,10 +77,13 @@ def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(ge
         "reward_mode": "live" if any_reward_program_enabled() else "disabled",
         "has_bank_card": has_bank_card,
         # Kept for old clients; it now means recharge collection only.
-        "payment_service_enabled": provider_configured(),
-        "recharge_service_enabled": provider_configured(),
-        "withdraw_service_enabled": sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED),
-        "payment_config": payment_public_config(),
+        "payment_service_enabled": recharge_enabled(),
+        "recharge_service_enabled": recharge_enabled(),
+        "withdraw_service_enabled": withdrawal_enabled(),
+        "payment_config": {
+            **payment_public_config(),
+            "enabled": recharge_enabled(),
+        },
     })
 
 

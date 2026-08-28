@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <AppNavBar :title="t('deviceManage')" />
+    <AppNavBar :title="t('merchantResourceManagement')" />
     <view class="seg-wrap">
       <SegmentedControl :items="segmentItems" :model-value="filterIdx" @update:model-value="onFilter" />
     </view>

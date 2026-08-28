@@ -36,6 +36,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
                 "SUPPLIER_REWARD_ENABLED",
                 "INVITE_REWARD_ENABLED",
                 "REWARD_SETTLEMENT_ENABLED",
+                "DIRECT_TRADE_ENABLED",
                 "MERCHANT_SERVICE_FEE_BPS",
                 "ORDER_DELIVERY_TIMEOUT_HOURS",
                 "ORDER_CONFIRMATION_TIMEOUT_HOURS",
@@ -45,6 +46,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
         settings.SUPPLIER_REWARD_ENABLED = False
         settings.INVITE_REWARD_ENABLED = False
         settings.REWARD_SETTLEMENT_ENABLED = False
+        settings.DIRECT_TRADE_ENABLED = True
         settings.MERCHANT_SERVICE_FEE_BPS = 1000
         settings.ORDER_DELIVERY_TIMEOUT_HOURS = 24
         settings.ORDER_CONFIRMATION_TIMEOUT_HOURS = 24
@@ -154,6 +156,12 @@ class MerchantCommerceFlowTests(unittest.TestCase):
         listing = catalog["items"][0]
         self.assertEqual(listing["seller_type"], "merchant")
         self.assertEqual(listing["seller_name"], "真实算力商家")
+        self.assertEqual(listing["supplier_id"], self.supplier.id)
+        self.assertEqual(listing["supplier_name"], "真实算力商家")
+        self.assertEqual(listing["supplier_rating"], 4.9)
+        self.assertEqual(listing["supplier_order_count"], 0)
+        self.assertEqual(listing["resource_claim_source"], "merchant_declared")
+        self.assertEqual(listing["assurance_label"], "商家身份已审核 · 商家人工交付")
         self.assertEqual(listing["reported_stock"], 2)
         self.assertTrue(listing["purchasable"])
 
@@ -174,7 +182,14 @@ class MerchantCommerceFlowTests(unittest.TestCase):
         self.assertEqual(order.status, "paid")
         self.assertEqual(product.stock, 1)
         self.assertEqual(created_order["seller_type"], "merchant")
+        self.assertEqual(created_order["supplier_id"], self.supplier.id)
+        self.assertEqual(created_order["supplier_name"], "真实算力商家")
+        self.assertEqual(created_order["supplier_rating"], 4.9)
+        self.assertEqual(created_order["supplier_order_count"], 0)
         self.assertEqual(created_order["fulfillment_mode"], "merchant_manual")
+        self.assertEqual(created_order["resource_claim_source"], "merchant_declared")
+        self.assertEqual(created_order["assurance_label"], "商家身份已审核 · 商家人工交付")
+        self.assertIn("平台未对商家硬件进行审计或认证", created_order["assurance_description"])
         self.assertEqual(created_order["purchase_unit"], "hour")
         self.assertEqual(created_order["amount_card_hours"], 0.24)
         self.assertEqual(
@@ -218,6 +233,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
             "android",
         )["data"]
         self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["supplier_order_count"], 1)
         self.assertFalse(completed["can_renew"])
         settlement = self.db.query(MerchantSettlement).filter(
             MerchantSettlement.order_id == order.id,

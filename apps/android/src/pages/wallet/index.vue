@@ -11,10 +11,14 @@
       <view class="card balance-card">
         <text class="bc-label">{{ t('k_3c67102a') }}</text>
         <AmountText :value="toCardHours(wallet?.balance ?? 0)" prefix="卡时" size="xl" />
-        <view class="bc-actions">
-          <view class="btn ghost" @tap="openRecharge">{{ t('recharge') }}</view>
-          <view class="btn primary" :class="{ disabled: !wallet?.withdraw_service_enabled }" @tap="openWithdraw">{{ t('withdraw') }}</view>
-        </view>
+        <DirectTradeWalletActions
+          v-if="commerce.directTradeEnabled"
+          :wallet="wallet"
+          :recharge-prefill="directRechargePrefill"
+          :open-withdrawal="directWithdrawRequested"
+          @payment-started="handleDirectPaymentStarted"
+          @wallet-updated="handleDirectWalletUpdated"
+        />
       </view>
 
       <view class="withdraw-balance-row">
@@ -50,16 +54,9 @@
           <view class="payment-order-copy" role="button" @tap="copyRechargeOrderNo(pendingPayment.order_no)">{{ t('copyOrderNumber') }}</view>
         </view>
         <text class="payment-state-detail">{{ paymentStateDetail }}</text>
-        <view v-if="paymentCardState !== 'success'" class="payment-state-actions action-grid">
+        <view v-if="paymentCardState !== 'success' && (canQueryPayment || canCancelPayment)" class="payment-state-actions action-grid">
           <view
-            v-if="canContinuePayment"
-            class="payment-action primary"
-            :class="{ disabled: checkingStatus || cancelingPayment }"
-            :aria-disabled="checkingStatus || cancelingPayment"
-            role="button"
-            @tap="continueCurrentPayment"
-          >{{ t('continuePayment') }}</view>
-          <view
+            v-if="canQueryPayment"
             class="payment-action secondary"
             :class="{ disabled: !canQueryPayment || checkingStatus || cancelingPayment }"
             :aria-disabled="!canQueryPayment || checkingStatus || cancelingPayment"
@@ -67,31 +64,15 @@
             @tap="manualRefreshPayment"
           >{{ checkingStatus ? t('checkingPaymentStatus') : t('queryAndConfirmPayment') }}</view>
           <view
-            v-if="canReplacePayment"
-            class="payment-action danger"
-            :class="{ disabled: checkingStatus || cancelingPayment }"
-            :aria-disabled="checkingStatus || cancelingPayment"
-            role="button"
-            @tap="requestReplaceRecharge"
-          >{{ t('changeRechargeAmount') }}</view>
-          <view
-            v-else
+            v-if="canCancelPayment"
             class="payment-action danger"
             :class="{ disabled: !canCancelPayment || checkingStatus || cancelingPayment }"
             :aria-disabled="!canCancelPayment || checkingStatus || cancelingPayment"
             role="button"
             @tap="requestCancelPayment"
           >{{ cancelingPayment ? t('cancelingRechargeOrder') : t('cancelRechargeOrder') }}</view>
-          <view
-            v-if="canRestartPayment"
-            class="payment-action secondary"
-            :class="{ disabled: checkingStatus || cancelingPayment }"
-            :aria-disabled="checkingStatus || cancelingPayment"
-            role="button"
-            @tap="handleRestartRecharge"
-          >{{ t('restartRecharge') }}</view>
         </view>
-        <view v-else class="payment-state-actions">
+        <view v-if="paymentCardState === 'success'" class="payment-state-actions">
           <view class="payment-action primary" role="button" @tap="dismissPaymentState">{{ t('done') }}</view>
         </view>
       </view>
@@ -142,133 +123,42 @@
       </view>
       </template>
     </scroll-view>
-
-    <!-- 充值弹窗 -->
-    <view v-if="sheet.type === 'recharge'" class="mask" @tap="closeSheet">
-      <view class="sheet" @tap.stop>
-        <text class="sheet-title">{{ t('k_2d1872ca') }}</text>
-        <view class="rate-card">
-          <text class="rate-main">1 {{ t('cardHour') }} = {{ formatNumber(cardHourRate, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }} {{ t('cny') }}</text>
-          <text class="rate-sub">{{ t('rechargeRateLockedHint') }}</text>
-        </view>
-        <view class="input-wrap">
-          <text class="cur">¥</text>
-          <input class="amt-input" v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeCny')" placeholder-class="ph" />
-        </view>
-        <view class="quick-amounts">
-          <view v-for="amount in quickAmounts" :key="amount" class="quick-amount" @tap="sheet.amount = String(amount)">¥{{ amount }}</view>
-        </view>
-        <text class="sheet-label payment-method-label">{{ t('paymentMethod') }}</text>
-        <view class="payment-methods">
-          <view
-            v-for="method in paymentMethods"
-            :key="method.value"
-            class="payment-method"
-            :class="{ active: sheet.paymentType === method.value }"
-            @tap="sheet.paymentType = method.value"
-          >
-            <text class="payment-method-mark" :class="method.value">{{ method.mark }}</text>
-            <text>{{ t(method.label) }}</text>
-          </view>
-        </view>
-        <view class="conversion-preview">
-          <text>{{ t('estimatedCardHours') }}</text>
-          <text class="conversion-value">{{ formatNumber(estimatedCardHours, { maximumFractionDigits: 6 }) }} {{ t('cardHour') }}</text>
-        </view>
-        <text class="payment-hint">{{ t('mapayCheckoutHint') }}</text>
-        <text class="payment-time-limit">{{ t('rechargePaymentTimeLimit', { minutes: checkoutTtlMinutes }) }}</text>
-        <text v-if="!rechargeEnabled" class="payment-unavailable">{{ t('mapayKeyPending') }}</text>
-        <view class="sheet-btns">
-          <view class="sheet-btn cancel" @tap="closeSheet">{{ t('cancel') }}</view>
-          <view class="sheet-btn primary" :class="{ disabled: !rechargeEnabled || submitting }" @tap="onRecharge">{{ submitting ? t('submitting') : t('payAndRecharge') }}</view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 提现弹窗 -->
-    <view v-if="sheet.type === 'withdraw'" class="mask" @tap="closeSheet">
-      <view class="sheet" @tap.stop>
-        <text class="sheet-title">{{ t('k_1b3593c1') }}</text>
-        <view v-if="!bankCards.length" class="no-card">
-          <text class="no-card-text">{{ t('k_5cdf6123') }}</text>
-          <view class="sheet-btn primary" @tap="goBankCards" style="margin-top: 20rpx">{{ t('k_e2f477a5') }}</view>
-        </view>
-        <template v-else>
-          <view class="manual-transfer-note">
-            <text class="manual-transfer-title">{{ t('manualTransfer') }}</text>
-            <text class="manual-transfer-text">{{ t('manualWithdrawalFlowHint') }}</text>
-          </view>
-          <view class="withdraw-summary">
-            <view><text>{{ t('withdrawableBalance') }}</text><text>{{ fmtCardHours(wallet?.withdrawable_balance ?? 0) }} {{ t('cardHour') }}</text></view>
-            <view><text>{{ t('exchangeRate') }}</text><text>1 {{ t('cardHour') }} = {{ formatMoney(withdrawConfig?.rate_cny_per_card_hour || 0) }} {{ t('cny') }}</text></view>
-          </view>
-          <view class="input-wrap">
-            <text class="cur">{{ t('cardHour') }}</text>
-            <input class="amt-input" v-model="sheet.amount" type="digit" :placeholder="t('withdrawableValue', { amount: `${fmtCardHours(wallet?.withdrawable_balance ?? 0)} ${t('cardHour')}` })" placeholder-class="ph" />
-          </view>
-          <text class="sheet-label">{{ t('k_7d66b940') }}</text>
-          <picker :range="bankCards" range-key="displayName" :value="cardIndex" @change="onCardChange" class="card-picker">
-            <view class="picker-text">{{ bankCards[cardIndex]?.displayName || t('请选择银行卡') }}</view>
-          </picker>
-          <view class="settlement-preview">
-            <view><text>{{ t('grossAmount') }}</text><text>¥{{ formatMoney(withdrawGross) }}</text></view>
-            <view><text>{{ t('serviceFee') }} ({{ formatNumber((withdrawConfig?.fee_rate || 0) * 100, { maximumFractionDigits: 2 }) }}%)</text><text>- ¥{{ formatMoney(withdrawFee) }}</text></view>
-            <view class="net-row"><text>{{ t('estimatedArrival') }}</text><text>¥{{ formatMoney(withdrawNet) }}</text></view>
-          </view>
-          <view class="sheet-btns">
-            <view class="sheet-btn cancel" @tap="closeSheet">{{ t('cancel') }}</view>
-            <view class="sheet-btn primary" :class="{ disabled: submitting }" @tap="onWithdraw">{{ t(submitting ? 'submitting' : 'submitWithdrawalRequest') }}</view>
-          </view>
-        </template>
-      </view>
-    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, reactive } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
-import { cancelRechargePayment, createRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type RechargePaymentType, type WalletInfo } from '@/api/wallet'
-import { getBankCards, type BankCardItem } from '@/api/bank-card'
-import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/api/withdrawal'
-import { isRegisteredBankCardStatus } from '@/utils/bank-card'
+import { cancelRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type WalletInfo } from '@/api/wallet'
 import { useAssetStore } from '@/store/asset'
-import { fmtCardHours, fmtCH, fmtCHr, formatMoney, formatNumber, toCardHours } from '@/utils/format'
-import { resolveBackendUrl } from '@/utils/config'
+import { fmtCH, formatMoney, formatNumber, toCardHours } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import DirectTradeWalletActions from '@/components/direct-trade/DirectTradeWalletActions.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
-import { openPaymentCheckout, type PaymentCheckoutFailure } from '@/utils/payment-checkout'
+import { useCommerceStore } from '@/store/commerce'
 import {
-  DEFAULT_RECHARGE_TTL_SECONDS,
-  effectiveRechargeMinimum,
-  effectiveWithdrawalMinimum,
   formatPaymentCountdown,
-  MINIMUM_RECHARGE_CNY,
   paymentRemainingMs,
-  readRechargePrefillQuery,
   readStoredRechargeSession,
+  readRechargePrefillQuery,
   rechargeCanCancel,
   rechargeCanQuery,
-  rechargeCanRestart,
   rechargeClearsCurrentSession,
   rechargeUiState,
-  type RechargePrefill,
   type RechargeUiState,
   type StoredRechargeSession,
+  type RechargePrefill,
 } from '@/utils/recharge-payment'
 
 const i18n = useI18nStore()
 const { t } = i18n
 const assetStore = useAssetStore()
+const commerce = useCommerceStore()
 const wallet = ref<WalletInfo | null>(null)
-const withdrawConfig = ref<WithdrawalConfig | null>(null)
-const bankCards = ref<(BankCardItem & { displayName: string })[]>([])
-const cardIndex = ref(0)
-const submitting = ref(false)
 const loading = ref(true)
 const loadError = ref(false)
 const pendingPayment = ref<RechargePaymentOrder | null>(null)
@@ -277,52 +167,14 @@ const paymentDeadlineMs = ref<number | null>(null)
 const countdownRemainingMs = ref<number | null>(null)
 const checkingStatus = ref(false)
 const cancelingPayment = ref(false)
-const queuedRechargePrefill = ref<RechargePrefill | null>(null)
+const directRechargePrefill = ref<RechargePrefill | null>(null)
+const directWithdrawRequested = ref(false)
 const PENDING_PAYMENT_KEY = 'wod-pending-recharge-order'
 const PAYMENT_POLL_INTERVAL_MS = 5000
 let pageActive = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let expiryRefreshOrderNo = ''
-
-const sheet = reactive<{ type: '' | 'recharge' | 'withdraw'; amount: string; paymentType: RechargePaymentType }>({
-  type: '',
-  amount: '',
-  paymentType: 'alipay',
-})
-
-const allPaymentMethods: Array<{ value: RechargePaymentType; label: string; mark: string }> = [
-  { value: 'alipay', label: 'alipay', mark: '支' },
-  { value: 'wxpay', label: 'wechatPay', mark: '微' },
-]
-const paymentMethods = computed(() => {
-  const enabled = wallet.value?.payment_config?.payment_types || []
-  return enabled
-    .map(value => allPaymentMethods.find(method => method.value === value))
-    .filter((method): method is (typeof allPaymentMethods)[number] => Boolean(method))
-})
-
-const cardHourRate = computed(() => Number(wallet.value?.payment_config?.card_hour_rmb_rate || 1.002))
-const rechargeEnabled = computed(() => (
-  wallet.value?.recharge_service_enabled === true
-  && wallet.value?.payment_config?.enabled === true
-  && paymentMethods.value.length > 0
-))
-const minimumAmount = computed(() => effectiveRechargeMinimum(wallet.value?.payment_config?.min_amount_cny))
-const minimumWithdrawalAmount = computed(() => effectiveWithdrawalMinimum(withdrawConfig.value?.min_card_hours))
-const maximumAmount = computed(() => Number(wallet.value?.payment_config?.max_amount_cny || 50000))
-const checkoutTtlMinutes = computed(() => Math.max(
-  1,
-  Math.ceil(Number(wallet.value?.payment_config?.checkout_ttl_seconds || DEFAULT_RECHARGE_TTL_SECONDS) / 60),
-))
-const quickAmounts = [MINIMUM_RECHARGE_CNY, 50, 100]
-const estimatedCardHours = computed(() => {
-  const amount = Number(sheet.amount)
-  return Number.isFinite(amount) && amount > 0 ? amount / cardHourRate.value : 0
-})
-const withdrawGross = computed(() => Math.max(0, Number(sheet.amount) || 0) * Number(withdrawConfig.value?.rate_cny_per_card_hour || 0))
-const withdrawFee = computed(() => withdrawGross.value * Number(withdrawConfig.value?.fee_rate || 0))
-const withdrawNet = computed(() => Math.max(0, withdrawGross.value - withdrawFee.value))
 
 const paymentCardState = computed<RechargeUiState>(() => (
   pendingPayment.value
@@ -368,25 +220,17 @@ const paymentStateDetail = computed(() => {
 })
 const paymentCountdownText = computed(() => formatPaymentCountdown(countdownRemainingMs.value))
 const canQueryPayment = computed(() => Boolean(
-  pendingPayment.value && rechargeCanQuery(pendingPayment.value),
+  commerce.historyReadEnabled && pendingPayment.value && rechargeCanQuery(pendingPayment.value),
 ))
 const canCancelPayment = computed(() => Boolean(
-  pendingPayment.value && rechargeCanCancel(pendingPayment.value),
-))
-const canRestartPayment = computed(() => Boolean(
-  pendingPayment.value && rechargeCanRestart(pendingPayment.value, countdownRemainingMs.value),
-))
-const canContinuePayment = computed(() => Boolean(
-  paymentCardState.value === 'pending' && paymentSession.value?.checkoutUrl,
-))
-const canReplacePayment = computed(() => Boolean(
-  pendingPayment.value && paymentSession.value && paymentCardState.value === 'pending',
+  commerce.historyReadEnabled && pendingPayment.value && rechargeCanCancel(pendingPayment.value),
 ))
 
 let resumePromise: Promise<void> | null = null
 
-onLoad((query) => {
-  queuedRechargePrefill.value = readRechargePrefillQuery(query)
+onLoad(query => {
+  directRechargePrefill.value = readRechargePrefillQuery(query)
+  directWithdrawRequested.value = String(query?.withdraw || '') === '1'
 })
 
 onShow(() => {
@@ -428,7 +272,6 @@ async function resumePage() {
     hydratePaymentSession()
     await fetchWallet()
     await refreshPendingPayment(true, true)
-    applyQueuedRechargePrefill()
     startPaymentTracking()
   })()
   try {
@@ -457,171 +300,23 @@ function handleBrowserPageShow() {
 async function fetchWallet() {
   loading.value = true
   loadError.value = false
-  const [walletResult, cardsResult, configResult] = await Promise.allSettled([getWallet(), getBankCards(), getWithdrawalConfig()])
-  if (walletResult.status === 'fulfilled') wallet.value = walletResult.value
-  else loadError.value = true
-  if (cardsResult.status === 'fulfilled') {
-    bankCards.value = cardsResult.value.filter(c => isRegisteredBankCardStatus(c.status)).map(c => ({
-      ...c,
-      displayName: `${t(c.bank_name)} (${c.card_number})`,
-    }))
-  }
-  if (configResult.status === 'fulfilled') withdrawConfig.value = configResult.value
-  loading.value = false
-}
-
-function openRecharge() {
-  showRechargeSheet()
-}
-
-function showRechargeSheet(prefill?: RechargePrefill) {
-  if (pendingPayment.value && (paymentCardState.value === 'pending' || paymentCardState.value === 'processing')) {
-    uni.showModal({
-      title: t('activeRechargeExistsTitle'),
-      content: t('activeRechargeExists'),
-      cancelText: t('close'),
-      confirmText: canContinuePayment.value ? t('continuePayment') : t('viewRechargeOrders'),
-      success: result => {
-        if (!result.confirm) return
-        if (canContinuePayment.value) continueCurrentPayment()
-        else goRechargeOrders()
-      },
-    })
-    return
-  }
-  sheet.type = 'recharge'
-  sheet.amount = prefill?.amount || ''
-  sheet.paymentType = prefill?.paymentType && paymentMethods.value.some(method => method.value === prefill.paymentType)
-    ? prefill.paymentType
-    : paymentMethods.value[0]?.value || 'wxpay'
-}
-
-function applyQueuedRechargePrefill() {
-  const prefill = queuedRechargePrefill.value
-  if (!prefill) return
-  // Consume once so pageshow/onShow cannot reopen the sheet after the user
-  // closes it. showRechargeSheet still blocks a new order when another live
-  // checkout exists, preserving the same safety rule as the main wallet CTA.
-  queuedRechargePrefill.value = null
-  showRechargeSheet(prefill)
-}
-async function openWithdraw() {
-  if (!wallet.value?.withdraw_service_enabled || withdrawConfig.value?.enabled !== true) {
-    uni.showToast({ title: t('manualWithdrawalUnavailable'), icon: 'none' })
-    return
-  }
-  sheet.type = 'withdraw'
-  sheet.amount = ''
-  // 刷新银行卡列表
-  if (!bankCards.value.length) {
-    try {
-      const cards = await getBankCards()
-      bankCards.value = cards.filter(c => isRegisteredBankCardStatus(c.status)).map(c => ({
-        ...c,
-        displayName: `${t(c.bank_name)} (${c.card_number})`,
-      }))
-    } catch {}
-  }
-}
-function closeSheet() {
-  sheet.type = ''
-}
-
-function onCardChange(e: any) {
-  cardIndex.value = e.detail.value
-}
-
-async function onRecharge() {
-  const rawAmount = String(sheet.amount || '').trim()
-  const amount = Number(rawAmount)
-  if (!/^\d+(?:\.\d{1,2})?$/.test(rawAmount)
-    || !Number.isFinite(amount)
-    || amount < minimumAmount.value
-    || amount > maximumAmount.value) {
-    uni.showToast({
-      title: t('invalidRechargeAmount', {
-        min: formatMoney(minimumAmount.value),
-        max: formatMoney(maximumAmount.value),
-      }),
-      icon: 'none',
-    })
-    return
-  }
-  if (!rechargeEnabled.value) {
-    uni.showToast({ title: t('mapayKeyPending'), icon: 'none' })
-    return
-  }
-  if (!paymentMethods.value.some(method => method.value === sheet.paymentType)) {
-    uni.showToast({ title: t('paymentChannelUnavailable'), icon: 'none' })
-    return
-  }
-  if (!await confirmRechargeAmount(amount)) return
-  if (submitting.value) return
-  submitting.value = true
   try {
-    const payment = await createRechargePayment(amount, sheet.paymentType)
-    const target = resolveBackendUrl(payment.checkout_url)
-    if (!target) throw new Error('invalid checkout url')
-    paymentSession.value = {
-      version: 1,
-      orderNo: payment.order_no,
-      checkoutUrl: target,
-      fallbackExpiresAtMs: Date.now() + Number(
-        wallet.value?.payment_config?.checkout_ttl_seconds || DEFAULT_RECHARGE_TTL_SECONDS,
-      ) * 1000,
-      successNotified: false,
-    }
-    savePaymentSession()
-    applyPayment(payment)
-    closeSheet()
-    openCheckout(target)
-  } catch (error) {
-    console.error('[wallet] failed to start recharge checkout', error)
-    uni.showToast({ title: t('paymentStartFailed'), icon: 'none' })
+    wallet.value = await getWallet()
+  } catch {
+    loadError.value = true
   } finally {
-    submitting.value = false
+    loading.value = false
   }
 }
 
-function confirmRechargeAmount(amount: number): Promise<boolean> {
-  return new Promise(resolve => {
-    uni.showModal({
-      title: t('confirmRechargeAmountTitle'),
-      content: t('confirmRechargeAmountContent', {
-        amount: formatMoney(amount),
-        cardHours: formatNumber(amount / cardHourRate.value, { maximumFractionDigits: 6 }),
-      }),
-      cancelText: t('checkAmountAgain'),
-      confirmText: t('confirmAndPay'),
-      success: result => resolve(result.confirm === true),
-      fail: () => resolve(false),
-    })
-  })
+function handleDirectPaymentStarted() {
+  paymentSession.value = null
+  hydratePaymentSession()
+  void refreshPendingPayment(true, false)
 }
 
-function handleCheckoutFailure(failure: PaymentCheckoutFailure) {
-  console.error('[wallet] payment checkout navigation failed', failure)
-  const paymentAppMissing = failure.code === 'payment-app-open-failed'
-  uni.showModal({
-    title: t(paymentAppMissing ? 'paymentAppUnavailableTitle' : 'paymentPageOpenFailedTitle'),
-    content: t(paymentAppMissing ? 'paymentAppUnavailable' : 'paymentPageOpenFailed'),
-    showCancel: false,
-    confirmText: t('understood'),
-  })
-}
-
-function openCheckout(url: string) {
-  openPaymentCheckout(url, handleCheckoutFailure)
-}
-
-function continueCurrentPayment() {
-  if (checkingStatus.value || cancelingPayment.value) return
-  const target = paymentSession.value?.checkoutUrl || ''
-  if (!target || paymentCardState.value !== 'pending') {
-    uni.showToast({ title: t('paymentCheckoutUnavailable'), icon: 'none' })
-    return
-  }
-  openCheckout(target)
+function handleDirectWalletUpdated() {
+  void Promise.allSettled([fetchWallet(), assetStore.refresh()])
 }
 
 function hydratePaymentSession() {
@@ -719,7 +414,7 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
     if (clearCanceledCurrentPayment(payment)) return
     const stateBeforeQuery = paymentCardState.value
     if (queryProvider
-      && rechargeEnabled.value
+      && commerce.historyReadEnabled
       && payment.can_query !== false
       && (stateBeforeQuery === 'pending' || stateBeforeQuery === 'processing' || stateBeforeQuery === 'expired')) {
       try {
@@ -806,96 +501,8 @@ async function requestCancelPayment() {
   }
 }
 
-function confirmReplaceRecharge(): Promise<boolean> {
-  return new Promise(resolve => {
-    uni.showModal({
-      title: t('changeRechargeAmountTitle'),
-      content: t('changeRechargeAmountContent', {
-        amount: formatMoney(pendingPayment.value?.amount_cny || 0),
-      }),
-      cancelText: t('keepRechargeOrder'),
-      confirmText: t('changeRechargeAmount'),
-      confirmColor: '#dc4949',
-      success: result => resolve(result.confirm === true),
-      fail: () => resolve(false),
-    })
-  })
-}
-
-async function requestReplaceRecharge() {
-  if (checkingStatus.value || cancelingPayment.value || !canReplacePayment.value) return
-  if (!await confirmReplaceRecharge()) return
-
-  checkingStatus.value = true
-  stopPaymentTracking()
-  try {
-    const orderNo = paymentSession.value?.orderNo || ''
-    if (!orderNo) return
-    const payment = await queryRechargePayment(orderNo, true)
-    applyPayment(payment)
-    if (paymentCardState.value !== 'pending') {
-      uni.showToast({ title: t('rechargeStatusChanged'), icon: 'none' })
-      return
-    }
-    // This intentionally abandons only the local checkout session. The old
-    // provider order remains visible in history and must not be presented as
-    // canceled while the provider can still accept payment.
-    clearPaymentSession()
-    openRecharge()
-  } catch {
-    uni.showToast({ title: t('paymentStatusUnavailable'), icon: 'none' })
-  } finally {
-    checkingStatus.value = false
-    startPaymentTracking()
-  }
-}
-
-function handleRestartRecharge() {
-  if (checkingStatus.value || cancelingPayment.value) return
-  if (!canRestartPayment.value) {
-    uni.showToast({ title: t('cancelBeforeRestartRecharge'), icon: 'none' })
-    return
-  }
-  clearPaymentSession()
-  openRecharge()
-}
-
 function dismissPaymentState() {
   clearPaymentSession()
-}
-
-async function onWithdraw() {
-  const amount = Number(sheet.amount)
-  if (!Number.isFinite(amount) || amount < minimumWithdrawalAmount.value || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
-    uni.showToast({ title: t('withdrawAmountRange', { min: formatNumber(minimumWithdrawalAmount.value), max: formatNumber(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
-    return
-  }
-  if (amount > Number(wallet.value?.withdrawable_balance || 0)) {
-    uni.showToast({ title: t('withdrawableBalanceInsufficient'), icon: 'none' })
-    return
-  }
-  if (!bankCards.value.length) {
-    uni.showToast({ title: t('k_5cdf6123'), icon: 'none' })
-    return
-  }
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    const card = bankCards.value[cardIndex.value]
-    const order = await createWithdrawal({
-      amount_card_hours: amount,
-      bank_card_id: card.id,
-      client_request_id: createClientRequestId(),
-    })
-    closeSheet()
-    await Promise.allSettled([fetchWallet(), assetStore.refresh()])
-    uni.showToast({ title: t('withdrawalSubmitted'), icon: 'success' })
-    nav(`/pages/withdrawals/detail?id=${order.id}`)
-  } finally { submitting.value = false }
-}
-
-function createClientRequestId() {
-  return `wd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function copyRechargeOrderNo(orderNo: string) {
@@ -909,10 +516,6 @@ function goLedger() {
   nav('/pages/wallet/ledger')
 }
 function goRechargeOrders() { nav('/pages/wallet/recharges') }
-function goBankCards() {
-  closeSheet()
-  nav('/pages/bank-cards/index')
-}
 function goWithdrawals() { nav('/pages/withdrawals/index') }
 </script>
 

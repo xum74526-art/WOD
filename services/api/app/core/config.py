@@ -35,6 +35,19 @@ class Settings(BaseSettings):
     AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
     COMMUNITY_IMAGE_MAX_BYTES: int = 5 * 1024 * 1024
     COMMUNITY_VIDEO_MAX_BYTES: int = 50 * 1024 * 1024
+    # Direct checkout and other in-app transaction commitments stay disabled
+    # until the required company qualifications and payment rails are ready.
+    # Inquiry submission and human follow-up remain available independently.
+    DIRECT_TRADE_ENABLED: bool = False
+    # Demand publication, supplier quoting and platform coordination are a
+    # separate capability from wallet-backed direct trade. Keep this enabled
+    # for the qualification-pending launch so clients can submit enquiries
+    # while every financial commitment remains fail-closed.
+    MATCHMAKING_ENABLED: bool = True
+    # Structured SSH delivery is an independently switchable, server-enforced
+    # matchmaking capability. Payloads are encrypted with the application's
+    # sensitive-data key and are never written to orders, events or logs.
+    MATCHMAKING_CREDENTIAL_ESCROW_ENABLED: bool = True
     # Keep payment actions visible but do not simulate money movement before a
     # real payment and settlement provider has been connected.
     PAYMENT_SERVICE_ENABLED: bool = False

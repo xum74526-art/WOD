@@ -20,24 +20,36 @@
         <text class="pmem">{{ product.memory }}</text>
       </view>
       <view class="card price-box">
-        <view v-if="isKaiProduct" class="price-primary">
-          <text class="currency">¥</text>
-          <text class="pp">{{ formatNumber(unitPriceCny) }}</text>
-          <text class="pu">{{ t('perGpuHour') }}</text>
-        </view>
-        <view v-else class="price-primary">
-          <text class="pp merchant-price">{{ formatNumber(unitPriceCardHours) }}</text>
-          <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
-        </view>
-        <text v-if="isKaiProduct" class="daily muted">{{ formatNumber(unitPriceCardHours) }} {{ t('cardHourPerGpuHour') }}</text>
-        <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
+        <template v-if="commerce.directTradeEnabled">
+          <view v-if="isKaiProduct" class="price-primary">
+            <text class="currency">¥</text>
+            <text class="pp">{{ formatNumber(directTradeCnyPerGpuHour(product)) }}</text>
+            <text class="pu">{{ t('perGpuHour') }}</text>
+          </view>
+          <view v-else class="price-primary">
+            <text class="pp merchant-price">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }}</text>
+            <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
+          </view>
+          <text v-if="isKaiProduct" class="daily muted">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHourPerGpuHour') }}</text>
+          <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
+        </template>
+        <template v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false">
+          <text class="price-label">{{ t('inquiryResource') }}</text>
+          <view class="price-primary"><text class="pp merchant-price">{{ t('inquiry') }}</text></view>
+          <text class="daily muted">{{ t('inquiryPriceHint') }}</text>
+        </template>
+        <template v-else>
+          <text class="price-label">{{ t('operationTemporarilyUnavailable') }}</text>
+          <view class="price-primary"><text class="pp merchant-price unavailable-price">{{ t('viewDetail') }}</text></view>
+          <text class="daily muted">{{ t('dataUnavailable') }}</text>
+        </template>
       </view>
       <view class="card specs">
         <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ product.gpu_model }}</text></view>
         <view class="row"><text class="sk">{{ t('k_224d9bc8') }}</text><text class="sv">{{ product.memory }}</text></view>
         <view class="row"><text class="sk">CUDA</text><text class="sv">{{ product.cuda || '-' }}</text></view>
         <view class="row"><text class="sk">{{ t("region") }}</text><text class="sv">{{ localizeMarketLocation(product.region_name, product.region_code, product.city, i18n.lang) || '-' }}</text></view>
-        <view class="row"><text class="sk">{{ t(isKaiProduct ? 'kaiFulfillmentAllocation' : 'k_40a4b798') }}</text><text class="sv">{{ product.stock ?? 0 }} {{ t('units') }}</text></view>
+        <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? (isKaiProduct ? 'kaiFulfillmentAllocation' : 'k_40a4b798') : 'referenceAvailability') }}</text><text class="sv">{{ product.stock ?? 0 }} {{ t('units') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_262a2599') }}</text><text class="sv">{{ product.stability != null ? `${formatNumber(product.stability)}%` : '-' }}</text></view>
         <view class="row"><text class="sk">{{ t('seller') }}</text><text class="sv" :class="{ 'seller-link': isMerchantProduct && product.supplier_id }" @tap="goStore">{{ sellerDisplayName }}</text></view>
         <view class="row"><text class="sk">{{ t('resourceAssurance') }}</text><text class="sv assurance-value">{{ assuranceLabel }}</text></view>
@@ -47,8 +59,8 @@
         <view class="row"><text class="sk">{{ t('k_f411d0f1') }}</text><text class="sv">{{ sourceDescription }}</text></view>
       </view>
 
-      <view v-if="!canBuy" class="offer-warning">{{ purchaseUnavailableText }}</view>
-      <view v-else class="provider-notice">{{ fulfillmentNotice }}</view>
+      <view v-if="!canConfigure" class="offer-warning">{{ purchaseUnavailableText }}</view>
+      <view v-else class="provider-notice">{{ commerce.directTradeEnabled ? fulfillmentNotice : t('inquiryFlowHint') }}</view>
 
       <SectionHeader v-if="isMerchantProduct" :title="t('sellerInformation')" />
       <view v-if="isMerchantProduct" class="card store-link" @tap="goStore">
@@ -73,10 +85,10 @@
           :reference-observed-at="candles?.latest_live_observed_at || product.price_updated_at || ''"
         />
       </view>
-      <SectionHeader v-if="canBuy" :title="t('purchaseDurationHours')" />
-      <view v-if="canBuy" class="duration-card">
+      <SectionHeader v-if="canConfigure" :title="t(commerce.directTradeEnabled ? 'purchaseDurationHours' : 'requiredDurationHours')" />
+      <view v-if="canConfigure" class="duration-card">
         <view class="duration-stepper">
-          <view class="duration-button" :class="{ disabled: hours <= 1 }" role="button" :aria-label="t('decreaseHours')" @tap="changeHours(-1)">−</view>
+          <view class="duration-button" :class="{ disabled: hours <= minPurchaseHours }" role="button" :aria-label="t('decreaseHours')" @tap="changeHours(-1)">−</view>
           <view class="duration-value-wrap">
             <input v-model.number="hours" class="duration-input" type="number" @blur="normalizeHours" />
             <text class="duration-unit">{{ t('hoursUnit') }}</text>
@@ -88,53 +100,55 @@
             <view v-for="value in purchaseHourOptions" :key="value" class="hour-preset" :class="{ active: hours === value }" @tap="hours = value">{{ t('hoursValue', { count: value }) }}</view>
           </view>
         </scroll-view>
-        <text class="duration-hint">{{ t('hourlyBillingOnly') }}</text>
+        <text class="duration-hint">{{ t(commerce.directTradeEnabled ? 'hourlyBillingOnly' : 'inquiryDurationHint') }}</text>
       </view>
-      <SectionHeader v-if="canBuy" :title="t('purchaseQuantity')" />
-      <view v-if="canBuy" class="quantity-row">
+      <SectionHeader v-if="canConfigure" :title="t(commerce.directTradeEnabled ? 'purchaseQuantity' : 'requiredQuantity')" />
+      <view v-if="canConfigure" class="quantity-row">
         <view>
           <text class="quantity-label">{{ quantityUnits(quantity) }}</text>
-          <text class="quantity-stock">{{ t(isKaiProduct ? 'kaiAvailableAllocationHint' : 'availableQuantityHint', { count: maxQuantity }) }}</text>
+          <text class="quantity-stock">{{ commerce.directTradeEnabled ? t(isKaiProduct ? 'kaiAvailableAllocationHint' : 'availableQuantityHint', { count: maxQuantity }) : t('inquiryQuantityHint') }}</text>
         </view>
         <view class="quantity-stepper">
           <view class="quantity-button" :class="{ disabled: quantity <= 1 }" role="button" :aria-label="t('decreaseQuantity')" @tap="changeQuantity(-1)">−</view>
           <text class="quantity-value">{{ quantity }}</text>
-          <view class="quantity-button" :class="{ disabled: quantity >= maxQuantity }" role="button" :aria-label="t('increaseQuantity')" @tap="changeQuantity(1)">+</view>
+          <view class="quantity-button" :class="{ disabled: quantity >= quantityLimit }" role="button" :aria-label="t('increaseQuantity')" @tap="changeQuantity(1)">+</view>
         </view>
       </view>
-      <SectionHeader v-if="canBuy" :title="t('purchaseModeLabel')" />
-      <view v-if="canBuy" class="mode-row">
+      <SectionHeader v-if="canConfigure" :title="t(commerce.directTradeEnabled ? 'purchaseModeLabel' : 'requirementType')" />
+      <view v-if="canConfigure" class="mode-row">
         <view class="mode-card active">
-          <text class="mode-title">{{ t('usageMode') }}</text>
-          <text class="mode-desc">{{ t('usageDesc') }}</text>
+          <template v-if="commerce.directTradeEnabled">
+            <text class="mode-title">{{ t('usageMode') }}</text>
+            <text class="mode-desc">{{ t('usageDesc') }}</text>
+          </template>
+          <template v-else>
+            <text class="mode-title">{{ t('hourlyComputeRequirement') }}</text>
+            <text class="mode-desc">{{ t('hourlyComputeRequirementHint') }}</text>
+          </template>
         </view>
       </view>
-      <view v-if="canBuy" class="card fee">
-        <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
-        <view class="row"><text class="sk">{{ t('purchaseDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
-        <view class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text></view>
+      <SectionHeader v-if="canConfigure && !commerce.directTradeEnabled" :title="t('inquirySummary')" />
+      <view v-if="canConfigure" class="card fee">
+        <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseQuantity' : 'requiredQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
+        <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseDurationHours' : 'requiredDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
+        <view v-if="commerce.directTradeEnabled" class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(directTradeCardHoursPerGpuHour(product) * hours * quantity) }} {{ t('cardHour') }}</text></view>
+        <view v-else class="row"><text class="sk">{{ t('inquiry') }}</text><text class="sv inquiry-value">{{ t('inquiryPriceHint') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ deliveryLabel }}</text></view>
-        <view class="row" v-if="estRebate > 0"><text class="sk">{{ t('personalPurchaseRebateTier') }}</text><text class="sv">{{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text></view>
-        <view class="row" v-if="estRebate > 0"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }}</text></view>
-        <view class="row"><text class="sk">{{ t('walletBalance') }}</text><text class="sv">{{ wallet == null ? '-' : `${fmtCardHours(wallet)} ${t('cardHour')}` }}</text></view>
-        <text v-if="estRebate > 0" class="rebate-estimate-hint">{{ t('personalRebateEstimateHint') }}</text>
       </view>
-      <view v-if="canBuy" class="risk">{{ t('usageRisk') }}</view>
+      <view v-if="canConfigure" class="risk">{{ t(commerce.directTradeEnabled ? 'usageRisk' : 'inquiryRiskHint') }}</view>
     </scroll-view>
     <BottomActionBar v-if="product">
-      <view class="buy-btn" :class="{ disabled: submitting || !canBuy }" @tap="openConfirm">{{ t(submitting ? '处理中...' : (!canBuy ? unavailableActionLabel : 'buyUsage')) }}</view>
+      <DirectTradeProductCheckout
+        v-if="commerce.directTradeEnabled"
+        :product="product"
+        :hours="hours"
+        :quantity="quantity"
+        :disabled="!canBuy"
+        :unavailable-message="purchaseUnavailableText"
+      />
+      <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="buy-btn" :class="{ disabled: submitting || !canSubmitInquiry }" @tap="submitInquiry">{{ t(submitting ? '处理中...' : 'submitRequirement') }}</view>
+      <view v-else class="buy-btn disabled">{{ t('operationTemporarilyUnavailable') }}</view>
     </BottomActionBar>
-    <ConfirmSheet :visible="showConfirm" :title="t('confirmUsagePurchase')" :desc="product ? `${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(amount)} ${t('cardHour')}` : ''" :confirmText="t('k_936de2c4')" @cancel="showConfirm = false" @confirm="onBuy">
-      <view class="provider-notice">{{ fulfillmentNotice }}</view>
-      <view class="confirm-fee">
-        <text>{{ t('k_99b6bb88') }}</text>
-        <text class="cf-val up">{{ fmtCardHours(amount) }} {{ t('cardHour') }}</text>
-      </view>
-      <view v-if="estRebate > 0" class="confirm-fee">
-        <text>{{ t('estimatedExpiryRebate') }}</text>
-        <text class="cf-val">+{{ fmtCardHours(estRebate) }} {{ t('cardHour') }} · {{ t('rebateTierRateValue', { rate: formatNumber(estRebateRate) }) }}</text>
-      </view>
-    </ConfirmSheet>
   </view>
 </template>
 
@@ -143,21 +157,21 @@ import { ref, computed } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { getProduct, type Product } from '@/api/gpu'
 import { getMarketCandles, type MarketCandles, type MarketCandlesParams } from '@/api/market'
-import { createOrder } from '@/api/order'
-import { getWallet } from '@/api/wallet'
-import { getRebateSummary, type RebateSummary } from '@/api/user'
-import { formatNumber, fmtCardHours, toCardHours } from '@/utils/format'
+import { fmtCardHours, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
 import BottomActionBar from '@/components/BottomActionBar.vue'
-import ConfirmSheet from '@/components/ConfirmSheet.vue'
+import DirectTradeProductCheckout from '@/components/direct-trade/DirectTradeProductCheckout.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
+import { useUserStore } from '@/store/user'
+import { useCommerceStore } from '@/store/commerce'
+import { directTradeCardHoursPerGpuHour, directTradeCnyPerGpuHour } from '@/utils/direct-trade'
 import { localizeMarketLocation } from '@/utils/region-name'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
-import { estimateUsageExpiryRebate } from '@/utils/product-rebate'
+import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
 import {
   historyProvenanceLabel,
   localizeMarketSourceText,
@@ -168,48 +182,47 @@ import {
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
+const userStore = useUserStore()
+const commerce = useCommerceStore()
 const product = ref<Awaited<ReturnType<typeof getProduct>> | null>(null)
 const candles = ref<MarketCandles | null>(null)
 const hours = ref(24)
 const quantity = ref(1)
-const purchaseType = 'usage' as const
-const wallet = ref<number | null>(null)
-const rebate = ref<RebateSummary | null>(null)
-const showConfirm = ref(false)
 const submitting = ref(false)
 const loading = ref(false)
 const loadError = ref(false)
 const partialLoadError = ref(false)
 const productImageFailed = ref(false)
 const pid = ref(0)
-const pendingRequestId = ref('')
-const pendingRequestSignature = ref('')
 let candleTimer: ReturnType<typeof setInterval> | null = null
-const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168, 720]
-const isKaiProduct = computed(() => product.value?.seller_type === 'kai_self_operated' || product.value?.market_source === 'kai')
-const isMerchantProduct = computed(() => product.value?.seller_type === 'merchant' || (product.value?.market_source === 'wod' && Boolean(product.value?.supplier_id)))
+const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168, 360, 720]
+const MAX_INQUIRY_QUANTITY = 99
+const isKaiProduct = computed(() => product.value?.seller_type === 'kai_self_operated'
+  || product.value?.resource_claim_source === 'kai_published'
+  || product.value?.market_source === 'kai')
+const isMerchantProduct = computed(() => product.value?.seller_type === 'merchant'
+  || product.value?.resource_claim_source === 'merchant_declared'
+  || (product.value?.market_source === 'wod' && Boolean(product.value?.supplier_id)))
 const sellerDisplayName = computed(() => {
-  if (isKaiProduct.value) return t('kaiSelfOperated')
   const name = product.value?.seller_name || product.value?.supplier_name
+  if (isKaiProduct.value && (!name || name === 'KAI 自营')) return t('kaiSelfOperated')
   return name ? localizePersonName(name, i18n.lang) : t('verifiedMerchant')
 })
 const productImageUrl = computed(() => productImageFailed.value
   ? fallbackProductImage(product.value?.gpu_model)
   : resolveProductImage(product.value?.image_url, product.value?.gpu_model))
+const minPurchaseHours = computed(() => Math.max(1, Math.min(720, Math.floor(Number(product.value?.min_purchase_hours ?? 1)) || 1)))
+const maxPurchaseHours = computed(() => Math.max(
+  minPurchaseHours.value,
+  Math.min(720, Math.floor(Number(product.value?.max_purchase_hours ?? 720)) || 720),
+))
 const purchaseHourOptions = computed(() => {
   const values = product.value?.purchase_hour_options || []
   return [...new Set(values.length ? values : DEFAULT_PURCHASE_HOURS)]
     .map((value) => Math.floor(Number(value)))
-    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 720)
+    .filter((value) => Number.isFinite(value) && value >= minPurchaseHours.value && value <= maxPurchaseHours.value)
     .sort((a, b) => a - b)
 })
-const maxPurchaseHours = computed(() => Math.max(...purchaseHourOptions.value, 720))
-const unitPriceCny = computed(() => Number(product.value?.price_cny_per_gpu_hour ?? product.value?.price ?? 0))
-const unitPriceCardHours = computed(() => Number(
-  product.value?.price_card_hours_per_gpu_hour
-    ?? (isMerchantProduct.value ? product.value?.price : toCardHours(unitPriceCny.value))
-    ?? 0,
-))
 const maxQuantity = computed(() => {
   const stock = Number(product.value?.stock || 0)
   const remaining = Math.max(0, Math.floor(stock))
@@ -219,17 +232,21 @@ const maxQuantity = computed(() => {
   }
   return Math.min(remaining, 99)
 })
-const canBuy = computed(() => Boolean((isKaiProduct.value || isMerchantProduct.value) && product.value?.purchasable === true && maxQuantity.value > 0))
+const canBuy = computed(() => Boolean(product.value?.purchasable === true && maxQuantity.value > 0))
+const canSubmitInquiry = computed(() => Boolean(
+  commerce.matchmakingEnabled
+  && product.value
+  && product.value.inquiry_available !== false,
+))
+const canConfigure = computed(() => commerce.directTradeEnabled ? canBuy.value : canSubmitInquiry.value)
+const quantityLimit = computed(() => commerce.directTradeEnabled ? Math.max(maxQuantity.value, 1) : MAX_INQUIRY_QUANTITY)
 const purchaseUnavailableText = computed(() => {
-  if (!isKaiProduct.value && !isMerchantProduct.value) return t('retiredMarketSourceUnavailable')
-  if (maxQuantity.value <= 0) return t(isKaiProduct.value ? 'kaiAllocationUnavailable' : 'noStockAvailable')
-  if (isKaiProduct.value && product.value?.is_market_current === false) return t('marketOfferUnavailable')
-  return product.value?.purchase_unavailable_reason ? tr(product.value.purchase_unavailable_reason) : t('wodListingUnavailable')
-})
-const unavailableActionLabel = computed(() => {
-  if (!isKaiProduct.value && !isMerchantProduct.value) return 'retiredMarketSourceUnavailableShort'
-  if (maxQuantity.value <= 0) return isKaiProduct.value ? 'kaiAllocationUnavailableShort' : 'soldOutShort'
-  return 'marketOfferUnavailableShort'
+  if (!commerce.available) return t('dataUnavailable')
+  if (commerce.directTradeEnabled) {
+    if (maxQuantity.value <= 0) return t(isKaiProduct.value ? 'kaiAllocationUnavailable' : 'noStockAvailable')
+    return product.value?.purchase_unavailable_reason ? tr(product.value.purchase_unavailable_reason) : t('marketOfferUnavailableShort')
+  }
+  return t('inquiryAvailabilityPending')
 })
 const sourceName = computed(() => {
   return marketSourceDisplayName(product.value?.market_source || 'wod', t)
@@ -295,8 +312,6 @@ async function loadProduct() {
   productImageFailed.value = false
   product.value = null
   candles.value = null
-  wallet.value = null
-  rebate.value = null
 
   const [productResult] = await Promise.allSettled([getProduct(pid.value)])
 
@@ -321,19 +336,11 @@ async function loadProduct() {
       productCandleParams(product.value),
     )
     : Promise.resolve<MarketCandles | null>(null)
-  const [candleResult, walletResult, rebateResult] = await Promise.allSettled([
-    candleRequest,
-    getWallet(),
-    getRebateSummary(),
-  ])
+  const [candleResult] = await Promise.allSettled([candleRequest])
   if (candleResult.status === 'fulfilled' && candleResult.value) candles.value = candleResult.value
-  if (walletResult.status === 'fulfilled') wallet.value = walletResult.value.balance
-  if (rebateResult.status === 'fulfilled') rebate.value = rebateResult.value
   partialLoadError.value = candleResult.status === 'rejected'
-    || walletResult.status === 'rejected'
-    || rebateResult.status === 'rejected'
   if (!purchaseHourOptions.value.includes(hours.value)) {
-    hours.value = purchaseHourOptions.value[0] || 1
+    hours.value = purchaseHourOptions.value[0] || minPurchaseHours.value
   }
   loading.value = false
 }
@@ -345,7 +352,8 @@ async function refreshProductState() {
   if (!pid.value || !product.value || loading.value) return
   try {
     product.value = await getProduct(pid.value)
-    quantity.value = Math.min(Math.max(quantity.value, 1), Math.max(maxQuantity.value, 1))
+    hours.value = clampHours(hours.value)
+    quantity.value = Math.min(Math.max(quantity.value, 1), quantityLimit.value)
   } catch {
     // Keep the last successfully loaded detail during a transient refresh.
   }
@@ -381,11 +389,9 @@ function stopCandleTimer() {
   candleTimer = null
 }
 
-const amount = computed(() => unitPriceCardHours.value * hours.value * quantity.value)
-
 function clampHours(value: number): number {
-  if (!Number.isFinite(value)) return 1
-  return Math.max(1, Math.min(Math.floor(value), maxPurchaseHours.value))
+  if (!Number.isFinite(value)) return minPurchaseHours.value
+  return Math.max(minPurchaseHours.value, Math.min(Math.floor(value), maxPurchaseHours.value))
 }
 function changeHours(delta: number) {
   hours.value = clampHours(hours.value + delta)
@@ -395,65 +401,33 @@ function normalizeHours() {
 }
 
 function changeQuantity(delta: number) {
-  if (!canBuy.value) return
-  quantity.value = Math.max(1, Math.min(quantity.value + delta, maxQuantity.value))
+  if (!canConfigure.value) return
+  quantity.value = Math.max(1, Math.min(quantity.value + delta, quantityLimit.value))
 }
 function quantityUnits(count: number) {
   if (i18n.lang === 'en') return `${count} ${count === 1 ? 'GPU' : 'GPUs'}`
   return t('quantityUnits', { count })
 }
 
-const rebateEstimate = computed(() => estimateUsageExpiryRebate(
-  amount.value,
-  purchaseType,
-  Boolean(rebate.value?.rewards_enabled),
-  Number(rebate.value?.month_spent ?? 0),
-  Number(rebate.value?.minimum_order_amount ?? Number.NaN),
-  rebate.value?.tiers ?? [],
-  Number(rebate.value?.cap_remaining ?? Number.NaN),
-))
-const estRebateRate = computed(() => rebateEstimate.value.ratePercent)
-const estRebate = computed(() => rebateEstimate.value.amount)
-
-async function onBuy() {
-  showConfirm.value = false
-  if (submitting.value || !canBuy.value) return
+function submitInquiry() {
+  const current = product.value
+  if (!current || submitting.value || !canSubmitInquiry.value) return
   submitting.value = true
-  try {
-    const created = await createOrder(
-      pid.value,
-      hours.value,
-      purchaseType,
-      quantity.value,
-      ensureRequestId(),
-      unitPriceCardHours.value,
-    )
-    pendingRequestId.value = ''
-    pendingRequestSignature.value = ''
-    uni.showToast({ title: t('购买成功'), icon: 'success' })
-    setTimeout(() => nav(`/pages/order/detail?id=${created.id}`), 800)
-  } catch {
-    /* request toast */
-  }
-  submitting.value = false
-}
-
-function openConfirm() {
-  if (!canBuy.value) {
-    uni.showToast({ title: purchaseUnavailableText.value, icon: 'none' })
-    return
-  }
-  ensureRequestId()
-  showConfirm.value = true
-}
-
-function ensureRequestId() {
-  const signature = `${pid.value}:${hours.value}:${quantity.value}:${purchaseType}:${unitPriceCardHours.value}`
-  if (!pendingRequestId.value || pendingRequestSignature.value !== signature) {
-    pendingRequestSignature.value = signature
-    pendingRequestId.value = `wod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
-  }
-  return pendingRequestId.value
+  saveInquiryRequestPrefill({
+    product_id: current.id,
+    supplier_id: current.supplier_id,
+    seller_name: sellerDisplayName.value,
+    source: current.market_source || current.seller_type || 'wod',
+    gpu_model: current.gpu_model,
+    gpu_variant: current.memory || '',
+    quantity: quantity.value,
+    gpu_hours: hours.value,
+    region: current.region_code || current.region_name || current.city || '',
+    product_name: current.name,
+  })
+  const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'
+  nav(target)
+  setTimeout(() => { submitting.value = false }, 800)
 }
 
 function goStore() {
@@ -482,6 +456,7 @@ function goStore() {
 .trend-card { padding: 12rpx 12rpx 4rpx; overflow: hidden; }
 .history-empty { padding: 72rpx 28rpx; color: var(--text-sub); font-size: 24rpx; text-align: center; }
 .price-box { padding: 40rpx 32rpx; margin-bottom: 24rpx; background: var(--card); border: none; box-shadow: 0 4rpx 24rpx var(--card-border); }
+.price-label { display: block; margin-bottom: 10rpx; color: var(--text-sub); font-size: 22rpx; }
 .price-primary { display: flex; align-items: baseline; gap: 8rpx; }
 .currency { color: var(--text-sub); font-size: 28rpx; font-weight: 700; }
 .pp { color: var(--text); font-size: 56rpx; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -494,6 +469,7 @@ function goStore() {
 .row:last-child { border-bottom: none; }
 .sk { color: var(--text-sub); font-size: 28rpx; }
 .sv { color: var(--text); font-size: 28rpx; font-variant-numeric: tabular-nums; }
+.inquiry-value { max-width: 64%; text-align: right; line-height: 1.45; }
 .sv.stale { color: var(--down); }
 .seller-link { color: var(--primary); }
 .assurance-value { max-width: 62%; text-align: right; line-height: 1.45; }

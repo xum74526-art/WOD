@@ -15,6 +15,10 @@ from app.utils.response import BizError
 
 class ProductCatalogTests(unittest.TestCase):
     def setUp(self):
+        self.original_direct_trade = settings.DIRECT_TRADE_ENABLED
+        self.original_matchmaking = settings.MATCHMAKING_ENABLED
+        settings.DIRECT_TRADE_ENABLED = True
+        settings.MATCHMAKING_ENABLED = True
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -101,6 +105,8 @@ class ProductCatalogTests(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self):
+        settings.DIRECT_TRADE_ENABLED = self.original_direct_trade
+        settings.MATCHMAKING_ENABLED = self.original_matchmaking
         self.db.close()
 
     @staticmethod
@@ -146,12 +152,32 @@ class ProductCatalogTests(unittest.TestCase):
             {(item["gpu_model"], item["memory"]) for item in data["items"]},
             {("A10", "24GB"), ("A100", "40GB"), ("A100", "80GB")},
         )
+
         a10 = next(item for item in data["items"] if item["gpu_model"] == "A10")
         self.assertEqual(a10["external_product_id"], "kai-a10-lowest")
         self.assertEqual(a10["seller_type"], "kai_self_operated")
         self.assertEqual(a10["seller_name"], "KAI 自营")
         self.assertEqual(a10["fulfillment_mode"], "platform_manual")
         self.assertEqual(a10["resource_claim_source"], "kai_published")
+        self.assertEqual(a10["assurance_label"], "KAI 自营 · 平台人工交付")
+        self.assertIn("商品由 KAI 发布", a10["assurance_description"])
+        self.assertIn("平台安排人工交付", a10["assurance_description"])
+        self.assertIsNone(a10["supplier_id"])
+        self.assertIsNone(a10["supplier_name"])
+
+    def test_inquiry_mode_never_exposes_a_purchasable_product(self):
+        settings.DIRECT_TRADE_ENABLED = False
+
+        items = self._list()["items"]
+
+        self.assertTrue(items)
+        self.assertTrue(all(item["interaction_mode"] == "matchmaking" for item in items))
+        self.assertTrue(all(item["inquiry_available"] for item in items))
+        self.assertTrue(all(not item["purchasable"] for item in items))
+        self.assertTrue(all(
+            item["purchase_unavailable_reason"] == "当前仅支持提交需求并人工确认"
+            for item in items
+        ))
 
     def test_representative_catalog_paginates_the_unique_result(self):
         first = self._list(page=1, page_size=2, sort="price_asc")
@@ -188,9 +214,16 @@ class ProductCatalogTests(unittest.TestCase):
             self.assertEqual(item["purchase_unit"], "hour")
             self.assertEqual(item["min_purchase_hours"], 1)
             self.assertEqual(item["max_purchase_hours"], 720)
+            self.assertEqual(item["assurance_label"], "商家身份已审核 · 商家人工交付")
+            self.assertIn("平台已审核商家入驻身份", item["assurance_description"])
             self.assertIn("配置与库存由商家自行申报", item["assurance_description"])
+            self.assertIn("平台未对商家硬件进行审计或认证", item["assurance_description"])
+            self.assertIn("买家确认交付后资金才向商家结算", item["assurance_description"])
+            self.assertIn("发起争议", item["assurance_description"])
+            self.assertIsNotNone(item["supplier_id"])
             self.assertIsNotNone(item["supplier_name"])
             self.assertIsNotNone(item["supplier_rating"])
+            self.assertIsNotNone(item["supplier_order_count"])
 
     def test_unowned_wod_listing_is_not_exposed_in_public_catalog(self):
         data = list_products(
@@ -209,6 +242,48 @@ class ProductCatalogTests(unittest.TestCase):
         )["data"]
 
         self.assertNotIn("WOD A40", {item["name"] for item in data["items"]})
+
+    def test_wod_filter_includes_approved_legacy_untyped_merchant_listing(self):
+        supplier = self.db.query(Supplier).filter(
+            Supplier.company_name == "目录商家1",
+        ).one()
+        legacy_product = Product(
+            name="迁移前商家 L40S",
+            gpu_model="L40S",
+            memory="48GB",
+            price=Decimal("1.35"),
+            cycle=[30],
+            stock=2,
+            status="on",
+            market_source=None,
+            source_price=None,
+            supplier_id=supplier.id,
+            stock_semantics="supplier_reported_inventory",
+        )
+        self.db.add(legacy_product)
+        self.db.commit()
+
+        data = list_products(
+            keyword=None,
+            memory=None,
+            region=None,
+            category=None,
+            sort="default",
+            min_price=None,
+            max_price=None,
+            market_source="wod",
+            representative=True,
+            page=1,
+            page_size=100,
+            db=self.db,
+        )["data"]
+
+        item = next(
+            row for row in data["items"] if row["id"] == legacy_product.id
+        )
+        self.assertEqual(item["market_source"], "wod")
+        self.assertEqual(item["seller_type"], "merchant")
+        self.assertTrue(item["purchasable"])
 
     def test_pending_merchant_listing_is_hidden_while_approved_listings_remain_visible(self):
         pending_user = User(

@@ -47,7 +47,7 @@ test('iOS English market copy uses buyer-friendly natural language', () => {
     '../src/pages/supplier/devices.vue',
   ].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8'))
 
-  assert.match(i18n, /buyUsage: 'Buy Now'/)
+  assert.match(i18n, /buyUsage: 'Submit Request'/)
   assert.match(i18n, /marketOfferSource: 'Pricing Source'/)
   assert.match(i18n, /sevenDayChangeValue: '7-Day Change \{value\}%'/)
   assert.match(i18n, /sevenDayPriceRangeValue: '7-Day Price Range \{low\}-\{high\} CH'/)

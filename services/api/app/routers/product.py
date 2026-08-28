@@ -24,6 +24,12 @@ from app.services.market_sync import utcnow
 from app.services.offer_sync import KAI_PRODUCT_DESCRIPTION
 from app.services.product_purchase import product_purchase_availability
 from app.services.product_provider import product_provider_info
+from app.services.trade_mode import (
+    INQUIRY_ONLY_MESSAGE,
+    commerce_mode,
+    direct_trade_enabled,
+    matchmaking_enabled,
+)
 from app.services.gpu_catalog import canonicalize_gpu, normalize_gpu_variant
 from app.services.region_mapper import REGIONS, map_region
 from app.utils.response import BizError, success
@@ -48,6 +54,15 @@ def _market_source_states(db: Session) -> dict[str, str]:
     }
 
 
+def _legacy_wod_product_filter():
+    """Match merchant rows created before ``market_source`` was persisted."""
+
+    return and_(
+        or_(Product.market_source.is_(None), Product.market_source == ""),
+        Product.source_price.is_(None),
+    )
+
+
 def _current_product_query(
     db: Session,
     source_states: dict[str, str] | None = None,
@@ -58,14 +73,13 @@ def _current_product_query(
     cutoff = utcnow() - timedelta(seconds=max(settings.PRODUCT_OFFER_MAX_AGE_SECONDS, 60))
     # Only approved merchant listings and current KAI self-operated cards are
     # eligible for the public catalogue. Retired sources remain audit-only.
-    legacy_untyped = or_(Product.market_source.is_(None), Product.market_source == "")
     approved_supplier_ids = db.query(Supplier.id).filter(Supplier.status == "approved")
     source_filters = []
     if include_merchants:
         source_filters.append(and_(
             or_(
                 Product.market_source == "wod",
-                and_(legacy_untyped, Product.source_price.is_(None)),
+                _legacy_wod_product_filter(),
             ),
             Product.supplier_id.in_(approved_supplier_ids),
         ))
@@ -166,6 +180,10 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
     out["stability"] = round(reliability, 1) if reliability > 0 else None
     out["tags"] = []
     out.update(product_provider_info(p, db))
+    interaction_mode = commerce_mode()
+    inquiry_available = matchmaking_enabled()
+    out["interaction_mode"] = interaction_mode
+    out["inquiry_available"] = inquiry_available
     purchasable, unavailable_reason = product_purchase_availability(p, db) if db else (False, None)
     effective_purchase_capacity = reported_stock
     if source == "kai":
@@ -173,12 +191,22 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
             effective_purchase_capacity,
             max(int(p.source_max_configurable_quantity or 0), 0),
         )
-    out["purchasable"] = purchasable and market_state == "live" and effective_purchase_capacity > 0
-    out["purchase_unavailable_reason"] = (
-        unavailable_reason
-        if not purchasable
-        else ("当前无可售额度" if effective_purchase_capacity <= 0 else ("报价已过期或来源暂不可用" if market_state != "live" else None))
+    out["purchasable"] = bool(
+        direct_trade_enabled()
+        and purchasable
+        and market_state == "live"
+        and effective_purchase_capacity > 0
     )
+    if not direct_trade_enabled():
+        out["purchase_unavailable_reason"] = (
+            INQUIRY_ONLY_MESSAGE if inquiry_available else "交易服务暂未开放"
+        )
+    else:
+        out["purchase_unavailable_reason"] = (
+            unavailable_reason
+            if not purchasable
+            else ("当前无可售额度" if effective_purchase_capacity <= 0 else ("报价已过期或来源暂不可用" if market_state != "live" else None))
+        )
     return out
 
 
@@ -249,7 +277,14 @@ def list_products(
         q = q.filter(Product.price >= min_price)
     if max_price is not None:
         q = q.filter(Product.price <= max_price)
-    if market_source:
+    if market_source == "wod":
+        # Keep the explicit source filter compatible with pre-migration
+        # merchant rows admitted by ``_current_product_query``.
+        q = q.filter(or_(
+            Product.market_source == "wod",
+            _legacy_wod_product_filter(),
+        ))
+    elif market_source:
         q = q.filter(Product.market_source == market_source)
     if sort == "price_asc":
         q = q.order_by(Product.price.asc())

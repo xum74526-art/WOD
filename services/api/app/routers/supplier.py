@@ -5,9 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.deps import get_current_user, require_admin
-from app.core.sensitive import sensitive_capability_enabled
 from app.db.session import get_db
 from app.models.asset import Asset
 from app.models.ledger import Ledger
@@ -25,6 +23,7 @@ from app.schemas.supplier import (
     SupplierProfileUpdateIn,
     SupplierRegisterIn,
 )
+from app.services.trade_mode import withdrawal_enabled
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/supplier", tags=["supplier"])
@@ -336,7 +335,7 @@ def supplier_wallet(user: User = Depends(get_current_user), db: Session = Depend
         "available": max(0, round(available, 6)),
         "today_revenue": today_revenue,
         "historical_unreconciled_count": historical_unreconciled_count,
-        "payment_service_enabled": sensitive_capability_enabled(settings.MANUAL_PAYOUT_ENABLED),
+        "payment_service_enabled": withdrawal_enabled(),
     })
 
 

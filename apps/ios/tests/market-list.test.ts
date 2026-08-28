@@ -26,12 +26,12 @@ test('market cards put complete-history models with larger seven-day moves first
   assert.equal(sorted[1].price, 2.49500998)
 })
 
-test('pagination merge removes duplicate cards when live offers move between pages', () => {
+test('pagination merge removes repeated ids without deduplicating same-model merchant offers', () => {
   const merged = mergeUniqueProducts(
     [{ id: 1, gpu_model: 'A100', memory: '80GB' }],
     [
       { id: 1, gpu_model: 'A100', memory: '80GB' },
-      { id: 2, gpu_model: 'H100', memory: '80GB' },
+      { id: 2, gpu_model: 'A100', memory: '80GB' },
     ],
   )
 

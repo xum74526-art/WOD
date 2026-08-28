@@ -23,17 +23,17 @@ const profilePage = source('../src/pages/profile/index.vue')
 const candleChart = source('../src/components/CandlestickChart.vue')
 const marketChart = source('../src/components/MarketChart.vue')
 
-test('KAI product contract distinguishes CNY pricing from wallet card-hours', () => {
+test('KAI pricing remains available to market charts while product checkout is inquiry-only', () => {
   assert.match(gpuApi, /billing_unit\?: 'GPU_HOUR'/)
   assert.match(gpuApi, /price_cny_per_gpu_hour\?: number/)
   assert.match(gpuApi, /price_card_hours_per_gpu_hour\?: number/)
   assert.match(gpuApi, /wallet_charge_unit\?: 'CARD_HOUR'/)
-  assert.match(productPage, /price_cny_per_gpu_hour \?\? product\.value\?\.price/)
-  assert.match(productPage, /price_card_hours_per_gpu_hour[\s\S]*?isMerchantProduct\.value \? product\.value\?\.price : toCardHours/)
-  assert.match(productPage, /unitPriceCardHours\.value \* hours\.value \* quantity\.value/)
-  assert.match(marketPage, /productPriceCardHours/)
-  assert.match(marketPage, /cardHourPerGpuHour/)
-  assert.match(marketPage, /productPriceCny/)
+  assert.match(productPage, /inquiryPriceHint/)
+  assert.match(productPage, /saveInquiryRequestPrefill/)
+  assert.doesNotMatch(productPage, /unitPriceCardHours|createOrder\(/)
+  assert.match(marketPage, /modelPriceRangeText/)
+  assert.match(marketPage, /submitRequirement/)
+  assert.doesNotMatch(marketPage, /productPriceCardHours|productPriceCny/)
 })
 
 test('home keeps representative KAI cards while market separates KAI and merchant catalogues', () => {
@@ -62,12 +62,16 @@ test('quote views render raw KAI CNY while shared charts keep explicit display u
   assert.match(marketChart, /props\.displayCurrency === 'CNY' \? `¥\$\{formatted\}` : formatted/)
 })
 
-test('new purchases and renewals are integer-hour only', () => {
+test('new inquiries retain bounded integer-hour requirements while legacy APIs remain readable', () => {
   assert.match(gpuApi, /purchase_unit\?: 'hour'/)
   assert.match(gpuApi, /purchase_hour_options\?: number\[\]/)
-  assert.match(productPage, /DEFAULT_PURCHASE_HOURS = \[1, 6, 12, 24, 72, 168, 720\]/)
+  assert.match(productPage, /DEFAULT_PURCHASE_HOURS = \[1, 6, 12, 24, 72, 168, 360, 720\]/)
+  assert.match(productPage, /product\.value\?\.min_purchase_hours/)
+  assert.match(productPage, /product\.value\?\.max_purchase_hours/)
   assert.match(productPage, /v-model\.number="hours"/)
-  assert.match(productPage, /createOrder\([\s\S]*?pid\.value,[\s\S]*?hours\.value,[\s\S]*?purchaseType,[\s\S]*?quantity\.value,[\s\S]*?ensureRequestId\(\),[\s\S]*?unitPriceCardHours\.value/)
+  assert.match(productPage, /gpu_hours: hours\.value/)
+  assert.match(productPage, /quantity: quantity\.value/)
+  assert.doesNotMatch(productPage, /createOrder\(/)
   assert.doesNotMatch(productPage, /purchaseCycles|cycleLabel/)
   assert.match(orderApi, /export type PurchaseType = 'usage'/)
   assert.match(orderApi, /expected_unit_price_card_hours\?: number/)
@@ -80,11 +84,11 @@ test('new purchases and renewals are integer-hour only', () => {
   assert.doesNotMatch(renewBlock, /product_id/)
 })
 
-test('hourly checkout exposes usage only while retaining historical holding display elsewhere', () => {
-  assert.match(productPage, /const purchaseType = 'usage' as const/)
+test('hourly inquiry exposes usage requirements without creating a checkout', () => {
   assert.match(productPage, /t\('usageMode'\)/)
-  assert.match(productPage, /createOrder\([\s\S]*?pid\.value,[\s\S]*?hours\.value,[\s\S]*?purchaseType,[\s\S]*?quantity\.value,[\s\S]*?ensureRequestId\(\),[\s\S]*?unitPriceCardHours\.value/)
-  assert.match(productPage, /`\$\{pid\.value\}:\$\{hours\.value\}:\$\{quantity\.value\}:\$\{purchaseType\}:\$\{unitPriceCardHours\.value\}`/)
+  assert.match(productPage, /saveInquiryRequestPrefill\(\{/)
+  assert.match(productPage, /\/pages\/buy-request\/index\?compose=1/)
+  assert.doesNotMatch(productPage, /createOrder\(|purchaseType|ensureRequestId/)
   assert.doesNotMatch(productPage, /t\('holdingMode'\)|confirmHoldingPurchase|buyHolding|purchaseType\s*=\s*'holding'/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   assert.match(createBlock, /hours: number/)
@@ -92,7 +96,7 @@ test('hourly checkout exposes usage only while retaining historical holding disp
   assert.doesNotMatch(createBlock, /cycle_days/)
 })
 
-test('usage expiry rebate follows the live server tier that will be locked at confirmation', () => {
+test('usage expiry rebate calculator remains valid but is not promised before inquiry confirmation', () => {
   const tiers = [
     { max_month_spent: 10000, rate: 3 },
     { max_month_spent: 50000, rate: 5 },
@@ -108,15 +112,8 @@ test('usage expiry rebate follows the live server tier that will be locked at co
   assert.deepEqual(estimateUsageExpiryRebate(720, 'usage', false, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
   assert.deepEqual(estimateUsageExpiryRebate(9.99, 'usage', true, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
   assert.deepEqual(estimateUsageExpiryRebate(33.5, 'usage', true, 0, 10, tiers, 20000), { amount: 1.01, ratePercent: 3 })
-  assert.match(productPage, /getRebateSummary/)
-  assert.match(productPage, /rebate\.value\?\.month_spent/)
-  assert.match(productPage, /rebate\.value\?\.minimum_order_amount/)
-  assert.match(productPage, /rebate\.value\?\.tiers/)
-  assert.match(productPage, /rebate\.value\?\.cap_remaining/)
-  assert.match(productPage, /estimatedExpiryRebate/)
-  assert.match(productPage, /personalRebateEstimateHint/)
-  assert.match(productPage, /personalPurchaseRebateTier/)
-  assert.match(productPage, /v-if="estRebate > 0"/)
+  assert.match(productPage, /inquiryPriceHint/)
+  assert.doesNotMatch(productPage, /getRebateSummary|estimatedExpiryRebate|personalRebateEstimateHint|personalPurchaseRebateTier|estRebate/)
   assert.doesNotMatch(productPage, /USAGE_EXPIRY_REBATE_RATE_PERCENT/)
 })
 
@@ -160,7 +157,7 @@ test('KAI quote observations are never typed or ranked as live inventory', () =>
   assert.doesNotMatch(quotePage, /b\.available_gpu_count - a\.available_gpu_count/)
 })
 
-test('new order views prefer hour duration while retaining legacy day fallback', () => {
+test('historical order views retain durations while renewal becomes a follow-up requirement', () => {
   for (const page of [orderList, orderDetail]) {
     assert.match(page, /duration_hours/)
     assert.match(page, /purchase_hours/)
@@ -168,10 +165,10 @@ test('new order views prefer hour duration while retaining legacy day fallback',
     assert.match(page, /cycle_days/)
   }
   assert.match(orderList, /remaining_hours/)
-  assert.match(orderDetail, /renewOrder\(oid\.value, renewHours\.value, ensureRenewRequestId\(\)\)/)
-  assert.match(orderDetail, /pendingRenewRequestId/)
-  assert.match(orderDetail, /pendingRenewKey/)
-  assert.match(orderDetail, /clearRenewRequest\(\)[\s\S]*?续费成功/)
+  assert.match(orderDetail, /saveInquiryRequestPrefill\(\{/)
+  assert.match(orderDetail, /submitFollowUpRequirement/)
+  assert.match(orderDetail, /\/pages\/buy-request\/index\?compose=1/)
+  assert.doesNotMatch(orderDetail, /renewOrder\(|pendingRenewRequestId|pendingRenewKey/)
   assert.match(orderApi, /can_renew\?: boolean/)
   assert.match(orderDetail, /order\.value\?\.can_renew === true/)
   assert.match(orderDetail, /v-else-if="canRenew"/)

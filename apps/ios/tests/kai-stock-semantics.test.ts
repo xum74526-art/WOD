@@ -23,19 +23,21 @@ test('frontend contract prefers neutral KAI manual-fulfillment semantics and rea
 test('KAI stock is never presented as live rentable inventory', () => {
   assert.match(marketPage, /isKaiProduct\(p\) \? 'kaiFulfillmentAllocation' : 'availableQuantity'/)
   assert.match(productPage, /isKaiProduct \? 'kaiFulfillmentAllocation' : 'k_40a4b798'/)
-  assert.match(productPage, /kaiFulfillmentAllocationNotice/)
+  assert.match(productPage, /inquiryFlowHint/)
   assert.match(productPage, /kaiProductDescription/)
   assert.doesNotMatch(homePage, /t\(['"]rentable['"]\)/)
 })
 
-test('KAI purchase affordances and checkout use the real remaining platform allocation', () => {
-  assert.match(homePage, /product\.market_source === 'kai' && product\.purchasable === true && Number\(product\.stock \|\| 0\) > 0/)
-  assert.match(marketPage, /\(isKaiProduct\(product\) \|\| isMerchantProduct\(product\)\) && product\.purchasable === true/)
+test('KAI inquiry affordances retain allocation metadata without creating checkout', () => {
+  assert.match(homePage, /t\('submitRequirement'\)/)
+  assert.match(marketPage, /t\('submitRequirement'\)/)
   assert.match(gpuApi, /source_max_configurable_quantity\?: number \| null/)
   assert.match(productPage, /sourceOrderLimit = Math\.max/)
   assert.match(productPage, /Math\.min\(remaining, sourceOrderLimit\)/)
-  assert.match(productPage, /isKaiProduct \? 'kaiAvailableAllocationHint' : 'availableQuantityHint'/)
-  assert.match(productPage, /isMerchantProduct\.value \? 'merchantFulfillmentNotice' : 'kaiFulfillmentAllocationNotice'/)
+  assert.match(productPage, /const MAX_INQUIRY_QUANTITY = 99/)
+  assert.match(productPage, /quantityLimit = computed\(\(\) => commerce\.directTradeEnabled \? Math\.max\(maxQuantity\.value, 1\) : MAX_INQUIRY_QUANTITY\)/)
+  assert.match(productPage, /saveInquiryRequestPrefill/)
+  assert.doesNotMatch(productPage, /createOrder\(/)
   assert.doesNotMatch(orderPage, /rentable|实时库存|live inventory/i)
 })
 

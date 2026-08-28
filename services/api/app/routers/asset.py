@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.asset import Asset
@@ -14,7 +15,7 @@ from app.models.revenue import Revenue
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.schemas.asset import AssetOut
-from app.core.config import settings
+from app.services.trade_mode import require_direct_trade_enabled
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.response import BizError, success
 
@@ -109,6 +110,7 @@ def asset_detail(aid: int, user: User = Depends(get_current_user), db: Session =
 
 @router.post("/{aid}/sell")
 def sell_asset(aid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_direct_trade_enabled()
     a = db.query(Asset).filter(Asset.id == aid, Asset.user_id == user.id).first()
     if not a:
         raise BizError("资产不存在", status_code=404)
