@@ -1,108 +1,220 @@
-# KAI
+# WOD / KAI Monorepo
 
-KAI 是一个 monorepo：一个 FastAPI 业务后端、一个独立数据采集服务、一个 Next.js Web，以及分别发布的 iOS、Android 客户端。
+WOD 是面向算力资源信息、需求撮合与商家协作的多端平台。本仓库同时维护 FastAPI 业务后端、独立数据采集服务、Next.js Web、iOS/Android 客户端、OpenAPI 契约以及静态审核页面。
 
-## 架构
+## 命名说明
+
+- **WOD**：用户看到的 App 与平台名称。
+- **KAI**：仓库内部、服务前缀、统一身份以及 KAI Pricing 行情源沿用的名称。
+- KAI Pricing 是行情与商品数据来源之一，不等同于 WOD 自营资源或第三方商家。
+
+## 当前发布模式
+
+WOD 当前面向审核和资质准备的构建采用**撮合模式**：保留行情、曲线、资讯、需求提交、商家报价、双方合作确认、平台协调交付和历史记录查询；新直接交易、充值、提现和支付能力默认关闭。
+
+相关代码、接口和账务模型没有删除，而是由服务端能力开关与移动端构建开关共同控制。只有资质、支付回调、对账、退款和运营流程全部验证后，才可发布启用直接交易的新版本。完整规则见 [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md)。
+
+客户端以 `GET /api/platform/capabilities` 返回的服务端能力为准；移动端直接交易还必须同时通过 `VITE_ENABLE_DIRECT_TRADE` 构建门禁。能力响应缺失、异常或不可达时按关闭处理。
+
+## 系统架构
 
 ```text
-Web Browser ──> Next.js BFF /api/v1/canonical ──┐
-                                      ├──> FastAPI /api ──> wod.db
-iOS / Android ─────────────────────┘
+Web Browser
+  -> Next.js BFF /api/v1/canonical/*
+  -> FastAPI /api/*
+  -> Database configured by DATABASE_URL / private uploads
 
-External Sources ──> Collector ──> FastAPI /internal/v1/ingestion ──> wod.db
-KAI Pricing ──> Scheduled Candle Agent ──> market_price_candles ──> FastAPI read API
+iOS / Android
+  -> FastAPI /api/*
+  -> Database / private uploads
+
+External Sources
+  -> Collector
+  -> FastAPI /internal/v1/ingestion/*
+  -> Database
+
+KAI Pricing
+  -> FastAPI scheduled Candle Agent
+  -> market_price_candles
+  -> read-only market APIs
 ```
 
-- `services/api` 是唯一业务后端和数据模型。
-- `services/collector` 获取并标准化外部数据，只能通过 FastAPI 内部接口写入，禁止直连数据库。
-- KAI 官方 OHLC 由 FastAPI 内的定时 Candle Agent 预取并持久化；Web 行情请求只读数据库，不在请求链路访问上游。
-- `apps/web` 不连接数据库；BFF 使用 HttpOnly Cookie 保存会话并转发到 FastAPI。
-- `apps/ios` 与 `apps/android` 分别承载两个 App；两端共享同一 OpenAPI 契约和业务状态定义。
-- `packages/api-contracts` 保存从 FastAPI 导出的 OpenAPI 快照并检查 Mobile 请求。
-- `infra` 只保留当前 systemd/nginx 部署文件；运行数据和发布包不进 Git。
+架构约束：
 
-## 开发前必读
+- `services/api` 是唯一业务后端，也是唯一允许读写业务数据库的应用。
+- Web 浏览器只调用同源 `/api/v1/canonical/*`，由 Next.js BFF 使用 HttpOnly Cookie 转发到 FastAPI。
+- iOS 与 Android 使用同一 OpenAPI 契约和业务状态，不在客户端维护第二套订单、支付或钱包规则。
+- `services/collector` 不连接数据库，只通过受保护的内部接口提交标准化数据。
+- 运行数据库、上传文件、环境配置和发布包均位于 Git 之外。
 
-新同事或 Codex 开始修改前，按下列顺序了解项目：
+更完整的边界定义见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
-| 文档 | 内容 | 什么时候阅读 |
-|---|---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 唯一数据源、请求链路、模块边界和兼容层治理 | 任何代码修改前 |
-| [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | 工程门禁、上线清单和仍需人工完成的条件 | 合并或发布前 |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | 云端备份、拉取、构建、验收与回滚 | 部署前 |
-
-仓库根目录的 [`AGENTS.md`](AGENTS.md) 是给 Codex 和自动化编码代理的工作约定。克隆仓库后
-直接从仓库根目录打开 Codex，它会获得项目边界、验证命令和完成标准；修改 Web 时还会读取
-`apps/web/AGENTS.md` 中与当前 Next.js 版本相关的说明。
-
-## 目录
+## 项目目录
 
 | 目录 | 职责 |
 |---|---|
-| `apps/web` | Next.js Web 和同源 BFF |
-| `apps/ios` | uni-app iOS 客户端 |
-| `apps/android` | uni-app Android 客户端，正式包名 `com.kai.wod` |
-| `services/api` | 唯一 FastAPI 后端 |
-| `services/collector` | 外部数据采集、标准化和定时提交服务，不访问数据库 |
-| `packages/api-contracts` | OpenAPI 快照和契约检查 |
-| `infra` | systemd、nginx 和环境变量示例 |
-| `tooling` | 全仓检查和本地工具 |
-| `docs` | 架构、开发、部署和移动端打包文档 |
+| `apps/web` | Next.js Web 与同源 BFF；开发端口 9100 |
+| `apps/ios` | uni-app iOS 客户端；H5 预览端口 9000 |
+| `apps/android` | uni-app Android 客户端；H5 预览端口 9001，正式包名 `com.kai.wod` |
+| `services/api` | 唯一 FastAPI 业务后端和数据库访问者 |
+| `services/collector` | 外部数据采集与标准化，只通过内部 API 提交 |
+| `packages/api-contracts` | FastAPI OpenAPI 快照及客户端边界检查 |
+| `static-review` | 无后端、可独立部署的静态审核页面 |
+| `infra` | systemd、nginx 和生产环境变量模板 |
+| `tooling` | 全仓检查、依赖审计和本地调试工具 |
+| `docs` | 架构、开发、撮合模式、部署和上线门禁文档 |
+| `.github/workflows` | Pull Request 与 `main` 分支 CI |
+
+根 `package.json` 只负责统一编排命令，并不是 npm workspace。Web、iOS、Android 各自维护独立的 `package-lock.json`，依赖必须在对应子项目中安装。
+
+## 环境要求
+
+- Python 3.12
+- Node.js 20.19+（CI 使用 Node.js 22）
+- npm
+- 执行根目录 `check:all` 与 `audit:deps` 需要 Linux、macOS、WSL 或兼容 Bash 的环境
+- iOS 正式打包另需 macOS、Xcode、Apple 证书和 Provisioning Profile
+- Android 正式打包另需 JDK 17、Android SDK/HBuilderX 和受控 keystore
+
+## 首次安装
+
+### Linux / macOS / WSL / Git Bash
+
+```bash
+python3.12 -m venv services/api/.venv
+services/api/.venv/bin/python -m pip install -r services/api/requirements-dev.txt
+
+python3.12 -m venv services/collector/.venv
+services/collector/.venv/bin/python -m pip install -r services/collector/requirements.txt
+
+npm ci --prefix apps/web
+npm ci --prefix apps/ios
+npm ci --prefix apps/android
+```
+
+### Windows PowerShell
+
+```powershell
+py -3.12 -m venv services/api/.venv
+& .\services\api\.venv\Scripts\python.exe -m pip install -r services/api/requirements-dev.txt
+
+py -3.12 -m venv services/collector/.venv
+& .\services\collector\.venv\Scripts\python.exe -m pip install -r services/collector/requirements.txt
+
+npm ci --prefix apps/web
+npm ci --prefix apps/ios
+npm ci --prefix apps/android
+```
+
+原生 PowerShell 可以运行各子项目命令；全仓 `.sh` 门禁请在 WSL、Git Bash 或 Linux CI 中执行。
 
 ## 本地启动
 
-需要 Python 3.12、Node.js 20.19+ 和 npm。
+### Web
+
+普通 Web 联调默认通过 BFF 使用云端 API，不复制生产数据库。
+
+```powershell
+$env:API_ORIGIN = "https://wod.kai.com"
+npm --prefix apps/web run dev
+```
 
 ```bash
-# Web（默认连接云端唯一数据库）
-npm ci --prefix apps/web
 API_ORIGIN=https://wod.kai.com npm --prefix apps/web run dev
+```
 
-# iOS/Android 界面预览（可选，分别使用 9000/9001）
-npm ci --prefix apps/ios
-npm ci --prefix apps/android
+仅在修改 FastAPI 本身时才启动本地 API 和本地沙箱数据库。具体环境文件、初始化和启动命令见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 与 [`services/api/README.md`](services/api/README.md)。API 内含进程内调度任务，本地与当前生产定义均保持单 worker。
+
+### iOS / Android H5 预览
+
+```bash
 npm --prefix apps/ios run dev:h5
 npm --prefix apps/android run dev:h5
 ```
 
-- Web：`http://127.0.0.1:9100`
-- iOS H5 预览：`http://127.0.0.1:9000`
-- Android H5 预览：`http://127.0.0.1:9001`
-- 云端 API 文档：`https://wod.kai.com/docs`
-- Web 健康检查：`http://127.0.0.1:9100/api/v1/health`
+| 服务 | 地址 |
+|---|---|
+| Web | `http://127.0.0.1:9100` |
+| iOS H5 | `http://127.0.0.1:9000` |
+| Android H5 | `http://127.0.0.1:9001` |
+| 本地 API（按需） | `http://127.0.0.1:8000` |
+| Web 健康检查 | `http://127.0.0.1:9100/api/v1/health` |
 
-修改 FastAPI 时可按开发文档另外启动本地沙箱数据库；普通 Web/iOS 联调一律使用云端 API。完整说明见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
+## 验证与契约更新
 
-## 验证
-
-```bash
-npm run export:openapi
-npm run check:all
-```
-
-`check:all` 会运行 API 编译和单元测试、OpenAPI 快照一致性、Web 测试/类型检查/生产构建、iOS/Android 测试与类型检查，以及客户端边界检查。
-
-## 推荐协作流程
+完整依赖安装后，在 POSIX/WSL/Bash 环境执行：
 
 ```bash
-git clone git@github.com:lemonevo/KAI.git
-cd KAI
-git switch -c codex/example-task
-
-# 让 Codex 阅读 AGENTS.md 和“开发前必读”中的三份文档后再修改
 npm run check:all
 npm run audit:deps
 git diff --check
+node --test static-review/site.test.mjs
 ```
 
-代码只在本地功能分支修改和验证。合并到 `main` 后，云端仅拉取该提交并重新构建，不在
-服务器上修代码。完整本地环境见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，移动端打包见
-[`docs/ANDROID_BUILD.md`](docs/ANDROID_BUILD.md)。
+`check:all` 会运行 API 与 Collector 编译/单元测试、OpenAPI 一致性、Web 测试/类型检查/生产构建、iOS/Android 单元测试、i18n 检查、类型检查、App 资源构建和客户端边界检查。依赖漏洞审计由 `audit:deps` 单独执行。
 
-## 开发原则
+只有 FastAPI router 或 schema 发生变化时才重新导出契约：
 
-1. 业务数据只能由 `services/api` 写入。
-2. Web、iOS 和 Android 可以有各自的 ViewModel，但不重新定义订单、支付、钱包等状态。
-3. iOS/Android 的平台差异只处理系统能力；业务字段必须与同一 OpenAPI 一致。
-4. 禁止在生产服务器直接修改源码；发布必须对应一个 Git 提交。
-5. 密钥、数据库、上传文件、签名资料和构建产物不进 Git。
+```bash
+npm run export:openapi
+git diff -- packages/api-contracts/openapi.json
+npm run check:contracts
+npm run check:all
+```
+
+`packages/api-contracts/openapi.json` 是生成物，不手工编辑。
+
+## 移动端构建说明
+
+- `npm run build:android:app` 与 `npm run build:ios:app` 生成 uni-app 业务资源，不等同于已签名的 APK、AAB 或 IPA。
+- 正式安装包必须在对应平台环境中使用已批准的 AppID、证书和签名材料生成。
+- keystore、证书、Provisioning Profile、密码、APK/AAB/IPA、DCloud 缓存和签名目录不得进入 Git。
+- 移动端共同业务修改必须同步检查 iOS 与 Android；manifest、回跳、权限和签名配置保留平台差异。
+
+## 静态审核页面
+
+`static-review/` 是明确保留的独立静态审核站，不连接后端，也不读取正式账户。`apps/web/public/info/` 是 Web 的 `/info` 发布副本；两者属于不同部署目标，修改共享内容时必须同时验证，不能把其中一个当作可随意删除的构建产物。
+
+```bash
+python -m http.server 9200 --directory static-review
+node --test static-review/site.test.mjs
+```
+
+## 配置与敏感数据
+
+只从以下模板创建本地或服务器私有配置，README 和提交记录中不得填写真实值：
+
+- `services/api/.env.example`
+- `services/collector/.env.example`
+- `apps/web/.env.example`
+- `apps/ios/.env.example`
+- `apps/android/.env.example`
+- `infra/*.env.example`
+
+以下内容始终禁止提交：真实 `.env`、Token、密钥、数据库、上传文件、备份、证书、签名资料、日志、测试账号、APK/AAB/IPA、`node_modules`、`.next`、`dist` 和 `unpackage`。
+
+撮合、凭据托管、直接交易、支付、银行卡和提现是相互独立的能力开关。变量名及安全组合见 [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md) 和环境模板，不要在客户端硬编码服务端能力。
+
+## 分支与发布约定
+
+- `main` 是唯一长期存在、可部署的分支。
+- 功能修改从最新 `main` 创建短期 `codex/<topic>` 或团队约定分支，合并后删除。
+- 历史发布使用 annotated tag / GitHub Release 保存，不长期堆积 `backup/*` 或服务器分支。
+- 生产服务器只拉取已经审核的 `origin/main` 提交，不在服务器直接修改源码。
+- 推送、合并、打包和部署均需明确授权；部署时本地、GitHub 与云端必须指向同一完整 commit SHA。
+
+## 文档导航
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 唯一数据源、请求链路、模块边界和兼容层治理 |
+| [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md) | 撮合审核版与未来直接交易版的能力门禁 |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 本地开发、启动、采集与契约更新 |
+| [`docs/APP_OWNERSHIP.md`](docs/APP_OWNERSHIP.md) | Web、iOS、Android 的源码边界 |
+| [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | 自动门禁、人工检查和外部上线条件 |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | 生产备份、发布、验收和回滚 |
+| [`AGENTS.md`](AGENTS.md) | 开发人员与 Codex 的仓库协作规则 |
+
+## 上线原则
+
+代码检查通过不等于业务已经具备公开运营条件。正式上架前仍需完成适用的主体资质、隐私政策、客服与个人信息处理联系方式、短信/统一身份、支付与提现流程、证书签名、备份恢复和运维演练。状态与清单以 [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) 为准。
