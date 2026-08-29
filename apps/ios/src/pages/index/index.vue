@@ -143,14 +143,22 @@
             </view>
           </view>
           <view class="hot-full-chart" @tap="retryActiveTrend">
+            <view class="hot-chart-period">
+              <text>{{ t('thirtyDays') }}</text>
+              <text>{{ t('candlestickMode') }}</text>
+            </view>
             <CandlestickChart
               :candles="activeHotTrend.candles?.candles || []"
+              compact
               :source-note="historySourceText(activeHotTrend)"
               :history-state="marketHistoryDisplayState(activeHotTrend.candles)"
               :observed-days="marketObservedDayCount(activeHotTrend.candles)"
               :reference-price-cny="activeHotTrend.candles?.latest_live_price_cny ?? activeHotTrend.item.median_price_cny"
+              :reference-comparable-to-history="activeHotTrend.candles?.latest_live_comparable_to_history === true"
               :reference-sample-count="activeHotTrend.item.sample_count"
               :reference-observed-at="activeHotTrend.candles?.latest_live_observed_at || ''"
+              :bucket-seconds="activeHotTrend.candles?.bucket_seconds || 0"
+              range="30d"
               :loading="activeHotTrend.state === 'loading'"
               :error="activeHotTrend.state === 'error'"
             />
@@ -242,7 +250,6 @@ import {
   trustedSevenDayPriceRange,
 } from '@/utils/market-list'
 import {
-  hasCompleteSevenDayCandles,
   historyProvenanceLabel,
   marketHistoryDisplayState,
   marketObservedDayCount,
@@ -360,7 +367,7 @@ async function loadHotMarket(silent = true, forceCandles = false) {
     const signature = plan.map((request) => `${request.key}|${request.sources.join(',')}|${request.billingMode}`).join(';')
     const existingByKey = new Map(hotTrends.value.map((trend) => [gpuKey(trend.item.gpu_model, trend.item.gpu_variant), trend]))
     // Keep the current quote fields fresh every ten seconds without reloading
-    // a seven-day archive whose display bucket is six hours.
+    // the denser 30-day chart on every countdown tick.
     hotTrends.value = plan.map((request) => {
       const existing = existingByKey.get(request.key)
       return existing
@@ -379,7 +386,7 @@ async function loadHotMarket(silent = true, forceCandles = false) {
         candles: await getMarketCandles(
           request.item.gpu_model,
           request.item.gpu_variant,
-          '7d',
+          '30d',
           request.sources,
           silent,
           request.billingMode,
@@ -489,7 +496,7 @@ function priceRangeText(item: MarketRankingItem): string {
     : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
 }
 function trendHasFullHistory(trend: HotTrend): boolean {
-  return hasCompleteSevenDayCandles(trend.candles)
+  return hasCompleteSevenDayMetric(trend.item)
 }
 function trendSevenDayChange(trend: HotTrend): number | null {
   return trendHasFullHistory(trend) ? sevenDayChange(trend.item) : null
@@ -505,16 +512,17 @@ function changeTone(value: number | null): string {
   return value == null || value === 0 ? 'neutral' : value > 0 ? 'rise' : 'fall'
 }
 function compareHomeMarketCandidate(a: MarketRankingItem, b: MarketRankingItem): number {
+  const aOfficial = /official/i.test(String(a.history_provenance?.kind || '')) ? 1 : 0
+  const bOfficial = /official/i.test(String(b.history_provenance?.kind || '')) ? 1 : 0
+  if (aOfficial !== bOfficial) return bOfficial - aOfficial
+  const sampleDifference = Number(b.quote_sample_count ?? b.sample_count ?? 0)
+    - Number(a.quote_sample_count ?? a.sample_count ?? 0)
+  if (sampleDifference !== 0) return sampleDifference
   const aModel = gpuKey(a.gpu_model).split('|')[0]
   const bModel = gpuKey(b.gpu_model).split('|')[0]
   const a4090 = aModel === 'RTX4090' ? 1 : 0
   const b4090 = bModel === 'RTX4090' ? 1 : 0
-  if (a4090 !== b4090) return b4090 - a4090
-  const aOfficial = a.history_provenance?.kind === 'official' ? 1 : 0
-  const bOfficial = b.history_provenance?.kind === 'official' ? 1 : 0
-  if (aOfficial !== bOfficial) return bOfficial - aOfficial
-  return Number(b.quote_sample_count ?? b.sample_count ?? 0)
-    - Number(a.quote_sample_count ?? a.sample_count ?? 0)
+  return b4090 - a4090
 }
 function historySourceText(trend: HotTrend): string {
   return historyProvenanceLabel(trend.candles?.provenance || trend.item.history_provenance, t)
@@ -604,13 +612,15 @@ function markProductImageFailed(id: number) {
 .hot-change.fall { color: #168A5B; }
 .hot-range { display: block; color: var(--text-sub); font-size: 17rpx; line-height: 1.35; margin-top: 3rpx; }
 .hot-full-chart { padding: 0 8rpx; }
+.hot-chart-period { display: flex; align-items: center; gap: 10rpx; padding: 12rpx 8rpx 2rpx; color: var(--text-dim); font-size: 17rpx; font-weight: 650; }
+.hot-chart-period text:first-child { color: var(--primary); }
 .hot-market-empty { padding: 38rpx 20rpx; color: var(--text-sub); text-align: center; font-size: 22rpx; display: flex; flex-direction: column; align-items: center; gap: 18rpx; }
 .hot-market-retry { min-height: 64rpx; padding: 0 26rpx; display: flex; align-items: center; color: var(--primary); border: 1rpx solid var(--primary); border-radius: var(--radius); font-weight: 700; }
 .hot-market-skeleton { padding: 10rpx 20rpx 24rpx; }
 .hot-sk-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; }
 .hot-sk-tabs view { height: 48rpx; border-radius: 10rpx; background: var(--divider); }
 .hot-sk-head { width: 44%; height: 22rpx; border-radius: 11rpx; background: var(--divider); margin: 28rpx 4rpx 18rpx; }
-.hot-sk-chart { height: 550rpx; border-radius: 12rpx; background: var(--divider); }
+.hot-sk-chart { height: 280rpx; border-radius: 12rpx; background: var(--divider); }
 .featured-state { min-height: 180rpx; margin-bottom: 16rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18rpx; color: var(--text-sub); background: var(--card); border: 1rpx solid var(--card-border); border-radius: var(--radius); font-size: 22rpx; }
 .featured-list-skeleton { margin-bottom: 8rpx; }
 .featured-skeleton-row { display: flex; align-items: center; gap: 20rpx; min-height: 112rpx; padding: 12px; margin-bottom: 8px; }

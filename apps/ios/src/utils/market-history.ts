@@ -24,9 +24,10 @@ export function marketObservedDayCount(payload?: MarketCandles | null): number {
 
 export function marketHistoryDisplayState(payload?: MarketCandles | null): 'full' | 'partial' | 'single' {
   if (!payload) return 'single'
-  const declared = payload.history_state || payload.history_status
+  const declared = payload.curve_status || payload.history_state || payload.history_status
   if (declared === 'full' || declared === 'available') return 'full'
-  if (declared === 'partial' || declared === 'single') return declared
+  if (declared === 'partial' || declared === 'partial_history' || declared === 'insufficient_history') return 'partial'
+  if (declared === 'single' || declared === 'single_observation' || declared === 'unavailable') return 'single'
   if ((payload.candles || []).length <= 1) return 'single'
   const coverage = validCoverage(payload)
   return coverage.days >= 7 && coverage.spanHours >= MIN_SEVEN_DAY_SPAN_HOURS ? 'full' : 'partial'

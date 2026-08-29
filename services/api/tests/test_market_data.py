@@ -318,6 +318,29 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(snapshots[("RTX3090", "ondemand")].median_price_cny, Decimal("20.000000"))
         db.close()
 
+    def test_each_new_five_minute_publication_is_kept_even_when_price_is_unchanged(self):
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
+        MarketPriceSnapshot.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        start = datetime(2026, 8, 10, 0, 0)
+        offers = [{
+            "gpu_model": "RTX4090", "gpu_variant": "24GB", "billing_mode": "ondemand",
+            "currency": "CNY", "price": Decimal("5"), "available": 0,
+        }]
+        with patch.object(settings, "MARKET_UNCHANGED_SNAPSHOT_SECONDS", 300):
+            first, _ = _aggregate_and_store(db, "kai", offers, start)
+            db.commit()
+            same_publication, _ = _aggregate_and_store(db, "kai", offers, start + timedelta(seconds=299))
+            db.commit()
+            next_publication, _ = _aggregate_and_store(db, "kai", offers, start + timedelta(seconds=300))
+            db.commit()
+
+        self.assertEqual((first, same_publication, next_publication), (1, 0, 1))
+        self.assertEqual(db.query(MarketPriceSnapshot).count(), 2)
+        db.close()
+
     def test_retired_provider_cannot_write_new_market_snapshots(self):
         engine = create_engine(
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
@@ -623,9 +646,9 @@ class MarketDataTests(unittest.TestCase):
 
         self.assertEqual(_aggregate_and_store(db, "kai", [row], start)[0], 1)
         db.commit()
-        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(minutes=30))[0], 0)
+        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(minutes=4))[0], 0)
         db.commit()
-        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(hours=1))[0], 1)
+        self.assertEqual(_aggregate_and_store(db, "kai", [row], start + timedelta(minutes=5))[0], 1)
         db.commit()
         self.assertEqual(db.query(MarketPriceSnapshot).count(), 2)
         db.close()

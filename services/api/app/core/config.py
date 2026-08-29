@@ -193,7 +193,10 @@ class Settings(BaseSettings):
     VAST_HISTORY_DAYS: int = 90
     MARKET_SYNC_SECONDS: int = 10
     MARKET_HISTORY_DAYS: int = 30
-    MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 3600
+    # KAI publishes current-price revisions on a five-minute validity window.
+    # Persist each new publication, including an unchanged price, without
+    # requesting the provider faster than its documented cadence.
+    MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 300
     MARKET_CANDLE_SYNC_SECONDS: int = 300
     MARKET_CANDLE_HISTORY_DAYS: int = 100
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900

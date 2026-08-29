@@ -81,8 +81,11 @@
           :history-state="chartHistoryState"
           :observed-days="chartObservedDays"
           :reference-price-cny="candles?.latest_live_price_cny ?? product.price"
+          :reference-comparable-to-history="candles?.latest_live_comparable_to_history === true"
           :reference-sample-count="chartReferenceSampleCount"
           :reference-observed-at="candles?.latest_live_observed_at || product.price_updated_at || ''"
+          :bucket-seconds="candles?.bucket_seconds || 0"
+          range="30d"
         />
       </view>
       <SectionHeader v-if="canConfigure" :title="t(commerce.directTradeEnabled ? 'purchaseDurationHours' : 'requiredDurationHours')" />
@@ -329,7 +332,7 @@ async function loadProduct() {
     ? getMarketCandles(
       product.value.gpu_model,
       product.value.memory || '',
-      '7d',
+      '30d',
       [source],
       false,
       'ondemand',
@@ -368,7 +371,7 @@ async function refreshCandles(silent = true) {
     candles.value = await getMarketCandles(
       current.gpu_model,
       current.memory || '',
-      '7d',
+      '30d',
       [source],
       silent,
       'ondemand',
