@@ -22,7 +22,7 @@ test('homepage app promotions use the approved local assets and real internal ro
   assert.deepEqual(HOME_PROMOTIONS.map((item) => item.route), [
     '/pages/market/index',
     '/pages/quote/index',
-    '/pages/wallet/index',
+    '/pages/buy-request/index?compose=1',
   ])
   assert.deepEqual(HOME_PROMOTIONS.map((item) => item.image), [
     '/static/gpu/RTX5090.jpg',
@@ -30,11 +30,23 @@ test('homepage app promotions use the approved local assets and real internal ro
     '/static/gpu/RTX4090.jpg',
   ])
   assert.equal(HOME_PROMOTIONS[0]?.id, 'hourly')
+  assert.equal(HOME_PROMOTIONS[2]?.id, 'request')
   for (const item of HOME_PROMOTIONS) {
     assert.equal(item.image.startsWith('/static/'), true)
     assert.equal(existsSync(new URL(`../src${item.image}`, import.meta.url)), true, `${item.image} must be bundled`)
   }
   assert.deepEqual(HOME_NOTICES.map((item) => item.route), HOME_PROMOTIONS.map((item) => item.route))
+})
+
+test('homepage matching promotion replaces wallet messaging and opens request composition', () => {
+  const requestPromotion = HOME_PROMOTIONS[2]
+  assert.equal(requestPromotion?.route, '/pages/buy-request/index?compose=1')
+  assert.equal(requestPromotion?.titleKey, 'homePromoRequestTitle')
+  assert.match(i18n, /homePromoRequestKicker: 'WOD MATCHING'/)
+  assert.match(i18n, /homePromoRequestTitle: '发布算力需求'/)
+  assert.match(i18n, /homePromoRequestAction: '提交需求'/)
+  assert.match(i18n, /homePromoRequestTitle: 'Post Compute Request'/)
+  assert.doesNotMatch(i18n, /homePromoWallet(?:Kicker|Title|Description|Action|ImageAlt)/)
 })
 
 test('promotion carousel uses a dark media card with internal paging and no playback control', () => {
@@ -51,6 +63,7 @@ test('promotion carousel uses a dark media card with internal paging and no play
   assert.match(carousel, /class="promo-shade"/)
   assert.match(carousel, /background: #081A20;/)
   assert.match(carousel, /background: #8EDDE7;/)
+  assert.match(carousel, /promo-background--request/)
   assert.match(carousel, /@tap\.stop="previousSlide"/)
   assert.match(carousel, /@tap\.stop="nextSlide"/)
   assert.match(carousel, /function previousSlide\(\)/)

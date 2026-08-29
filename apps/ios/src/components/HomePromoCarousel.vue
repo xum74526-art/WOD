@@ -179,7 +179,7 @@ function openItem(item: { route: string; navigation: HomePromotionNavigation }) 
   opacity: 0.96;
 }
 .promo-background--market { opacity: 0.88; }
-.promo-background--wallet { opacity: 0.82; }
+.promo-background--request { opacity: 0.82; }
 .promo-shade {
   position: absolute;
   inset: 0;

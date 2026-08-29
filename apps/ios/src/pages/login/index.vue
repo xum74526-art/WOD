@@ -5,7 +5,7 @@
         <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
         <view class="brand-copy">
           <text class="logo">{{ t('appName') }}</text>
-          <text class="sub">{{ t('AI 算力资产管理') }}</text>
+          <text class="sub">{{ t('算力资源撮合平台') }}</text>
         </view>
       </view>
 

@@ -1,7 +1,7 @@
 {
     "name" : "WOD",
     "appid" : "__UNI__47CF9D3",
-    "description" : "AI 算力资产管理 App",
+    "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hans",
     "vueVersion" : "3",
     "versionName" : "1.0.9",
@@ -51,7 +51,7 @@
         }
     },
     "h5" : {
-        "title" : "KAI Android Preview",
+        "title" : "WOD",
         "router" : {
             "mode" : "history",
             "base" : "/"

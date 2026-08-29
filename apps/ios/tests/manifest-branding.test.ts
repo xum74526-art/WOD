@@ -9,6 +9,8 @@ const manifest = JSON.parse(readFileSync(resolve(appRoot, 'src/manifest.json'), 
 
 test('iOS package identity and icon paths use the WOD Vue 3 source tree', () => {
   assert.equal(manifest.name, 'WOD')
+  assert.equal(manifest.description, '算力资源撮合平台 App')
+  assert.equal(manifest.h5.title, 'WOD')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest['app-plus'].distribute.ios.appid, 'com.kai.wod')
 
@@ -27,12 +29,17 @@ test('iOS package identity and icon paths use the WOD Vue 3 source tree', () => 
   assert.equal(existsSync(resolve(appRoot, 'assets/branding/app-icon-master.png')), true)
 })
 
-test('iOS App Store icon is a square 1024px PNG and login uses the same KAI logo family', () => {
+test('iOS App Store icon stays unchanged while login and registration present WOD', () => {
   const icon = readFileSync(resolve(appRoot, manifest['app-plus'].distribute.icons.ios.appstore))
   assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG')
   assert.equal(icon.readUInt32BE(16), 1024)
   assert.equal(icon.readUInt32BE(20), 1024)
 
   const loginPage = readFileSync(resolve(appRoot, 'src/pages/login/index.vue'), 'utf8')
+  const i18n = readFileSync(resolve(appRoot, 'src/store/i18n.ts'), 'utf8')
   assert.match(loginPage, /src="\/static\/logo\/logo\.png"/)
+  assert.match(loginPage, /t\('appName'\)/)
+  assert.match(loginPage, /t\('算力资源撮合平台'\)/)
+  assert.equal([...i18n.matchAll(/appName: 'WOD'/g)].length, 2)
+  assert.doesNotMatch(i18n, /appName: 'KAI'/)
 })

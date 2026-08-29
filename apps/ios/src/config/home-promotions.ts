@@ -1,7 +1,7 @@
 export type HomePromotionNavigation = 'navigateTo' | 'switchTab'
 
 export interface HomePromotionItem {
-  id: 'market' | 'hourly' | 'wallet'
+  id: 'market' | 'hourly' | 'request'
   kickerKey: string
   titleKey: string
   descriptionKey: string
@@ -13,7 +13,7 @@ export interface HomePromotionItem {
 }
 
 export interface HomeNoticeItem {
-  id: 'market' | 'hourly' | 'wallet'
+  id: 'market' | 'hourly' | 'request'
   textKey: string
   route: string
   navigation: HomePromotionNavigation
@@ -43,14 +43,14 @@ export const HOME_PROMOTIONS: readonly HomePromotionItem[] = [
     navigation: 'navigateTo',
   },
   {
-    id: 'wallet',
-    kickerKey: 'homePromoWalletKicker',
-    titleKey: 'homePromoWalletTitle',
-    descriptionKey: 'homePromoWalletDescription',
-    actionKey: 'homePromoWalletAction',
-    imageAltKey: 'homePromoWalletImageAlt',
+    id: 'request',
+    kickerKey: 'homePromoRequestKicker',
+    titleKey: 'homePromoRequestTitle',
+    descriptionKey: 'homePromoRequestDescription',
+    actionKey: 'homePromoRequestAction',
+    imageAltKey: 'homePromoRequestImageAlt',
     image: '/static/gpu/RTX4090.jpg',
-    route: '/pages/wallet/index',
+    route: '/pages/buy-request/index?compose=1',
     navigation: 'navigateTo',
   },
 ]
@@ -69,9 +69,9 @@ export const HOME_NOTICES: readonly HomeNoticeItem[] = [
     navigation: 'navigateTo',
   },
   {
-    id: 'wallet',
-    textKey: 'homeNoticeWallet',
-    route: '/pages/wallet/index',
+    id: 'request',
+    textKey: 'homeNoticeRequest',
+    route: '/pages/buy-request/index?compose=1',
     navigation: 'navigateTo',
   },
 ]
