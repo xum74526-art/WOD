@@ -97,18 +97,6 @@
           </view>
 
           <view class="chart-section">
-            <CandlestickChart
-              :candles="displayedCandles"
-              :source-note="historySourceText"
-              :loading="refreshing && !candles"
-              :error="candleLoadError && !candles"
-              :history-state="chartHistoryState"
-              :observed-days="chartObservedDays"
-              :reference-price-cny="candles?.latest_live_price_cny ?? latest?.summary.median_price_cny"
-              :reference-sample-count="latest?.summary.sample_count || 0"
-              :reference-observed-at="candles?.latest_live_observed_at || latestObservedAt"
-              display-currency="CNY"
-            />
             <view class="range-row">
               <view
                 v-for="item in ranges"
@@ -118,6 +106,23 @@
                 @tap="selectRange(item.key)"
               >{{ item.label }}</view>
             </view>
+            <CandlestickChart
+              :key="selectedKey + ':' + timeRange"
+              :candles="displayedCandles"
+              :source-note="historySourceText"
+              :loading="refreshing && !candles"
+              :error="candleLoadError && !candles"
+              :history-state="chartHistoryState"
+              :observed-days="chartObservedDays"
+              :reference-price-cny="candles?.latest_live_price_cny ?? latest?.summary.median_price_cny"
+              :reference-comparable-to-history="candles?.latest_live_comparable_to_history === true"
+              :reference-sample-count="latest?.summary.sample_count || 0"
+              :reference-observed-at="candles?.latest_live_observed_at || latestObservedAt"
+              :bucket-seconds="candles?.bucket_seconds || 0"
+              :range="timeRange"
+              display-currency="CNY"
+              zoomable
+            />
           </view>
 
           <view class="range-summary">
@@ -260,6 +265,7 @@ import {
   type LatestMarket,
   type MarketCandles,
   type MarketModel,
+  type MarketQuoteRange,
   type MarketRankingItem,
   type MarketSnapshot,
   type MarketSourceState,
@@ -270,7 +276,7 @@ import CandlestickChart from '@/components/CandlestickChart.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatNumber } from '@/utils/format'
 import { localizeRegionName } from '@/utils/region-name'
-import { candleChangePercent, formatSignedMarketPercentNumber } from '@/utils/market-chart'
+import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import {
   hasCompleteSevenDayMetric,
   trustedSevenDayChange,
@@ -282,6 +288,11 @@ import {
   marketObservedDayCount,
   marketSourceDisplayName,
 } from '@/utils/market-history'
+import {
+  hasAdvancedMarketObservation,
+  latestMarketObservationMs,
+  QUOTE_POLL_SECONDS,
+} from '@/utils/market-polling'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -295,8 +306,8 @@ const regions = ref<RegionalQuoteItem[]>([])
 const regionalMeta = ref<RegionalQuoteResponse | null>(null)
 const selectedKey = ref('')
 const selectedSources = ref<string[]>(['kai'])
-const timeRange = ref('7d')
-const refreshIn = ref(10)
+const timeRange = ref<MarketQuoteRange>('30d')
+const refreshIn = ref(QUOTE_POLL_SECONDS)
 const initialLoading = ref(true)
 const initialError = ref(false)
 const refreshing = ref(false)
@@ -311,15 +322,15 @@ let timer: ReturnType<typeof setInterval> | null = null
 let refreshGeneration = 0
 let candlesLoadedAt = 0
 let candleRequestKey = ''
+let candleObservationCursor = 0
 let sourceStatesLoadedAt = 0
 let regionalGeneration = 0
 
 const tabs = computed(() => [t('priceTrends'), t('modelRanking'), t('regionalPrices')])
-const ranges = computed(() => [
-  { key: '1h', label: t('oneHour') },
-  { key: '6h', label: t('sixHours') },
+const ranges = computed<Array<{ key: MarketQuoteRange; label: string }>>(() => [
   { key: '24h', label: t('twentyFourHours') },
   { key: '7d', label: t('sevenDays') },
+  { key: '30d', label: t('thirtyDays') },
 ])
 const currentModel = computed(() => models.value.find((item) => modelKey(item) === selectedKey.value) || models.value[0])
 const regionalIdentity = computed(() => regionalMeta.value
@@ -339,16 +350,10 @@ const chartStateSummary = computed(() => chartHistoryState.value === 'full'
   : chartHistoryState.value === 'partial'
     ? t('chartObservedDays', { days: chartObservedDays.value })
     : t('currentQuoteBaseline'))
-const candlePeriodChange = computed(() => {
-  const rows = displayedCandles.value
-  if (rows.length < 2) return null
-  return candleChangePercent(rows[0].open_price_cny, rows[rows.length - 1].close_price_cny)
-})
 const selectedSevenDayChange = computed(() => {
-  if (chartHistoryState.value !== 'full') return null
-  // Prefer the exact K-line series currently shown. Ranking data is only a
-  // fallback because it may arrive later than the candle history request.
-  return candlePeriodChange.value ?? (selectedMetric.value ? sevenDayChange(selectedMetric.value) : null)
+  // This headline is explicitly labelled as a seven-day metric. Never replace
+  // it with the change of the currently selected chart range (for example 30d).
+  return selectedMetric.value ? sevenDayChange(selectedMetric.value) : null
 })
 const selectedHistoryHeadline = computed(() => selectedSevenDayChange.value == null
   ? chartStateSummary.value
@@ -516,19 +521,12 @@ async function refreshPrices(silent = true, forceHistory = false) {
   const range = timeRange.value
   const billingMode = 'ondemand'
   const historyKey = `${model.gpu_model}|${model.gpu_variant}|${range}|${[...sources].sort().join(',')}|${billingMode}`
-  const historyRefreshMs = range === '7d' ? 5 * 60_000 : range === '24h' ? 30_000 : 8_000
-  const needsHistory = forceHistory
-    || !candles.value
-    || candleRequestKey !== historyKey
-    || Date.now() - candlesLoadedAt >= historyRefreshMs
+  const historyRefreshMs = range === '7d' || range === '30d' ? 5 * 60_000 : 30_000
   const needsSourceState = !sourceStates.value.length || Date.now() - sourceStatesLoadedAt >= 30_000
   refreshing.value = true
   try {
-    const [latestResult, candleResult, stateResult] = await Promise.allSettled([
+    const [latestResult, stateResult] = await Promise.allSettled([
       getLatestMarket(model.gpu_model, model.gpu_variant, sources, silent),
-      needsHistory
-        ? getMarketCandles(model.gpu_model, model.gpu_variant, range, sources, silent, billingMode)
-        : Promise.resolve(candles.value),
       needsSourceState
         ? getMarketSourceStatus(silent)
         : Promise.resolve({ server_time: '', items: sourceStates.value }),
@@ -537,7 +535,22 @@ async function refreshPrices(silent = true, forceHistory = false) {
     // flight. Only the latest selection is allowed to update the screen.
     if (generation !== refreshGeneration) return
     if (latestResult.status === 'rejected') throw latestResult.reason
-    latest.value = latestResult.value
+    const nextLatest = latestResult.value
+    const observationAdvanced = hasAdvancedMarketObservation(candleObservationCursor, nextLatest.items)
+    const currentObservationMs = latestMarketObservationMs(nextLatest.items)
+    latest.value = nextLatest
+    const needsHistory = forceHistory
+      || !candles.value
+      || candleRequestKey !== historyKey
+      || Date.now() - candlesLoadedAt >= historyRefreshMs
+    const [candleResult] = await Promise.allSettled([
+      needsHistory
+        ? getMarketCandles(model.gpu_model, model.gpu_variant, range, sources, silent, billingMode, {
+            force_refresh: observationAdvanced,
+          })
+        : Promise.resolve(candles.value),
+    ])
+    if (generation !== refreshGeneration) return
     if (candleResult.status === 'fulfilled' && candleResult.value) {
       candles.value = candleResult.value
       candleLoadError.value = false
@@ -552,9 +565,10 @@ async function refreshPrices(silent = true, forceHistory = false) {
       sourceStates.value = stateResult.value.items
       if (needsSourceState) sourceStatesLoadedAt = Date.now()
     }
-    refreshIn.value = latestResult.value.next_refresh_in || 10
+    if (currentObservationMs > candleObservationCursor) candleObservationCursor = currentObservationMs
+    refreshIn.value = QUOTE_POLL_SECONDS
   } catch {
-    if (generation === refreshGeneration) refreshIn.value = 10
+    if (generation === refreshGeneration) refreshIn.value = QUOTE_POLL_SECONDS
   } finally {
     if (generation === refreshGeneration) refreshing.value = false
   }
@@ -583,7 +597,10 @@ function startTimer() {
   timer = setInterval(() => {
     if (typeof document !== 'undefined' && document.hidden) return
     refreshIn.value -= 1
-    if (refreshIn.value <= 0) refreshPrices(true)
+    if (refreshIn.value <= 0) {
+      refreshIn.value = QUOTE_POLL_SECONDS
+      if (!refreshing.value) void refreshPrices(true)
+    }
   }, 1000)
 }
 function stopTimer() { if (timer) { clearInterval(timer); timer = null } }
@@ -599,6 +616,7 @@ async function selectModel(item: MarketModel) {
   selectedSources.value = ['kai']
   latest.value = null
   candles.value = null
+  candleObservationCursor = 0
   regions.value = []
   regionalMeta.value = null
   candleLoadError.value = false
@@ -613,7 +631,7 @@ async function selectRegionalModel(item: MarketModel) {
   regionalMeta.value = null
   await loadRegions(false)
 }
-async function selectRange(value: string) { timeRange.value = value; await refreshPrices(false, true) }
+async function selectRange(value: MarketQuoteRange) { timeRange.value = value; await refreshPrices(false, true) }
 function openTrend(item: MarketRankingItem) {
   const found = models.value.find((model) => model.gpu_model === item.gpu_model && model.gpu_variant === item.gpu_variant)
   if (found) selectModel(found)
@@ -692,10 +710,12 @@ onUnload(stopTimer)
 .source-context-state { flex-shrink: 0; color: var(--text-sub); font-size: 20rpx; font-weight: 650; }
 .source-context-state.live { color: var(--up); }
 .source-context-state.unavailable { color: var(--down); }
-.chart-section { padding: 14rpx 16rpx 10rpx; }
-.range-row { display: flex; align-items: center; justify-content: space-between; padding: 10rpx 12rpx 4rpx; }
-.range-item { color: var(--text-sub); font-size: 21rpx; padding: 10rpx 13rpx; border-radius: 10rpx; }
-.range-item.active { color: var(--primary); background: var(--primary-soft); font-weight: 650; }
+.chart-section { padding: 0 12rpx 10rpx; overflow: hidden; }
+.range-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 6rpx 6rpx; border-bottom: 1rpx solid var(--divider); }
+.range-item { position: relative; min-height: 68rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 19rpx; white-space: nowrap; }
+.range-item::after { content: ''; position: absolute; left: 50%; bottom: -1rpx; width: 0; height: 4rpx; border-radius: 4rpx 4rpx 0 0; background: var(--primary); transform: translateX(-50%); transition: width 160ms ease; }
+.range-item.active { color: var(--text); font-weight: 700; }
+.range-item.active::after { width: 34rpx; }
 .range-summary { display: flex; margin: 18rpx 0; }
 .range-cell { flex: 1; }
 .range-cell.center { text-align: center; }

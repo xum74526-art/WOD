@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from math import ceil
 from threading import Condition
 import time
 from typing import Callable, Iterable, TypeVar
@@ -33,6 +34,47 @@ SOURCE_NAMES = {"kai": "KAI Pricing"}
 MIN_RANGE_DAYS = 7
 MIN_RANGE_SPAN_HOURS = 6 * 24
 RANGE_REPRESENTATIVE_SECONDS = 60 * 60
+SEVEN_DAY_CANDLE_SECONDS = 4 * 60 * 60
+MIN_SEVEN_DAY_SNAPSHOT_CANDLES = 30
+RANGE_COVERAGE_RATIO = 0.85
+
+# Public ranges share one duration contract. Candle widths get progressively
+# coarser while every OHLC value still comes from observations persisted by a
+# background worker. KAI's official candle API exposes 1h/4h/1d and current
+# quotes have a five-minute publication window. Short ranges therefore start
+# at five-minute-derived buckets; public requests never fetch or synthesize
+# finer observations.
+MARKET_RANGE_DURATIONS = {
+    "1h": timedelta(hours=1),
+    "3h": timedelta(hours=3),
+    "6h": timedelta(hours=6),
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "90d": timedelta(days=90),
+}
+MARKET_CANDLE_CONFIG = {
+    "1h": (MARKET_RANGE_DURATIONS["1h"], 5 * 60, 5 * 60),
+    "3h": (MARKET_RANGE_DURATIONS["3h"], 15 * 60, 5 * 60),
+    "6h": (MARKET_RANGE_DURATIONS["6h"], 15 * 60, 5 * 60),
+    "24h": (MARKET_RANGE_DURATIONS["24h"], 60 * 60, 5 * 60),
+    "7d": (MARKET_RANGE_DURATIONS["7d"], SEVEN_DAY_CANDLE_SECONDS, 15 * 60),
+    "30d": (MARKET_RANGE_DURATIONS["30d"], 24 * 60 * 60, 4 * 60 * 60),
+    "90d": (MARKET_RANGE_DURATIONS["90d"], 24 * 60 * 60, 4 * 60 * 60),
+}
+MARKET_INTRADAY_BUCKET_CANDIDATES = {
+    "1h": (5 * 60, 10 * 60),
+    "3h": (15 * 60, 30 * 60),
+    "6h": (15 * 60, 30 * 60, 60 * 60),
+    "24h": (60 * 60, 2 * 60 * 60),
+}
+STORED_CANDLE_INTERVALS = {
+    "6h": 60 * 60,
+    "24h": 60 * 60,
+    "7d": 4 * 60 * 60,
+    "30d": 24 * 60 * 60,
+    "90d": 24 * 60 * 60,
+}
 
 _Payload = TypeVar("_Payload")
 
@@ -382,6 +424,105 @@ def _build_market_candles(rows: Iterable, candle_seconds: int, tick_seconds: int
             "sources": sorted({source for item in candle_ticks for source in item["sources"]}),
         })
     return candles
+
+
+def _latest_contiguous_candles(candles: list[dict], candle_seconds: int) -> list[dict]:
+    """Return the latest gap-free suffix of observed candles.
+
+    A missing bucket ends the suffix instead of being hidden by joining the
+    observations on either side.  This keeps the density check independent of
+    interpolation and lets callers fall back to a coarser stored series.
+    """
+    if not candles:
+        return []
+
+    def start_time(candle: dict) -> datetime:
+        value = str(candle["start_time"])
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+
+    ordered = sorted(candles, key=start_time)
+    contiguous = [ordered[-1]]
+    expected_step = timedelta(seconds=candle_seconds)
+    newer_start = start_time(ordered[-1])
+    for candle in reversed(ordered[:-1]):
+        older_start = start_time(candle)
+        if newer_start - older_start != expected_step:
+            break
+        contiguous.append(candle)
+        newer_start = older_start
+    contiguous.reverse()
+    return contiguous
+
+
+def _observed_candle_density(candles: list[dict], candle_seconds: int) -> float:
+    """Measure occupied buckets inside the actually observed time span."""
+    if not candles:
+        return 0.0
+    starts = sorted(
+        datetime.fromisoformat(str(item["start_time"]).replace("Z", "+00:00")).replace(tzinfo=None)
+        for item in candles
+    )
+    possible = int((starts[-1] - starts[0]).total_seconds() // candle_seconds) + 1
+    return min(len(starts) / max(possible, 1), 1.0)
+
+
+def _select_observed_candle_resolution(
+    rows: list,
+    bucket_candidates: tuple[int, ...],
+    tick_seconds: int,
+) -> tuple[list[dict], int, float]:
+    """Choose the finest bucket supported by real observation density.
+
+    Candidate candles are always built from the same persisted rows. A coarser
+    result combines observations but never inserts a missing observation.
+    """
+    evaluated: list[tuple[list[dict], int, float]] = []
+    for candle_seconds in bucket_candidates:
+        candles = _build_market_candles(rows, candle_seconds, min(tick_seconds, candle_seconds))
+        density = _observed_candle_density(candles, candle_seconds)
+        evaluated.append((candles, candle_seconds, density))
+        if len(candles) < 2 or density >= RANGE_COVERAGE_RATIO:
+            return candles, candle_seconds, density
+    return max(evaluated, key=lambda item: (item[2], -item[1]))
+
+
+def _trim_candles_to_duration(
+    candles: list[dict], duration: timedelta, candle_seconds: int,
+) -> list[dict]:
+    limit = max(ceil(duration.total_seconds() / candle_seconds), 1)
+    return candles[-limit:]
+
+
+def _range_coverage_requirements(duration: timedelta) -> tuple[int, float]:
+    """Return distinct-day and elapsed-hour thresholds for a requested range.
+
+    The small tolerance accommodates collector scheduling and rolling-window
+    boundaries.  Long ranges also require observations on most UTC dates, so
+    two distant points cannot make a sparse 30/90-day series appear complete.
+    """
+    duration_hours = duration.total_seconds() / 3600
+    required_span_hours = duration_hours * RANGE_COVERAGE_RATIO
+    duration_days = duration.total_seconds() / (24 * 60 * 60)
+    required_days = (
+        max(ceil(duration_days * RANGE_COVERAGE_RATIO), 1)
+        if duration_days >= 1
+        else 1
+    )
+    return required_days, required_span_hours
+
+
+def _range_curve_status(observed_times: list[datetime], duration: timedelta) -> str:
+    if len(observed_times) < 2:
+        return "single" if observed_times else "unavailable"
+    required_days, required_span_hours = _range_coverage_requirements(duration)
+    day_count = len({item.date() for item in observed_times})
+    span_hours = (max(observed_times) - min(observed_times)).total_seconds() / 3600
+    return (
+        "full"
+        if day_count >= required_days and span_hours >= required_span_hours
+        else "partial"
+    )
 
 
 def _range_volatility(values: list[Decimal]) -> float:
@@ -742,6 +883,9 @@ def _kai_history_metrics(
     rows = db.query(MarketPriceCandle).filter(
         MarketPriceCandle.source == "kai",
         MarketPriceCandle.billing_mode == "ondemand",
+        # Ranking is a seven-day daily metric. Minute/hour/four-hour cache
+        # rows coexist in the same table and must never be mixed into it.
+        MarketPriceCandle.interval_seconds == 24 * 60 * 60,
         MarketPriceCandle.gpu_model.in_(models),
     ).order_by(MarketPriceCandle.start_time.asc()).all()
     grouped: dict[tuple[str, str], list[MarketPriceCandle]] = defaultdict(list)
@@ -1020,8 +1164,7 @@ def price_history(
     sources: str = "kai",
     db: Session = Depends(get_db),
 ):
-    ranges = {"1h": timedelta(hours=1), "6h": timedelta(hours=6), "24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}
-    if range not in ranges:
+    if range not in MARKET_RANGE_DURATIONS:
         raise BizError("不支持的时间范围")
     allowed_sources = _kai_sources(sources)
     all_latest = _latest_rows(db)
@@ -1031,7 +1174,7 @@ def price_history(
         variant if variant is not None else _pick_variant(all_latest, canonical_model),
     )
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
-    since = utcnow() - ranges[range]
+    since = utcnow() - MARKET_RANGE_DURATIONS[range]
     # Keep chart payload generation lightweight on SQLite: only fields exposed
     # by this endpoint are fetched from the continuously growing history table.
     rows = db.query(
@@ -1071,13 +1214,8 @@ def price_history(
             "source": source,
             "source_name": SOURCE_NAMES[source],
             "source_status": source_states.get(source, "pending"),
-            "curve_status": (
-                "full"
-                if len({item.date() for item in source_times[source]}) >= MIN_RANGE_DAYS
-                and (max(source_times[source]) - min(source_times[source])).total_seconds() / 3600 >= MIN_RANGE_SPAN_HOURS
-                else "partial"
-                if len(points) >= 2
-                else "single"
+            "curve_status": _range_curve_status(
+                source_times[source], MARKET_RANGE_DURATIONS[range],
             ),
             "coverage_day_count": len({item.date() for item in source_times[source]}),
             "coverage_span_hours": round(
@@ -1123,12 +1261,16 @@ def _stored_kai_candle_payload(
     range_name: str,
     duration: timedelta,
 ) -> dict | None:
+    interval_seconds = STORED_CANDLE_INTERVALS.get(range_name)
+    if interval_seconds is None:
+        return None
     variant_filters = gpu_variant_aliases(model, variant)
     stored = db.query(MarketPriceCandle).filter(
         MarketPriceCandle.source == "kai",
         MarketPriceCandle.gpu_model == model,
         MarketPriceCandle.gpu_variant.in_(variant_filters),
         MarketPriceCandle.billing_mode == "ondemand",
+        MarketPriceCandle.interval_seconds == interval_seconds,
     ).order_by(MarketPriceCandle.start_time.asc()).all()
     if not stored:
         return None
@@ -1139,7 +1281,21 @@ def _stored_kai_candle_payload(
     day_count = len({row.start_time.date() for row in rows})
     span_hours = max((rows[-1].end_time - rows[0].start_time).total_seconds() / 3600, 0.0)
     expected_days = {"7d": 7, "30d": 28, "90d": 84}.get(range_name, 1)
-    complete = day_count >= expected_days
+    contiguous = all(
+        row.end_time - row.start_time == timedelta(seconds=interval_seconds)
+        and (index == 0 or rows[index - 1].end_time == row.start_time)
+        for index, row in enumerate(rows)
+    )
+    if range_name == "6h":
+        required_days, required_span_hours = _range_coverage_requirements(duration)
+        complete = (
+            len(rows) >= 2
+            and contiguous
+            and day_count >= required_days
+            and span_hours >= required_span_hours
+        )
+    else:
+        complete = contiguous and day_count >= expected_days
     sync_state = db.query(MarketCandleSyncStatus).filter(MarketCandleSyncStatus.source == "kai").one_or_none()
     latest_live = db.query(MarketPriceSnapshot).filter(
         MarketPriceSnapshot.source == "kai",
@@ -1154,8 +1310,11 @@ def _stored_kai_candle_payload(
         "gpu_variant": variant,
         "billing_mode": "ondemand",
         "range": range_name,
+        "requested_bucket_seconds": MARKET_CANDLE_CONFIG[range_name][1],
         "bucket_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
         "tick_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
+        "resolution_status": "requested",
+        "observed_bucket_coverage_ratio": None,
         "method": rows[-1].method,
         "is_interpolated": False,
         "requested_sources": ["kai"],
@@ -1179,7 +1338,10 @@ def _stored_kai_candle_payload(
         },
         "latest_live_price_cny": float(latest_live.median_price_cny) if latest_live else None,
         "latest_live_observed_at": _iso(latest_live.observed_at) if latest_live else None,
-        "latest_live_comparable_to_history": True if latest_live else None,
+        # Stored official OHLC is a cross-region historical aggregate, while
+        # the live value is the current offer-pool median. Keep both visible,
+        # but never splice the live value into this differently-scoped curve.
+        "latest_live_comparable_to_history": False if latest_live else None,
         "candles": [{
             "start_time": _iso(row.start_time),
             "end_time": _iso(row.end_time),
@@ -1208,23 +1370,10 @@ def _price_candles_payload(
     Candles use real stored source medians only. A missing time bucket remains
     missing instead of being filled with a generated line segment.
     """
-    configs = {
-        "1h": (timedelta(hours=1), 5 * 60, 60),
-        "6h": (timedelta(hours=6), 15 * 60, 5 * 60),
-        "24h": (timedelta(hours=24), 60 * 60, 15 * 60),
-        # Seven-day history is presented as a daily K-line.  The licensed
-        # archive is sampled roughly twice per day, so six-hour candles often
-        # contained a single observation and collapsed into grey doji marks.
-        # Daily buckets preserve the real first/high/low/last observations and
-        # produce truthful red/green OHLC bodies without inventing movement.
-        "7d": (timedelta(days=7), 24 * 60 * 60, 60 * 60),
-        "30d": (timedelta(days=30), 24 * 60 * 60, 4 * 60 * 60),
-        "90d": (timedelta(days=90), 24 * 60 * 60, 4 * 60 * 60),
-    }
-    if range not in configs:
+    if range not in MARKET_CANDLE_CONFIG:
         raise BizError("不支持的时间范围")
     allowed_sources = _kai_sources(sources)
-    duration, candle_seconds, tick_seconds = configs[range]
+    duration, candle_seconds, tick_seconds = MARKET_CANDLE_CONFIG[range]
     canonical_model = canonicalize_gpu(model) or model
     picked_variant = variant if variant is not None else _pick_variant(_latest_rows(db), canonical_model)
     selected_variant = normalize_gpu_variant(canonical_model, picked_variant)
@@ -1239,14 +1388,20 @@ def _price_candles_payload(
         product_variant = normalize_gpu_variant(product_model, product.memory)
         if product_model != canonical_model or product_variant != selected_variant:
             raise BizError("资源标识与请求的 GPU 型号不匹配", status_code=400)
-    if "kai" in allowed_sources and billing_mode == "ondemand" and range in {"7d", "30d", "90d"}:
+    if (
+        "kai" in allowed_sources
+        and billing_mode == "ondemand"
+        and range in STORED_CANDLE_INTERVALS
+        and range != "6h"
+    ):
         stored_payload = _stored_kai_candle_payload(
             db, canonical_model, selected_variant, range, duration,
         )
         if stored_payload is not None:
             return _with_card_hour_candles(stored_payload)
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
-    since = utcnow() - duration
+    requested_at = utcnow()
+    since = requested_at - duration
     rows = db.query(
         MarketPriceSnapshot.source,
         MarketPriceSnapshot.observed_at,
@@ -1270,6 +1425,7 @@ def _price_candles_payload(
             len(ordered),
         )
 
+    required_coverage_days, required_coverage_span_hours = _range_coverage_requirements(duration)
     # A request may name several acceptable providers, but a temporal series
     # must still come from one provider. Select the strongest real series and
     # expose the choice instead of blending unrelated provider price levels.
@@ -1281,8 +1437,8 @@ def _price_candles_payload(
     selected_live_source = max(
         rows_by_source,
         key=lambda source: (
-            coverage(rows_by_source[source])[0] >= MIN_RANGE_DAYS
-            and coverage(rows_by_source[source])[1] >= MIN_RANGE_SPAN_HOURS,
+            coverage(rows_by_source[source])[0] >= required_coverage_days
+            and coverage(rows_by_source[source])[1] >= required_coverage_span_hours,
             coverage(rows_by_source[source])[1],
             coverage(rows_by_source[source])[0],
             coverage(rows_by_source[source])[2],
@@ -1292,9 +1448,14 @@ def _price_candles_payload(
     )
     live_rows = list(rows_by_source.get(selected_live_source, []))
     coverage_day_count, coverage_span_hours, _ = coverage(live_rows)
+    coverage_complete = (
+        len(live_rows) >= 2
+        and coverage_day_count >= required_coverage_days
+        and coverage_span_hours >= required_coverage_span_hours
+    )
     history_status = (
         "available"
-        if coverage_day_count >= 2 and coverage_span_hours >= MIN_RANGE_SPAN_HOURS
+        if coverage_complete
         else "partial_history"
         if len(live_rows) >= 2
         else "single_observation"
@@ -1303,9 +1464,7 @@ def _price_candles_payload(
     )
     coverage_status = (
         "complete"
-        if coverage_day_count >= MIN_RANGE_DAYS and coverage_span_hours >= MIN_RANGE_SPAN_HOURS
-        else "sparse_window"
-        if history_status == "available"
+        if coverage_complete
         else "partial"
         if history_status == "partial_history"
         else "single"
@@ -1340,7 +1499,64 @@ def _price_candles_payload(
     latest_live_observed_at = _iso(
         max((row.observed_at for row in latest_by_source.values()), default=None)
     )
-    candles = _build_market_candles(candle_rows, candle_seconds, tick_seconds)
+    requested_candle_seconds = candle_seconds
+    observed_bucket_density = None
+    if range in MARKET_INTRADAY_BUCKET_CANDIDATES:
+        candles, candle_seconds, observed_bucket_density = _select_observed_candle_resolution(
+            candle_rows,
+            MARKET_INTRADAY_BUCKET_CANDIDATES[range],
+            tick_seconds,
+        )
+        tick_seconds = min(tick_seconds, candle_seconds)
+    else:
+        candles = _build_market_candles(candle_rows, candle_seconds, tick_seconds)
+    if (
+        range == "6h"
+        and "kai" in allowed_sources
+        and billing_mode == "ondemand"
+        and (
+            coverage_status != "complete"
+            or observed_bucket_density is None
+            or observed_bucket_density < RANGE_COVERAGE_RATIO
+        )
+    ):
+        stored_payload = _stored_kai_candle_payload(
+            db, canonical_model, selected_variant, range, duration,
+        )
+        if (
+            stored_payload is not None
+            and stored_payload.get("history_coverage_status") == "complete"
+        ):
+            return _with_card_hour_candles(stored_payload)
+    if range == "7d" and "kai" in allowed_sources and billing_mode == "ondemand":
+        contiguous_candles = _latest_contiguous_candles(candles, candle_seconds)
+        latest_snapshot_at = max(
+            (row.observed_at for row in live_rows),
+            default=None,
+        )
+        snapshot_series_is_recent = (
+            latest_snapshot_at is not None
+            and latest_snapshot_at >= requested_at - timedelta(seconds=candle_seconds)
+        )
+        if (
+            len(contiguous_candles) >= MIN_SEVEN_DAY_SNAPSHOT_CANDLES
+            and snapshot_series_is_recent
+        ):
+            candles = contiguous_candles
+        else:
+            stored_payload = _stored_kai_candle_payload(
+                db, canonical_model, selected_variant, range, duration,
+            )
+            if stored_payload is not None:
+                return _with_card_hour_candles(stored_payload)
+            # Preserve the pre-existing truthful daily view when no official
+            # stored series exists.  A short four-hour series is not exposed as
+            # a dense seven-day curve, and the daily fallback still contains
+            # observed values only.
+            candle_seconds = 24 * 60 * 60
+            tick_seconds = 60 * 60
+            candles = _build_market_candles(candle_rows, candle_seconds, tick_seconds)
+    candles = _trim_candles_to_duration(candles, duration, candle_seconds)
     curve_status = (
         "full"
         if candles and coverage_status == "complete"
@@ -1351,13 +1567,24 @@ def _price_candles_payload(
         else "unavailable"
     )
     return _with_card_hour_candles({
-        "server_time": _iso(utcnow()),
+        "server_time": _iso(requested_at),
         "gpu_model": canonical_model,
         "gpu_variant": selected_variant,
         "billing_mode": billing_mode,
         "range": range,
+        "requested_bucket_seconds": requested_candle_seconds,
         "bucket_seconds": candle_seconds,
         "tick_seconds": tick_seconds,
+        "resolution_status": (
+            "requested"
+            if candle_seconds == requested_candle_seconds
+            else "coarsened_for_observation_density"
+        ),
+        "observed_bucket_coverage_ratio": (
+            round(observed_bucket_density, 4)
+            if observed_bucket_density is not None
+            else None
+        ),
         "method": "observed_source_robust_median_ohlc",
         "is_interpolated": False,
         "requested_sources": sorted(allowed_sources),

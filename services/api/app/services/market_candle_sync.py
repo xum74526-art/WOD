@@ -1,7 +1,7 @@
 """Scheduled official OHLC synchronization.
 
 Only this worker performs network I/O. Public market handlers read the durable
-``market_price_candles`` table and continue serving the last successful batch
+resolution-aware candle table and continue serving the last successful batch
 when the provider is temporarily unavailable.
 """
 
@@ -15,6 +15,8 @@ import json
 from threading import Lock
 from typing import Any
 
+from sqlalchemy import func
+
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.integrations.kai_pricing import KaiPricingError, get_aggregated_candles
@@ -24,6 +26,16 @@ from app.services.market_sync import utcnow
 
 
 SOURCE = "kai"
+CANDLE_RANGE_INTERVALS = {
+    "24h": 60 * 60,
+    "7d": 4 * 60 * 60,
+    "90d": 24 * 60 * 60,
+}
+CANDLE_RANGE_REFRESH_SECONDS = {
+    "24h": 10 * 60,
+    "7d": 60 * 60,
+    "90d": 6 * 60 * 60,
+}
 _SYNC_LOCK = Lock()
 _DISPATCH_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-candle-agent")
 
@@ -94,9 +106,68 @@ def _identities() -> list[tuple[str, str]]:
         db.close()
 
 
-def _fetch(identity: tuple[str, str]) -> tuple[tuple[str, str], dict[str, Any]]:
+def _fetch(
+    identity: tuple[str, str],
+    range_name: str,
+) -> tuple[tuple[str, str], str, int, dict[str, Any]]:
     model, variant = identity
-    return identity, dict(get_aggregated_candles(model, variant, "90d"))
+    payload = dict(get_aggregated_candles(model, variant, range_name))
+    try:
+        interval_seconds = int(payload.get("bucket_seconds"))
+    except (TypeError, ValueError) as exc:
+        raise KaiPricingError("upstream_invalid_response") from exc
+    if (
+        payload.get("range") != range_name
+        or interval_seconds != CANDLE_RANGE_INTERVALS[range_name]
+    ):
+        raise KaiPricingError("upstream_invalid_response")
+    return identity, range_name, interval_seconds, payload
+
+
+def _pending_jobs(
+    identities: list[tuple[str, str]],
+    force: bool,
+) -> list[tuple[tuple[str, str], str]]:
+    jobs = [
+        (identity, range_name)
+        for identity in identities
+        for range_name in CANDLE_RANGE_INTERVALS
+    ]
+    if force:
+        return jobs
+
+    db = SessionLocal()
+    try:
+        rows = db.query(
+            MarketPriceCandle.gpu_model,
+            MarketPriceCandle.gpu_variant,
+            MarketPriceCandle.interval_seconds,
+            func.max(MarketPriceCandle.collected_at),
+        ).filter(
+            MarketPriceCandle.source == SOURCE,
+            MarketPriceCandle.billing_mode == "ondemand",
+        ).group_by(
+            MarketPriceCandle.gpu_model,
+            MarketPriceCandle.gpu_variant,
+            MarketPriceCandle.interval_seconds,
+        ).all()
+    finally:
+        db.close()
+    latest = {
+        (model, variant, int(interval_seconds)): collected_at
+        for model, variant, interval_seconds, collected_at in rows
+        if collected_at is not None
+    }
+    now = utcnow()
+    return [
+        (identity, range_name)
+        for identity, range_name in jobs
+        if (
+            latest.get((*identity, CANDLE_RANGE_INTERVALS[range_name])) is None
+            or now - latest[(*identity, CANDLE_RANGE_INTERVALS[range_name])]
+            >= timedelta(seconds=CANDLE_RANGE_REFRESH_SECONDS[range_name])
+        )
+    ]
 
 
 def _signature(payload: dict[str, Any]) -> str:
@@ -107,13 +178,15 @@ def _signature(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(stable, sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()
 
 
-def _store_payloads(payloads: list[tuple[tuple[str, str], dict[str, Any]]]) -> tuple[int, int]:
+def _store_payloads(
+    payloads: list[tuple[tuple[str, str], str, int, dict[str, Any]]],
+) -> tuple[int, int]:
     db = SessionLocal()
     inserted = 0
     accepted = 0
     collected_at = utcnow()
     try:
-        for (model, variant), payload in payloads:
+        for (model, variant), _range_name, interval_seconds, payload in payloads:
             provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
             source_observed_at = _parse_datetime(provenance.get("as_of"))
             source_version = str(provenance.get("data_version") or "").strip() or None
@@ -143,6 +216,7 @@ def _store_payloads(payloads: list[tuple[tuple[str, str], dict[str, Any]]]) -> t
                     "gpu_model": model,
                     "gpu_variant": variant,
                     "billing_mode": "ondemand",
+                    "interval_seconds": interval_seconds,
                     "start_time": start_time,
                     "end_time": end_time,
                     **prices,
@@ -159,10 +233,14 @@ def _store_payloads(payloads: list[tuple[tuple[str, str], dict[str, Any]]]) -> t
                     MarketPriceCandle.gpu_model == model,
                     MarketPriceCandle.gpu_variant == variant,
                     MarketPriceCandle.billing_mode == "ondemand",
+                    MarketPriceCandle.interval_seconds == interval_seconds,
                     MarketPriceCandle.start_time == start_time,
                 ).one_or_none()
                 accepted += 1
                 if current is not None and current.signature == signature:
+                    # A successful unchanged publication still advances this
+                    # resolution's next-due clock without creating a new row.
+                    current.collected_at = collected_at
                     continue
                 if current is None:
                     db.add(MarketPriceCandle(**values, signature=signature, collected_at=collected_at))
@@ -208,18 +286,24 @@ def sync_market_candles(force: bool = False) -> dict[str, Any]:
         identities = _identities()
         if not identities:
             raise RuntimeError("no_market_models")
-        payloads: list[tuple[tuple[str, str], dict[str, Any]]] = []
+        payloads: list[tuple[tuple[str, str], str, int, dict[str, Any]]] = []
         errors: list[str] = []
-        with ThreadPoolExecutor(max_workers=min(2, len(identities)), thread_name_prefix="kai-candle-fetch") as executor:
-            futures = {executor.submit(_fetch, identity): identity for identity in identities}
+        jobs = _pending_jobs(identities, force)
+        if not jobs:
+            return {"status": "not_due", "source": SOURCE}
+        with ThreadPoolExecutor(max_workers=min(2, len(jobs)), thread_name_prefix="kai-candle-fetch") as executor:
+            futures = {
+                executor.submit(_fetch, identity, range_name): (identity, range_name)
+                for identity, range_name in jobs
+            }
             for future in as_completed(futures):
                 try:
-                    identity, payload = future.result()
+                    identity, range_name, interval_seconds, payload = future.result()
                 except Exception as exc:  # noqa: BLE001
                     errors.append(_error_code(exc))
                     continue
                 if payload.get("candles"):
-                    payloads.append((identity, payload))
+                    payloads.append((identity, range_name, interval_seconds, payload))
                 else:
                     errors.append("empty_history")
         if not payloads:
@@ -230,7 +314,7 @@ def sync_market_candles(force: bool = False) -> dict[str, Any]:
         try:
             state = _status(db)
             state.status = "ok" if not errors else "partial"
-            state.model_count = len(payloads)
+            state.model_count = len({identity for identity, _range, _interval, _payload in payloads})
             state.candle_count = accepted
             state.last_success_at = utcnow()
             state.last_error = errors[0] if errors else None
@@ -240,7 +324,8 @@ def sync_market_candles(force: bool = False) -> dict[str, Any]:
         return {
             "status": "ok" if not errors else "partial",
             "source": SOURCE,
-            "models": len(payloads),
+            "models": len({identity for identity, _range, _interval, _payload in payloads}),
+            "ranges": len(payloads),
             "candles": accepted,
             "inserted": inserted,
         }

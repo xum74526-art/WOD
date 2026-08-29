@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.models import *  # noqa: F401,F403,E402
+from app.models.market_price import MarketPriceCandle  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
@@ -179,6 +180,117 @@ def _ensure_columns(db_engine=None):
                 f"CREATE INDEX IF NOT EXISTS ix_{table}_created_platform "
                 f"ON {table} (created_platform)"
             ))
+
+
+def _migrate_market_candle_resolutions(db_engine=None) -> int:
+    """Copy legacy daily candles into the additive resolution-aware table.
+
+    The legacy table and its restrictive UNIQUE constraint are intentionally
+    left untouched. This makes the migration reversible and avoids an in-place
+    SQLite table rebuild while the new table can safely store 1h/4h/1d rows
+    sharing the same start timestamp.
+    """
+
+    target_engine = db_engine or engine
+    MarketPriceCandle.__table__.create(bind=target_engine, checkfirst=True)
+    inspector = inspect(target_engine)
+    tables = set(inspector.get_table_names())
+    legacy_table = "market_price_candles"
+    target_table = MarketPriceCandle.__tablename__
+    if legacy_table not in tables or target_table not in tables:
+        return 0
+
+    legacy_columns = {
+        item["name"] for item in inspector.get_columns(legacy_table)
+    }
+    copied_columns = [
+        column for column in MarketPriceCandle.__table__.columns
+        if column.name not in {"id", "interval_seconds"}
+        and column.name in legacy_columns
+    ]
+    missing_required = [
+        column.name for column in MarketPriceCandle.__table__.columns
+        if column.name not in {"id", "interval_seconds"}
+        and column.name not in legacy_columns
+        and not column.nullable
+        and column.server_default is None
+    ]
+    if missing_required:
+        raise RuntimeError(
+            "legacy market_price_candles is missing required columns: "
+            + ", ".join(sorted(missing_required))
+        )
+
+    interval_from_duration: str
+    if target_engine.dialect.name == "sqlite":
+        interval_from_duration = (
+            "CASE WHEN end_time IS NOT NULL AND start_time IS NOT NULL "
+            "AND julianday(end_time) > julianday(start_time) "
+            "THEN MAX(CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER), 1) "
+            "ELSE 86400 END"
+        )
+    elif target_engine.dialect.name == "postgresql":
+        interval_from_duration = (
+            "CASE WHEN end_time IS NOT NULL AND start_time IS NOT NULL AND end_time > start_time "
+            "THEN GREATEST(ROUND(EXTRACT(EPOCH FROM (end_time - start_time)))::INTEGER, 1) "
+            "ELSE 86400 END"
+        )
+    else:
+        raise RuntimeError(
+            "market candle resolution migration supports only SQLite and PostgreSQL"
+        )
+    interval_expression = interval_from_duration
+    if "interval_seconds" in legacy_columns:
+        interval_expression = (
+            "CASE WHEN CAST(interval_seconds AS INTEGER) > 0 "
+            f"THEN CAST(interval_seconds AS INTEGER) ELSE {interval_from_duration} END"
+        )
+
+    insert_names = [column.name for column in copied_columns] + ["interval_seconds"]
+    quoted_insert_names = ", ".join(f'"{name}"' for name in insert_names)
+    qualified_interval_expression = interval_expression
+    for column_name in ("interval_seconds", "end_time", "start_time"):
+        qualified_interval_expression = qualified_interval_expression.replace(
+            column_name, f'legacy."{column_name}"',
+        )
+    select_values = ", ".join(
+        [f'legacy."{column.name}"' for column in copied_columns]
+        + [qualified_interval_expression]
+    )
+    identity = (
+        "source, gpu_model, gpu_variant, billing_mode, interval_seconds, start_time"
+    )
+    if target_engine.dialect.name == "sqlite":
+        statement = (
+            f'INSERT OR IGNORE INTO "{target_table}" ({quoted_insert_names}) '
+            f'SELECT {select_values} FROM "{legacy_table}" AS legacy'
+        )
+    else:
+        statement = (
+            f'INSERT INTO "{target_table}" ({quoted_insert_names}) '
+            f'SELECT {select_values} FROM "{legacy_table}" AS legacy '
+            f"ON CONFLICT ({identity}) DO NOTHING"
+        )
+    with target_engine.begin() as conn:
+        result = conn.execute(text(statement))
+        missing = conn.execute(text(
+            f'SELECT COUNT(*) FROM "{legacy_table}" AS legacy '
+            f'WHERE NOT EXISTS (SELECT 1 FROM "{target_table}" AS current '
+            'WHERE current.source = legacy.source '
+            'AND current.gpu_model = legacy.gpu_model '
+            'AND current.gpu_variant = legacy.gpu_variant '
+            'AND current.billing_mode = legacy.billing_mode '
+            f'AND current.interval_seconds = {qualified_interval_expression} '
+            'AND current.start_time = legacy.start_time)'
+        )).scalar_one()
+        if int(missing or 0):
+            raise RuntimeError(
+                f"market candle resolution migration left {int(missing)} legacy rows uncopied"
+            )
+    copied = max(int(result.rowcount or 0), 0)
+    if copied:
+        print(f"[init_db] 行情K线分辨率迁移: 安全复制 {copied} 条，旧表保留")
+    return copied
 
 
 def _migrate_product_market_sources(db_engine=None):
@@ -1117,6 +1229,7 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_market_candle_resolutions()
     _migrate_order_request_scope()
     _migrate_product_market_sources()
     _reconcile_supplier_completed_order_counts()

@@ -72,15 +72,18 @@ class MarketPriceCandle(Base):
     the worker so an upstream outage cannot erase the last valid chart.
     """
 
-    __tablename__ = "market_price_candles"
+    # Resolution-aware successor of the legacy ``market_price_candles`` table.
+    # ``init_db`` copies legacy rows forward and deliberately keeps the old
+    # table intact as a rollback source instead of rebuilding it in place.
+    __tablename__ = "market_price_candles_v2"
     __table_args__ = (
         UniqueConstraint(
-            "source", "gpu_model", "gpu_variant", "billing_mode", "start_time",
-            name="uq_market_price_candle_identity",
+            "source", "gpu_model", "gpu_variant", "billing_mode", "interval_seconds", "start_time",
+            name="uq_market_price_candle_v2_identity",
         ),
         Index(
-            "ix_market_price_candle_series",
-            "source", "gpu_model", "gpu_variant", "billing_mode", "start_time",
+            "ix_market_price_candle_v2_series",
+            "source", "gpu_model", "gpu_variant", "billing_mode", "interval_seconds", "start_time",
         ),
     )
 
@@ -89,6 +92,7 @@ class MarketPriceCandle(Base):
     gpu_model: Mapped[str] = mapped_column(String(64), index=True)
     gpu_variant: Mapped[str] = mapped_column(String(64), default="", index=True)
     billing_mode: Mapped[str] = mapped_column(String(24), default="ondemand", index=True)
+    interval_seconds: Mapped[int] = mapped_column(Integer, default=86400, server_default="86400")
     start_time: Mapped[datetime] = mapped_column(DateTime, index=True)
     end_time: Mapped[datetime] = mapped_column(DateTime)
     open_price_cny: Mapped[Decimal] = mapped_column(Numeric(18, 6))

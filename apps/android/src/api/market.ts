@@ -34,7 +34,7 @@ export interface MarketHistoryProvenance {
   collected_at: string
 }
 
-export type MarketHistoryState = 'available' | 'insufficient_history' | 'full' | 'partial' | 'single'
+export type MarketHistoryState = 'available' | 'insufficient_history' | 'partial_history' | 'single_observation' | 'unavailable' | 'full' | 'partial' | 'single'
 
 export interface MarketModel {
   gpu_model: string
@@ -126,6 +126,10 @@ export interface MarketHistory {
   series: MarketSeries[]
 }
 
+export type MarketCandleRange = '1h' | '3h' | '6h' | '24h' | '7d' | '30d'
+export type MarketCandleApiRange = MarketCandleRange
+export type MarketQuoteRange = Extract<MarketCandleApiRange, '24h' | '7d' | '30d'>
+
 export interface MarketCandle {
   start_time: string
   end_time: string
@@ -143,7 +147,7 @@ export interface MarketCandles {
   gpu_model: string
   gpu_variant: string
   billing_mode: string
-  range: string
+  range: MarketCandleApiRange
   bucket_seconds: number
   tick_seconds: number
   method: 'observed_source_median_ohlc'
@@ -151,18 +155,21 @@ export interface MarketCandles {
   requested_sources: string[]
   history_status?: MarketHistoryState
   history_state?: 'full' | 'partial' | 'single'
+  curve_status?: 'full' | 'partial' | 'single' | 'unavailable'
+  coverage_class?: 'full' | 'partial' | 'single' | 'unavailable'
   coverage_day_count?: number
   coverage_span_hours?: number
   data_quality?: 'official' | 'external_reference'
   provenance?: MarketHistoryProvenance | null
   latest_live_price_cny?: number | null
   latest_live_observed_at?: string | null
-  latest_live_comparable_to_history?: false
+  latest_live_comparable_to_history?: boolean | null
   candles: MarketCandle[]
 }
 
 export interface MarketCandlesParams {
   external_product_id?: string | null
+  force_refresh?: boolean
 }
 
 export interface MarketSourceState {
@@ -248,7 +255,7 @@ export function getMarketHistory(model: string, variant: string, range: string, 
 export function getMarketCandles(
   model: string,
   variant: string,
-  range: string,
+  range: MarketCandleApiRange,
   sources: string[],
   silent = false,
   billingMode = 'ondemand',
@@ -258,6 +265,7 @@ export function getMarketCandles(
   const externalProductId = String(params.external_product_id || '').trim()
   const ttlMs = range === '7d' || range === '30d' ? 5 * 60_000 : range === '24h' ? 30_000 : 8_000
   const key = `candles|${model}|${variant}|${range}|${normalizedSources.join(',')}|${billingMode}|${encodeURIComponent(externalProductId)}`
+  if (params.force_refresh) marketResponseCache.delete(key)
   return cachedMarketRequest(key, ttlMs, () => (
     request<MarketCandles>({
       url: '/market/prices/candles',
