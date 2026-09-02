@@ -337,7 +337,9 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
       ? "7天"
       : activeChartSnapshot?.range === "30d"
         ? "30天"
-        : "当前周期";
+        : activeChartSnapshot?.range === "90d"
+          ? "90天"
+          : "当前周期";
   const dailyMovers = markets.map((item) => priceStats(item, 7)).filter((stats) => stats.enough);
   const risingToday = dailyMovers.filter((stats) => stats.delta > 0).length;
   const fallingToday = dailyMovers.filter((stats) => stats.delta < 0).length;

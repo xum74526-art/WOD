@@ -1,6 +1,6 @@
 import type { MobileMarketCandle, MobileMarketCandles } from "@/lib/mobile-market-api";
 
-export type MarketChartRange = "24h" | "7d" | "30d";
+export type MarketChartRange = "24h" | "7d" | "30d" | "90d";
 
 export type MarketChartCandle = {
   startTime: string;
@@ -73,18 +73,21 @@ const RANGE_DURATION_MS: Record<MarketChartRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
+  "90d": 90 * 24 * 60 * 60 * 1000,
 };
 
 const DEFAULT_BUCKET_SECONDS: Record<MarketChartRange, number> = {
   "24h": 60 * 60,
   "7d": 60 * 60,
   "30d": 4 * 60 * 60,
+  "90d": 24 * 60 * 60,
 };
 
 const MOBILE_VISIBLE_TARGET: Record<MarketChartRange, number> = {
   "24h": 24,
   "7d": 42,
   "30d": 60,
+  "90d": 45,
 };
 
 export function chartCanvasLayout(renderedWidth: number): MarketChartLayout {
@@ -562,6 +565,7 @@ const CANDLE_ZOOM_FRACTIONS: Record<MarketChartRange, number[]> = {
   "24h": [0.5, 0.75, 1],
   "7d": [0.25, 0.5, 0.75, 1],
   "30d": [1 / 6, 1 / 3, 0.5, 2 / 3, 1],
+  "90d": [1 / 6, 1 / 3, 0.5, 2 / 3, 1],
 };
 
 function candleZoomSteps(range: MarketChartRange, available: number): number[] {

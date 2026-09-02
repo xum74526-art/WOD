@@ -109,6 +109,8 @@ test("trend ranges use real calendar windows and peak-preserving full-width spar
   assert.match(panel, /长期排行周期/);
   assert.match(panel, /长期 · \{longRangeLabel\}涨跌/);
   assert.match(panel, /onSnapshot=\{setChartSnapshot\}/);
+  assert.match(panel, /activeChartSnapshot\?\.range === "90d"/);
+  assert.match(panel, /\? "90天"/);
   assert.match(panel, /\{chartRangeLabel\}历史最高价/);
   assert.match(panel, /\{chartRangeLabel\}历史最低价/);
   assert.match(panel, /\{chartRangeLabel\}历史中位价/);
@@ -117,6 +119,7 @@ test("trend ranges use real calendar windows and peak-preserving full-width spar
   assert.doesNotMatch(chart, /value: "24h", label: "24小时"/);
   assert.match(chart, /value: "7d", label: "7天"/);
   assert.match(chart, /value: "30d", label: "30天"/);
+  assert.match(chart, /value: "90d", label: "90天"/);
   assert.match(chart, /preserveAspectRatio="xMidYMid meet"/);
   assert.doesNotMatch(chart, /preserveAspectRatio="none"/);
   assert.match(api, /range: "90d"/);

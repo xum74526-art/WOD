@@ -88,6 +88,12 @@ test("candle response identity must match model, variant, and range exactly", ()
   assert.equal(matchesMarketCandleSelection(response, "H200", "80GB", "7d"), false);
   assert.equal(matchesMarketCandleSelection(response, "H100", "94GB", "7d"), false);
   assert.equal(matchesMarketCandleSelection(response, "H100", "80GB", "30d"), false);
+  assert.equal(matchesMarketCandleSelection(
+    { gpu_model: "H100", gpu_variant: "80GB", range: "90d" },
+    "H100",
+    "80GB",
+    "90d",
+  ), true);
 });
 
 test("Web chart keeps real missing buckets and breaks moving-average segments at gaps", () => {
@@ -161,7 +167,7 @@ test("24-hour coverage is derived from real candle buckets instead of trusting a
   assert.equal(coverage.full, false);
 });
 
-test("high-density seven and thirty day ranges keep their native real bucket counts", () => {
+test("high-density seven, thirty, and ninety day ranges keep their native real bucket counts", () => {
   const series = (count: number, bucketSeconds: number): MarketChartCandle[] => Array.from(
     { length: count },
     (_, index) => {
@@ -182,6 +188,7 @@ test("high-density seven and thirty day ranges keep their native real bucket cou
 
   const sevenDays = marketChartCoverage(series(168, 3600), 3600, "7d", "complete");
   const thirtyDays = marketChartCoverage(series(180, 4 * 3600), 4 * 3600, "30d", "complete");
+  const ninetyDays = marketChartCoverage(series(90, 24 * 3600), 24 * 3600, "90d", "complete");
   assert.deepEqual(
     { expected: sevenDays.expectedBucketCount, full: sevenDays.full },
     { expected: 168, full: true },
@@ -189,6 +196,10 @@ test("high-density seven and thirty day ranges keep their native real bucket cou
   assert.deepEqual(
     { expected: thirtyDays.expectedBucketCount, full: thirtyDays.full },
     { expected: 180, full: true },
+  );
+  assert.deepEqual(
+    { expected: ninetyDays.expectedBucketCount, full: ninetyDays.full },
+    { expected: 90, full: true },
   );
 });
 
@@ -232,6 +243,8 @@ test("bucket-aware labels and responsive zoom limits keep dense mobile candles r
   assert.equal(defaultCandleZoomLimit("7d", 390, 2 * 3600), 42);
   assert.equal(defaultCandleZoomLimit("30d", 390, 4 * 3600), 60);
   assert.equal(defaultCandleZoomLimit("30d", 1280, 4 * 3600), 180);
+  assert.equal(defaultCandleZoomLimit("90d", 390, 24 * 3600), 45);
+  assert.equal(defaultCandleZoomLimit("90d", 1280, 24 * 3600), 90);
   assert.equal(nextCandleZoomLimit("7d", 84, 84, "in", 2 * 3600), 63);
 });
 
@@ -435,8 +448,11 @@ test("Web chart exposes all high-density desktop ranges through discrete zoom li
   assert.equal(defaultCandleZoomLimit("24h"), 24);
   assert.equal(defaultCandleZoomLimit("7d"), 168);
   assert.equal(defaultCandleZoomLimit("30d"), 180);
+  assert.equal(defaultCandleZoomLimit("90d"), 90);
   assert.equal(nextCandleZoomLimit("30d", 180, 180, "in"), 120);
   assert.equal(nextCandleZoomLimit("30d", 120, 180, "out"), 180);
+  assert.equal(nextCandleZoomLimit("90d", 90, 90, "in"), 60);
+  assert.equal(nextCandleZoomLimit("90d", 45, 90, "out"), 60);
   assert.equal(nextCandleZoomLimit("7d", 168, 168, "in"), 126);
 });
 
@@ -448,6 +464,8 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   assert.match(chart, /LATEST_REFRESH_MS = 10_000/);
   assert.match(chart, /"24h": 30_000/);
   assert.match(chart, /"7d": 300_000/);
+  assert.match(chart, /"90d": 300_000/);
+  assert.match(chart, /value: "90d", label: "90天"/);
   assert.match(chart, /preserveAspectRatio="xMidYMid meet"/);
   assert.match(chart, /period: 5/);
   assert.match(chart, /period: 10/);
@@ -499,6 +517,7 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   assert.match(styles, /--kline-rise: #c9323c/);
   assert.match(styles, /--kline-fall: #08784e/);
   assert.match(styles, /--kline-ma-5: #9a5c09/);
+  assert.equal(styles.match(/grid-template-columns: repeat\(3,/g)?.length, 2);
   assert.match(styles, /@media \(prefers-color-scheme: dark\)/);
   assert.match(styles, /touch-action: pan-y pinch-zoom/);
   assert.match(styles, /\.candleRise rect[\s\S]*?fill: var\(--kline-card\)/);

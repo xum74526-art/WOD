@@ -25,7 +25,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--kline-line) 78%, transparent);
   padding-inline: clamp(14px, 2.2vw, 26px);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 112px));
+  grid-template-columns: repeat(3, minmax(0, 112px));
   align-items: stretch;
   gap: 4px;
 }
@@ -532,7 +532,7 @@
 
 @media (max-width: 700px) {
   .rangeTabs {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     padding-inline: 6px;
   }
 

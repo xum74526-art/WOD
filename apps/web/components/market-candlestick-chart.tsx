@@ -68,12 +68,14 @@ const MOBILE_WIDTH = 360;
 const RANGE_OPTIONS: Array<{ value: MarketChartRange; label: string }> = [
   { value: "7d", label: "7天" },
   { value: "30d", label: "30天" },
+  { value: "90d", label: "90天" },
 ];
 const LATEST_REFRESH_MS = 10_000;
 const HISTORY_REFRESH_MS: Record<MarketChartRange, number> = {
   "24h": 30_000,
   "7d": 300_000,
   "30d": 300_000,
+  "90d": 300_000,
 };
 const MA_SERIES = [
   { period: 5, color: "var(--kline-ma-5)" },
