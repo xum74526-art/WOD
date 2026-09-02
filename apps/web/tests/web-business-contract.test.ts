@@ -64,6 +64,8 @@ test("released clients do not describe canonical data as coming from mobile", ()
 test("Web market summary and chart use the canonical KAI candle contract", () => {
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
+  const chartMath = fs.readFileSync(new URL("../lib/market-candlestick-chart.ts", import.meta.url), "utf8");
   const summary = adapter.slice(
     adapter.indexOf("async function marketSummary"),
     adapter.indexOf("async function accountSummary"),
@@ -75,8 +77,11 @@ test("Web market summary and chart use the canonical KAI candle contract", () =>
   assert.match(summary, /median_price_card_hours/);
   assert.doesNotMatch(summary, /\/api\/market\/prices\/history/);
   assert.match(panel, /`\$\{item\.gpu_model\} \$\{item\.gpu_variant\}`/);
-  assert.match(panel, /open_price_card_hours/);
-  assert.match(panel, /median_price_card_hours/);
+  assert.match(panel, /MarketCandlestickChart/);
+  assert.match(chart, /getMobileMarketCandles/);
+  assert.match(chart, /median_price_card_hours/);
+  assert.match(chartMath, /open_price_card_hours/);
+  assert.match(chartMath, /close_price_card_hours/);
 });
 
 test("Web compute catalogue separates representative KAI offers from individual merchant listings", () => {

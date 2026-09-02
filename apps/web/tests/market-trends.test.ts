@@ -54,6 +54,10 @@ test("trend panel keeps current quotes and matches a model by model plus variant
 
   assert.match(source, /item\.median_price > 0 \|\| validHistory\(item\)\.length > 0/);
   assert.match(source, /`\$\{item\.gpu_model\} \$\{item\.gpu_variant\}`/);
+  assert.match(source, /function preferredMarketModel/);
+  assert.match(source, /aSevenDayCoverage/);
+  assert.match(source, /\^RTX\\s\*4090/);
+  assert.match(source, /findMobileModel\(models, a\.gpu_model\)\?\.sample_count/);
 });
 
 test("GPU chart picker opens the full catalogue, filters after typing, and supports keyboard selection", () => {
@@ -88,6 +92,7 @@ test("complete market filters keep the compact original controls", () => {
 
 test("trend ranges use real calendar windows and peak-preserving full-width sparklines", () => {
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
   assert.match(panel, /value: 28, label: "4周"/);
@@ -100,11 +105,36 @@ test("trend ranges use real calendar windows and peak-preserving full-width spar
   assert.match(panel, /trend-mini-area/);
   assert.doesNotMatch(panel, /trend-mini-glow/);
   assert.doesNotMatch(panel, /pathLength="1"/);
-  assert.match(panel, /rawRange \* \.08/);
-  assert.match(panel, /rawMax \* \.001/);
-  assert.match(panel, /trend-grid-price/);
+  assert.match(panel, /MarketCandlestickChart/);
+  assert.match(panel, /长期排行周期/);
+  assert.match(panel, /长期 · \{longRangeLabel\}涨跌/);
+  assert.match(panel, /onSnapshot=\{setChartSnapshot\}/);
+  assert.match(panel, /\{chartRangeLabel\}历史最高价/);
+  assert.match(panel, /\{chartRangeLabel\}历史最低价/);
+  assert.match(panel, /\{chartRangeLabel\}历史中位价/);
+  assert.match(panel, /chartSummary\.changePct/);
+  assert.doesNotMatch(panel, /selectedStatsRangeLabel/);
+  assert.doesNotMatch(chart, /value: "24h", label: "24小时"/);
+  assert.match(chart, /value: "7d", label: "7天"/);
+  assert.match(chart, /value: "30d", label: "30天"/);
+  assert.match(chart, /preserveAspectRatio="xMidYMid meet"/);
+  assert.doesNotMatch(chart, /preserveAspectRatio="none"/);
   assert.match(api, /range: "90d"/);
   assert.doesNotMatch(panel, /slice\(0, weeks\)/);
+});
+
+test("trend selection and candle statistics reject stale cross-identity state", () => {
+  const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
+
+  assert.match(panel, /const catalogRequest = useRef\(0\)/);
+  assert.match(panel, /const request = \+\+catalogRequest\.current/);
+  assert.match(panel, /if \(request !== catalogRequest\.current\) return/);
+  assert.match(panel, /selectedModelRef\.current = nextSelectedModel/);
+  assert.match(panel, /const activeChartSnapshot = chartSnapshot\?\.identity === selectedChartIdentity/);
+  assert.doesNotMatch(panel, /markets\.find\(\(item\) => item\.gpu_model === selectedModel\) \?\? markets\[0\]/);
+  assert.match(chart, /sequence !== historyRequest\.current/);
+  assert.match(chart, /matchesMarketCandleSelection[\s\S]*activeModel\.gpu_model[\s\S]*activeModel\.gpu_variant[\s\S]*range/);
 });
 
 test("home candlestick chart uses stored OHLC and real calendar ranges", () => {

@@ -33,12 +33,29 @@ export type MobileMarketCandles = {
   gpu_model: string;
   gpu_variant: string;
   range: string;
-  method: "observed_source_median_ohlc";
+  bucket_seconds?: number;
+  tick_seconds?: number;
+  method:
+    | "observed_source_median_ohlc"
+    | "observed_source_robust_median_ohlc"
+    | "official_hourly"
+    | "official_daily"
+    | string;
   is_interpolated: false;
   history_status?: string;
+  history_coverage_status?: "complete" | "full" | "partial" | "single" | "unavailable" | string;
+  history_state?: "full" | "partial" | "single";
+  curve_status?: "full" | "partial" | "single" | string;
+  coverage_class?: "full" | "partial" | "single" | string;
+  coverage_day_count?: number;
   latest_live_price_cny?: number | null;
   latest_live_price_card_hours?: number | null;
   latest_live_observed_at?: string | null;
+  latest_live_comparable_to_history?: boolean | null;
+  quarantined_candle_count?: number | null;
+  quarantined_prefix_count?: number | null;
+  quarantined_tail_count?: number | null;
+  quarantine_reason?: string | null;
   candles: MobileMarketCandle[];
 };
 
@@ -58,6 +75,10 @@ export type MobileLatestMarket = {
     source_count: number;
     card_hour_rmb_rate: number;
   };
+  items?: Array<{
+    observed_at?: string | null;
+    source_checked_at?: string | null;
+  }>;
   requested_source_states: Record<string, string>;
   excluded_sources: string[];
 };
@@ -108,7 +129,7 @@ export function getMobileLatestMarket(model: MobileMarketModel) {
   })}`));
 }
 
-export function getMobileMarketCandles(model: MobileMarketModel, range: "7d" | "30d" | "90d") {
+export function getMobileMarketCandles(model: MobileMarketModel, range: "24h" | "7d" | "30d" | "90d") {
   return apiRequest<MobileMarketCandles>(canonicalApiPath(`/market/prices/candles?${kaiPricingQuery({
     model: model.gpu_model,
     variant: model.gpu_variant,

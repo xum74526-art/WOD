@@ -4,12 +4,13 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from math import ceil
+from statistics import median
 from threading import Condition
 import time
 from typing import Callable, Iterable, TypeVar
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -34,8 +35,8 @@ SOURCE_NAMES = {"kai": "KAI Pricing"}
 MIN_RANGE_DAYS = 7
 MIN_RANGE_SPAN_HOURS = 6 * 24
 RANGE_REPRESENTATIVE_SECONDS = 60 * 60
-SEVEN_DAY_CANDLE_SECONDS = 4 * 60 * 60
-MIN_SEVEN_DAY_SNAPSHOT_CANDLES = 30
+SEVEN_DAY_CANDLE_SECONDS = 60 * 60
+MIN_SEVEN_DAY_SNAPSHOT_CANDLES = 143
 RANGE_COVERAGE_RATIO = 0.85
 
 # Public ranges share one duration contract. Candle widths get progressively
@@ -59,22 +60,66 @@ MARKET_CANDLE_CONFIG = {
     "6h": (MARKET_RANGE_DURATIONS["6h"], 15 * 60, 5 * 60),
     "24h": (MARKET_RANGE_DURATIONS["24h"], 60 * 60, 5 * 60),
     "7d": (MARKET_RANGE_DURATIONS["7d"], SEVEN_DAY_CANDLE_SECONDS, 15 * 60),
-    "30d": (MARKET_RANGE_DURATIONS["30d"], 24 * 60 * 60, 4 * 60 * 60),
+    "30d": (MARKET_RANGE_DURATIONS["30d"], 4 * 60 * 60, 60 * 60),
     "90d": (MARKET_RANGE_DURATIONS["90d"], 24 * 60 * 60, 4 * 60 * 60),
 }
 MARKET_INTRADAY_BUCKET_CANDIDATES = {
     "1h": (5 * 60, 10 * 60),
     "3h": (15 * 60, 30 * 60),
     "6h": (15 * 60, 30 * 60, 60 * 60),
-    "24h": (60 * 60, 2 * 60 * 60),
+    # Public chart contracts must not change shape from one GPU to another.
+    # Sparse real observations remain sparse one-hour candles; they are never
+    # disguised as six wider two-hour candles.
+    "24h": (60 * 60,),
 }
 STORED_CANDLE_INTERVALS = {
     "6h": 60 * 60,
     "24h": 60 * 60,
-    "7d": 4 * 60 * 60,
-    "30d": 24 * 60 * 60,
+    "7d": 60 * 60,
+    "30d": 4 * 60 * 60,
     "90d": 24 * 60 * 60,
 }
+STORED_CANDLE_INTERVAL_CANDIDATES = {
+    "6h": (60 * 60,),
+    "24h": (60 * 60,),
+    "7d": (60 * 60,),
+    "30d": (4 * 60 * 60,),
+    "90d": (24 * 60 * 60,),
+}
+
+# Native one-hour and four-hour KAI histories occasionally describe materially
+# different price levels for the same closed UTC window.  The public chart must
+# not prefer a denser series merely because it contains more points.  Compare a
+# bounded overlap and require a repeated mismatch before falling back so one
+# unusual candle cannot flip the resolution. A one-percent median close drift
+# is already material for a chart that presents both resolutions as one market.
+RESOLUTION_REFERENCE_SECONDS = 4 * 60 * 60
+RESOLUTION_COMPARISON_BUCKET_LIMIT = 42
+RESOLUTION_MIN_COMPARISON_BUCKETS = 4
+RESOLUTION_MEDIAN_CLOSE_DEVIATION_LIMIT = 0.01
+RESOLUTION_MEDIAN_OHLC_DEVIATION_LIMIT = 0.02
+RESOLUTION_LARGE_BUCKET_DEVIATION_LIMIT = 0.03
+RESOLUTION_LARGE_BUCKET_RATIO_LIMIT = 0.5
+
+# A completed official refresh can end one bucket earlier than a previous
+# partial refresh. The upsert table intentionally preserves that older row, so
+# the read path must not append it to the newer publication and present the two
+# batches as one continuous curve. Only an isolated edge candle is quarantined,
+# and only when price, source time and provenance all identify a stale batch.
+OFFICIAL_EDGE_PRICE_GAP_LIMIT = 0.04
+OFFICIAL_EDGE_OVERFETCH_BUCKETS = 2
+
+# The rolling 24-hour chart is built from KAI's real five-minute current-price
+# publications. A complete candidate contains 24 consecutive hourly candles,
+# keeps at least 85% of the expected publication ticks and ends close to now.
+# While the collector is still building that window, a recent consecutive
+# suffix may be shown as partial history when every displayed hour contains at
+# least half of its expected real publications. No missing tick is fabricated.
+SNAPSHOT_24H_EXPECTED_CANDLES = 24
+SNAPSHOT_24H_MIN_TICK_COVERAGE = 0.85
+SNAPSHOT_24H_MIN_PARTIAL_TICK_COVERAGE = 0.50
+SNAPSHOT_24H_MIN_PARTIAL_CANDLES = 2
+SNAPSHOT_24H_MAX_LAG_SECONDS = 10 * 60
 
 _Payload = TypeVar("_Payload")
 
@@ -421,6 +466,9 @@ def _build_market_candles(rows: Iterable, candle_seconds: int, tick_seconds: int
             "close_price_cny": float(prices[-1]),
             "sample_count": sum(item["sample_count"] for item in candle_ticks),
             "observation_count": sum(item["observation_count"] for item in candle_ticks),
+            # One tick represents one real publication slot after duplicate
+            # rows inside the same source/time bucket have been collapsed.
+            "tick_count": len(candle_ticks),
             "sources": sorted({source for item in candle_ticks for source in item["sources"]}),
         })
     return candles
@@ -492,6 +540,110 @@ def _trim_candles_to_duration(
 ) -> list[dict]:
     limit = max(ceil(duration.total_seconds() / candle_seconds), 1)
     return candles[-limit:]
+
+
+def _candle_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+
+
+def _candle_tick_coverage_ratio(
+    candle: dict,
+    tick_seconds: int,
+    server_time: datetime,
+) -> float | None:
+    """Return real publication-slot coverage for one observed candle."""
+
+    if tick_seconds <= 0:
+        return None
+    start_time = _candle_datetime(candle["start_time"])
+    end_time = _candle_datetime(candle["end_time"])
+    if start_time > server_time:
+        return None
+    covered_until = min(end_time, server_time)
+    covered_seconds = max((covered_until - start_time).total_seconds(), 0.0)
+    if covered_seconds <= 0:
+        return None
+    if end_time <= server_time:
+        expected = max(ceil(covered_seconds / tick_seconds), 1)
+    else:
+        # The in-progress candle includes a publication at its start and then
+        # one at each completed five-minute boundary.
+        expected = max(int(covered_seconds // tick_seconds) + 1, 1)
+    observed = max(int(candle.get("tick_count") or 0), 0)
+    return min(observed / expected, 1.0)
+
+
+def _latest_partial_quality_candles(
+    candles: list[dict],
+    candle_seconds: int,
+    tick_seconds: int,
+    server_time: datetime,
+) -> list[dict]:
+    """Keep the newest consecutive hours with usable real tick coverage."""
+
+    contiguous = _latest_contiguous_candles(candles, candle_seconds)
+    qualified: list[dict] = []
+    for candle in reversed(contiguous):
+        ratio = _candle_tick_coverage_ratio(candle, tick_seconds, server_time)
+        if ratio is None or ratio < SNAPSHOT_24H_MIN_PARTIAL_TICK_COVERAGE:
+            break
+        qualified.append(candle)
+    qualified.reverse()
+    return qualified
+
+
+def _observed_tick_quality(
+    candles: list[dict],
+    tick_seconds: int,
+    server_time: datetime,
+) -> dict:
+    """Measure distinct publication slots overall and inside every candle."""
+
+    if not candles or tick_seconds <= 0:
+        return {
+            "coverage_ratio": 0.0,
+            "minimum_candle_coverage_ratio": 0.0,
+            "all_candles_meet_minimum": False,
+        }
+    expected_ticks = 0
+    observed_ticks = 0
+    candle_coverage_ratios: list[float] = []
+    for candle in candles:
+        start_time = _candle_datetime(candle["start_time"])
+        end_time = _candle_datetime(candle["end_time"])
+        ratio = _candle_tick_coverage_ratio(candle, tick_seconds, server_time)
+        if ratio is None:
+            continue
+        covered_until = min(end_time, server_time)
+        covered_seconds = max((covered_until - start_time).total_seconds(), 0.0)
+        if end_time <= server_time:
+            candle_expected = max(ceil(covered_seconds / tick_seconds), 1)
+        else:
+            candle_expected = max(int(covered_seconds // tick_seconds) + 1, 1)
+        candle_observed = max(int(candle.get("tick_count") or 0), 0)
+        expected_ticks += candle_expected
+        observed_ticks += min(candle_observed, candle_expected)
+        candle_coverage_ratios.append(ratio)
+    if expected_ticks <= 0:
+        return {
+            "coverage_ratio": 0.0,
+            "minimum_candle_coverage_ratio": 0.0,
+            "all_candles_meet_minimum": False,
+        }
+    coverage_ratio = min(observed_ticks / expected_ticks, 1.0)
+    minimum_candle_coverage = min(candle_coverage_ratios, default=0.0)
+    return {
+        "coverage_ratio": coverage_ratio,
+        "minimum_candle_coverage_ratio": minimum_candle_coverage,
+        "all_candles_meet_minimum": (
+            bool(candle_coverage_ratios)
+            and all(
+                ratio >= SNAPSHOT_24H_MIN_TICK_COVERAGE
+                for ratio in candle_coverage_ratios
+            )
+        ),
+    }
 
 
 def _range_coverage_requirements(duration: timedelta) -> tuple[int, float]:
@@ -1242,7 +1394,7 @@ def price_candles(
         "market_candles", model, variant or "", range, normalized_sources, billing_mode,
         external_product_id or "",
     )
-    ttl_seconds = 300 if range in {"7d", "30d", "90d"} else 30 if range == "24h" else 8
+    ttl_seconds = 300 if range in {"7d", "30d", "90d"} else 8
     payload = _cached_payload(
         db,
         cache_key,
@@ -1254,6 +1406,317 @@ def price_candles(
     return success(payload)
 
 
+def _relative_price_deviation(left: Decimal, right: Decimal) -> float:
+    denominator = max(abs(left), abs(right), Decimal("0.01"))
+    return float(abs(left - right) / denominator)
+
+
+def _official_edge_price_gap(left: MarketPriceCandle, right: MarketPriceCandle) -> float:
+    return _relative_price_deviation(
+        Decimal(left.close_price_cny),
+        Decimal(right.open_price_cny),
+    )
+
+
+def _older_edge_provenance(
+    edge: MarketPriceCandle,
+    neighbour: MarketPriceCandle,
+) -> bool:
+    edge_observed = edge.source_observed_at
+    neighbour_observed = neighbour.source_observed_at
+    if (
+        edge_observed is None
+        or neighbour_observed is None
+        or edge_observed >= neighbour_observed
+    ):
+        return False
+    edge_is_partial = "partial" in str(edge.data_quality or "").lower()
+    version_changed = (edge.source_version or "") != (neighbour.source_version or "")
+    return edge_is_partial or version_changed
+
+
+def _quarantine_superseded_edge_candles(
+    rows: list[MarketPriceCandle],
+) -> tuple[list[MarketPriceCandle], dict]:
+    """Remove only isolated edge buckets from an older official publication.
+
+    This is a provenance quality gate, not an outlier filter. A large move from
+    a current/full publication is retained. Two or more consecutive candles at
+    a new level are also retained because they may represent a real repricing.
+    Quarantined rows remain stored for auditability and are disclosed by the
+    public response.
+    """
+
+    cleaned = list(rows)
+    prefix_count = 0
+    tail_count = 0
+    if len(cleaned) >= 3:
+        first, second, third = cleaned[0], cleaned[1], cleaned[2]
+        if (
+            _official_edge_price_gap(first, second) >= OFFICIAL_EDGE_PRICE_GAP_LIMIT
+            and _official_edge_price_gap(second, third) < OFFICIAL_EDGE_PRICE_GAP_LIMIT
+            and _older_edge_provenance(first, second)
+        ):
+            cleaned = cleaned[1:]
+            prefix_count = 1
+    if len(cleaned) >= 3:
+        third_last, second_last, last = cleaned[-3], cleaned[-2], cleaned[-1]
+        if (
+            _official_edge_price_gap(second_last, last) >= OFFICIAL_EDGE_PRICE_GAP_LIMIT
+            and _official_edge_price_gap(third_last, second_last) < OFFICIAL_EDGE_PRICE_GAP_LIMIT
+            and _older_edge_provenance(last, second_last)
+        ):
+            cleaned = cleaned[:-1]
+            tail_count = 1
+    total = prefix_count + tail_count
+    return cleaned, {
+        "quarantined_candle_count": total,
+        "quarantined_prefix_count": prefix_count,
+        "quarantined_tail_count": tail_count,
+        "quarantine_reason": "superseded_partial_edge_batch" if total else None,
+    }
+
+
+def _stored_resolution_consistency(
+    db: Session,
+    model: str,
+    variant_filters: set[str],
+    server_time: datetime,
+) -> dict:
+    """Compare closed native 1h OHLC with native 4h OHLC on exact windows.
+
+    Four consecutive one-hour candles are aggregated using normal OHLC rules.
+    Only an exact native four-hour window is compared; missing or shifted
+    windows are ignored rather than interpolated.  Median deviations and a
+    majority rule make the gate insensitive to a few upstream boundary quirks.
+    """
+
+    hourly_limit = RESOLUTION_COMPARISON_BUCKET_LIMIT * 4
+    common_filters = (
+        MarketPriceCandle.source == "kai",
+        MarketPriceCandle.gpu_model == model,
+        MarketPriceCandle.gpu_variant.in_(variant_filters),
+        MarketPriceCandle.billing_mode == "ondemand",
+        MarketPriceCandle.end_time <= server_time,
+        or_(
+            MarketPriceCandle.source_observed_at.is_(None),
+            MarketPriceCandle.source_observed_at <= server_time,
+        ),
+    )
+    hourly_rows = db.query(MarketPriceCandle).filter(
+        *common_filters,
+        MarketPriceCandle.interval_seconds == 60 * 60,
+    ).order_by(MarketPriceCandle.start_time.desc()).limit(hourly_limit).all()
+    reference_rows = db.query(MarketPriceCandle).filter(
+        *common_filters,
+        MarketPriceCandle.interval_seconds == RESOLUTION_REFERENCE_SECONDS,
+    ).order_by(MarketPriceCandle.start_time.desc()).limit(
+        RESOLUTION_COMPARISON_BUCKET_LIMIT,
+    ).all()
+
+    hourly_by_start = {row.start_time: row for row in hourly_rows}
+    close_deviations: list[float] = []
+    bucket_ohlc_deviations: list[float] = []
+    large_deviation_count = 0
+    one_hour = timedelta(hours=1)
+    four_hours = timedelta(seconds=RESOLUTION_REFERENCE_SECONDS)
+    for reference in reference_rows:
+        if reference.end_time - reference.start_time != four_hours:
+            continue
+        components = [
+            hourly_by_start.get(reference.start_time + one_hour * offset)
+            for offset in range(4)
+        ]
+        if any(row is None for row in components):
+            continue
+        hourly = [row for row in components if row is not None]
+        if any(
+            row.end_time - row.start_time != one_hour
+            or (index > 0 and hourly[index - 1].end_time != row.start_time)
+            for index, row in enumerate(hourly)
+        ) or hourly[-1].end_time != reference.end_time:
+            continue
+
+        aggregate = (
+            Decimal(hourly[0].open_price_cny),
+            max(Decimal(row.high_price_cny) for row in hourly),
+            min(Decimal(row.low_price_cny) for row in hourly),
+            Decimal(hourly[-1].close_price_cny),
+        )
+        native = (
+            Decimal(reference.open_price_cny),
+            Decimal(reference.high_price_cny),
+            Decimal(reference.low_price_cny),
+            Decimal(reference.close_price_cny),
+        )
+        metric_deviations = [
+            _relative_price_deviation(aggregate_value, native_value)
+            for aggregate_value, native_value in zip(aggregate, native)
+        ]
+        close_deviation = metric_deviations[-1]
+        bucket_deviation = max(metric_deviations)
+        close_deviations.append(close_deviation)
+        bucket_ohlc_deviations.append(bucket_deviation)
+        if bucket_deviation > RESOLUTION_LARGE_BUCKET_DEVIATION_LIMIT:
+            large_deviation_count += 1
+
+    compared_bucket_count = len(close_deviations)
+    quality = {
+        "status": "insufficient_overlap",
+        "requested_bucket_seconds": 60 * 60,
+        "reference_bucket_seconds": RESOLUTION_REFERENCE_SECONDS,
+        "compared_bucket_count": compared_bucket_count,
+        "minimum_comparison_bucket_count": RESOLUTION_MIN_COMPARISON_BUCKETS,
+        "median_close_deviation_ratio": None,
+        "median_ohlc_deviation_ratio": None,
+        "large_deviation_bucket_count": large_deviation_count,
+        "thresholds": {
+            "median_close_deviation_ratio": RESOLUTION_MEDIAN_CLOSE_DEVIATION_LIMIT,
+            "median_ohlc_deviation_ratio": RESOLUTION_MEDIAN_OHLC_DEVIATION_LIMIT,
+            "large_bucket_deviation_ratio": RESOLUTION_LARGE_BUCKET_DEVIATION_LIMIT,
+            "large_bucket_share": RESOLUTION_LARGE_BUCKET_RATIO_LIMIT,
+        },
+    }
+    if compared_bucket_count < RESOLUTION_MIN_COMPARISON_BUCKETS:
+        return quality
+
+    median_close_deviation = float(median(close_deviations))
+    # A median of all four flattened OHLC fields can hide a repeatedly wrong
+    # high or low behind otherwise similar opens and closes. Compare the worst
+    # OHLC field per bucket, then take its median across the overlap instead.
+    median_ohlc_deviation = float(median(bucket_ohlc_deviations))
+    large_deviation_ratio = large_deviation_count / compared_bucket_count
+    inconsistent = (
+        median_close_deviation > RESOLUTION_MEDIAN_CLOSE_DEVIATION_LIMIT
+        or median_ohlc_deviation > RESOLUTION_MEDIAN_OHLC_DEVIATION_LIMIT
+        or (
+            large_deviation_count >= 3
+            and large_deviation_ratio >= RESOLUTION_LARGE_BUCKET_RATIO_LIMIT
+        )
+    )
+    quality.update({
+        "status": "inconsistent" if inconsistent else "consistent",
+        "median_close_deviation_ratio": round(median_close_deviation, 6),
+        "median_ohlc_deviation_ratio": round(median_ohlc_deviation, 6),
+        "large_deviation_bucket_ratio": round(large_deviation_ratio, 6),
+    })
+    return quality
+
+
+def _aggregate_contiguous_hourly_thirty_day_fallback(
+    db: Session,
+    model: str,
+    variant: str,
+    variant_filters: set[str],
+    server_time: datetime,
+    duration: timedelta,
+) -> list[MarketPriceCandle]:
+    """Aggregate only real, complete UTC 1h groups into a recent 4h suffix.
+
+    This is a read-time safety fallback for a native 4h publication that does
+    not match its overlapping native 1h history. Missing hours are never
+    filled, and older buckets across a gap are not connected to the suffix.
+    The returned ORM objects are transient and are never added to the session.
+    """
+
+    one_hour_seconds = 60 * 60
+    one_hour = timedelta(seconds=one_hour_seconds)
+    four_hours = timedelta(seconds=RESOLUTION_REFERENCE_SECONDS)
+    expected_hour_count = max(ceil(duration.total_seconds() / one_hour_seconds), 1)
+    # Three extra hours are enough to retain the last complete UTC-aligned 4h
+    # window when the newest stored hour belongs to the next partial window.
+    hourly_rows = db.query(MarketPriceCandle).filter(
+        MarketPriceCandle.source == "kai",
+        MarketPriceCandle.gpu_model == model,
+        MarketPriceCandle.gpu_variant.in_(variant_filters),
+        MarketPriceCandle.billing_mode == "ondemand",
+        MarketPriceCandle.interval_seconds == one_hour_seconds,
+        MarketPriceCandle.end_time <= server_time,
+        or_(
+            MarketPriceCandle.source_observed_at.is_(None),
+            MarketPriceCandle.source_observed_at <= server_time,
+        ),
+    ).order_by(MarketPriceCandle.start_time.desc()).limit(
+        expected_hour_count + 3,
+    ).all()
+    if not hourly_rows:
+        return []
+
+    hourly_by_start = {row.start_time: row for row in hourly_rows}
+    aggregated: list[MarketPriceCandle] = []
+    for start_time in sorted(hourly_by_start):
+        # KAI native 4h buckets are aligned to 00/04/08/12/16/20 UTC.
+        if (
+            start_time.minute != 0
+            or start_time.second != 0
+            or start_time.microsecond != 0
+            or start_time.hour % 4 != 0
+        ):
+            continue
+        components = [
+            hourly_by_start.get(start_time + one_hour * offset)
+            for offset in range(4)
+        ]
+        if any(row is None for row in components):
+            continue
+        hourly = [row for row in components if row is not None]
+        if any(
+            row.end_time - row.start_time != one_hour
+            or (index > 0 and hourly[index - 1].end_time != row.start_time)
+            for index, row in enumerate(hourly)
+        ) or hourly[-1].end_time != start_time + four_hours:
+            continue
+
+        source_observed_values = [
+            row.source_observed_at for row in hourly if row.source_observed_at is not None
+        ]
+        source_versions = {
+            row.source_version for row in hourly if row.source_version is not None
+        }
+        aggregated.append(MarketPriceCandle(
+            source="kai",
+            gpu_model=model,
+            gpu_variant=variant,
+            billing_mode="ondemand",
+            interval_seconds=RESOLUTION_REFERENCE_SECONDS,
+            start_time=start_time,
+            end_time=start_time + four_hours,
+            open_price_cny=Decimal(hourly[0].open_price_cny),
+            high_price_cny=max(Decimal(row.high_price_cny) for row in hourly),
+            low_price_cny=min(Decimal(row.low_price_cny) for row in hourly),
+            close_price_cny=Decimal(hourly[-1].close_price_cny),
+            # Sample count describes the common usable cohort, not four times
+            # the number of products. Observation count remains additive.
+            sample_count=min(row.sample_count for row in hourly),
+            observation_count=sum(row.observation_count for row in hourly),
+            method="official_hourly_aggregated_four_hour",
+            data_quality="official_hourly_aggregate",
+            source_version=next(iter(source_versions)) if len(source_versions) == 1 else None,
+            signature=f"derived-hourly-{int(start_time.timestamp())}",
+            source_observed_at=max(source_observed_values) if source_observed_values else None,
+            collected_at=max(row.collected_at for row in hourly),
+            updated_at=max(row.updated_at for row in hourly),
+        ))
+
+    if not aggregated:
+        return []
+    # Keep only the latest gap-free 4h suffix. A missing historical window is
+    # represented by absent older candles, which the fixed chart viewport
+    # renders as blank space rather than a fabricated connecting segment.
+    contiguous = [aggregated[-1]]
+    newer = aggregated[-1]
+    for row in reversed(aggregated[:-1]):
+        if row.end_time != newer.start_time:
+            break
+        contiguous.append(row)
+        newer = row
+    contiguous.reverse()
+    expected_bucket_count = max(
+        ceil(duration.total_seconds() / RESOLUTION_REFERENCE_SECONDS), 1,
+    )
+    return contiguous[-expected_bucket_count:]
+
+
 def _stored_kai_candle_payload(
     db: Session,
     model: str,
@@ -1261,99 +1724,275 @@ def _stored_kai_candle_payload(
     range_name: str,
     duration: timedelta,
 ) -> dict | None:
-    interval_seconds = STORED_CANDLE_INTERVALS.get(range_name)
-    if interval_seconds is None:
+    requested_interval_seconds = STORED_CANDLE_INTERVALS.get(range_name)
+    interval_candidates = STORED_CANDLE_INTERVAL_CANDIDATES.get(range_name)
+    if requested_interval_seconds is None or interval_candidates is None:
         return None
     variant_filters = gpu_variant_aliases(model, variant)
-    stored = db.query(MarketPriceCandle).filter(
-        MarketPriceCandle.source == "kai",
-        MarketPriceCandle.gpu_model == model,
-        MarketPriceCandle.gpu_variant.in_(variant_filters),
-        MarketPriceCandle.billing_mode == "ondemand",
-        MarketPriceCandle.interval_seconds == interval_seconds,
-    ).order_by(MarketPriceCandle.start_time.asc()).all()
-    if not stored:
-        return None
-    anchor = stored[-1].end_time
-    rows = [row for row in stored if row.start_time >= anchor - duration]
-    if not rows:
-        return None
-    day_count = len({row.start_time.date() for row in rows})
-    span_hours = max((rows[-1].end_time - rows[0].start_time).total_seconds() / 3600, 0.0)
-    expected_days = {"7d": 7, "30d": 28, "90d": 84}.get(range_name, 1)
-    contiguous = all(
-        row.end_time - row.start_time == timedelta(seconds=interval_seconds)
-        and (index == 0 or rows[index - 1].end_time == row.start_time)
-        for index, row in enumerate(rows)
-    )
-    if range_name == "6h":
-        required_days, required_span_hours = _range_coverage_requirements(duration)
-        complete = (
-            len(rows) >= 2
-            and contiguous
-            and day_count >= required_days
-            and span_hours >= required_span_hours
-        )
-    else:
-        complete = contiguous and day_count >= expected_days
-    sync_state = db.query(MarketCandleSyncStatus).filter(MarketCandleSyncStatus.source == "kai").one_or_none()
+    server_time = utcnow()
     latest_live = db.query(MarketPriceSnapshot).filter(
         MarketPriceSnapshot.source == "kai",
         MarketPriceSnapshot.gpu_model == model,
         MarketPriceSnapshot.gpu_variant.in_(variant_filters),
         MarketPriceSnapshot.billing_mode == "ondemand",
         MarketPriceSnapshot.median_price_cny.isnot(None),
+        MarketPriceSnapshot.observed_at <= server_time,
     ).order_by(MarketPriceSnapshot.observed_at.desc()).first()
-    return {
-        "server_time": _iso(utcnow()),
-        "gpu_model": model,
-        "gpu_variant": variant,
-        "billing_mode": "ondemand",
-        "range": range_name,
-        "requested_bucket_seconds": MARKET_CANDLE_CONFIG[range_name][1],
-        "bucket_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
-        "tick_seconds": int((rows[0].end_time - rows[0].start_time).total_seconds()),
-        "resolution_status": "requested",
-        "observed_bucket_coverage_ratio": None,
-        "method": rows[-1].method,
-        "is_interpolated": False,
-        "requested_sources": ["kai"],
-        "selected_source": "kai",
-        "history_status": "available" if len(rows) >= 2 else "single_observation",
-        "curve_status": "full" if complete else "partial",
-        "coverage_class": "full" if complete else "partial",
-        "history_coverage_status": "complete" if complete else "partial",
-        "coverage_day_count": day_count,
-        "coverage_span_hours": round(span_hours, 1),
-        "data_quality": rows[-1].data_quality,
-        "provenance": {
-            "kind": "stored_official_historical_ohlc",
-            "dataset_source": "market_price_candles",
-            "upstream_provider": "kai",
-            "collection_mode": "scheduled_database_agent",
-            "source_version": rows[-1].source_version,
-            "source_observed_at": _iso(rows[-1].source_observed_at),
-            "last_database_sync_at": _iso(sync_state.last_success_at) if sync_state else None,
-            "live_component_included": False,
-        },
-        "latest_live_price_cny": float(latest_live.median_price_cny) if latest_live else None,
-        "latest_live_observed_at": _iso(latest_live.observed_at) if latest_live else None,
-        # Stored official OHLC is a cross-region historical aggregate, while
-        # the live value is the current offer-pool median. Keep both visible,
-        # but never splice the live value into this differently-scoped curve.
-        "latest_live_comparable_to_history": False if latest_live else None,
-        "candles": [{
-            "start_time": _iso(row.start_time),
-            "end_time": _iso(row.end_time),
-            "open_price_cny": float(row.open_price_cny),
-            "high_price_cny": float(row.high_price_cny),
-            "low_price_cny": float(row.low_price_cny),
-            "close_price_cny": float(row.close_price_cny),
-            "sample_count": row.sample_count,
-            "observation_count": row.observation_count,
-            "sources": ["kai"],
-        } for row in rows],
-    }
+    lag_reference = latest_live.observed_at if latest_live else server_time
+    # The public range owns one fixed bucket size. Only the 30-day native 4h
+    # publication is checked against overlapping native 1h history. Shorter
+    # public ranges retain their fixed 1h contract without cross-resolution
+    # replacement.
+    resolution_quality = (
+        _stored_resolution_consistency(db, model, variant_filters, server_time)
+        if range_name == "30d"
+        else None
+    )
+    hourly_resolution_fallback: list[MarketPriceCandle] | None = None
+    candidates: list[tuple[tuple, dict]] = []
+    sync_state = None
+    sync_state_loaded = False
+
+    for interval_seconds in interval_candidates:
+        interval = timedelta(seconds=interval_seconds)
+        expected_bucket_count = max(ceil(duration.total_seconds() / interval_seconds), 1)
+        # The descending LIMIT stays bounded to the requested window plus two
+        # audit buckets. The small overfetch lets a quarantined stale tail be
+        # replaced by the immediately preceding verified bucket.
+        stored = db.query(MarketPriceCandle).filter(
+            MarketPriceCandle.source == "kai",
+            MarketPriceCandle.gpu_model == model,
+            MarketPriceCandle.gpu_variant.in_(variant_filters),
+            MarketPriceCandle.billing_mode == "ondemand",
+            MarketPriceCandle.interval_seconds == interval_seconds,
+            MarketPriceCandle.end_time <= server_time,
+            or_(
+                MarketPriceCandle.source_observed_at.is_(None),
+                MarketPriceCandle.source_observed_at <= server_time,
+            ),
+        ).order_by(MarketPriceCandle.start_time.desc()).limit(
+            expected_bucket_count + OFFICIAL_EDGE_OVERFETCH_BUCKETS,
+        ).all()
+        if not stored:
+            continue
+        if not sync_state_loaded:
+            sync_state = db.query(MarketCandleSyncStatus).filter(
+                MarketCandleSyncStatus.source == "kai",
+            ).one_or_none()
+            sync_state_loaded = True
+        stored.reverse()
+        if stored[-1].end_time - stored[-1].start_time != interval:
+            continue
+
+        # A gap ends the public series. Never connect older observations across
+        # a missing official bucket just to make the requested range look full.
+        rows = [stored[-1]]
+        newer = stored[-1]
+        for row in reversed(stored[:-1]):
+            if row.end_time - row.start_time != interval or row.end_time != newer.start_time:
+                break
+            rows.append(row)
+            newer = row
+        rows.reverse()
+
+        # Inspect the exact public window before computing coverage. If a stale
+        # tail is quarantined, an older adjacent candle can safely refill the
+        # beginning without bridging a missing timestamp. A quarantined prefix
+        # is left partial because bridging over its timestamp would be false.
+        contiguous_rows = rows
+        candidate_rows = contiguous_rows[-expected_bucket_count:]
+        rows, quarantine = _quarantine_superseded_edge_candles(candidate_rows)
+        if (
+            quarantine["quarantined_tail_count"]
+            and not quarantine["quarantined_prefix_count"]
+            and len(rows) < expected_bucket_count
+        ):
+            public_start_index = len(contiguous_rows) - len(candidate_rows)
+            needed = expected_bucket_count - len(rows)
+            refill = contiguous_rows[max(public_start_index - needed, 0):public_start_index]
+            if (
+                len(refill) == needed
+                and rows
+                and refill[-1].end_time == rows[0].start_time
+            ):
+                rows = refill + rows
+
+        resolution_fallback = False
+        if (
+            range_name == "30d"
+            and resolution_quality is not None
+            and resolution_quality["status"] == "inconsistent"
+        ):
+            if hourly_resolution_fallback is None:
+                hourly_resolution_fallback = (
+                    _aggregate_contiguous_hourly_thirty_day_fallback(
+                        db, model, variant, variant_filters, server_time, duration,
+                    )
+                )
+            # Once native 4h history has failed the overlap gate, it must never
+            # win merely because it covers all 180 buckets. If real hourly
+            # history cannot produce even one complete 4h group, let the caller
+            # continue to its ordinary sparse-history path instead.
+            if not hourly_resolution_fallback:
+                continue
+            rows = hourly_resolution_fallback
+            resolution_fallback = True
+            quarantine = {
+                "quarantined_candle_count": 0,
+                "quarantined_prefix_count": 0,
+                "quarantined_tail_count": 0,
+                "quarantine_reason": None,
+            }
+
+        span_seconds = max((rows[-1].end_time - rows[0].start_time).total_seconds(), 0.0)
+        duration_seconds = max(duration.total_seconds(), 1.0)
+        coverage_ratio = min(
+            len(rows) / expected_bucket_count,
+            span_seconds / duration_seconds,
+            1.0,
+        )
+        temporal_complete = (
+            len(rows) == expected_bucket_count
+            and span_seconds == duration.total_seconds()
+        )
+        history_lag_seconds = max(int((lag_reference - rows[-1].end_time).total_seconds()), 0)
+        stale_after_seconds = int(max(
+            interval_seconds * 2,
+            min(duration.total_seconds() / 2, 24 * 60 * 60),
+        ))
+        freshness_status = (
+            "stale" if history_lag_seconds > stale_after_seconds else "current"
+        )
+        # Even if a deployment eventually accumulates 30 days of hourly data,
+        # this remains a disclosed safety fallback rather than claiming that
+        # the quarantined native 4h publication was verified.
+        temporal_current = (
+            temporal_complete
+            and freshness_status == "current"
+            and not resolution_fallback
+        )
+        strict_complete = (
+            interval_seconds == requested_interval_seconds
+            and temporal_current
+        )
+        coverage_state = (
+            "full" if temporal_current
+            else "single" if len(rows) == 1
+            else "partial"
+        )
+        history_status = (
+            "available" if temporal_current
+            else "single_observation" if len(rows) == 1
+            else "partial_history"
+        )
+        fallback_reason = None
+        if resolution_fallback:
+            fallback_reason = "native_four_hour_inconsistent_with_hourly_overlap"
+        elif interval_seconds != requested_interval_seconds:
+            fallback_reason = "requested_resolution_unavailable_or_incomplete"
+        resolution_consistency_status = (
+            resolution_quality["status"]
+            if resolution_quality is not None
+            else "not_evaluated"
+        )
+        payload = {
+            "server_time": _iso(server_time),
+            "gpu_model": model,
+            "gpu_variant": variant,
+            "billing_mode": "ondemand",
+            "range": range_name,
+            "requested_bucket_seconds": requested_interval_seconds,
+            "bucket_seconds": interval_seconds,
+            "tick_seconds": interval_seconds,
+            "resolution_status": (
+                "fallback_aggregated_from_hourly" if resolution_fallback
+                else "requested" if interval_seconds == requested_interval_seconds
+                else "fallback_official_resolution"
+            ),
+            "resolution_fallback_reason": fallback_reason,
+            "partial_reason": fallback_reason if resolution_fallback else None,
+            "resolution_consistency_status": resolution_consistency_status,
+            "resolution_consistency": resolution_quality,
+            "aggregation_source_bucket_seconds": (
+                60 * 60 if resolution_fallback else None
+            ),
+            "observed_bucket_coverage_ratio": round(coverage_ratio, 4),
+            "expected_bucket_count": expected_bucket_count,
+            "method": rows[-1].method,
+            "is_interpolated": False,
+            "requested_sources": ["kai"],
+            "selected_source": "kai",
+            "history_status": history_status,
+            "curve_status": coverage_state,
+            "coverage_class": coverage_state,
+            # Coverage and resolution are separate facts. A real coarser
+            # fallback can still cover the complete requested time window;
+            # ``resolution_status`` already discloses that it is not the
+            # preferred bucket size.
+            "history_coverage_status": "complete" if temporal_current else coverage_state,
+            "coverage_day_count": len({row.start_time.date() for row in rows}),
+            "coverage_span_hours": round(span_seconds / 3600, 1),
+            "data_quality": rows[-1].data_quality,
+            **quarantine,
+            "provenance": {
+                "kind": (
+                    "stored_official_hourly_aggregated_ohlc" if resolution_fallback
+                    else "stored_official_historical_ohlc"
+                ),
+                "dataset_source": "market_price_candles",
+                "upstream_provider": "kai",
+                "collection_mode": "scheduled_database_agent",
+                "source_version": rows[-1].source_version,
+                "source_observed_at": _iso(rows[-1].source_observed_at),
+                "history_as_of": _iso(rows[-1].end_time),
+                "history_lag_seconds": history_lag_seconds,
+                "history_freshness_status": freshness_status,
+                "history_stale_after_seconds": stale_after_seconds,
+                "temporal_coverage_status": "complete" if temporal_complete else "partial",
+                "resolution_fallback_reason": fallback_reason,
+                "partial_reason": fallback_reason if resolution_fallback else None,
+                "resolution_consistency_status": resolution_consistency_status,
+                "aggregation_source_bucket_seconds": (
+                    60 * 60 if resolution_fallback else None
+                ),
+                "native_four_hour_quarantined": resolution_fallback,
+                "last_database_sync_at": _iso(sync_state.last_success_at) if sync_state else None,
+                "live_component_included": False,
+                **quarantine,
+            },
+            "latest_live_price_cny": float(latest_live.median_price_cny) if latest_live else None,
+            "latest_live_observed_at": _iso(latest_live.observed_at) if latest_live else None,
+            # Stored official OHLC is a cross-region historical aggregate,
+            # while the live value is the current offer-pool median. Keep both
+            # visible, but never splice the live value into this curve.
+            "latest_live_comparable_to_history": False if latest_live else None,
+            "candles": [{
+                "start_time": _iso(row.start_time),
+                "end_time": _iso(row.end_time),
+                "open_price_cny": float(row.open_price_cny),
+                "high_price_cny": float(row.high_price_cny),
+                "low_price_cny": float(row.low_price_cny),
+                "close_price_cny": float(row.close_price_cny),
+                "sample_count": row.sample_count,
+                "observation_count": row.observation_count,
+                "sources": ["kai"],
+            } for row in rows],
+        }
+        # A complete fresh duration wins first. Exact requested resolution then
+        # wins ties; otherwise compare real coverage and freshness.
+        score = (
+            temporal_current,
+            strict_complete,
+            freshness_status == "current",
+            coverage_ratio,
+            -history_lag_seconds,
+            interval_seconds == requested_interval_seconds,
+        )
+        candidates.append((score, payload))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _price_candles_payload(
@@ -1388,6 +2027,7 @@ def _price_candles_payload(
         product_variant = normalize_gpu_variant(product_model, product.memory)
         if product_model != canonical_model or product_variant != selected_variant:
             raise BizError("资源标识与请求的 GPU 型号不匹配", status_code=400)
+    stored_payload = None
     if (
         "kai" in allowed_sources
         and billing_mode == "ondemand"
@@ -1397,7 +2037,7 @@ def _price_candles_payload(
         stored_payload = _stored_kai_candle_payload(
             db, canonical_model, selected_variant, range, duration,
         )
-        if stored_payload is not None:
+        if stored_payload is not None and range != "24h":
             return _with_card_hour_candles(stored_payload)
     variant_filters = gpu_variant_aliases(canonical_model, selected_variant)
     requested_at = utcnow()
@@ -1412,6 +2052,7 @@ def _price_candles_payload(
         MarketPriceSnapshot.gpu_variant.in_(variant_filters),
         MarketPriceSnapshot.billing_mode == billing_mode,
         MarketPriceSnapshot.observed_at >= since,
+        MarketPriceSnapshot.observed_at <= requested_at,
         MarketPriceSnapshot.source.in_(allowed_sources),
         MarketPriceSnapshot.median_price_cny.isnot(None),
     ).order_by(MarketPriceSnapshot.observed_at.asc()).all()
@@ -1549,14 +2190,149 @@ def _price_candles_payload(
             )
             if stored_payload is not None:
                 return _with_card_hour_candles(stored_payload)
-            # Preserve the pre-existing truthful daily view when no official
-            # stored series exists.  A short four-hour series is not exposed as
-            # a dense seven-day curve, and the daily fallback still contains
-            # observed values only.
-            candle_seconds = 24 * 60 * 60
-            tick_seconds = 60 * 60
-            candles = _build_market_candles(candle_rows, candle_seconds, tick_seconds)
+            # Keep the public seven-day contract at one-hour candles. Missing
+            # hours stay missing and the response remains explicitly partial;
+            # changing to daily bars made identical chart tabs look unrelated.
     candles = _trim_candles_to_duration(candles, duration, candle_seconds)
+    expected_bucket_count = None
+    observed_tick_coverage = None
+    minimum_candle_tick_coverage = None
+    snapshot_series_is_recent = None
+    snapshot_candidate_status = None
+    if range in {"24h", "7d", "30d"}:
+        expected_bucket_count = max(
+            ceil(duration.total_seconds() / requested_candle_seconds), 1,
+        )
+        contiguous_candles = _latest_contiguous_candles(candles, candle_seconds)
+        strict_snapshot_requirements = True
+        partial_snapshot_candles: list[dict] = []
+        partial_snapshot_ready = False
+        if range == "24h":
+            latest_snapshot_at = max(
+                (row.observed_at for row in live_rows),
+                default=None,
+            )
+            snapshot_series_is_recent = (
+                latest_snapshot_at is not None
+                and latest_snapshot_at >= requested_at - timedelta(
+                    seconds=SNAPSHOT_24H_MAX_LAG_SECONDS,
+                )
+            )
+            tick_quality = _observed_tick_quality(
+                candles, tick_seconds, requested_at,
+            )
+            observed_tick_coverage = tick_quality["coverage_ratio"]
+            minimum_candle_tick_coverage = tick_quality["minimum_candle_coverage_ratio"]
+            strict_snapshot_requirements = (
+                expected_bucket_count == SNAPSHOT_24H_EXPECTED_CANDLES
+                and snapshot_series_is_recent
+                and observed_tick_coverage >= SNAPSHOT_24H_MIN_TICK_COVERAGE
+                and tick_quality["all_candles_meet_minimum"]
+            )
+            partial_snapshot_candles = _latest_partial_quality_candles(
+                candles, candle_seconds, tick_seconds, requested_at,
+            )
+            partial_snapshot_ready = (
+                candle_seconds == requested_candle_seconds
+                and snapshot_series_is_recent
+                and len(candles) < expected_bucket_count
+                and len(partial_snapshot_candles) >= SNAPSHOT_24H_MIN_PARTIAL_CANDLES
+            )
+        strict_complete = (
+            candle_seconds == requested_candle_seconds
+            and len(candles) == expected_bucket_count
+            and len(contiguous_candles) == expected_bucket_count
+            and strict_snapshot_requirements
+        )
+        if range == "24h":
+            snapshot_candidate_status = (
+                "ready"
+                if strict_complete
+                else "building"
+                if partial_snapshot_ready
+                else "insufficient_five_minute_coverage"
+            )
+            use_stored_fallback = (
+                not strict_complete
+                and stored_payload is not None
+                and (
+                    stored_payload.get("history_coverage_status") == "complete"
+                    or not partial_snapshot_ready
+                )
+            )
+            if use_stored_fallback:
+                # Do not replace a complete 24-hour official series with only
+                # the first few locally collected hours after a new deployment.
+                # The two indices remain separate: the chart uses the complete
+                # official series until the five-minute offer-pool collector has
+                # built its own complete rolling day, then switches wholesale.
+                stored_payload["snapshot_candidate_status"] = snapshot_candidate_status
+                stored_payload["snapshot_candidate_candle_count"] = len(candles)
+                stored_payload["snapshot_candidate_expected_candle_count"] = expected_bucket_count
+                stored_payload["snapshot_candidate_tick_coverage_ratio"] = round(
+                    observed_tick_coverage or 0.0, 4,
+                )
+                stored_payload["snapshot_candidate_minimum_hour_coverage_ratio"] = round(
+                    minimum_candle_tick_coverage or 0.0, 4,
+                )
+                stored_provenance = stored_payload.get("provenance")
+                if isinstance(stored_provenance, dict):
+                    stored_provenance["snapshot_candidate_status"] = snapshot_candidate_status
+                return _with_card_hour_candles(stored_payload)
+            if partial_snapshot_ready:
+                # Prefer the newest truthful one-hour suffix while the local
+                # five-minute collector builds the full rolling day only when
+                # no complete official one-hour window is available. The UI
+                # exposes its partial coverage; independent indices are never
+                # spliced into one curve.
+                candles = partial_snapshot_candles
+                contiguous_candles = list(partial_snapshot_candles)
+                tick_quality = _observed_tick_quality(
+                    candles, tick_seconds, requested_at,
+                )
+                observed_tick_coverage = tick_quality["coverage_ratio"]
+                minimum_candle_tick_coverage = tick_quality[
+                    "minimum_candle_coverage_ratio"
+                ]
+            elif not strict_complete:
+                if stored_payload is not None:
+                    stored_payload["snapshot_candidate_status"] = snapshot_candidate_status
+                    stored_payload["snapshot_candidate_candle_count"] = len(candles)
+                    stored_payload["snapshot_candidate_expected_candle_count"] = expected_bucket_count
+                    stored_payload["snapshot_candidate_tick_coverage_ratio"] = round(
+                        observed_tick_coverage or 0.0, 4,
+                    )
+                    stored_payload["snapshot_candidate_minimum_hour_coverage_ratio"] = round(
+                        minimum_candle_tick_coverage or 0.0, 4,
+                    )
+                    stored_provenance = stored_payload.get("provenance")
+                    if isinstance(stored_provenance, dict):
+                        stored_provenance["snapshot_candidate_status"] = snapshot_candidate_status
+                    return _with_card_hour_candles(stored_payload)
+        history_status = (
+            "available" if strict_complete
+            else "partial_history" if len(candles) >= 2
+            else "single_observation" if candles
+            else "unavailable"
+        )
+        coverage_status = (
+            "complete" if strict_complete
+            else "partial" if len(candles) >= 2
+            else "single" if candles
+            else "unavailable"
+        )
+        if range == "24h":
+            if provenance is not None:
+                provenance["publication_interval_seconds"] = tick_seconds
+                provenance["observed_tick_coverage_ratio"] = round(
+                    observed_tick_coverage or 0.0, 4,
+                )
+                provenance["minimum_hour_tick_coverage_ratio"] = round(
+                    minimum_candle_tick_coverage or 0.0, 4,
+                )
+                provenance["coverage_quality"] = (
+                    "verified" if coverage_status == "complete" else "limited_sample"
+                )
     curve_status = (
         "full"
         if candles and coverage_status == "complete"
@@ -1585,6 +2361,19 @@ def _price_candles_payload(
             if observed_bucket_density is not None
             else None
         ),
+        "observed_tick_coverage_ratio": (
+            round(observed_tick_coverage, 4)
+            if observed_tick_coverage is not None
+            else None
+        ),
+        "snapshot_series_is_recent": snapshot_series_is_recent,
+        "minimum_hour_tick_coverage_ratio": (
+            round(minimum_candle_tick_coverage, 4)
+            if minimum_candle_tick_coverage is not None
+            else None
+        ),
+        "snapshot_candidate_status": snapshot_candidate_status,
+        "expected_bucket_count": expected_bucket_count,
         "method": "observed_source_robust_median_ohlc",
         "is_interpolated": False,
         "requested_sources": sorted(allowed_sources),

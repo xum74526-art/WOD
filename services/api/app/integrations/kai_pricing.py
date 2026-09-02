@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import logging
+from math import ceil
 import os
 import re
 from threading import BoundedSemaphore, Condition, Event, Lock, Thread
@@ -1216,15 +1217,79 @@ def _without_outliers(values: list[Decimal]) -> list[Decimal]:
     return accepted or values
 
 
+def _select_centered_price_candidates(
+    quotes: Iterable[dict[str, Any]],
+    max_products: int,
+) -> list[dict[str, Any]]:
+    """Return a bounded deterministic cohort without changing its median.
+
+    The former product-id prefix cap systematically excluded whichever price
+    regions happened to sort last. A centered window over current prices keeps
+    the full pool's middle observation(s). Matching the selected-count parity
+    to the full pool makes the selected median exactly equal to the full median
+    whenever the configured capacity permits it.
+    """
+
+    ordered = sorted(
+        quotes,
+        key=lambda item: (
+            Decimal(item["price_cny"]),
+            str(item.get("external_product_id") or ""),
+        ),
+    )
+    if not ordered:
+        return []
+    selected_count = min(len(ordered), max(int(max_products), 1))
+    if (
+        selected_count < len(ordered)
+        and selected_count > 1
+        and selected_count % 2 != len(ordered) % 2
+    ):
+        selected_count -= 1
+    start = (len(ordered) - selected_count) // 2
+    return ordered[start:start + selected_count]
+
+
 _RANGE_CONFIG = {
     "1h": (timedelta(hours=1), "1h", 3600, 1),
     "6h": (timedelta(hours=6), "1h", 3600, 1),
     "24h": (timedelta(hours=24), "1h", 3600, 1),
-    # Seven days always comes from KAI's official historical 4-hour OHLC.
-    "7d": (timedelta(days=7), "4h", 4 * 3600, 1),
-    "30d": (timedelta(days=30), "1d", 24 * 3600, 1),
+    # Chart history uses the finest native KAI interval that remains bounded
+    # for the requested window. Ranking keeps its separate four-hour contract
+    # below so increasing chart density cannot expand the bulk ranking fanout.
+    "7d": (timedelta(days=7), "1h", 3600, 1),
+    "30d": (timedelta(days=30), "4h", 4 * 3600, 1),
     "90d": (timedelta(days=90), "1d", 24 * 3600, 3),
 }
+
+_RANKING_RANGE_CONFIG = (timedelta(days=7), "4h", 4 * 3600, 1)
+
+
+def _expected_candle_count(duration: timedelta, interval_seconds: int) -> int:
+    return max(ceil(duration.total_seconds() / interval_seconds), 1)
+
+
+def _history_freshness(
+    *,
+    history_as_of: datetime,
+    reference_at: datetime,
+    duration: timedelta,
+    interval_seconds: int,
+) -> tuple[int, int, str]:
+    """Classify provider history without silently blessing an old window."""
+
+    if history_as_of > reference_at:
+        raise KaiPricingError("upstream_invalid_response")
+    lag_seconds = int((reference_at - history_as_of).total_seconds())
+    stale_after_seconds = int(max(
+        interval_seconds * 2,
+        min(duration.total_seconds() / 2, 24 * 60 * 60),
+    ))
+    return (
+        lag_seconds,
+        stale_after_seconds,
+        "stale" if lag_seconds > stale_after_seconds else "current",
+    )
 
 
 # KAI's ``gpuModel`` filter is exact.  These are observed public display names
@@ -1329,14 +1394,16 @@ def _parse_complete_candle_series(
         meta_to = _parse_datetime(meta.get("to"))
     except (TypeError, ValueError, KaiPricingError):
         return None
+    now = utcnow()
     if (
         data_months != expected_months
         or meta_months != expected_months
         or meta_interval_ms != interval_seconds * 1000
         or data_version < 1
         or meta_from >= meta_to
-        or meta_to > meta_as_of + timedelta(seconds=interval_seconds * 2)
-        or meta_to < since - timedelta(seconds=interval_seconds)
+        or meta_to > meta_as_of
+        or meta_as_of > now
+        or meta_to > now
     ):
         return None
     raw_candles = data.get("candles")
@@ -1350,13 +1417,35 @@ def _parse_complete_candle_series(
             observed = _parse_datetime(raw.get("asOf"))
         except KaiPricingError:
             return None
-        if observed < since - timedelta(seconds=interval_seconds) or observed > until + timedelta(seconds=interval_seconds):
+        if observed < meta_from or observed > meta_to or observed > now:
+            return None
+        # ``asOf`` is the bucket start. KAI may include the currently open
+        # bucket at ``meta.to``; it is valid metadata but not historical OHLC
+        # yet. Ignore it before inspecting OHLC fields because an open bucket
+        # cannot validate or invalidate the closed historical series.
+        candle_end = observed + timedelta(seconds=interval_seconds)
+        closed_through = min(meta_as_of, meta_to, until, now)
+        if candle_end > closed_through:
             continue
         values = {name: _positive_decimal(raw.get(name)) for name in ("open", "high", "low", "close")}
         if any(value is None for value in values.values()):
             return None
-        if values["low"] > min(values["open"], values["close"]) or values["high"] < max(values["open"], values["close"]):
-            return None
+        body_low = min(values["open"], values["close"])
+        body_high = max(values["open"], values["close"])
+        # KAI serializes prices to six decimal places. A few otherwise valid
+        # products expose a high/low one final decimal unit inside the candle
+        # body (for example high=24.790000, close=24.790001). Normalise only
+        # that transport-rounding ULP; a larger structural OHLC violation still
+        # rejects the series.
+        rounding_ulp = Decimal("0.000001")
+        if values["low"] > body_low:
+            if values["low"] - body_low > rounding_ulp:
+                return None
+            values["low"] = body_low
+        if values["high"] < body_high:
+            if body_high - values["high"] > rounding_ulp:
+                return None
+            values["high"] = body_high
         parsed.append({"observed_at": observed, **values})
     parsed.sort(key=lambda item: item["observed_at"])
     if not parsed:
@@ -1369,7 +1458,15 @@ def _parse_complete_candle_series(
         for previous, current in zip(observed_times, observed_times[1:])
     ):
         return None
-    coverage = (parsed[-1]["observed_at"] - parsed[0]["observed_at"]).total_seconds()
+    # A candle represents the full half-open [start, end) interval. Coverage
+    # therefore includes the final candle's end instead of measuring only the
+    # distance between candle starts (which made every exact window one bucket
+    # short and incorrectly labelled it partial).
+    coverage = (
+        parsed[-1]["observed_at"]
+        + timedelta(seconds=interval_seconds)
+        - parsed[0]["observed_at"]
+    ).total_seconds()
     required = max((until - since).total_seconds(), 0)
     coverage_class = (
         "single" if len(parsed) == 1
@@ -1377,6 +1474,136 @@ def _parse_complete_candle_series(
         else "partial"
     )
     return KaiCandleSeries(tuple(parsed), coverage_class, coverage)
+
+
+def _window_candle_series(
+    candles: Iterable[dict[str, Any]],
+    *,
+    anchor_start: datetime,
+    duration: timedelta,
+    interval_seconds: int,
+) -> KaiCandleSeries:
+    """Return a provider-anchored trailing window without inventing buckets."""
+
+    interval = timedelta(seconds=interval_seconds)
+    window_start = anchor_start + interval - duration
+    selected = tuple(
+        item for item in candles
+        if window_start <= item["observed_at"] <= anchor_start
+    )
+    if not selected:
+        return KaiCandleSeries((), "single", 0.0)
+    coverage = (
+        selected[-1]["observed_at"] + interval - selected[0]["observed_at"]
+    ).total_seconds()
+    expected_count = _expected_candle_count(duration, interval_seconds)
+    coverage_class = (
+        "single" if len(selected) == 1
+        else "full" if (
+            len(selected) == expected_count
+            and coverage == duration.total_seconds()
+        )
+        else "partial"
+    )
+    return KaiCandleSeries(selected, coverage_class, coverage)
+
+
+def _latest_reasonable_candle_cohort(
+    selected: list[tuple[dict[str, Any], KaiCandleSeries]],
+) -> tuple[datetime, list[tuple[dict[str, Any], KaiCandleSeries]]]:
+    """Choose the newest candle start shared by at least half the regions."""
+
+    timestamp_sets = [
+        {item["observed_at"] for item in series.candles}
+        for _candidate, series in selected
+    ]
+    minimum_members = max(1, ceil(len(selected) / 2))
+    for anchor_start in sorted(set().union(*timestamp_sets), reverse=True):
+        cohort = [
+            item for item, timestamps in zip(selected, timestamp_sets)
+            if anchor_start in timestamps
+        ]
+        if len(cohort) >= minimum_members:
+            return anchor_start, cohort
+    raise KaiPricingError("history_unavailable")
+
+
+def _fixed_candle_cohort_window(
+    selected: list[tuple[dict[str, Any], KaiCandleSeries]],
+    *,
+    anchor_start: datetime,
+    duration: timedelta,
+    interval_seconds: int,
+    minimum_members: int,
+) -> tuple[
+    datetime,
+    list[tuple[dict[str, Any], KaiCandleSeries]],
+    tuple[datetime, ...],
+]:
+    """Choose one fixed minimum-half cohort for the longest anchored window.
+
+    Every parsed product series is already strictly consecutive. For a
+    trailing window ending at ``anchor_start``, the longest window covered by
+    at least N products therefore starts at the Nth-earliest available start.
+    Including every additional product that also covers that start maximises
+    membership without shortening the window. No missing timestamp is ever
+    generated or filled.
+    """
+
+    interval = timedelta(seconds=interval_seconds)
+    requested_window_start = anchor_start + interval - duration
+    anchored: list[
+        tuple[datetime, tuple[dict[str, Any], KaiCandleSeries]]
+    ] = []
+    for item in selected:
+        _candidate, series = item
+        timestamps = {candle["observed_at"] for candle in series.candles}
+        if anchor_start not in timestamps:
+            continue
+        available_start = max(
+            series.candles[0]["observed_at"],
+            requested_window_start,
+        )
+        anchored.append((available_start, item))
+
+    required = max(int(minimum_members), 1)
+    if len(anchored) < required:
+        raise KaiPricingError("history_unavailable")
+
+    window_start = sorted(start for start, _item in anchored)[required - 1]
+    cohort = [
+        item for available_start, item in anchored
+        if available_start <= window_start
+    ]
+    cohort.sort(key=lambda item: item[0]["external_product_id"])
+
+    common_timestamps: set[datetime] | None = None
+    for _candidate, series in cohort:
+        member_timestamps = {
+            candle["observed_at"] for candle in series.candles
+            if window_start <= candle["observed_at"] <= anchor_start
+        }
+        common_timestamps = (
+            member_timestamps
+            if common_timestamps is None
+            else common_timestamps & member_timestamps
+        )
+    timestamps = tuple(sorted(common_timestamps or ()))
+    expected_count = int(
+        (anchor_start - window_start).total_seconds() / interval_seconds
+    ) + 1
+    if (
+        len(timestamps) != expected_count
+        or not timestamps
+        or timestamps[0] != window_start
+        or timestamps[-1] != anchor_start
+        or any(
+            current - previous != interval
+            for previous, current in zip(timestamps, timestamps[1:])
+        )
+    ):
+        raise KaiPricingError("history_unavailable")
+    return window_start, cohort, timestamps
 
 
 def _coverage_contract(coverage_class: str) -> dict[str, str]:
@@ -1429,13 +1656,19 @@ def _aggregate_kai_candles(
         item for item in normalized_current_quotes(batch)
         if item["gpu_model"] == model and item["gpu_variant"] == variant
     ]
-    candidates = sorted(quotes, key=lambda item: item["external_product_id"])
-    candidates = candidates[:max(1, int(settings.KAI_CANDLE_MAX_PRODUCTS))]
+    candidates = _select_centered_price_candidates(
+        quotes,
+        settings.KAI_CANDLE_MAX_PRODUCTS,
+    )
     if not candidates:
         raise KaiPricingError("history_unavailable")
+    full_pool_live_price = _median([
+        Decimal(item["price_cny"])
+        for item in quotes
+    ])
 
-    until = batch.observed_at
-    since = until - duration
+    live_observed_at = batch.observed_at
+    requested_since = live_observed_at - duration
     futures = {
         _CANDLE_EXECUTOR.submit(
             _fetch_product_candles,
@@ -1464,8 +1697,8 @@ def _aggregate_kai_candles(
             series = _parse_complete_candle_series(
                 payload,
                 product_id=candidate["external_product_id"],
-                since=since,
-                until=until,
+                since=requested_since,
+                until=live_observed_at,
                 interval_seconds=interval_seconds,
                 expected_interval=interval,
                 expected_months=months,
@@ -1486,33 +1719,30 @@ def _aggregate_kai_candles(
             raise KaiPricingError("upstream_timeout")
         raise KaiPricingError("history_unavailable")
 
-    by_time: dict[datetime, list[dict[str, Decimal]]] = defaultdict(list)
-    for _, series in selected:
-        for candle in series.candles:
-            if since - timedelta(seconds=interval_seconds) <= candle["observed_at"] <= until:
-                by_time[candle["observed_at"]].append(candle)
-
-    # Multiple regions can expose different real retention windows.  Keep one
-    # deterministic, strictly consecutive window rather than returning a
-    # visually connected series across a temporal gap.
-    consecutive_windows: list[list[tuple[datetime, list[dict[str, Decimal]]]]] = []
-    for observed_at, rows in sorted(by_time.items()):
-        if (
-            not consecutive_windows
-            or int((observed_at - consecutive_windows[-1][-1][0]).total_seconds()) != interval_seconds
-        ):
-            consecutive_windows.append([])
-        consecutive_windows[-1].append((observed_at, rows))
-    selected_window = max(
-        consecutive_windows,
-        key=lambda window: (len(window), window[-1][0]),
-        default=[],
+    validated_product_count = len(selected)
+    minimum_cohort_members = max(1, ceil(validated_product_count / 2))
+    # One very stale region must not pull every current region backwards. The
+    # newest candle shared by a majority is deterministic, remains genuinely
+    # cross-region, and still permits one valid region when only one exists.
+    anchor_start, selected = _latest_reasonable_candle_cohort(selected)
+    anchor_cohort_product_count = len(selected)
+    window_start, selected, selected_timestamps = _fixed_candle_cohort_window(
+        selected,
+        anchor_start=anchor_start,
+        duration=duration,
+        interval_seconds=interval_seconds,
+        minimum_members=minimum_cohort_members,
     )
+    candle_indexes = [
+        {candle["observed_at"]: candle for candle in series.candles}
+        for _candidate, series in selected
+    ]
     candles: list[dict[str, Any]] = []
-    for observed_at, rows in selected_window:
+    for observed_at in selected_timestamps:
+        rows = [index[observed_at] for index in candle_indexes]
         aggregated: dict[str, Decimal] = {}
         for name in ("open", "high", "low", "close"):
-            aggregated[name] = _median(_without_outliers([Decimal(row[name]) for row in rows]))
+            aggregated[name] = _median([Decimal(row[name]) for row in rows])
         high = max(aggregated["high"], aggregated["open"], aggregated["close"])
         low = min(aggregated["low"], aggregated["open"], aggregated["close"])
         candles.append({
@@ -1530,13 +1760,33 @@ def _aggregate_kai_candles(
         raise KaiPricingError("history_unavailable")
 
     latest_prices = [Decimal(item["price_cny"]) for item, _ in selected]
+    successful_cohort_live_price = _median(latest_prices)
+    live_price_deviation_ratio = (
+        abs(successful_cohort_live_price - full_pool_live_price) / full_pool_live_price
+        if full_pool_live_price > 0 else Decimal("0")
+    )
+    latest_live_comparable = successful_cohort_live_price == full_pool_live_price
     first_time = _parse_datetime(candles[0]["start_time"])
-    last_time = _parse_datetime(candles[-1]["start_time"])
-    coverage_span_seconds = (last_time - first_time).total_seconds()
-    coverage_class = (
+    last_end_time = _parse_datetime(candles[-1]["end_time"])
+    coverage_span_seconds = (last_end_time - first_time).total_seconds()
+    expected_count = _expected_candle_count(duration, interval_seconds)
+    raw_coverage_class = (
         "single" if len(candles) == 1
-        else "full" if coverage_span_seconds >= duration.total_seconds()
+        else "full" if (
+            len(candles) == expected_count
+            and coverage_span_seconds == duration.total_seconds()
+        )
         else "partial"
+    )
+    history_lag_seconds, stale_after_seconds, freshness_status = _history_freshness(
+        history_as_of=last_end_time,
+        reference_at=batch.observed_at,
+        duration=duration,
+        interval_seconds=interval_seconds,
+    )
+    coverage_class = (
+        "partial" if raw_coverage_class == "full" and freshness_status == "stale"
+        else raw_coverage_class
     )
     coverage = _coverage_contract(coverage_class)
     selected_ids = [item["external_product_id"] for item, _ in selected]
@@ -1565,24 +1815,48 @@ def _aggregate_kai_candles(
             "terms_status": "not_declared_by_public_response",
             "data_version": batch.data_version,
             "as_of": batch.observed_at.isoformat(timespec="seconds") + "Z",
-            "product_selection": "lexicographic_product_id_current_strict_series",
+            "history_as_of": last_end_time.isoformat(timespec="seconds") + "Z",
+            "history_lag_seconds": history_lag_seconds,
+            "history_freshness_status": freshness_status,
+            "history_stale_after_seconds": stale_after_seconds,
+            "raw_coverage_class": raw_coverage_class,
+            "product_selection": "fixed_minimum_half_continuous_window_cohort",
+            "candidate_sampling_method": "current_price_centered_parity_matched",
             "current_quote_filter": "exact_gpuModel_query",
-            "candidate_product_count": len(candidates),
+            "candidate_product_count": len(quotes),
+            "sampled_candidate_product_count": len(candidates),
+            "sampled_candidate_product_ids": [
+                item["external_product_id"] for item in candidates
+            ],
+            "validated_product_count": validated_product_count,
+            "anchor_cohort_product_count": anchor_cohort_product_count,
             "selected_product_count": len(selected_ids),
+            "cohort_min_product_count": minimum_cohort_members,
             "selected_product_ids": selected_ids,
+            "fixed_cohort_product_count": len(selected_ids),
+            "fixed_cohort_product_ids": selected_ids,
+            "fixed_cohort_window_start": window_start.isoformat(timespec="seconds") + "Z",
+            "fixed_cohort_anchor_start": anchor_start.isoformat(timespec="seconds") + "Z",
             "selection_completeness": (
-                "full" if len(selected_ids) == len(candidates) else "partial_before_deadline"
+                "full"
+                if len(selected_ids) == len(candidates)
+                else "latest_reasonable_cohort"
+                if validated_product_count == len(candidates)
+                else "partial_before_deadline"
             ),
             "max_products": int(settings.KAI_CANDLE_MAX_PRODUCTS),
-            "aggregation": "per_timestamp_iqr_filtered_median_for_each_ohlc_field",
+            "aggregation": "fixed_cohort_median_for_each_ohlc_field",
+            "latest_live_full_pool_median_price_cny": float(full_pool_live_price),
+            "latest_live_successful_cohort_median_price_cny": float(successful_cohort_live_price),
+            "latest_live_median_deviation_ratio": float(live_price_deviation_ratio),
             "interval": interval,
             "cache_seconds": int(settings.KAI_CANDLE_CACHE_SECONDS),
             "live_component_included": False,
             "coverage_quality": coverage["coverage_quality"],
         },
-        "latest_live_price_cny": float(_median(latest_prices)),
+        "latest_live_price_cny": float(full_pool_live_price),
         "latest_live_observed_at": batch.observed_at.isoformat(timespec="seconds") + "Z",
-        "latest_live_comparable_to_history": True,
+        "latest_live_comparable_to_history": latest_live_comparable,
         "candles": candles,
     }
 
@@ -1639,17 +1913,25 @@ def _load_exact_product_candles(
         raise KaiPricingError("product_identity_mismatch")
 
     payload, _ = _fetch_product_candles(product_id, interval, months, deadline=deadline)
-    since = batch.observed_at - duration
-    series = _parse_complete_candle_series(
+    requested_since = batch.observed_at - duration
+    parsed_series = _parse_complete_candle_series(
         payload,
         product_id=product_id,
-        since=since,
+        since=requested_since,
         until=batch.observed_at,
         interval_seconds=interval_seconds,
         expected_interval=interval,
         expected_months=months,
     )
-    if not series:
+    if not parsed_series:
+        raise KaiPricingError("history_unavailable")
+    series = _window_candle_series(
+        parsed_series.candles,
+        anchor_start=parsed_series.candles[-1]["observed_at"],
+        duration=duration,
+        interval_seconds=interval_seconds,
+    )
+    if not series.candles:
         raise KaiPricingError("history_unavailable")
     candles = [{
         "start_time": item["observed_at"].isoformat(timespec="seconds") + "Z",
@@ -1662,9 +1944,19 @@ def _load_exact_product_candles(
         "observation_count": 1,
         "sources": [SOURCE_KEY],
     } for item in series.candles]
-    first_time = series.candles[0]["observed_at"]
     last_time = series.candles[-1]["observed_at"]
-    coverage = _coverage_contract(series.coverage_class)
+    history_as_of = last_time + timedelta(seconds=interval_seconds)
+    history_lag_seconds, stale_after_seconds, freshness_status = _history_freshness(
+        history_as_of=history_as_of,
+        reference_at=batch.observed_at,
+        duration=duration,
+        interval_seconds=interval_seconds,
+    )
+    coverage_class = (
+        "partial" if series.coverage_class == "full" and freshness_status == "stale"
+        else series.coverage_class
+    )
+    coverage = _coverage_contract(coverage_class)
     return {
         "gpu_model": canonical_model,
         "gpu_variant": canonical_variant,
@@ -1677,7 +1969,7 @@ def _load_exact_product_candles(
         "selected_source": SOURCE_KEY,
         "history_status": coverage["history_status"],
         "curve_status": coverage["curve_status"],
-        "coverage_class": series.coverage_class,
+        "coverage_class": coverage_class,
         "history_coverage_status": coverage["history_coverage_status"],
         "coverage_day_count": len({item["observed_at"].date() for item in series.candles}),
         "coverage_span_hours": round(series.coverage_span_seconds / 3600, 1),
@@ -1691,6 +1983,11 @@ def _load_exact_product_candles(
             "terms_status": "not_declared_by_public_response",
             "data_version": batch.data_version,
             "as_of": batch.observed_at.isoformat(timespec="seconds") + "Z",
+            "history_as_of": history_as_of.isoformat(timespec="seconds") + "Z",
+            "history_lag_seconds": history_lag_seconds,
+            "history_freshness_status": freshness_status,
+            "history_stale_after_seconds": stale_after_seconds,
+            "raw_coverage_class": series.coverage_class,
             "product_selection": "exact_product_id",
             "selected_product_id": product_id,
             "aggregation": "none_exact_product_ohlc",
@@ -1774,7 +2071,7 @@ def _load_ranking_metrics(
     if not candidates:
         return {}
 
-    duration, interval, interval_seconds, months = _RANGE_CONFIG["7d"]
+    duration, interval, interval_seconds, months = _RANKING_RANGE_CONFIG
     until = batch.observed_at
     since = until - duration
     futures = {
@@ -1804,7 +2101,7 @@ def _load_ranking_metrics(
         if total_bytes > int(settings.KAI_CANDLE_MAX_TOTAL_BYTES):
             raise KaiPricingError("upstream_response_too_large")
         try:
-            series = _parse_complete_candle_series(
+            parsed_series = _parse_complete_candle_series(
                 payload,
                 product_id=candidate["external_product_id"],
                 since=since,
@@ -1815,16 +2112,34 @@ def _load_ranking_metrics(
             )
         except KaiPricingError:
             continue
-        if not series:
+        if not parsed_series:
+            continue
+        series = _window_candle_series(
+            parsed_series.candles,
+            anchor_start=parsed_series.candles[-1]["observed_at"],
+            duration=duration,
+            interval_seconds=interval_seconds,
+        )
+        if not series.candles:
             continue
         candles = series.candles
+        history_as_of = candles[-1]["observed_at"] + timedelta(seconds=interval_seconds)
+        history_lag_seconds, stale_after_seconds, freshness_status = _history_freshness(
+            history_as_of=history_as_of,
+            reference_at=batch.observed_at,
+            duration=duration,
+            interval_seconds=interval_seconds,
+        )
         lows = [Decimal(item["low"]) for item in candles]
         highs = [Decimal(item["high"]) for item in candles]
         closes = [Decimal(item["close"]) for item in candles]
         identity = (candidate["gpu_model"], candidate["gpu_variant"])
         # Short official series remain useful coverage evidence, but are never
         # promoted into a seven-day change/range/volatility claim.
-        if series.coverage_class != "full":
+        if series.coverage_class != "full" or freshness_status == "stale":
+            effective_coverage = (
+                "partial" if series.coverage_class == "full" else series.coverage_class
+            )
             result[identity] = {
                 "volatility_7d": None,
                 "volatility_status": "insufficient_history",
@@ -1834,7 +2149,7 @@ def _load_ranking_metrics(
                 "history_span_hours": round(series.coverage_span_seconds / 3600, 1),
                 "history_min_daily_sample_count": 1,
                 "history_bucket_count": len(candles),
-                "history_coverage_status": series.coverage_class,
+                "history_coverage_status": effective_coverage,
                 "volatility_source_count": 1,
                 "volatility_sources": [SOURCE_KEY],
                 "volatility_billing_mode": "ondemand",
@@ -1854,10 +2169,14 @@ def _load_ranking_metrics(
                     "terms_status": "not_declared_by_public_response",
                     "data_version": batch.data_version,
                     "as_of": batch.observed_at.isoformat(timespec="seconds") + "Z",
+                    "history_as_of": history_as_of.isoformat(timespec="seconds") + "Z",
+                    "history_lag_seconds": history_lag_seconds,
+                    "history_freshness_status": freshness_status,
+                    "history_stale_after_seconds": stale_after_seconds,
                     "selected_product_id": candidate["external_product_id"],
                     "interval": interval,
                     "live_component_included": False,
-                    "coverage_quality": series.coverage_class,
+                    "coverage_quality": effective_coverage,
                 },
             }
             continue
@@ -1878,10 +2197,7 @@ def _load_ranking_metrics(
             "volatility_quality": "verified",
             "history_day_count": len({item["observed_at"].date() for item in candles}),
             "history_point_count": len(candles),
-            "history_span_hours": round(
-                (candles[-1]["observed_at"] - candles[0]["observed_at"]).total_seconds() / 3600,
-                1,
-            ),
+            "history_span_hours": round(series.coverage_span_seconds / 3600, 1),
             "history_min_daily_sample_count": 1,
             "history_bucket_count": len(candles),
             "history_coverage_status": "complete",
@@ -1902,6 +2218,10 @@ def _load_ranking_metrics(
                 "terms_status": "not_declared_by_public_response",
                 "data_version": batch.data_version,
                 "as_of": batch.observed_at.isoformat(timespec="seconds") + "Z",
+                "history_as_of": history_as_of.isoformat(timespec="seconds") + "Z",
+                "history_lag_seconds": history_lag_seconds,
+                "history_freshness_status": freshness_status,
+                "history_stale_after_seconds": stale_after_seconds,
                 "product_selection": "one_lexicographic_current_product_per_identity",
                 "selected_product_id": candidate["external_product_id"],
                 "global_product_cap": int(settings.KAI_RANKING_MAX_PRODUCTS),

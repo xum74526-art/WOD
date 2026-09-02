@@ -27,13 +27,16 @@ from app.services.market_sync import utcnow
 
 SOURCE = "kai"
 CANDLE_RANGE_INTERVALS = {
-    "24h": 60 * 60,
-    "7d": 4 * 60 * 60,
+    # One seven-day hourly backfill also supplies the trailing 24-hour view.
+    # Keeping one job per persisted resolution avoids duplicate refresh clocks
+    # competing for the same v2 uniqueness key.
+    "7d": 60 * 60,
+    "30d": 4 * 60 * 60,
     "90d": 24 * 60 * 60,
 }
 CANDLE_RANGE_REFRESH_SECONDS = {
-    "24h": 10 * 60,
-    "7d": 60 * 60,
+    "7d": 10 * 60,
+    "30d": 60 * 60,
     "90d": 6 * 60 * 60,
 }
 _SYNC_LOCK = Lock()
@@ -101,7 +104,11 @@ def _identities() -> list[tuple[str, str]]:
             )
             for model, variant in rows if model
         }
-        return sorted(identities)[:max(int(settings.KAI_RANKING_MAX_PRODUCTS), 1)]
+        # KAI_RANKING_MAX_PRODUCTS limits one live ranking request; it must not
+        # become a permanent allow-list for historical K lines.  Returning the
+        # full identity set lets the bounded job selector below rotate fairly
+        # across every GPU exposed by /api/market/models.
+        return sorted(identities)
     finally:
         db.close()
 
@@ -159,7 +166,7 @@ def _pending_jobs(
         if collected_at is not None
     }
     now = utcnow()
-    return [
+    due_jobs = [
         (identity, range_name)
         for identity, range_name in jobs
         if (
@@ -168,12 +175,33 @@ def _pending_jobs(
             >= timedelta(seconds=CANDLE_RANGE_REFRESH_SECONDS[range_name])
         )
     ]
+    # Missing and oldest histories go first.  The previous implementation
+    # sliced the alphabetically sorted identity list, so models after the first
+    # 24 could never obtain official history.  A bounded rotating job queue
+    # protects the upstream while guaranteeing eventual coverage for all.
+    range_priority = {"7d": 0, "30d": 1, "90d": 2}
+    due_jobs.sort(key=lambda item: (
+        latest.get((*item[0], CANDLE_RANGE_INTERVALS[item[1]])) is not None,
+        latest.get((*item[0], CANDLE_RANGE_INTERVALS[item[1]])) or datetime.min,
+        range_priority.get(item[1], 99),
+        item[0],
+    ))
+    return due_jobs[:max(int(settings.MARKET_CANDLE_SYNC_MAX_JOBS), 1)]
 
 
 def _signature(payload: dict[str, Any]) -> str:
     stable = {
         key: value.isoformat() if isinstance(value, datetime) else str(value) if isinstance(value, Decimal) else value
-        for key, value in payload.items() if key not in {"collected_at", "updated_at"}
+        for key, value in payload.items()
+        if key not in {
+            "collected_at",
+            "updated_at",
+            # These describe the containing live publication, not a candle's
+            # OHLC content. Including them rewrote the full history window on
+            # every live refresh even when every historical value was equal.
+            "source_observed_at",
+            "source_version",
+        }
     }
     return hashlib.sha256(json.dumps(stable, sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()
 
@@ -189,9 +217,17 @@ def _store_payloads(
         for (model, variant), _range_name, interval_seconds, payload in payloads:
             provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
             source_observed_at = _parse_datetime(provenance.get("as_of"))
+            history_as_of = _parse_datetime(provenance.get("history_as_of"))
             source_version = str(provenance.get("data_version") or "").strip() or None
             method = str(payload.get("method") or "official_ohlc").strip()[:96]
             data_quality = str(payload.get("data_quality") or "official").strip()[:32]
+            if source_observed_at is not None and source_observed_at > collected_at:
+                continue
+            closed_through = min(
+                item for item in (source_observed_at, history_as_of, collected_at)
+                if item is not None
+            )
+            prepared: dict[datetime, dict[str, Any]] = {}
             for candle in payload.get("candles") or []:
                 if not isinstance(candle, dict):
                     continue
@@ -203,7 +239,13 @@ def _store_payloads(
                     "low_price_cny": _decimal(candle.get("low_price_cny")),
                     "close_price_cny": _decimal(candle.get("close_price_cny")),
                 }
-                if start_time is None or end_time is None or end_time <= start_time or any(value is None for value in prices.values()):
+                if (
+                    start_time is None
+                    or end_time is None
+                    or end_time - start_time != timedelta(seconds=interval_seconds)
+                    or end_time > closed_through
+                    or any(value is None for value in prices.values())
+                ):
                     continue
                 low = prices["low_price_cny"]
                 high = prices["high_price_cny"]
@@ -227,21 +269,33 @@ def _store_payloads(
                     "source_version": source_version,
                     "source_observed_at": source_observed_at,
                 }
+                prepared[start_time] = values
+            if not prepared:
+                continue
+
+            starts = sorted(prepared)
+            existing_rows = db.query(MarketPriceCandle).filter(
+                MarketPriceCandle.source == SOURCE,
+                MarketPriceCandle.gpu_model == model,
+                MarketPriceCandle.gpu_variant == variant,
+                MarketPriceCandle.billing_mode == "ondemand",
+                MarketPriceCandle.interval_seconds == interval_seconds,
+                MarketPriceCandle.start_time >= starts[0],
+                MarketPriceCandle.start_time <= starts[-1],
+            ).all()
+            existing = {row.start_time: row for row in existing_rows}
+            changed = False
+            latest_unchanged = None
+            for start_time in starts:
+                values = prepared[start_time]
                 signature = _signature(values)
-                current = db.query(MarketPriceCandle).filter(
-                    MarketPriceCandle.source == SOURCE,
-                    MarketPriceCandle.gpu_model == model,
-                    MarketPriceCandle.gpu_variant == variant,
-                    MarketPriceCandle.billing_mode == "ondemand",
-                    MarketPriceCandle.interval_seconds == interval_seconds,
-                    MarketPriceCandle.start_time == start_time,
-                ).one_or_none()
+                current = existing.get(start_time)
                 accepted += 1
                 if current is not None and current.signature == signature:
-                    # A successful unchanged publication still advances this
-                    # resolution's next-due clock without creating a new row.
-                    current.collected_at = collected_at
+                    if latest_unchanged is None or current.start_time > latest_unchanged.start_time:
+                        latest_unchanged = current
                     continue
+                changed = True
                 if current is None:
                     db.add(MarketPriceCandle(**values, signature=signature, collected_at=collected_at))
                     inserted += 1
@@ -251,6 +305,10 @@ def _store_payloads(
                     current.signature = signature
                     current.collected_at = collected_at
                     current.updated_at = collected_at
+            if not changed and latest_unchanged is not None:
+                # One bounded heartbeat advances the due clock. Older equal
+                # rows keep their original timestamps and are not rewritten.
+                latest_unchanged.collected_at = collected_at
         cutoff = utcnow() - timedelta(days=max(int(settings.MARKET_CANDLE_HISTORY_DAYS), 1))
         db.query(MarketPriceCandle).filter(MarketPriceCandle.end_time < cutoff).delete()
         db.commit()

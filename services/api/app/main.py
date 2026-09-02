@@ -108,7 +108,11 @@ async def lifespan(app: FastAPI):
         "date",
         run_date=datetime.now(community_timezone) + timedelta(seconds=5),
         id="market_candle_startup_sync",
-        kwargs={"force": True},
+        # Startup must use the same bounded, oldest-first queue as the interval
+        # worker.  Forcing here expands one restart into every model x every
+        # history range, which can exhaust the provider quota and leave models
+        # refreshed against different quote cohorts.
+        kwargs={"force": False},
         replace_existing=True,
     )
     scheduler.add_job(

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass, MapPin } from "@phosphor-icons/react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
-import { getMobileLatestMarket, getMobileMarketCandles, getMobileMarketModels, getMobileMarketSources, getMobileRegionalQuotes, type MobileLatestMarket, type MobileMarketCandle, type MobileMarketModel, type MobileMarketSource, type MobileRegionalQuotes } from "@/lib/mobile-market-api";
+import { getMobileLatestMarket, getMobileMarketModels, getMobileMarketSources, getMobileRegionalQuotes, type MobileLatestMarket, type MobileMarketModel, type MobileMarketSource, type MobileRegionalQuotes } from "@/lib/mobile-market-api";
 import { KAI_REALTIME_SOURCE } from "@/lib/web-business-contract";
+import { MarketCandlestickChart } from "@/components/market-candlestick-chart";
+import type { MarketChartSnapshot } from "@/lib/market-candlestick-chart";
 
 export type PricePoint = { date: string; median: number };
 export type MarketSummary = {
@@ -58,6 +60,21 @@ function pointsWithinDays<T extends { date: string }>(input: T[], days: number) 
 
 function rangePoints(item: MarketSummary, days: number) {
   return pointsWithinDays(validHistory(item), days);
+}
+
+function preferredMarketModel(items: MarketSummary[], models: MobileMarketModel[] = []) {
+  return [...items].sort((a, b) => {
+    const aSevenDayCoverage = new Set(rangePoints(a, 7).map((point) => point.date.slice(0, 10))).size >= 7 ? 1 : 0;
+    const bSevenDayCoverage = new Set(rangePoints(b, 7).map((point) => point.date.slice(0, 10))).size >= 7 ? 1 : 0;
+    if (aSevenDayCoverage !== bSevenDayCoverage) return bSevenDayCoverage - aSevenDayCoverage;
+    const a4090 = /^RTX\s*4090(?:\s|$)/i.test(a.gpu_model) ? 1 : 0;
+    const b4090 = /^RTX\s*4090(?:\s|$)/i.test(b.gpu_model) ? 1 : 0;
+    if (a4090 !== b4090) return b4090 - a4090;
+    const aSamples = findMobileModel(models, a.gpu_model)?.sample_count ?? 0;
+    const bSamples = findMobileModel(models, b.gpu_model)?.sample_count ?? 0;
+    if (aSamples !== bSamples) return bSamples - aSamples;
+    return validHistory(b).length - validHistory(a).length;
+  })[0]?.gpu_model ?? "";
 }
 
 function priceStats(item: MarketSummary, days: number) {
@@ -203,114 +220,9 @@ function MiniTrend({ item, days, tone }: { item: MarketSummary; days: RangeDays;
   </svg>;
 }
 
-function MainPriceChart({ item, days, realCandles = [] }: { item: MarketSummary; days: RangeDays; realCandles?: MobileMarketCandle[] }) {
-  const stats = useMemo(() => priceStats(item, days), [item, days]);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  useEffect(() => setActiveIndex(null), [item.gpu_model, days]);
-
-  if (!stats.enough) {
-    return <div className="trend-chart-state"><ChartLine size={34} weight="light" /><strong>历史数据不足</strong><p>当前只有 {validHistory(item).length} 个公开周价格点。</p></div>;
-  }
-
-  const fallbackCandles = stats.points.map((point, index) => {
-    const open = index === 0 ? point.median : stats.points[index - 1].median;
-    return {
-      ...point,
-      open,
-      high: Math.max(open, point.median),
-      low: Math.min(open, point.median),
-      close: point.median,
-    };
-  });
-  const storedCandles = pointsWithinDays(realCandles.map((point) => ({
-    date: point.start_time.slice(0, 10),
-    median: point.close_price_card_hours,
-    open: point.open_price_card_hours,
-    high: point.high_price_card_hours,
-    low: point.low_price_card_hours,
-    close: point.close_price_card_hours,
-  })), days);
-  const candles = storedCandles.length > 1 ? storedCandles : fallbackCandles;
-  const rawMin = Math.min(...candles.map((candle) => candle.low));
-  const rawMax = Math.max(...candles.map((candle) => candle.high));
-  const rawRange = rawMax - rawMin;
-  // Keep the visible range close to the actual market range. A percentage of
-  // the absolute price compresses low-volatility GPU quotes into a flat band.
-  const padding = Math.max(rawRange * .08, rawMax * .001, .01);
-  const chartMin = Math.max(0, rawMin - padding);
-  const chartMax = rawMax + padding;
-  const plot = { left: 54, right: 946, top: 52, bottom: 292 };
-  const scaleY = (value: number) => plot.top + ((chartMax - value) / (chartMax - chartMin || 1)) * (plot.bottom - plot.top);
-  const candleSpacing = (plot.right - plot.left) / candles.length;
-  const candleWidth = Math.min(13, Math.max(3.2, candleSpacing * .62));
-  const chartCandles = candles.map((candle, index) => {
-    const averageWindow = candles.slice(Math.max(0, index - 3), index + 1);
-    const ma4 = averageWindow.reduce((total, entry) => total + entry.close, 0) / averageWindow.length;
-    return {
-      ...candle,
-      x: plot.left + ((index + .5) / candles.length) * (plot.right - plot.left),
-      openY: scaleY(candle.open),
-      highY: scaleY(candle.high),
-      lowY: scaleY(candle.low),
-      closeY: scaleY(candle.close),
-      ma4,
-      maY: scaleY(ma4),
-    };
-  });
-  const maLine = linearPath(chartCandles.map((candle) => ({ x: candle.x, y: candle.maY })));
-  const highPoint = chartCandles.reduce((best, point) => point.high > best.high ? point : best);
-  const lowPoint = chartCandles.reduce((best, point) => point.low < best.low ? point : best);
-  const active = activeIndex === null ? chartCandles.at(-1)! : chartCandles[activeIndex];
-
-  const selectPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const pointerRatio = (event.clientX - rect.left) / rect.width;
-    const chartRatio = Math.max(0, Math.min(1, (pointerRatio - .054) / .892));
-    setActiveIndex(Math.round(chartRatio * (chartCandles.length - 1)));
-  };
-
-  const trendTone = stats.delta > 0 ? "is-up" : stats.delta < 0 ? "is-down" : "is-flat";
-
-  return <div className={`trend-main-chart ${trendTone}`} onPointerMove={selectPoint} onPointerLeave={() => setActiveIndex(null)} onPointerDown={selectPoint}>
-    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" role="img" aria-label={`${item.gpu_model} 日价格 K 线`}>
-      {[0, 1, 2, 3, 4].map((line) => {
-        const y = plot.top + ((plot.bottom - plot.top) / 4) * line;
-        const price = chartMax - ((chartMax - chartMin) / 4) * line;
-        return <g className="trend-grid" key={line}>
-          <line className="trend-grid-line" x1={plot.left} x2={plot.right} y1={y} y2={y} />
-          <text className="trend-grid-price" x={plot.right + 10} y={y + 3.5}>{price.toFixed(3)}</text>
-        </g>;
-      })}
-      <line className="trend-median-line" x1={plot.left} x2={plot.right} y1={scaleY(stats.median)} y2={scaleY(stats.median)} />
-      <path className="trend-kline-ma" d={maLine} key={`ma-${item.gpu_model}-${days}`} />
-      {chartCandles.map((candle) => {
-        const bodyTop = Math.min(candle.openY, candle.closeY);
-        const bodyHeight = Math.max(2.4, Math.abs(candle.closeY - candle.openY));
-        return <g className={`trend-candle ${candle.close >= candle.open ? "is-up" : "is-down"}`} key={candle.date}>
-          <title>{candle.date} · O {candle.open.toFixed(3)} H {candle.high.toFixed(3)} L {candle.low.toFixed(3)} C {candle.close.toFixed(3)}</title>
-          <line className="trend-candle__wick" x1={candle.x} x2={candle.x} y1={candle.highY} y2={candle.lowY} />
-          <rect className="trend-candle__body" x={candle.x - candleWidth / 2} y={bodyHeight === 2.4 ? bodyTop - 1.2 : bodyTop} width={candleWidth} height={bodyHeight} />
-        </g>;
-      })}
-      {activeIndex !== null && <line className="trend-cursor-line" x1={active.x} x2={active.x} y1={plot.top} y2={plot.bottom} />}
-    </svg>
-    <div className="trend-chart-legend">
-      <span><i className="is-candle-up" />上涨</span>
-      <span><i className="is-candle-down" />下跌</span>
-      <span><i className="is-average" />MA4 {active.ma4.toFixed(3)}</span>
-      <span className="trend-chart-ohlc">{new Date(`${active.date}T00:00:00Z`).toLocaleDateString("zh-CN", { timeZone: "UTC" })} · O {active.open.toFixed(3)} H {active.high.toFixed(3)} L {active.low.toFixed(3)} C {active.close.toFixed(3)}</span>
-    </div>
-    <span className="trend-high-label" style={{ left: `${highPoint.x / 10}%`, top: `${highPoint.highY / 3.3}%` }}>最高 {formatPrice(highPoint.high)}</span>
-    <span className="trend-low-label" style={{ left: `${lowPoint.x / 10}%`, top: `${lowPoint.lowY / 3.3}%` }}>最低 {formatPrice(lowPoint.low)}</span>
-    <span className="trend-median-label" style={{ top: `${scaleY(stats.median) / 3.3}%` }}>中位价 {formatPrice(stats.median)}</span>
-    {activeIndex !== null && <div className="trend-chart-tooltip" style={{ left: `${Math.max(10, Math.min(90, active.x / 10))}%`, top: `${Math.max(7, active.highY / 3.3 - 6)}%` }}><strong>{formatPrice(active.close)} / GPU·小时</strong><span>开 {active.open.toFixed(3)} · 高 {active.high.toFixed(3)} · 低 {active.low.toFixed(3)} · 收 {active.close.toFixed(3)}</span><span>{new Date(`${active.date}T00:00:00Z`).toLocaleDateString("zh-CN", { timeZone: "UTC" })}</span></div>}
-    <div className="trend-axis-dates"><span>{new Date(`${candles[0].date}T00:00:00`).toLocaleDateString("zh-CN")}</span><span>{new Date(`${candles.at(-1)!.date}T00:00:00`).toLocaleDateString("zh-CN")}</span></div>
-  </div>;
-}
-
 export function LiveMarketPanel({ featured = false, initialData = null }: { featured?: boolean; initialData?: InitialMarketDashboard | null }) {
   const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price > 0 || validHistory(item).length > 0);
-  const initialModel = initialMarkets[0]?.gpu_model ?? "";
+  const initialModel = preferredMarketModel(initialMarkets, initialData?.models);
   const [markets, setMarkets] = useState<MarketSummary[]>(initialMarkets);
   const [meta, setMeta] = useState<MarketMeta | null>(initialData?.meta ?? null);
   const [selectedModel, setSelectedModel] = useState(initialModel);
@@ -333,12 +245,14 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     (initialData?.sources ?? []).filter((source) => source.source.toLowerCase() === KAI_REALTIME_SOURCE),
   );
   const [latest, setLatest] = useState<MobileLatestMarket | null>(null);
-  const [realCandles, setRealCandles] = useState<MobileMarketCandle[]>([]);
-  const [candleIdentity, setCandleIdentity] = useState("");
   const [regionalQuotes, setRegionalQuotes] = useState<MobileRegionalQuotes | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
+  const [chartSnapshot, setChartSnapshot] = useState<MarketChartSnapshot | null>(null);
+  const selectedModelRef = useRef(initialModel);
+  const catalogRequest = useRef(0);
 
   const load = useCallback(async (force = false, showLoading = true) => {
+    const request = ++catalogRequest.current;
     if (showLoading) setStatus("loading");
     try {
       const [payload, modelsPayload, sourcesPayload] = await Promise.all([
@@ -346,18 +260,42 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
         getMobileMarketModels(),
         getMobileMarketSources(),
       ]);
+      if (request !== catalogRequest.current) return;
       const data = (payload.data ?? []).filter((item) => item.median_price > 0 || validHistory(item).length > 0);
+      const nextMobileModels = modelsPayload.items ?? [];
+      const currentSelection = selectedModelRef.current;
+      const selectableMarkets = data.filter((item) => Boolean(findMobileModel(nextMobileModels, item.gpu_model)));
+      const selectionIsValid = Boolean(
+        currentSelection
+        && data.some((item) => item.gpu_model === currentSelection)
+        && findMobileModel(nextMobileModels, currentSelection),
+      );
+      const preferredModel = preferredMarketModel(
+        selectableMarkets.length ? selectableMarkets : data,
+        nextMobileModels,
+      );
+      const nextSelectedModel = selectionIsValid ? currentSelection : preferredModel;
       setMarkets(data);
       setMeta(payload.meta);
-      setMobileModels(modelsPayload.items ?? []);
+      setMobileModels(nextMobileModels);
       setSourceStates((sourcesPayload.items ?? []).filter((source) => source.source.toLowerCase() === KAI_REALTIME_SOURCE));
-      setSelectedModel((current) => current || data[0]?.gpu_model || "");
-      setGpuPickerQuery((current) => current || data[0]?.gpu_model || "");
+      selectedModelRef.current = nextSelectedModel;
+      setSelectedModel(nextSelectedModel);
+      if (nextSelectedModel !== currentSelection) {
+        setGpuPickerQuery(nextSelectedModel);
+        setGpuPickerOpen(false);
+        setGpuPickerDirty(false);
+        setGpuPickerActive(0);
+        setChartSnapshot(null);
+      } else {
+        setGpuPickerQuery((current) => current || nextSelectedModel);
+      }
       setMessage("");
       setStatus("ready");
     } catch (error) {
+      if (request !== catalogRequest.current) return;
       setMessage(error instanceof Error ? error.message : "行情读取失败");
-      if (showLoading) setStatus("error");
+      setStatus((current) => showLoading || current === "loading" ? "error" : current);
     }
   }, []);
   useEffect(() => { void load(false, !initialData); }, [initialData, load]);
@@ -368,28 +306,38 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
 
   useEffect(() => {
     const model = findMobileModel(mobileModels, selectedModel);
-    if (!model) { setLatest(null); setRealCandles([]); setCandleIdentity(""); setRegionalQuotes(null); return; }
+    if (!model) { setLatest(null); setRegionalQuotes(null); return; }
     let active = true;
     setLiveLoading(true);
-    const identity = `${model.gpu_model}|${model.gpu_variant}`;
     setLatest((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
-    if (candleIdentity !== identity) setRealCandles([]);
     setRegionalQuotes((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
-    const range = days <= 28 ? "30d" : "90d";
-    Promise.allSettled([getMobileLatestMarket(model), getMobileMarketCandles(model, range), getMobileRegionalQuotes(model)])
-      .then(([latestResult, candleResult, regionalResult]) => {
+    Promise.allSettled([getMobileLatestMarket(model), getMobileRegionalQuotes(model)])
+      .then(([latestResult, regionalResult]) => {
         if (!active) return;
         if (latestResult.status === "fulfilled") setLatest(latestResult.value);
-        if (candleResult.status === "fulfilled") { setRealCandles(candleResult.value.candles ?? []); setCandleIdentity(identity); }
         if (regionalResult.status === "fulfilled") setRegionalQuotes(regionalResult.value);
       })
       .finally(() => { if (active) setLiveLoading(false); });
     return () => { active = false; };
-  }, [mobileModels, selectedModel, days]);
+  }, [mobileModels, selectedModel]);
 
   const memories = useMemo(() => [...new Set(markets.map((item) => item.vram_gb).filter((value): value is number => Boolean(value)))].sort((a, b) => a - b), [markets]);
-  const selected = markets.find((item) => item.gpu_model === selectedModel) ?? markets[0];
+  const selected = markets.find((item) => item.gpu_model === selectedModel) ?? null;
+  const selectedMobileModel = selected ? findMobileModel(mobileModels, selected.gpu_model) ?? null : null;
   const selectedStats = selected ? priceStats(selected, days) : null;
+  const longRangeLabel = ranges.find((range) => range.value === days)?.label ?? `${days} 天`;
+  const selectedChartIdentity = selectedMobileModel
+    ? `${selectedMobileModel.gpu_model}|${selectedMobileModel.gpu_variant}`
+    : "";
+  const activeChartSnapshot = chartSnapshot?.identity === selectedChartIdentity ? chartSnapshot : null;
+  const chartSummary = activeChartSnapshot?.summary ?? null;
+  const chartRangeLabel = activeChartSnapshot?.range === "24h"
+    ? "24小时"
+    : activeChartSnapshot?.range === "7d"
+      ? "7天"
+      : activeChartSnapshot?.range === "30d"
+        ? "30天"
+        : "当前周期";
   const dailyMovers = markets.map((item) => priceStats(item, 7)).filter((stats) => stats.enough);
   const risingToday = dailyMovers.filter((stats) => stats.delta > 0).length;
   const fallingToday = dailyMovers.filter((stats) => stats.delta < 0).length;
@@ -445,7 +393,9 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     else { setSortKey(key); setSortAsc(key === "price"); }
   };
   const chooseGpu = (model: string, scrollToChart = true) => {
+    selectedModelRef.current = model;
     setSelectedModel(model);
+    setChartSnapshot(null);
     setGpuPickerQuery(model);
     setGpuPickerOpen(false);
     setGpuPickerDirty(false);
@@ -598,20 +548,20 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
               </button>) : <p>没有匹配的 GPU 型号</p>}
             </div>}
           </div>
-          <div className="trend-focus-period"><span>观察周期</span><div className="trend-ranges" aria-label="时间范围">{ranges.map((range) => <button className={days === range.value ? "is-active" : ""} aria-pressed={days === range.value} onClick={() => setDays(range.value)} type="button" key={range.value}>{range.label}</button>)}</div></div>
+          <div className="trend-focus-period"><span>长期排行周期</span><div className="trend-ranges" aria-label="长期排行周期">{ranges.map((range) => <button className={days === range.value ? "is-active" : ""} aria-pressed={days === range.value} onClick={() => setDays(range.value)} type="button" key={range.value}>{range.label}</button>)}</div></div>
         </div>
         <div className="trend-focus-quote">
           <div className="trend-current-price"><span>当前实时中位价</span><strong>{latest?.summary.median_price_card_hours ? formatPrice(latest.summary.median_price_card_hours) : selectedStats.current ? formatPrice(selectedStats.current) : "数据不足"}</strong><small>{liveLoading ? "正在刷新实时行情" : latest ? `${latest.summary.sample_count} 条 KAI 报价` : "历史行情兼容模式"}</small></div>
-          {selectedStats.enough && <div className={`trend-focus-change ${selectedStats.delta >= 0 ? "is-up" : "is-down"}`}><span>{ranges.find((range) => range.value === days)?.label}涨跌</span><strong>{formatChange(selectedStats.percent, "%")}</strong></div>}
+          {selectedStats.enough && <div className={`trend-focus-change ${selectedStats.delta >= 0 ? "is-up" : "is-down"}`}><span>长期 · {longRangeLabel}涨跌</span><strong>{formatChange(selectedStats.percent, "%")}</strong></div>}
           <Link href={`/market?gpu=${encodeURIComponent(selected.gpu_model)}`}>查看可租资源</Link>
         </div>
       </header>
-      <MainPriceChart item={selected} days={days} realCandles={realCandles} />
-      <div className="trend-period-stats">
-        <span><small>周期最高价</small><strong>{selectedStats.enough ? formatPrice(selectedStats.high) : "—"}</strong></span>
-        <span><small>周期最低价</small><strong>{selectedStats.enough ? formatPrice(selectedStats.low) : "—"}</strong></span>
-        <span><small>市场中位价</small><strong>{selectedStats.enough ? formatPrice(selectedStats.median) : "—"}</strong></span>
-        <span><small>周期涨跌</small><strong className={selectedStats.delta >= 0 ? "is-up" : "is-down"}>{selectedStats.enough ? formatChange(selectedStats.percent, "%") : "—"}</strong></span>
+      <MarketCandlestickChart model={selectedMobileModel} initialLatest={latest} onLatest={setLatest} onSnapshot={setChartSnapshot} />
+      <div className="trend-period-stats" aria-label={`${chartRangeLabel} K 线统计`}>
+        <span><small>{chartRangeLabel}历史最高价</small><strong>{chartSummary ? formatPrice(chartSummary.high) : "—"}</strong></span>
+        <span><small>{chartRangeLabel}历史最低价</small><strong>{chartSummary ? formatPrice(chartSummary.low) : "—"}</strong></span>
+        <span><small>{chartRangeLabel}历史中位价</small><strong>{chartSummary ? formatPrice(chartSummary.median) : "—"}</strong></span>
+        <span><small>{chartRangeLabel}历史涨跌</small><strong className={chartSummary ? chartSummary.change >= 0 ? "is-up" : "is-down" : undefined}>{chartSummary ? formatChange(chartSummary.changePct, "%") : "—"}</strong></span>
       </div>
     </section>}
 

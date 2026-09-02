@@ -218,14 +218,14 @@ class MarketHistorySyncTests(unittest.TestCase):
             available_gpu_count=0, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
             data_quality="verified", signature="kai-live", observed_at=now, fetched_at=now,
         ))
-        for index in range(42):
-            candle_open = Decimal("2.0") + Decimal("0.06") * Decimal(index) / Decimal("41")
+        for index in range(168):
+            candle_open = Decimal("2.0") + Decimal("0.06") * Decimal(index) / Decimal("167")
             candle_close = candle_open
-            candle_start = start + timedelta(hours=index * 4)
+            candle_start = start + timedelta(hours=index)
             db.add(MarketPriceCandle(
                 source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
-                interval_seconds=4 * 60 * 60,
-                start_time=candle_start, end_time=candle_start + timedelta(hours=4),
+                interval_seconds=60 * 60,
+                start_time=candle_start, end_time=candle_start + timedelta(hours=1),
                 open_price_cny=candle_open, high_price_cny=candle_close + Decimal("0.005"),
                 low_price_cny=candle_open - Decimal("0.005"), close_price_cny=candle_close,
                 sample_count=1, observation_count=1, method="official_ohlc", data_quality="official",
@@ -233,7 +233,7 @@ class MarketHistorySyncTests(unittest.TestCase):
                 collected_at=now, updated_at=now,
             ))
         db.add(MarketCandleSyncStatus(
-            source="kai", status="ok", refresh_seconds=300, model_count=1, candle_count=42,
+            source="kai", status="ok", refresh_seconds=300, model_count=1, candle_count=168,
             last_attempt_at=now, last_success_at=now,
         ))
         db.commit()
@@ -246,6 +246,13 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual(metric["range_high_cny"], 2.06)
         self.assertEqual(payload["history_status"], "available")
         self.assertEqual(payload["curve_status"], "full")
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(payload["candles"]), 168)
+        self.assertEqual(payload["expected_bucket_count"], 168)
+        self.assertEqual(payload["observed_bucket_coverage_ratio"], 1.0)
+        self.assertEqual(payload["coverage_span_hours"], 168.0)
+        self.assertEqual(payload["provenance"]["history_as_of"], "2026-08-18T08:00:00Z")
+        self.assertEqual(payload["provenance"]["history_lag_seconds"], 0)
         self.assertEqual(payload["latest_live_price_cny"], 2.06)
         self.assertFalse(payload["provenance"]["live_component_included"])
         self.assertFalse(payload["latest_live_comparable_to_history"])
@@ -253,7 +260,7 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual({source for candle in payload["candles"] for source in candle["sources"]}, {"kai"})
         db.close()
 
-    def test_seven_day_curve_prefers_thirty_contiguous_real_four_hour_candles(self):
+    def test_seven_day_curve_prefers_dense_contiguous_real_hourly_candles(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketPriceSnapshot.__table__.create(engine)
         MarketPriceCandle.__table__.create(engine)
@@ -262,9 +269,10 @@ class MarketHistorySyncTests(unittest.TestCase):
         now = datetime(2026, 8, 18, 8, 0)
         start = now - timedelta(days=7)
 
-        # Exactly thirty recent, contiguous buckets meet the lower bound.
-        for index in range(13, 43):
-            observed = start + timedelta(hours=index * 4)
+        # A recent 85%-plus contiguous hourly suffix is dense enough to use
+        # without filling any missing bucket.
+        for index in range(24, 168):
+            observed = start + timedelta(hours=index)
             value = Decimal("5") + Decimal(index) / Decimal("100")
             db.add(MarketPriceSnapshot(
                 source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
@@ -292,16 +300,16 @@ class MarketHistorySyncTests(unittest.TestCase):
                 "RTX4090", "24GB", "7d", "kai", "ondemand", db,
             )
 
-        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
         self.assertEqual(payload["tick_seconds"], 15 * 60)
-        self.assertGreaterEqual(len(payload["candles"]), 30)
+        self.assertGreaterEqual(len(payload["candles"]), 143)
         self.assertEqual(payload["method"], "observed_source_robust_median_ohlc")
         self.assertEqual(payload["provenance"]["kind"], "direct_observation")
         self.assertFalse(payload["is_interpolated"])
-        self.assertLess(max(candle["high_price_cny"] for candle in payload["candles"]), 6)
+        self.assertLess(max(candle["high_price_cny"] for candle in payload["candles"]), 7)
         db.close()
 
-    def test_seven_day_curve_falls_back_when_latest_four_hour_series_has_a_gap(self):
+    def test_seven_day_curve_falls_back_when_latest_hourly_series_has_a_gap(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketPriceSnapshot.__table__.create(engine)
         MarketPriceCandle.__table__.create(engine)
@@ -310,10 +318,10 @@ class MarketHistorySyncTests(unittest.TestCase):
         now = datetime(2026, 8, 18, 8, 0)
         start = now - timedelta(days=7)
 
-        # There are more than thirty real observations in total, but the gap
-        # leaves only twelve consecutive buckets at the latest edge.
-        for index in list(range(30)) + list(range(31, 43)):
-            observed = start + timedelta(hours=index * 4)
+        # There are more than 143 real observations in total, but the gap
+        # leaves only eleven consecutive buckets at the latest edge.
+        for index in list(range(156)) + list(range(157, 168)):
+            observed = start + timedelta(hours=index)
             value = Decimal("5") + Decimal(index) / Decimal("100")
             db.add(MarketPriceSnapshot(
                 source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
@@ -323,13 +331,13 @@ class MarketHistorySyncTests(unittest.TestCase):
                 fx_source="test", fx_date="2026-08-18", data_quality="verified",
                 signature=f"snapshot-gap-{index}", observed_at=observed, fetched_at=observed,
             ))
-        for index in range(42):
+        for index in range(168):
             value = Decimal("20") + Decimal(index) / Decimal("100")
-            candle_start = start + timedelta(hours=index * 4)
+            candle_start = start + timedelta(hours=index)
             db.add(MarketPriceCandle(
                 source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
-                interval_seconds=4 * 60 * 60,
-                start_time=candle_start, end_time=candle_start + timedelta(hours=4),
+                interval_seconds=60 * 60,
+                start_time=candle_start, end_time=candle_start + timedelta(hours=1),
                 open_price_cny=value, high_price_cny=value, low_price_cny=value, close_price_cny=value,
                 sample_count=1, observation_count=1, method="official_ohlc", data_quality="official",
                 source_version="v1", signature=f"stored-gap-{index}", source_observed_at=now,
@@ -342,11 +350,54 @@ class MarketHistorySyncTests(unittest.TestCase):
                 "H100", "80GB", "7d", "kai", "ondemand", db,
             )
 
-        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
-        self.assertEqual(len(payload["candles"]), 42)
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(payload["candles"]), 168)
         self.assertEqual(payload["method"], "official_ohlc")
         self.assertEqual(payload["provenance"]["kind"], "stored_official_historical_ohlc")
         self.assertGreaterEqual(min(candle["low_price_cny"] for candle in payload["candles"]), 20)
+        db.close()
+
+    def test_stored_window_stops_at_gap_and_reports_real_coverage(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+            currency="CNY", min_price=Decimal("25"), p25_price=Decimal("25"), median_price=Decimal("25"),
+            p75_price=Decimal("25"), max_price=Decimal("25"), min_price_cny=Decimal("25"),
+            median_price_cny=Decimal("25"), max_price_cny=Decimal("25"), sample_count=8,
+            available_gpu_count=0, fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="gap-live", observed_at=now, fetched_at=now,
+        ))
+        starts = [now - timedelta(hours=24 - index) for index in range(13)]
+        starts += [now - timedelta(hours=10 - index) for index in range(10)]
+        for index, candle_start in enumerate(starts):
+            value = Decimal("20") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=8, observation_count=8, method="official_hourly", data_quality="official",
+                source_version="v1", signature=f"stored-window-gap-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(len(payload["candles"]), 10)
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["expected_bucket_count"], 24)
+        self.assertEqual(payload["coverage_span_hours"], 10.0)
+        self.assertAlmostEqual(payload["observed_bucket_coverage_ratio"], 10 / 24, places=4)
         db.close()
 
     def test_snapshot_coverage_requirements_scale_with_requested_range(self):
@@ -370,8 +421,8 @@ class MarketHistorySyncTests(unittest.TestCase):
             "3h": 15 * 60,
             "6h": 15 * 60,
             "24h": 60 * 60,
-            "7d": 4 * 60 * 60,
-            "30d": 24 * 60 * 60,
+            "7d": 60 * 60,
+            "30d": 4 * 60 * 60,
             "90d": 24 * 60 * 60,
         }
         self.assertEqual(
@@ -450,7 +501,7 @@ class MarketHistorySyncTests(unittest.TestCase):
         self.assertEqual(len(history_payload["series"][0]["points"]), 37)
         db.close()
 
-    def test_twenty_four_hour_snapshot_window_can_report_complete_coverage(self):
+    def test_twenty_three_sparse_hourly_observations_do_not_claim_complete_twenty_four_hours(self):
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         MarketPriceSnapshot.__table__.create(engine)
         MarketPriceCandle.__table__.create(engine)
@@ -474,10 +525,559 @@ class MarketHistorySyncTests(unittest.TestCase):
                 "RTX4090", "24GB", "24h", "kai", "ondemand", db,
             )
 
-        self.assertEqual(payload["history_status"], "available")
-        self.assertEqual(payload["history_coverage_status"], "complete")
-        self.assertEqual(payload["curve_status"], "full")
+        self.assertEqual(payload["history_status"], "partial_history")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["expected_bucket_count"], 24)
+        self.assertLess(payload["observed_tick_coverage_ratio"], 0.1)
         self.assertAlmostEqual(payload["coverage_span_hours"], 22.0)
+        db.close()
+
+    def test_twenty_four_hour_dense_five_minute_publications_form_twenty_four_real_hourly_candles(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 25)
+        first_observation = now - timedelta(hours=24)
+        ticks_by_hour: dict[datetime, list[Decimal]] = {}
+
+        # Real KAI publications cover the full rolling day at five-minute
+        # cadence. The current 08:00 hour is deliberately still in progress.
+        for index in range(24 * 12 + 1):
+            observed = first_observation + timedelta(minutes=index * 5)
+            value = Decimal("30") + Decimal(index) / Decimal("1000")
+            hour_start = observed.replace(minute=0, second=0, microsecond=0)
+            ticks_by_hour.setdefault(hour_start, []).append(value)
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"dense-24h-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+
+        # Matching closed official hourly history is present as a consistency
+        # reference. Dense real publications should still drive the public
+        # 24-hour view, including the in-progress current-hour candle.
+        closed_hours = [
+            hour_start for hour_start in sorted(ticks_by_hour)
+            if hour_start + timedelta(hours=1) <= now
+        ][-24:]
+        for index, hour_start in enumerate(closed_hours):
+            values = ticks_by_hour[hour_start]
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=hour_start,
+                end_time=hour_start + timedelta(hours=1), open_price_cny=values[0],
+                high_price_cny=max(values), low_price_cny=min(values),
+                close_price_cny=values[-1], sample_count=len(values) * 4,
+                observation_count=len(values), method="official_hourly",
+                data_quality="official_full", source_version="hourly-v1",
+                signature=f"matching-official-hour-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["tick_seconds"], 5 * 60)
+        self.assertEqual(payload["method"], "observed_source_robust_median_ohlc")
+        self.assertEqual(payload["provenance"]["kind"], "direct_observation")
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertEqual(payload["candles"][0]["start_time"], "2026-08-17T09:00:00Z")
+        current = payload["candles"][-1]
+        self.assertEqual(current["start_time"], "2026-08-18T08:00:00Z")
+        self.assertEqual(current["end_time"], "2026-08-18T09:00:00Z")
+        self.assertEqual(current["observation_count"], 6)
+        self.assertEqual(current["open_price_cny"], 30.283)
+        self.assertEqual(current["high_price_cny"], 30.288)
+        self.assertEqual(current["low_price_cny"], 30.283)
+        self.assertEqual(current["close_price_cny"], 30.288)
+        self.assertEqual(payload["history_coverage_status"], "complete")
+        self.assertTrue(payload["latest_live_comparable_to_history"])
+        db.close()
+
+    def test_dense_snapshots_consistent_with_selected_four_hour_history_ignore_bad_native_hourly_series(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 25)
+        official_start = datetime(2026, 8, 17, 8, 0)
+
+        # Native 1h is a materially different official publication. The stored
+        # selector must reject it in favour of the matching native 4h series.
+        for index in range(24):
+            candle_start = official_start + timedelta(hours=index)
+            value = Decimal("29") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=8, observation_count=8, method="official_hourly",
+                data_quality="official_full", source_version="hourly-bad-v1",
+                signature=f"bad-native-hour-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        for index in range(6):
+            candle_start = official_start + timedelta(hours=index * 4)
+            value = Decimal("27") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=32, observation_count=32, method="official_four_hour",
+                data_quality="official_full", source_version="four-hour-good-v1",
+                signature=f"selected-four-hour-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        # The complete five-minute publication stream follows the selected 4h
+        # level exactly. It should therefore be exposed as 24 real 1h candles;
+        # the rejected 1h official series must not veto this consistent stream.
+        first_observation = now - timedelta(hours=24)
+        for index in range(24 * 12 + 1):
+            observed = first_observation + timedelta(minutes=index * 5)
+            block = int((observed - official_start).total_seconds() // (4 * 60 * 60))
+            value = Decimal("27") + Decimal(block) / Decimal("100")
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"four-hour-consistent-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["tick_seconds"], 5 * 60)
+        self.assertEqual(payload["method"], "observed_source_robust_median_ohlc")
+        self.assertEqual(payload["provenance"]["kind"], "direct_observation")
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertTrue(all(candle["high_price_cny"] < 28 for candle in payload["candles"]))
+        self.assertEqual(payload["candles"][-1]["start_time"], "2026-08-18T08:00:00Z")
+        self.assertEqual(payload["candles"][-1]["observation_count"], 6)
+        self.assertTrue(payload["latest_live_comparable_to_history"])
+        db.close()
+
+    def test_new_five_minute_publication_updates_current_hour_without_adding_a_candle(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        first_now = datetime(2026, 8, 18, 8, 20)
+        first_observation = first_now - timedelta(hours=24)
+        for index in range(24 * 12 + 1):
+            observed = first_observation + timedelta(minutes=index * 5)
+            value = Decimal("40") + Decimal(index) / Decimal("1000")
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"current-hour-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=first_now):
+            before = _price_candles_payload(
+                "RTX4090", "24GB", "24h", "kai", "ondemand", db,
+            )
+
+        next_observation = first_now + timedelta(minutes=5)
+        next_value = Decimal("40.289")
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="RTX4090", gpu_variant="24GB", billing_mode="ondemand",
+            currency="CNY", min_price=next_value, p25_price=next_value,
+            median_price=next_value, p75_price=next_value, max_price=next_value,
+            min_price_cny=next_value, median_price_cny=next_value,
+            max_price_cny=next_value, sample_count=4, available_gpu_count=4,
+            fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="current-hour-snapshot-next",
+            observed_at=next_observation, fetched_at=next_observation,
+        ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=next_observation):
+            after = _price_candles_payload(
+                "RTX4090", "24GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(len(before["candles"]), 24)
+        self.assertEqual(len(after["candles"]), 24)
+        before_current = before["candles"][-1]
+        after_current = after["candles"][-1]
+        self.assertEqual(before_current["start_time"], after_current["start_time"])
+        self.assertEqual(before_current["end_time"], after_current["end_time"])
+        self.assertEqual(after_current["start_time"], "2026-08-18T08:00:00Z")
+        self.assertEqual(before_current["observation_count"], 5)
+        self.assertEqual(after_current["observation_count"], 6)
+        self.assertEqual(before_current["open_price_cny"], after_current["open_price_cny"])
+        self.assertEqual(before_current["close_price_cny"], 40.288)
+        self.assertEqual(after_current["close_price_cny"], 40.289)
+        self.assertEqual(after_current["high_price_cny"], 40.289)
+        db.close()
+
+    def test_twenty_four_hour_sparse_snapshots_fall_back_to_official_history_without_splicing(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        start = now - timedelta(hours=24)
+        for index in range(24):
+            candle_start = start + timedelta(hours=index)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value + Decimal("0.01"), low_price_cny=value - Decimal("0.01"),
+                close_price_cny=value, sample_count=8, observation_count=8,
+                method="official_hourly", data_quality="official_full",
+                source_version="hourly-v1", signature=f"sparse-fallback-hour-{index}",
+                source_observed_at=now, collected_at=now, updated_at=now,
+            ))
+        for index in range(6):
+            observed = now - timedelta(minutes=25 - index * 5)
+            value = Decimal("50") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"sparse-live-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "official_hourly")
+        self.assertEqual(payload["provenance"]["kind"], "stored_official_historical_ohlc")
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertTrue(all(candle["high_price_cny"] < 31 for candle in payload["candles"]))
+        self.assertEqual(payload["latest_live_price_cny"], 50.05)
+        self.assertFalse(payload["latest_live_comparable_to_history"])
+        self.assertFalse(payload["provenance"]["live_component_included"])
+        self.assertEqual(payload["candles"][-1]["end_time"], "2026-08-18T08:00:00Z")
+        db.close()
+
+    def test_twenty_four_hour_complete_official_window_wins_while_snapshot_index_is_building(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 10, 0)
+        official_start = datetime(2026, 8, 17, 10, 0)
+        for index in range(24):
+            candle_start = official_start + timedelta(hours=index)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value + Decimal("0.01"), low_price_cny=value - Decimal("0.01"),
+                close_price_cny=value, sample_count=8, observation_count=8,
+                method="official_hourly", data_quality="official_full",
+                source_version="hourly-v1", signature=f"building-fallback-hour-{index}",
+                source_observed_at=now, collected_at=now, updated_at=now,
+            ))
+        for hour_index in range(8):
+            hour_start = datetime(2026, 8, 18, 2, 0) + timedelta(hours=hour_index)
+            for tick_index in range(12):
+                observed = hour_start + timedelta(minutes=tick_index * 5)
+                value = Decimal("50") + Decimal(hour_index) / Decimal("100")
+                db.add(MarketPriceSnapshot(
+                    source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                    currency="CNY", min_price=value, p25_price=value, median_price=value,
+                    p75_price=value, max_price=value, min_price_cny=value,
+                    median_price_cny=value, max_price_cny=value, sample_count=4,
+                    available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                    fx_date="2026-08-18", data_quality="verified",
+                    signature=f"building-live-{hour_index}-{tick_index}", observed_at=observed,
+                    fetched_at=observed,
+                ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "official_hourly")
+        self.assertEqual(payload["provenance"]["kind"], "stored_official_historical_ohlc")
+        self.assertEqual(payload["snapshot_candidate_status"], "building")
+        self.assertEqual(payload["snapshot_candidate_candle_count"], 8)
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertTrue(all(candle["high_price_cny"] < 31 for candle in payload["candles"]))
+        self.assertFalse(payload["latest_live_comparable_to_history"])
+        db.close()
+
+    def test_recent_partial_hourly_snapshots_are_shown_while_five_minute_window_builds(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 10, 10)
+
+        # A complete but coarser official fallback exists. The local collector
+        # has accumulated nine consecutive one-hour buckets from real five-
+        # minute publications. Its oldest startup hour is too sparse, while the
+        # newest eight hours each retain at least half of their expected ticks.
+        official_start = datetime(2026, 8, 17, 8, 0)
+        for index in range(6):
+            candle_start = official_start + timedelta(hours=index * 4)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=32, observation_count=32, method="official_four_hour",
+                data_quality="official_full", source_version="four-hour-v1",
+                signature=f"partial-building-official-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        hourly_tick_counts = [2, 11, 12, 12, 10, 7, 9, 10, 3]
+        first_hour = datetime(2026, 8, 18, 2, 0)
+        for hour_index, tick_count in enumerate(hourly_tick_counts):
+            hour_start = first_hour + timedelta(hours=hour_index)
+            for tick_index in range(tick_count):
+                observed = hour_start + timedelta(minutes=tick_index * 5)
+                value = Decimal("50") + Decimal(hour_index) / Decimal("10") + Decimal(tick_index) / Decimal("1000")
+                db.add(MarketPriceSnapshot(
+                    source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+                    currency="CNY", min_price=value, p25_price=value, median_price=value,
+                    p75_price=value, max_price=value, min_price_cny=value,
+                    median_price_cny=value, max_price_cny=value, sample_count=4,
+                    available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                    fx_date="2026-08-18", data_quality="verified",
+                    signature=f"partial-building-{hour_index}-{tick_index}",
+                    observed_at=observed, fetched_at=observed,
+                ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "94GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "observed_source_robust_median_ohlc")
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["tick_seconds"], 5 * 60)
+        self.assertEqual(payload["snapshot_candidate_status"], "building")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["expected_bucket_count"], 24)
+        self.assertEqual(len(payload["candles"]), 8)
+        self.assertEqual(payload["candles"][0]["start_time"], "2026-08-18T03:00:00Z")
+        self.assertEqual(payload["candles"][-1]["start_time"], "2026-08-18T10:00:00Z")
+        self.assertGreaterEqual(payload["minimum_hour_tick_coverage_ratio"], 0.5)
+        self.assertEqual(payload["provenance"]["kind"], "direct_observation")
+        self.assertTrue(payload["latest_live_comparable_to_history"])
+        db.close()
+
+    def test_twenty_four_hour_dense_offer_pool_index_is_selected_even_when_official_index_differs(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 25)
+        start = now - timedelta(hours=24)
+        for index in range(24 * 12 + 1):
+            observed = start + timedelta(minutes=index * 5)
+            value = Decimal("50") + Decimal(index) / Decimal("10000")
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"inconsistent-dense-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+        official_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=24)
+        for index in range(24):
+            candle_start = official_start + timedelta(hours=index)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value + Decimal("0.01"), low_price_cny=value - Decimal("0.01"),
+                close_price_cny=value, sample_count=8, observation_count=8,
+                method="official_hourly", data_quality="official_full",
+                source_version="hourly-v1", signature=f"inconsistent-official-hour-{index}",
+                source_observed_at=now, collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "observed_source_robust_median_ohlc")
+        self.assertEqual(payload["provenance"]["kind"], "direct_observation")
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertEqual(payload["tick_seconds"], 5 * 60)
+        self.assertTrue(all(candle["low_price_cny"] > 49 for candle in payload["candles"]))
+        self.assertGreater(payload["latest_live_price_cny"], 50)
+        self.assertTrue(payload["latest_live_comparable_to_history"])
+        self.assertTrue(payload["provenance"]["live_component_included"])
+        self.assertEqual(payload["snapshot_candidate_status"], "ready")
+        self.assertEqual(payload["observed_tick_coverage_ratio"], 1.0)
+        self.assertEqual(payload["minimum_hour_tick_coverage_ratio"], 1.0)
+        self.assertEqual(payload["candles"][-1]["end_time"], "2026-08-18T09:00:00Z")
+        db.close()
+
+    def test_duplicate_snapshot_rows_in_one_five_minute_slot_do_not_inflate_tick_coverage(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        official_start = now - timedelta(hours=24)
+        for index in range(24):
+            candle_start = official_start + timedelta(hours=index)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=8, observation_count=8, method="official_hourly",
+                data_quality="official_full", source_version="hourly-v1",
+                signature=f"duplicate-slot-official-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        # Twenty-four hourly buckets exist, but each has only one distinct
+        # five-minute publication slot. Twelve duplicate DB rows in that slot
+        # must remain one tick rather than pretending to be twelve ticks.
+        first_hour = now - timedelta(hours=23)
+        for hour_index in range(24):
+            observed = first_hour + timedelta(hours=hour_index)
+            for duplicate_index in range(12):
+                value = Decimal("50") + Decimal(hour_index) / Decimal("100")
+                db.add(MarketPriceSnapshot(
+                    source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                    currency="CNY", min_price=value, p25_price=value, median_price=value,
+                    p75_price=value, max_price=value, min_price_cny=value,
+                    median_price_cny=value, max_price_cny=value, sample_count=1,
+                    available_gpu_count=1, fx_rate=Decimal("1"), fx_source="test",
+                    fx_date="2026-08-18", data_quality="verified",
+                    signature=f"duplicate-slot-{hour_index}-{duplicate_index}",
+                    observed_at=observed, fetched_at=observed,
+                ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "official_hourly")
+        self.assertEqual(payload["provenance"]["kind"], "stored_official_historical_ohlc")
+        self.assertEqual(payload["snapshot_candidate_status"], "insufficient_five_minute_coverage")
+        self.assertEqual(payload["snapshot_candidate_candle_count"], 24)
+        self.assertEqual(payload["snapshot_candidate_expected_candle_count"], 24)
+        self.assertEqual(payload["snapshot_candidate_tick_coverage_ratio"], 0.0833)
+        self.assertEqual(payload["snapshot_candidate_minimum_hour_coverage_ratio"], 0.0833)
+        self.assertTrue(all(candle["high_price_cny"] < 31 for candle in payload["candles"]))
+        db.close()
+
+    def test_one_undercovered_closed_hour_forces_official_fallback_despite_high_global_tick_coverage(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 25)
+        official_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=24)
+        for index in range(24):
+            candle_start = official_start + timedelta(hours=index)
+            value = Decimal("30") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=8, observation_count=8, method="official_hourly",
+                data_quality="official_full", source_version="hourly-v1",
+                signature=f"undercovered-hour-official-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        first_observation = now - timedelta(hours=24)
+        undercovered_hour = datetime(2026, 8, 17, 14, 0)
+        for index in range(24 * 12 + 1):
+            observed = first_observation + timedelta(minutes=index * 5)
+            if (
+                observed.replace(minute=0, second=0, microsecond=0) == undercovered_hour
+                and observed.minute in {20, 40}
+            ):
+                continue
+            value = Decimal("50") + Decimal(index) / Decimal("10000")
+            db.add(MarketPriceSnapshot(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                currency="CNY", min_price=value, p25_price=value, median_price=value,
+                p75_price=value, max_price=value, min_price_cny=value,
+                median_price_cny=value, max_price_cny=value, sample_count=4,
+                available_gpu_count=4, fx_rate=Decimal("1"), fx_source="test",
+                fx_date="2026-08-18", data_quality="verified",
+                signature=f"undercovered-hour-snapshot-{index}", observed_at=observed,
+                fetched_at=observed,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["method"], "official_hourly")
+        self.assertEqual(payload["provenance"]["kind"], "stored_official_historical_ohlc")
+        self.assertEqual(payload["snapshot_candidate_status"], "insufficient_five_minute_coverage")
+        self.assertEqual(payload["snapshot_candidate_candle_count"], 24)
+        self.assertGreaterEqual(payload["snapshot_candidate_tick_coverage_ratio"], 0.85)
+        self.assertEqual(payload["snapshot_candidate_minimum_hour_coverage_ratio"], 0.8333)
+        self.assertTrue(all(candle["high_price_cny"] < 31 for candle in payload["candles"]))
         db.close()
 
     def test_thirty_day_snapshot_window_with_only_seven_days_remains_partial(self):
@@ -529,7 +1129,10 @@ class MarketHistorySyncTests(unittest.TestCase):
         ))
         for index in range(24):
             candle_start = now - timedelta(hours=24 - index)
-            value = Decimal("5") + Decimal(index) / Decimal("100")
+            # Match the six overlapping native four-hour candles exactly so
+            # this case verifies that a consistent native 1h series remains
+            # the preferred public resolution.
+            value = Decimal("20") + Decimal(174 + index // 4) / Decimal("100")
             db.add(MarketPriceCandle(
                 source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
                 interval_seconds=60 * 60, start_time=candle_start,
@@ -539,16 +1142,16 @@ class MarketHistorySyncTests(unittest.TestCase):
                 source_version="v1", signature=f"stored-hour-{index}", source_observed_at=now,
                 collected_at=now, updated_at=now,
             ))
-        for index in range(30):
-            candle_start = now - timedelta(days=30 - index)
+        for index in range(180):
+            candle_start = now - timedelta(days=30) + timedelta(hours=index * 4)
             value = Decimal("20") + Decimal(index) / Decimal("100")
             db.add(MarketPriceCandle(
                 source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
-                interval_seconds=24 * 60 * 60, start_time=candle_start,
-                end_time=candle_start + timedelta(days=1), open_price_cny=value,
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
                 high_price_cny=value, low_price_cny=value, close_price_cny=value,
-                sample_count=2, observation_count=2, method="official_daily", data_quality="official",
-                source_version="v1", signature=f"stored-day-{index}", source_observed_at=now,
+                sample_count=2, observation_count=2, method="official_four_hour", data_quality="official",
+                source_version="v1", signature=f"stored-four-hour-{index}", source_observed_at=now,
                 collected_at=now, updated_at=now,
             ))
         db.commit()
@@ -557,18 +1160,582 @@ class MarketHistorySyncTests(unittest.TestCase):
             hourly = _price_candles_payload(
                 "H100", "80GB", "24h", "kai", "ondemand", db,
             )
-            daily = _price_candles_payload(
+            four_hour = _price_candles_payload(
                 "H100", "80GB", "30d", "kai", "ondemand", db,
             )
 
         self.assertEqual(hourly["bucket_seconds"], 60 * 60)
         self.assertEqual(hourly["method"], "official_hourly")
         self.assertEqual(len(hourly["candles"]), 24)
-        self.assertLess(max(item["high_price_cny"] for item in hourly["candles"]), 10)
-        self.assertEqual(daily["bucket_seconds"], 24 * 60 * 60)
-        self.assertEqual(daily["method"], "official_daily")
-        self.assertEqual(len(daily["candles"]), 30)
-        self.assertGreater(min(item["low_price_cny"] for item in daily["candles"]), 19)
+        self.assertGreater(min(item["low_price_cny"] for item in hourly["candles"]), 19)
+        self.assertEqual(hourly["resolution_consistency_status"], "not_evaluated")
+        self.assertEqual(four_hour["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(four_hour["method"], "official_four_hour")
+        self.assertEqual(len(four_hour["candles"]), 180)
+        self.assertGreater(min(item["low_price_cny"] for item in four_hour["candles"]), 19)
+        self.assertEqual(four_hour["resolution_consistency_status"], "consistent")
+        self.assertEqual(four_hour["resolution_consistency"]["compared_bucket_count"], 6)
+        self.assertEqual(
+            four_hour["resolution_consistency"]["median_close_deviation_ratio"], 0,
+        )
+        self.assertEqual(four_hour["resolution_status"], "requested")
+        self.assertIsNone(four_hour["resolution_fallback_reason"])
+        self.assertEqual(four_hour["history_coverage_status"], "complete")
+        db.close()
+
+    def test_thirty_day_resolution_gate_replaces_l40s_style_native_mismatch_with_real_hourly_suffix(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="L40S", gpu_variant="48GB", billing_mode="ondemand",
+            currency="CNY", min_price=Decimal("28"), p25_price=Decimal("28"),
+            median_price=Decimal("28"), p75_price=Decimal("28"), max_price=Decimal("28"),
+            min_price_cny=Decimal("28"), median_price_cny=Decimal("28"),
+            max_price_cny=Decimal("28"), sample_count=4, available_gpu_count=0,
+            fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="l40s-live", observed_at=now, fetched_at=now,
+        ))
+
+        native_start = now - timedelta(days=30)
+        for index in range(180):
+            candle_start = native_start + timedelta(hours=index * 4)
+            value = Decimal("42") + Decimal(index) / Decimal("10000")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="L40S", gpu_variant="48GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value + Decimal("0.04"), low_price_cny=value - Decimal("0.04"),
+                close_price_cny=value + Decimal("0.01"), sample_count=1, observation_count=1,
+                method="official_four_hour", data_quality="official", source_version="same-v1",
+                signature=f"l40s-native-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        hourly_start = now - timedelta(days=7)
+        for index in range(168):
+            candle_start = hourly_start + timedelta(hours=index)
+            group = index // 4
+            value = Decimal("25") + Decimal(group) / Decimal("10000")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="L40S", gpu_variant="48GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value + Decimal("0.03"), low_price_cny=value - Decimal("0.02"),
+                close_price_cny=value + Decimal("0.01"), sample_count=4, observation_count=4,
+                method="official_hourly", data_quality="official", source_version="same-v1",
+                signature=f"l40s-hourly-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "L40S", "48GB", "30d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["requested_bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(payload["expected_bucket_count"], 180)
+        self.assertEqual(len(payload["candles"]), 42)
+        self.assertEqual(payload["candles"][0]["start_time"], "2026-08-11T08:00:00Z")
+        self.assertEqual(payload["candles"][-1]["end_time"], "2026-08-18T08:00:00Z")
+        self.assertTrue(all(item["high_price_cny"] < 30 for item in payload["candles"]))
+        self.assertTrue(all(item["sample_count"] == 4 for item in payload["candles"]))
+        self.assertTrue(all(item["observation_count"] == 16 for item in payload["candles"]))
+        self.assertEqual(payload["method"], "official_hourly_aggregated_four_hour")
+        self.assertFalse(payload["is_interpolated"])
+        self.assertEqual(payload["resolution_status"], "fallback_aggregated_from_hourly")
+        self.assertEqual(
+            payload["resolution_fallback_reason"],
+            "native_four_hour_inconsistent_with_hourly_overlap",
+        )
+        self.assertEqual(payload["partial_reason"], payload["resolution_fallback_reason"])
+        self.assertEqual(payload["resolution_consistency_status"], "inconsistent")
+        self.assertGreater(
+            payload["resolution_consistency"]["median_close_deviation_ratio"], 0.3,
+        )
+        self.assertEqual(payload["aggregation_source_bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["history_status"], "partial_history")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["coverage_span_hours"], 7 * 24)
+        self.assertEqual(
+            payload["provenance"]["kind"], "stored_official_hourly_aggregated_ohlc",
+        )
+        self.assertTrue(payload["provenance"]["native_four_hour_quarantined"])
+        db.close()
+
+    def test_thirty_day_resolution_gate_keeps_native_when_hourly_overlap_is_insufficient(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        native_start = now - timedelta(days=30)
+        for index in range(180):
+            candle_start = native_start + timedelta(hours=index * 4)
+            value = Decimal("30") + Decimal(index) / Decimal("10000")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value + Decimal("0.02"), low_price_cny=value - Decimal("0.02"),
+                close_price_cny=value, sample_count=8, observation_count=8,
+                method="official_four_hour", data_quality="official", source_version="native-v1",
+                signature=f"insufficient-native-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+
+        # Three comparable four-hour windows are below the minimum gate size.
+        hourly_start = now - timedelta(hours=12)
+        for index in range(12):
+            candle_start = hourly_start + timedelta(hours=index)
+            value = Decimal("50") + Decimal(index // 4) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=8, observation_count=8, method="official_hourly",
+                data_quality="official", source_version="hourly-v1",
+                signature=f"insufficient-hourly-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "30d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["resolution_consistency_status"], "insufficient_overlap")
+        self.assertEqual(payload["resolution_consistency"]["compared_bucket_count"], 3)
+        self.assertEqual(payload["resolution_status"], "requested")
+        self.assertIsNone(payload["resolution_fallback_reason"])
+        self.assertEqual(payload["method"], "official_four_hour")
+        self.assertEqual(len(payload["candles"]), 180)
+        self.assertEqual(payload["history_coverage_status"], "complete")
+        self.assertTrue(all(item["high_price_cny"] < 31 for item in payload["candles"]))
+        db.close()
+
+    def test_inconsistent_cross_resolution_history_keeps_the_public_hourly_contract(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+            currency="CNY", min_price=Decimal("25"), p25_price=Decimal("25"),
+            median_price=Decimal("25"), p75_price=Decimal("25"), max_price=Decimal("25"),
+            min_price_cny=Decimal("25"), median_price_cny=Decimal("25"),
+            max_price_cny=Decimal("25"), sample_count=8, available_gpu_count=0,
+            fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="inconsistent-live", observed_at=now, fetched_at=now,
+        ))
+        start = now - timedelta(hours=24)
+        for index in range(24):
+            candle_start = start + timedelta(hours=index)
+            value = Decimal("29") + Decimal(index // 4) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=4, observation_count=4, method="official_hourly",
+                data_quality="official", source_version="hourly-v1",
+                signature=f"inconsistent-hourly-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        for index in range(6):
+            candle_start = start + timedelta(hours=index * 4)
+            value = Decimal("27") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=4, observation_count=4, method="official_four_hour",
+                data_quality="official", source_version="four-hour-v1",
+                signature=f"inconsistent-four-hour-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["requested_bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(payload["candles"]), 24)
+        self.assertEqual(payload["resolution_status"], "requested")
+        self.assertIsNone(payload["resolution_fallback_reason"])
+        self.assertEqual(payload["resolution_consistency_status"], "not_evaluated")
+        self.assertIsNone(payload["resolution_consistency"])
+        self.assertEqual(payload["curve_status"], "full")
+        self.assertEqual(payload["history_status"], "available")
+        self.assertEqual(payload["history_coverage_status"], "complete")
+        self.assertTrue(all(item["close_price_cny"] >= 29 for item in payload["candles"]))
+        db.close()
+
+    def test_resolution_gate_ignores_one_isolated_four_hour_outlier(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+            currency="CNY", min_price=Decimal("27"), p25_price=Decimal("27"),
+            median_price=Decimal("27"), p75_price=Decimal("27"), max_price=Decimal("27"),
+            min_price_cny=Decimal("27"), median_price_cny=Decimal("27"),
+            max_price_cny=Decimal("27"), sample_count=8, available_gpu_count=0,
+            fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="outlier-live", observed_at=now, fetched_at=now,
+        ))
+        start = now - timedelta(hours=24)
+        for index in range(24):
+            candle_start = start + timedelta(hours=index)
+            value = Decimal("27") + Decimal(index // 4) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=4, observation_count=4, method="official_hourly",
+                data_quality="official", source_version="hourly-v1",
+                signature=f"outlier-hourly-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        for index in range(6):
+            candle_start = start + timedelta(hours=index * 4)
+            value = Decimal("20") if index == 0 else Decimal("27") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=4), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=4, observation_count=4, method="official_four_hour",
+                data_quality="official", source_version="four-hour-v1",
+                signature=f"outlier-four-hour-{index}", source_observed_at=now,
+                collected_at=now, updated_at=now,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "24h", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 60 * 60)
+        self.assertEqual(payload["resolution_status"], "requested")
+        self.assertEqual(payload["resolution_consistency_status"], "not_evaluated")
+        self.assertIsNone(payload["resolution_consistency"])
+        self.assertEqual(len(payload["candles"]), 24)
+        db.close()
+
+    def test_thirty_day_history_quarantines_superseded_partial_tail_and_refills_from_overfetch(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        interval = timedelta(hours=4)
+        trusted_observed_at = now - timedelta(minutes=5)
+
+        # One extra trusted bucket is deliberately outside the public 180-candle
+        # window. It may refill the oldest edge only after the stale newest
+        # bucket is quarantined, preserving a real contiguous 30-day series.
+        for index in range(180):
+            candle_start = now - interval * (181 - index)
+            value = Decimal("84") + Decimal(index) / Decimal("1000")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + interval, open_price_cny=value,
+                high_price_cny=value + Decimal("0.04"), low_price_cny=value - Decimal("0.04"),
+                close_price_cny=value, sample_count=4, observation_count=4,
+                method="official_four_hour", data_quality="official_full",
+                source_version="official-v2", signature=f"trusted-30d-{index}",
+                source_observed_at=trusted_observed_at,
+                collected_at=trusted_observed_at, updated_at=trusted_observed_at,
+            ))
+
+        bad_start = now - interval
+        db.add(MarketPriceCandle(
+            source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+            interval_seconds=4 * 60 * 60, start_time=bad_start, end_time=now,
+            open_price_cny=Decimal("73"), high_price_cny=Decimal("73.1"),
+            low_price_cny=Decimal("72.9"), close_price_cny=Decimal("73"),
+            sample_count=1, observation_count=1, method="official_four_hour",
+            data_quality="official_partial", source_version="official-v1-partial",
+            signature="superseded-partial-tail", source_observed_at=now - timedelta(days=1),
+            collected_at=now - timedelta(days=1), updated_at=now - timedelta(days=1),
+        ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "94GB", "30d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(len(payload["candles"]), 180)
+        self.assertEqual(payload["expected_bucket_count"], 180)
+        self.assertEqual(payload["curve_status"], "full")
+        self.assertEqual(payload["history_coverage_status"], "complete")
+        self.assertEqual(payload["coverage_span_hours"], 30 * 24)
+        self.assertEqual(payload["quarantined_candle_count"], 1)
+        self.assertEqual(payload["quarantined_prefix_count"], 0)
+        self.assertEqual(payload["quarantined_tail_count"], 1)
+        self.assertEqual(payload["quarantine_reason"], "superseded_partial_edge_batch")
+        self.assertEqual(payload["provenance"]["quarantined_candle_count"], 1)
+        self.assertEqual(payload["provenance"]["quarantined_tail_count"], 1)
+        self.assertEqual(payload["provenance"]["source_version"], "official-v2")
+        self.assertEqual(payload["provenance"]["history_as_of"], "2026-08-18T04:00:00Z")
+        self.assertTrue(all(candle["low_price_cny"] > 80 for candle in payload["candles"]))
+        self.assertEqual(payload["candles"][0]["start_time"], "2026-07-19T04:00:00Z")
+        self.assertEqual(payload["candles"][-1]["end_time"], "2026-08-18T04:00:00Z")
+        db.close()
+
+    def test_thirty_day_history_quarantines_superseded_partial_prefix_without_bridging_gap(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        interval = timedelta(hours=4)
+        trusted_observed_at = now - timedelta(minutes=5)
+
+        # The oldest trusted row is overfetch only. Refilling it after removing
+        # the first public bucket would bridge the removed bucket's timestamp,
+        # so the API must leave the result partial instead of inventing coverage.
+        overfetch_start = now - interval * 181
+        db.add(MarketPriceCandle(
+            source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+            interval_seconds=4 * 60 * 60, start_time=overfetch_start,
+            end_time=overfetch_start + interval, open_price_cny=Decimal("73"),
+            high_price_cny=Decimal("73.05"), low_price_cny=Decimal("72.95"),
+            close_price_cny=Decimal("73"), sample_count=4, observation_count=4,
+            method="official_four_hour", data_quality="official_full",
+            source_version="official-v2", signature="trusted-7d-overfetch",
+            source_observed_at=trusted_observed_at,
+            collected_at=trusted_observed_at, updated_at=trusted_observed_at,
+        ))
+        bad_start = now - interval * 180
+        db.add(MarketPriceCandle(
+            source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+            interval_seconds=4 * 60 * 60, start_time=bad_start,
+            end_time=bad_start + interval, open_price_cny=Decimal("62"),
+            high_price_cny=Decimal("62.1"), low_price_cny=Decimal("61.9"),
+            close_price_cny=Decimal("62"), sample_count=1, observation_count=1,
+            method="official_four_hour", data_quality="official_partial",
+            source_version="official-v1-partial", signature="superseded-partial-prefix",
+            source_observed_at=now - timedelta(days=1),
+            collected_at=now - timedelta(days=1), updated_at=now - timedelta(days=1),
+        ))
+        for index in range(179):
+            candle_start = now - interval * (179 - index)
+            value = Decimal("73") + Decimal(index) / Decimal("1000")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + interval, open_price_cny=value,
+                high_price_cny=value + Decimal("0.04"), low_price_cny=value - Decimal("0.04"),
+                close_price_cny=value, sample_count=4, observation_count=4,
+                method="official_four_hour", data_quality="official_full",
+                source_version="official-v2", signature=f"trusted-7d-{index}",
+                source_observed_at=trusted_observed_at,
+                collected_at=trusted_observed_at, updated_at=trusted_observed_at,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "94GB", "30d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(len(payload["candles"]), 179)
+        self.assertEqual(payload["expected_bucket_count"], 180)
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["history_status"], "partial_history")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["coverage_span_hours"], 179 * 4)
+        self.assertAlmostEqual(payload["observed_bucket_coverage_ratio"], 179 / 180, places=4)
+        self.assertEqual(payload["quarantined_candle_count"], 1)
+        self.assertEqual(payload["quarantined_prefix_count"], 1)
+        self.assertEqual(payload["quarantined_tail_count"], 0)
+        self.assertEqual(payload["provenance"]["temporal_coverage_status"], "partial")
+        self.assertEqual(
+            payload["candles"][0]["start_time"],
+            (now - interval * 179).isoformat(timespec="seconds") + "Z",
+        )
+        self.assertGreater(payload["candles"][0]["low_price_cny"], 70)
+        self.assertNotIn(bad_start.isoformat(timespec="seconds") + "Z", {
+            candle["start_time"] for candle in payload["candles"]
+        })
+        db.close()
+
+    def test_full_current_three_candle_repricing_is_not_quarantined(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        interval = timedelta(hours=4)
+        start = now - timedelta(hours=24)
+
+        for index in range(6):
+            candle_start = start + interval * index
+            value = Decimal("84") if index < 3 else Decimal("73")
+            observed_at = now - timedelta(minutes=6 - index)
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="94GB", billing_mode="ondemand",
+                interval_seconds=4 * 60 * 60, start_time=candle_start,
+                end_time=candle_start + interval, open_price_cny=value,
+                high_price_cny=value + Decimal("0.05"), low_price_cny=value - Decimal("0.05"),
+                close_price_cny=value, sample_count=8, observation_count=8,
+                method="official_four_hour", data_quality="official_full",
+                source_version="official-v3", signature=f"confirmed-repricing-{index}",
+                source_observed_at=observed_at, collected_at=observed_at, updated_at=observed_at,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "94GB", "30d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(payload["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(len(payload["candles"]), 6)
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["quarantined_candle_count"], 0)
+        self.assertEqual(payload["quarantined_prefix_count"], 0)
+        self.assertEqual(payload["quarantined_tail_count"], 0)
+        self.assertIsNone(payload["quarantine_reason"])
+        self.assertEqual(
+            [candle["close_price_cny"] for candle in payload["candles"]],
+            [84.0, 84.0, 84.0, 73.0, 73.0, 73.0],
+        )
+        db.close()
+
+    def test_stored_history_keeps_fixed_resolution_when_primary_is_partial(self):
+        cases = (
+            ("7d", 60 * 60, 80, 4 * 60 * 60, 42),
+            ("30d", 4 * 60 * 60, 90, 24 * 60 * 60, 30),
+        )
+        now = datetime(2026, 8, 18, 8, 0)
+        for range_name, primary_seconds, primary_count, fallback_seconds, fallback_count in cases:
+            with self.subTest(range_name=range_name):
+                engine = create_engine(
+                    "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+                )
+                MarketPriceSnapshot.__table__.create(engine)
+                MarketPriceCandle.__table__.create(engine)
+                MarketCandleSyncStatus.__table__.create(engine)
+                db = sessionmaker(bind=engine)()
+                db.add(MarketPriceSnapshot(
+                    source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                    currency="CNY", min_price=Decimal("25"), p25_price=Decimal("25"),
+                    median_price=Decimal("25"), p75_price=Decimal("25"), max_price=Decimal("25"),
+                    min_price_cny=Decimal("25"), median_price_cny=Decimal("25"),
+                    max_price_cny=Decimal("25"), sample_count=8, available_gpu_count=0,
+                    fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+                    data_quality="verified", signature=f"fallback-live-{range_name}",
+                    observed_at=now, fetched_at=now,
+                ))
+                for label, interval_seconds, count, base in (
+                    ("primary", primary_seconds, primary_count, Decimal("5")),
+                    ("fallback", fallback_seconds, fallback_count, Decimal("20")),
+                ):
+                    step = timedelta(seconds=interval_seconds)
+                    for index in range(count):
+                        candle_start = now - step * (count - index)
+                        value = base + Decimal(index) / Decimal("100")
+                        db.add(MarketPriceCandle(
+                            source="kai", gpu_model="H100", gpu_variant="80GB",
+                            billing_mode="ondemand", interval_seconds=interval_seconds,
+                            start_time=candle_start, end_time=candle_start + step,
+                            open_price_cny=value, high_price_cny=value,
+                            low_price_cny=value, close_price_cny=value,
+                            sample_count=2, observation_count=2, method=f"official_{label}",
+                            data_quality="official", source_version="v1",
+                            signature=f"fallback-{range_name}-{label}-{index}",
+                            source_observed_at=now, collected_at=now, updated_at=now,
+                        ))
+                db.commit()
+
+                with patch("app.routers.market.utcnow", return_value=now):
+                    payload = _price_candles_payload(
+                        "H100", "80GB", range_name, "kai", "ondemand", db,
+                    )
+
+                self.assertEqual(payload["bucket_seconds"], primary_seconds)
+                self.assertEqual(len(payload["candles"]), primary_count)
+                self.assertEqual(payload["resolution_status"], "requested")
+                self.assertEqual(payload["curve_status"], "partial")
+                self.assertEqual(payload["history_status"], "partial_history")
+                self.assertEqual(payload["history_coverage_status"], "partial")
+                self.assertEqual(payload["provenance"]["temporal_coverage_status"], "partial")
+                self.assertGreaterEqual(min(item["low_price_cny"] for item in payload["candles"]), 5)
+                db.close()
+
+    def test_stale_complete_stored_window_is_never_reported_full(self):
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        MarketPriceSnapshot.__table__.create(engine)
+        MarketPriceCandle.__table__.create(engine)
+        MarketCandleSyncStatus.__table__.create(engine)
+        db = sessionmaker(bind=engine)()
+        now = datetime(2026, 8, 18, 8, 0)
+        history_end = now - timedelta(days=3)
+        db.add(MarketPriceSnapshot(
+            source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+            currency="CNY", min_price=Decimal("25"), p25_price=Decimal("25"),
+            median_price=Decimal("25"), p75_price=Decimal("25"), max_price=Decimal("25"),
+            min_price_cny=Decimal("25"), median_price_cny=Decimal("25"),
+            max_price_cny=Decimal("25"), sample_count=8, available_gpu_count=0,
+            fx_rate=Decimal("1"), fx_source="test", fx_date="2026-08-18",
+            data_quality="verified", signature="stale-live", observed_at=now, fetched_at=now,
+        ))
+        for index in range(168):
+            candle_start = history_end - timedelta(hours=168 - index)
+            value = Decimal("20") + Decimal(index) / Decimal("100")
+            db.add(MarketPriceCandle(
+                source="kai", gpu_model="H100", gpu_variant="80GB", billing_mode="ondemand",
+                interval_seconds=60 * 60, start_time=candle_start,
+                end_time=candle_start + timedelta(hours=1), open_price_cny=value,
+                high_price_cny=value, low_price_cny=value, close_price_cny=value,
+                sample_count=2, observation_count=2, method="official_hourly",
+                data_quality="official", source_version="v1", signature=f"stale-{index}",
+                source_observed_at=history_end, collected_at=history_end, updated_at=history_end,
+            ))
+        db.commit()
+
+        with patch("app.routers.market.utcnow", return_value=now):
+            payload = _price_candles_payload(
+                "H100", "80GB", "7d", "kai", "ondemand", db,
+            )
+
+        self.assertEqual(len(payload["candles"]), 168)
+        self.assertEqual(payload["history_status"], "partial_history")
+        self.assertEqual(payload["curve_status"], "partial")
+        self.assertEqual(payload["history_coverage_status"], "partial")
+        self.assertEqual(payload["provenance"]["temporal_coverage_status"], "complete")
+        self.assertEqual(payload["provenance"]["history_freshness_status"], "stale")
         db.close()
 
     def test_six_hour_curve_prefers_complete_snapshots_and_falls_back_as_one_official_series(self):

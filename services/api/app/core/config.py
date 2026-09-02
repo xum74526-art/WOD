@@ -198,6 +198,10 @@ class Settings(BaseSettings):
     # requesting the provider faster than its documented cadence.
     MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 300
     MARKET_CANDLE_SYNC_SECONDS: int = 300
+    # Bound one scheduled run without permanently excluding models. Jobs are
+    # selected oldest-first, so every GPU identity eventually receives the
+    # same official 1h/4h/1d history coverage.
+    MARKET_CANDLE_SYNC_MAX_JOBS: int = 36
     MARKET_CANDLE_HISTORY_DAYS: int = 100
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
     # Authenticated users allowed to fulfil KAI-backed manually delivered orders.

@@ -12,6 +12,7 @@ from app.integrations.kai_pricing import (
     _CANDLE_WORKERS,
     _HTTP_RUNNER,
     _get_json,
+    _select_centered_price_candidates,
     _upstream_gpu_model_filters,
     KaiPricingError,
     KaiPriceBatch,
@@ -62,12 +63,17 @@ class KaiPricingTests(unittest.TestCase):
             data_version=2, refresh_interval_ms=300_000, raw_count=len(rows),
         )
 
-    def history_payload(self, product_id, *, base="2.4", count=43):
+    def history_payload(
+        self, product_id, *, base="2.4", count=169, interval="1h", end_at=None,
+    ):
         base_value = Decimal(base)
+        interval_hours = {"1h": 1, "4h": 4, "1d": 24}[interval]
+        interval_ms = interval_hours * 60 * 60 * 1000
         candles = []
-        first_observed = self.now - timedelta(hours=4 * max(count - 1, 0))
+        last_observed = end_at or self.now
+        first_observed = last_observed - timedelta(hours=interval_hours * max(count - 1, 0))
         for index in range(count):
-            observed = first_observed + timedelta(hours=4 * index)
+            observed = first_observed + timedelta(hours=interval_hours * index)
             candles.append({
                 "asOf": observed.isoformat() + "Z",
                 "open": str(base_value), "high": str(base_value + Decimal("0.2")),
@@ -77,14 +83,14 @@ class KaiPricingTests(unittest.TestCase):
         return {
             "data": {
                 "productId": product_id, "currency": "CNY", "unit": "GPU_HOUR",
-                "interval": "4h", "months": 1, "candles": candles,
+                "interval": interval, "months": 1, "candles": candles,
             },
             "meta": {
-                "asOf": self.now.isoformat() + "Z", "dataVersion": 2,
-                "count": len(candles), "interval": "4h", "intervalMs": 14_400_000,
+                "asOf": last_observed.isoformat() + "Z", "dataVersion": 2,
+                "count": len(candles), "interval": interval, "intervalMs": interval_ms,
                 "months": 1,
-                "from": (self.now - timedelta(days=31)).isoformat() + "Z",
-                "to": self.now.isoformat() + "Z",
+                "from": (last_observed - timedelta(days=31)).isoformat() + "Z",
+                "to": last_observed.isoformat() + "Z",
             },
         }
 
@@ -100,11 +106,229 @@ class KaiPricingTests(unittest.TestCase):
         self.assertIsNone(rows[1]["max_configurable_quantity"])
         self.assertNotIn("stock", rows[0])
 
+    def test_centered_price_cap_preserves_full_pool_median_for_ten_quotes(self):
+        rows = [{
+            "external_product_id": f"product-{11 - price:02d}",
+            "price_cny": Decimal(price),
+        } for price in range(1, 11)]
+
+        selected = _select_centered_price_candidates(rows, 8)
+
+        selected_prices = sorted(item["price_cny"] for item in selected)
+        self.assertEqual(selected_prices, [Decimal(value) for value in range(2, 10)])
+        self.assertEqual(
+            (selected_prices[3] + selected_prices[4]) / Decimal("2"),
+            Decimal("5.5"),
+        )
+
+    def test_centered_price_candidate_selection_ignores_input_order(self):
+        rows = [{
+            "external_product_id": f"product-{11 - price:02d}",
+            "price_cny": Decimal(price),
+        } for price in range(1, 11)]
+
+        first = _select_centered_price_candidates(rows, 8)
+        second = _select_centered_price_candidates(reversed(rows), 8)
+
+        self.assertEqual(
+            [item["external_product_id"] for item in first],
+            [item["external_product_id"] for item in second],
+        )
+
+    def test_centered_price_cohort_reduces_single_product_cross_rank_jump(self):
+        prices = [
+            ("product-j", Decimal("2.20")),
+            ("product-i", Decimal("2.35")),
+            ("product-h", Decimal("3.00")),
+            ("product-g", Decimal("3.52")),
+            ("product-f", Decimal("4.49")),
+            ("product-e", Decimal("5.62")),
+            ("product-d", Decimal("6.38")),
+            ("product-c", Decimal("6.71")),
+            ("product-b", Decimal("7.64")),
+            ("product-a", Decimal("7.70")),
+        ]
+        rows = [quote(product_id, price=str(price)) for product_id, price in prices]
+        prices_by_id = dict(prices)
+
+        def history(product_id, interval, _months=1, *, deadline=None):
+            self.assertEqual(interval, "1h")
+            candles = []
+            first_observed = self.now - timedelta(hours=168)
+            for index in range(169):
+                observed = first_observed + timedelta(hours=index)
+                if product_id == "product-d":
+                    previous = Decimal("5.43") if index <= 84 else Decimal("6.38")
+                    current = Decimal("5.43") if index < 84 else Decimal("6.38")
+                else:
+                    previous = current = prices_by_id[product_id]
+                candles.append({
+                    "asOf": observed.isoformat() + "Z",
+                    "open": str(previous),
+                    "high": str(max(previous, current)),
+                    "low": str(min(previous, current)),
+                    "close": str(current),
+                })
+            return ({
+                "data": {
+                    "productId": product_id, "currency": "CNY", "unit": "GPU_HOUR",
+                    "interval": "1h", "months": 1, "candles": candles,
+                },
+                "meta": {
+                    "asOf": self.now.isoformat() + "Z", "dataVersion": 2,
+                    "count": len(candles), "interval": "1h", "intervalMs": 3_600_000,
+                    "months": 1,
+                    "from": (self.now - timedelta(days=31)).isoformat() + "Z",
+                    "to": self.now.isoformat() + "Z",
+                },
+            }, 1000)
+
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch(rows)), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", side_effect=history,
+        ), patch.object(settings, "KAI_CANDLE_MAX_PRODUCTS", 8):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        closes = [Decimal(str(item["close_price_cny"])) for item in value["candles"]]
+        observed_max_jump = max(
+            abs(current / previous - Decimal("1"))
+            for previous, current in zip(closes, closes[1:])
+        )
+        legacy_ids = {
+            product_id for product_id, _price in sorted(prices)[:8]
+        }
+        legacy_before = sorted(
+            Decimal("5.43") if product_id == "product-d" else price
+            for product_id, price in prices if product_id in legacy_ids
+        )
+        legacy_after = sorted(
+            Decimal("6.38") if product_id == "product-d" else price
+            for product_id, price in prices if product_id in legacy_ids
+        )
+        legacy_before_median = (legacy_before[3] + legacy_before[4]) / Decimal("2")
+        legacy_after_median = (legacy_after[3] + legacy_after[4]) / Decimal("2")
+        legacy_jump = abs(legacy_after_median / legacy_before_median - Decimal("1"))
+
+        self.assertGreater(legacy_jump, Decimal("0.08"))
+        self.assertLess(observed_max_jump, Decimal("0.025"))
+        self.assertLess(observed_max_jump, legacy_jump / Decimal("3"))
+        self.assertEqual(value["provenance"]["candidate_product_count"], 10)
+        self.assertEqual(value["provenance"]["sampled_candidate_product_count"], 8)
+        self.assertEqual(
+            value["provenance"]["candidate_sampling_method"],
+            "current_price_centered_parity_matched",
+        )
+        self.assertEqual(value["latest_live_price_cny"], 5.055)
+        self.assertTrue(value["latest_live_comparable_to_history"])
+
+    def test_live_comparability_uses_full_pool_and_successful_cohort_medians(self):
+        rows = [
+            quote("product-a", price="2"),
+            quote("product-b", price="4"),
+            quote("product-c", price="6"),
+        ]
+
+        def history(product_id, _interval, _months=1, *, deadline=None):
+            if product_id == "product-c":
+                raise KaiPricingError("history_unavailable")
+            return self.history_payload(product_id, base=str({"product-a": 2, "product-b": 4}[product_id])), 1000
+
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch(rows)), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", side_effect=history,
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        self.assertEqual(value["latest_live_price_cny"], 4.0)
+        self.assertFalse(value["latest_live_comparable_to_history"])
+        self.assertEqual(
+            value["provenance"]["latest_live_successful_cohort_median_price_cny"],
+            3.0,
+        )
+
+    def test_late_low_price_product_cannot_change_members_mid_window(self):
+        full_history_prices = {
+            "product-low-a": "73.4",
+            "product-low-b": "73.4",
+            "product-low-c": "73.4",
+            "product-high-a": "126.4",
+            "product-high-b": "126.4",
+            "product-high-c": "126.4",
+        }
+        late_product_id = "product-late-low"
+        rows = [
+            quote(product_id, price=str(Decimal(base) + Decimal("0.1")))
+            for product_id, base in full_history_prices.items()
+        ] + [quote(late_product_id, price="73.5")]
+
+        def history(product_id, interval, _months=1, *, deadline=None):
+            self.assertEqual(interval, "1h")
+            if product_id == late_product_id:
+                # This lower-price region joined halfway through the requested
+                # range. It is real history, but it cannot join the aggregate
+                # halfway and change the meaning of the median.
+                return self.history_payload(
+                    product_id, base="73.4", count=85, interval=interval,
+                ), 1000
+            return self.history_payload(
+                product_id,
+                base=full_history_prices[product_id],
+                count=169,
+                interval=interval,
+            ), 1000
+
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch(rows)), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", side_effect=history,
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        closes = [Decimal(str(item["close_price_cny"])) for item in value["candles"]]
+        observed_jumps = [
+            abs(current / previous - Decimal("1"))
+            for previous, current in zip(closes, closes[1:])
+        ]
+        legacy_before = [
+            Decimal(base) + Decimal("0.1")
+            for base in full_history_prices.values()
+        ]
+        legacy_after = legacy_before + [Decimal("73.5")]
+        legacy_before.sort()
+        legacy_after.sort()
+        legacy_before_median = (
+            legacy_before[2] + legacy_before[3]
+        ) / Decimal("2")
+        legacy_after_median = legacy_after[3]
+        legacy_jump = abs(
+            legacy_after_median / legacy_before_median - Decimal("1")
+        )
+        expected_ids = sorted(full_history_prices)
+        self.assertGreater(legacy_jump, Decimal("0.26"))
+        self.assertEqual(value["coverage_class"], "full")
+        self.assertEqual(len(value["candles"]), 168)
+        self.assertEqual({item["sample_count"] for item in value["candles"]}, {6})
+        self.assertEqual({item["observation_count"] for item in value["candles"]}, {6})
+        self.assertEqual(max(observed_jumps), Decimal("0"))
+        self.assertEqual(value["provenance"]["selected_product_ids"], expected_ids)
+        self.assertEqual(value["provenance"]["fixed_cohort_product_ids"], expected_ids)
+        self.assertEqual(value["provenance"]["fixed_cohort_product_count"], 6)
+        self.assertEqual(
+            value["provenance"]["fixed_cohort_window_start"],
+            (self.now - timedelta(days=7)).isoformat(timespec="seconds") + "Z",
+        )
+        self.assertNotIn(late_product_id, value["provenance"]["fixed_cohort_product_ids"])
+        self.assertFalse(value["latest_live_comparable_to_history"])
+        self.assertEqual(
+            value["provenance"]["latest_live_full_pool_median_price_cny"],
+            73.5,
+        )
+        self.assertEqual(
+            value["provenance"]["latest_live_successful_cohort_median_price_cny"],
+            100.0,
+        )
+
     def test_seven_day_candles_use_official_ohlc_and_are_cached(self):
         batch = self.batch([quote()])
         candles = []
-        for index in range(43):
-            observed = self.now - timedelta(days=7) + timedelta(hours=4 * index)
+        for index in range(169):
+            observed = self.now - timedelta(days=7) + timedelta(hours=index)
             base = Decimal("2.0") + Decimal(index) / Decimal("100")
             candles.append({
                 "asOf": observed.isoformat() + "Z",
@@ -114,12 +338,12 @@ class KaiPricingTests(unittest.TestCase):
         payload = {
             "data": {
                 "productId": "kai-4090-a", "currency": "CNY", "unit": "GPU_HOUR",
-                "interval": "4h", "months": 1,
+                "interval": "1h", "months": 1,
                 "candles": candles,
             },
             "meta": {
                 "asOf": self.now.isoformat() + "Z", "dataVersion": 2,
-                "count": len(candles), "interval": "4h", "intervalMs": 14_400_000,
+                "count": len(candles), "interval": "1h", "intervalMs": 3_600_000,
                 "months": 1,
                 "from": (self.now - timedelta(days=31)).isoformat() + "Z",
                 "to": self.now.isoformat() + "Z",
@@ -137,9 +361,61 @@ class KaiPricingTests(unittest.TestCase):
         self.assertEqual(first["selected_source"], "kai")
         self.assertEqual(first["method"], "kai_official_ohlc_cross_region_robust_median")
         self.assertEqual(first["coverage_class"], "full")
+        self.assertEqual(first["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(first["candles"]), 168)
+        self.assertEqual(first["coverage_span_hours"], 168.0)
+        self.assertEqual(first["provenance"]["history_as_of"], "2026-08-21T04:00:00Z")
+        self.assertEqual(first["provenance"]["history_lag_seconds"], 0)
         self.assertEqual(first["provenance"]["selected_product_ids"], ["kai-4090-a"])
         self.assertGreater(first["candles"][0]["high_price_cny"], first["candles"][0]["low_price_cny"])
         self.assertTrue(all(item["sources"] == ["kai"] for item in first["candles"]))
+
+    def test_one_upstream_decimal_ulp_is_normalized_without_losing_history(self):
+        batch = self.batch([quote()])
+        payload = self.history_payload("kai-4090-a", count=169, interval="1h")
+        payload["data"]["candles"][20]["high"] = "2.499999"
+
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
+            "app.integrations.kai_pricing._fetch_product_candles",
+            return_value=(payload, 1000),
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        self.assertEqual(value["coverage_class"], "full")
+        self.assertEqual(len(value["candles"]), 168)
+        self.assertTrue(all(
+            item["high_price_cny"] >= max(item["open_price_cny"], item["close_price_cny"])
+            for item in value["candles"]
+        ))
+
+    def test_twenty_four_hour_window_is_anchored_to_last_official_candle(self):
+        batch = self.batch([quote()])
+        last_official_start = self.now - timedelta(hours=12)
+        payload = self.history_payload(
+            "kai-4090-a", count=745, interval="1h", end_at=last_official_start,
+        )
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 180_000),
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "24h")
+
+        self.assertEqual(value["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(value["candles"]), 24)
+        self.assertEqual(value["coverage_class"], "full")
+        self.assertEqual(value["coverage_span_hours"], 24.0)
+        self.assertEqual(
+            value["candles"][-1]["end_time"],
+            last_official_start.isoformat() + "Z",
+        )
+        self.assertEqual(
+            value["provenance"]["history_as_of"],
+            last_official_start.isoformat() + "Z",
+        )
+        self.assertEqual(value["provenance"]["history_lag_seconds"], 12 * 60 * 60)
+        self.assertLessEqual(
+            datetime.fromisoformat(value["provenance"]["history_as_of"].removesuffix("Z")),
+            datetime.fromisoformat(payload["meta"]["to"].removesuffix("Z")),
+        )
 
     def test_ninety_day_candles_request_three_official_months(self):
         batch = self.batch([quote()])
@@ -173,13 +449,30 @@ class KaiPricingTests(unittest.TestCase):
         self.assertEqual(fetch.call_args.args[2], 3)
         self.assertEqual(value["range"], "90d")
         self.assertEqual(value["coverage_class"], "full")
-        self.assertEqual(len(value["candles"]), 91)
+        self.assertEqual(len(value["candles"]), 90)
+        self.assertEqual(value["coverage_span_hours"], 90 * 24)
+
+    def test_thirty_day_chart_uses_native_four_hour_candles(self):
+        batch = self.batch([quote()])
+        payload = self.history_payload(
+            "kai-4090-a", count=187, interval="4h",
+        )
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 46_000),
+        ) as fetch:
+            value = get_aggregated_candles("RTX4090", "24GB", "30d")
+
+        self.assertEqual(fetch.call_args.args[1:3], ("4h", 1))
+        self.assertEqual(value["bucket_seconds"], 4 * 60 * 60)
+        self.assertEqual(len(value["candles"]), 180)
+        self.assertEqual(value["coverage_span_hours"], 30 * 24)
+        self.assertEqual(value["coverage_class"], "full")
 
     def test_exact_product_candles_match_identity_and_live_price(self):
         batch = self.batch([quote()])
         candles = []
-        for index in range(43):
-            observed = self.now - timedelta(days=7) + timedelta(hours=4 * index)
+        for index in range(169):
+            observed = self.now - timedelta(days=7) + timedelta(hours=index)
             candles.append({
                 "asOf": observed.isoformat() + "Z",
                 "open": "2.4", "high": "2.6", "low": "2.3", "close": "2.5",
@@ -187,11 +480,11 @@ class KaiPricingTests(unittest.TestCase):
         payload = {
             "data": {
                 "productId": "kai-4090-a", "currency": "CNY", "unit": "GPU_HOUR",
-                "interval": "4h", "months": 1, "candles": candles,
+                "interval": "1h", "months": 1, "candles": candles,
             },
             "meta": {
                 "asOf": self.now.isoformat() + "Z", "dataVersion": 2,
-                "count": len(candles), "interval": "4h", "intervalMs": 14_400_000,
+                "count": len(candles), "interval": "1h", "intervalMs": 3_600_000,
                 "months": 1,
                 "from": (self.now - timedelta(days=31)).isoformat() + "Z",
                 "to": self.now.isoformat() + "Z",
@@ -206,6 +499,8 @@ class KaiPricingTests(unittest.TestCase):
 
         self.assertEqual(exact["method"], "kai_official_exact_product_ohlc")
         self.assertEqual(exact["coverage_class"], "full")
+        self.assertEqual(exact["bucket_seconds"], 60 * 60)
+        self.assertEqual(len(exact["candles"]), 168)
         self.assertEqual(exact["latest_live_price_cny"], 2.5)
         self.assertEqual(exact["provenance"]["product_selection"], "exact_product_id")
         self.assertEqual(mismatch.exception.code, "product_identity_mismatch")
@@ -244,10 +539,11 @@ class KaiPricingTests(unittest.TestCase):
             "app.integrations.kai_pricing.normalized_current_quotes", return_value=quotes,
         ), patch(
             "app.integrations.kai_pricing._fetch_product_candles", side_effect=history,
-        ), patch.object(settings, "KAI_RANKING_MAX_PRODUCTS", 24):
+        ) as fetch, patch.object(settings, "KAI_RANKING_MAX_PRODUCTS", 24):
             metrics = get_ranking_metrics(identities)
 
         self.assertEqual(len(metrics), 20)
+        self.assertEqual({call.args[1] for call in fetch.call_args_list}, {"4h"})
         self.assertTrue(all(item["volatility_status"] == "available" for item in metrics.values()))
         self.assertTrue(all(item["history_provenance"]["upstream_provider"] == "kai" for item in metrics.values()))
 
@@ -357,9 +653,13 @@ class KaiPricingTests(unittest.TestCase):
             quantities=(),
         )
         batch = self.batch([h20])
-        payload = self.history_payload("kai-h20-a", base="3.0", count=8)
+        def partial_history(product_id, interval, _months=1, *, deadline=None):
+            return self.history_payload(
+                product_id, base="3.0", count=8, interval=interval,
+            ), 1000
+
         with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
-            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 1000),
+            "app.integrations.kai_pricing._fetch_product_candles", side_effect=partial_history,
         ):
             exact = get_exact_product_candles("kai-h20-a", "H20", "141GB", "7d")
             clear_caches()
@@ -372,8 +672,8 @@ class KaiPricingTests(unittest.TestCase):
             self.assertEqual(value["curve_status"], "partial")
             self.assertEqual(value["history_coverage_status"], "partial")
             self.assertEqual(value["data_quality"], "official_historical_ohlc_partial")
-            self.assertEqual(value["coverage_span_hours"], 28.0)
-            self.assertEqual(len(value["candles"]), 8)
+            self.assertEqual(value["coverage_span_hours"], 7.0)
+            self.assertEqual(len(value["candles"]), 7)
             for forbidden in ("change_7d_pct", "volatility_7d", "range_low_cny", "range_high_cny"):
                 self.assertNotIn(forbidden, value)
         partial = ranking[("H20", "141GB")]
@@ -383,13 +683,15 @@ class KaiPricingTests(unittest.TestCase):
         self.assertIsNone(partial["range_high_cny"])
         self.assertEqual(partial["history_coverage_status"], "partial")
         self.assertEqual(partial["history_day_count"], 2)
-        self.assertEqual(partial["history_point_count"], 8)
+        self.assertEqual(partial["history_point_count"], 7)
         self.assertLess(partial["observed_partial_low_cny"], partial["observed_partial_high_cny"])
 
     def test_single_official_observation_is_returned_without_zero_percent_claim(self):
         row = quote("single")
         batch = self.batch([row])
-        payload = self.history_payload("single", count=1)
+        # KAI includes the open bucket at meta.to, so two publications contain
+        # exactly one closed official candle.
+        payload = self.history_payload("single", count=2)
         with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=batch), patch(
             "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 500),
         ):
@@ -401,7 +703,7 @@ class KaiPricingTests(unittest.TestCase):
             self.assertEqual(value["coverage_class"], "single")
             self.assertEqual(value["curve_status"], "single")
             self.assertEqual(value["history_coverage_status"], "single")
-            self.assertEqual(value["coverage_span_hours"], 0.0)
+            self.assertEqual(value["coverage_span_hours"], 1.0)
             self.assertEqual(len(value["candles"]), 1)
             self.assertNotIn("change_7d_pct", value)
 
@@ -456,6 +758,63 @@ class KaiPricingTests(unittest.TestCase):
                 with self.assertRaises(KaiPricingError) as raised:
                     get_aggregated_candles("RTX4090", "24GB", "7d")
                 self.assertEqual(raised.exception.code, "history_unavailable")
+
+    def test_future_official_metadata_is_rejected(self):
+        payload = self.history_payload("kai-4090-a")
+        future = self.now + timedelta(hours=1)
+        payload["meta"]["asOf"] = future.isoformat() + "Z"
+        payload["meta"]["to"] = future.isoformat() + "Z"
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch([quote()])), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 1000),
+        ), patch("app.integrations.kai_pricing.utcnow", return_value=self.now):
+            with self.assertRaises(KaiPricingError) as raised:
+                get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        self.assertEqual(raised.exception.code, "history_unavailable")
+
+    def test_complete_but_stale_official_window_is_observable_and_not_full(self):
+        stale_end = self.now - timedelta(days=3)
+        payload = self.history_payload(
+            "kai-4090-a", count=169, interval="1h", end_at=stale_end,
+        )
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch([quote()])), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", return_value=(payload, 1000),
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        self.assertEqual(len(value["candles"]), 168)
+        self.assertEqual(value["coverage_class"], "partial")
+        self.assertEqual(value["history_status"], "partial_history")
+        self.assertEqual(value["history_coverage_status"], "partial")
+        self.assertEqual(value["provenance"]["raw_coverage_class"], "full")
+        self.assertEqual(value["provenance"]["history_freshness_status"], "stale")
+        self.assertGreater(
+            value["provenance"]["history_lag_seconds"],
+            value["provenance"]["history_stale_after_seconds"],
+        )
+
+    def test_latest_majority_cohort_ignores_one_stale_region(self):
+        rows = [quote("product-a"), quote("product-b"), quote("product-stale")]
+
+        def history(product_id, _interval, _months=1, *, deadline=None):
+            end_at = self.now - timedelta(days=3) if product_id == "product-stale" else self.now
+            return self.history_payload(product_id, count=169, interval="1h", end_at=end_at), 1000
+
+        with patch("app.integrations.kai_pricing.fetch_price_batch", return_value=self.batch(rows)), patch(
+            "app.integrations.kai_pricing._fetch_product_candles", side_effect=history,
+        ):
+            value = get_aggregated_candles("RTX4090", "24GB", "7d")
+
+        self.assertEqual(value["coverage_class"], "full")
+        self.assertEqual(len(value["candles"]), 168)
+        self.assertEqual(
+            value["provenance"]["selected_product_ids"],
+            ["product-a", "product-b"],
+        )
+        self.assertEqual(value["provenance"]["validated_product_count"], 3)
+        self.assertEqual(value["provenance"]["cohort_min_product_count"], 2)
+        self.assertEqual(value["provenance"]["selection_completeness"], "latest_reasonable_cohort")
+        self.assertEqual(value["provenance"]["history_freshness_status"], "current")
 
     def test_absolute_deadline_covers_slow_filtered_price_batch(self):
         def slow_batch(**_kwargs):
