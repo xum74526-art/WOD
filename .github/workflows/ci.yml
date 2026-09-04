@@ -34,7 +34,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci --prefix apps/web
+      # npm 11 uses the supported bulk advisory endpoint, without retired quick fallback.
+      - run: npm install --global npm@11.9.0 --no-audit --no-fund
+      - run: npm ci --prefix apps/web --no-audit
       - run: npm --prefix apps/web audit --audit-level=high
       - run: npm run check:web
       - run: npm --prefix apps/web test
@@ -51,7 +53,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/ios/package-lock.json
-      - run: npm ci --prefix apps/ios
+      - run: npm install --global npm@11.9.0 --no-audit --no-fund
+      - run: npm ci --prefix apps/ios --no-audit
       - run: npm --prefix apps/ios audit --audit-level=high
       - run: npm run check:ios
       - run: npm run test:ios
@@ -67,7 +70,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/android/package-lock.json
-      - run: npm ci --prefix apps/android
+      - run: npm install --global npm@11.9.0 --no-audit --no-fund
+      - run: npm ci --prefix apps/android --no-audit
       - run: npm --prefix apps/android audit --audit-level=high
       - run: npm run check:android
       - run: npm run test:android
