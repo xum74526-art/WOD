@@ -236,7 +236,6 @@ export function AccountDeletion() {
           </form>}
           {!eligibility.eligible && <button className="outline-link" disabled={busy} type="button" onClick={() => void loadEligibility()}>{en ? "Check again" : "重新检查"}</button>}
         </> : busy ? <p role="status">{en ? "Checking account eligibility…" : "正在检查账号注销条件…"}</p> : <button type="button" className="outline-link" onClick={() => void loadEligibility()}>{en ? "Try again" : "重新检查"}</button>}
-        <p className={styles.note}><a href="tel:+864001082026">+86 4001082026</a></p>
       </section>
     </main>
     <SiteFooter />

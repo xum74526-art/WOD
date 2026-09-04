@@ -159,12 +159,10 @@ test("public deletion entry, actual settings link and privacy notice are present
   assert.match(privacy, /href="\/account-deletion"/);
 });
 
-test("deletion contact displays only the confirmed international phone number", () => {
+test("deletion and privacy keep their scoped disclosures without a customer phone entry", () => {
   const ui = readFileSync(new URL("../components/account-deletion.tsx", import.meta.url), "utf8");
   const privacy = readFileSync(new URL("../app/privacy/page.tsx", import.meta.url), "utf8");
-  for (const source of [ui, privacy]) {
-    assert.match(source, /<p(?: className=\{styles\.note\})?><a href="tel:\+864001082026">\+86 4001082026<\/a><\/p>/);
-  }
+  for (const source of [ui, privacy]) assert.doesNotMatch(source, /tel:\+864001082026|\+86 4001082026/);
   assert.doesNotMatch(ui, /href="\/support"|Unable to verify your account or resolve an item\?/);
 });
 

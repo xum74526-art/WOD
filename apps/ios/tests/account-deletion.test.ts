@@ -238,18 +238,15 @@ test('mobile entry, consent, password wiping and bounded status recovery are pre
   assert.doesNotMatch(page, /clearStorage|setStorageSync\([^)]*password|console\./)
 })
 
-test('deletion contact shows only the approved number outside all auth and status branches', () => {
+test('deletion and privacy views do not expose the contact number', () => {
   const page = readFileSync(new URL('../src/pages/account-deletion/index.vue', import.meta.url), 'utf8')
   const privacy = readFileSync(new URL('../src/pages/agreement/index.vue', import.meta.url), 'utf8')
-  const locale = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
-  assert.match(page, /<scroll-view scroll-y class="body">\s+<button class="deletion-contact" @tap="callContactPhone">\{\{ t\('platformContactNumber'\) \}\}<\/button>\s+<view v-if="receiptView"/)
   assert.doesNotMatch(page, /\/pages\/kefu\/index|deletionResolveHelp/)
-  assert.equal((locale.match(/platformContactNumber: '\+86 4001082026'/g) || []).length, 2)
-  assert.equal((privacy.match(/'\+86 4001082026'/g) || []).length, 2)
-  assert.match(privacy, /v-if="paragraph === t\('platformContactNumber'\)"[^>]+@tap="callContactPhone">\{\{ paragraph \}\}/)
+  assert.doesNotMatch(page, /callContactPhone|platformContactNumber|4001082026/)
+  assert.doesNotMatch(privacy, /callContactPhone|platformContactNumber|4001082026/)
 })
 
-test('deletion contact opens the dialer only on explicit activation with the exact international number', () => {
+test('contact link opens the dialer only on explicit activation with the exact international number', () => {
   const source = readFileSync(new URL('../src/utils/contact-phone.ts', import.meta.url), 'utf8')
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   const called: string[] = []

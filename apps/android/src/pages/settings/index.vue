@@ -74,6 +74,10 @@
 
       <SectionHeader :title="t('k_7116e7ec')" />
       <view class="card menu">
+        <view class="menu-item contact-link" role="button" @tap="callContactPhone">
+          <text class="mi-text">{{ t('platformContactLink', { phone: t('platformContactNumber') }) }}</text>
+          <AppIcon name="chevron" :size="36" />
+        </view>
         <view class="menu-item" @tap="nav('/pages/account-deletion/index')">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
@@ -112,6 +116,7 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
+import { callContactPhone } from '@/utils/contact-phone'
 import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
@@ -247,6 +252,7 @@ function onLogout() {
 .mi-right { display: flex; align-items: center; gap: 8rpx; }
 .mi-sub { color: var(--text-dim); font-size: 26rpx; }
 .mi-sub.bound { color: var(--up); }
+.contact-link .mi-text { color: var(--primary); }
 .binding-hint { display: block; max-width: 430rpx; margin-top: 5rpx; color: var(--text-sub); font-size: 20rpx; line-height: 1.45; }
 .settings-badge { min-width: 30rpx; height: 30rpx; padding: 0 7rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 15rpx; color: #fff; background: var(--down); font-size: 17rpx; font-weight: 700; }
 .theme-value { color: var(--text-sub); }

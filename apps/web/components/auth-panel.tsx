@@ -6,6 +6,7 @@ import { ArrowClockwise, CheckCircle, Eye, EyeSlash, Key, LockKey, Phone, Shield
 import { Button, Callout, Checkbox, TextField } from "@radix-ui/themes";
 import { exchangeKaiTicket, getAuthCaptcha, getKaiAuthConfig, kaiWebAuthorizationUrl, passwordLogin, passwordRegister } from "@/lib/api";
 import { useI18n } from "@/components/locale-root";
+import { ContactPhone } from "@/components/contact-phone";
 
 type AuthPanelProps = { mode: "login" | "register" };
 const PENDING_KAI_INTENT_KEY = "wod_kai_auth_intent";
@@ -233,6 +234,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       <div className="auth-panel__footer">
         <p>{isRegister ? t("auth.already", "已经有北斗 kai 账号？") : t("auth.new", "第一次使用北斗 kai？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
         <div><Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link><Link href="/terms">{t("footer.terms", "用户协议")}</Link><Link href="/help">{t("auth.help", "登录帮助")}</Link></div>
+        <ContactPhone />
       </div>
     </section>
   );

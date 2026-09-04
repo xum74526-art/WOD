@@ -16,8 +16,6 @@
         </view>
       </view>
 
-      <button class="contact-phone" @tap="callContactPhone">{{ t('platformContactNumber') }}</button>
-
       <view class="hero">
         <text class="hero-label">{{ t('totalAssets') }}</text>
         <text class="hero-val">{{ fmtCHn(totalAsset) }}</text>
@@ -230,7 +228,6 @@ import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { fmtCH, fmtCHn, formatNumber, toCardHours } from '@/utils/format'
 import { navigateTo as go } from '@/utils/nav'
-import { callContactPhone } from '@/utils/contact-phone'
 import type { Product } from '@/api/gpu'
 import type { RevenueSummary, RevenuePoint } from '@/api/revenue'
 import AppIcon from '@/components/AppIcon.vue'
@@ -557,8 +554,6 @@ function markProductImageFailed(id: number) {
 .shell { padding: 0 20px calc(132rpx + var(--safe-bottom)); }
 
 .topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }
-.contact-phone { display: block; width: fit-content; margin: 0 0 16rpx auto; padding: 12rpx 0; background: transparent; color: var(--primary); font-size: 26rpx; line-height: 1.5; text-decoration: underline; }
-.contact-phone::after { border: 0; }
 .hi { color: var(--text-sub); font-size: 13px; }
 .uname { color: var(--text); font-size: 15px; font-weight: 700; }
 .top-actions { display: flex; gap: 8px; align-items: center; color: var(--text-sub); }

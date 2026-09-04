@@ -2,7 +2,6 @@
   <view class="page">
     <AppNavBar :title="t('accountDeletion')" :showBack="!receiptView" />
     <scroll-view scroll-y class="body">
-      <button class="deletion-contact" @tap="callContactPhone">{{ t('platformContactNumber') }}</button>
       <view v-if="receiptView" class="card section">
         <text class="heading">{{ t(state.stage === 'completed' ? 'deletionCompleted' : state.stage === 'processing' ? 'deletionProcessing' : 'deletionStatusUnknown') }}</text>
         <text class="paragraph">{{ t(state.stage === 'completed' ? 'deletionCompletedHint' : state.stage === 'processing' ? 'deletionProcessingHint' : 'deletionStatusUnknownHint') }}</text>
@@ -85,7 +84,6 @@ import { ApiRequestError } from '@/api/request'
 import { createDeletionController, createDeletionState } from '@/utils/account-deletion'
 import { clearDeletionReceipt, consumeDeletionCompletion, readDeletionReceipt, rememberDeletionCompletion, saveDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { clearInquiryRequestPrefill } from '@/utils/inquiry-request'
-import { callContactPhone } from '@/utils/contact-phone'
 import { navigateTo as nav } from '@/utils/nav'
 import { useUserStore } from '@/store/user'
 import { useNotificationStore } from '@/store/notification'
@@ -245,7 +243,6 @@ onBackPress(() => {
 <style lang="scss" scoped>
 .page { min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; }
 .body { flex: 1; box-sizing: border-box; padding: 24rpx 32rpx calc(64rpx + var(--safe-bottom)); }
-.deletion-contact { margin-bottom: 24rpx; color: var(--primary); font-size: 28rpx; line-height: 1.6; text-decoration: underline; }
 .section { margin-bottom: 24rpx; padding: 30rpx; }
 .heading { display: block; font-size: 30rpx; font-weight: 600; color: var(--text); }
 .paragraph { display: block; margin-top: 18rpx; font-size: 26rpx; line-height: 1.7; color: var(--text); }

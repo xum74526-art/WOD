@@ -79,6 +79,7 @@
           <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
         </view>
         <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
+        <button class="contact-link" @tap="callContactPhone">{{ t('platformContactLink', { phone: t('platformContactNumber') }) }}</button>
       </view>
     </view>
   </view>
@@ -100,6 +101,7 @@ import {
 } from '@/utils/kai-auth-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
+import { callContactPhone } from '@/utils/contact-phone'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -409,4 +411,6 @@ onUnmounted(() => {
 .btn-primary { background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; }
 .btn-primary.disabled { opacity: 0.4; }
 .security-note { display: block; text-align: center; color: var(--text-dim); font-size: 21rpx; margin: 20rpx 0 4rpx; }
+.contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
+.contact-link::after { border: 0; }
 </style>

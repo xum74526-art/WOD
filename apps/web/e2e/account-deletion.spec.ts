@@ -42,10 +42,7 @@ test("public deletion entry works without an installed app or authenticated sess
   await expect(page.getByRole("heading", { name: "注销 WOD 账号" })).toBeVisible();
   await expect(page.getByRole("link", { name: "登录后继续注销" })).toHaveAttribute("href", "/login?return_to=%2Faccount-deletion");
   await expect(page.getByText("即使已经卸载 App，也可以在此申请注销账号，无需重新安装。")).toBeVisible();
-  const phone = page.getByRole("link", { name: "+86 4001082026", exact: true });
-  await expect(phone).toBeVisible();
-  await expect(phone).toHaveAttribute("href", "tel:+864001082026");
-  await expect(phone.locator("..")).toHaveText("+86 4001082026");
+  await expect(page.getByRole("link", { name: "联系我们：+86 4001082026", exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("account-deletion-public.png"), fullPage: true });
 });
 
@@ -83,7 +80,7 @@ test("timeout preserves receipt, only checks status after reload, and shows succ
   expect(await page.evaluate((key) => localStorage.getItem(key), receiptKey)).not.toContain("password");
   await page.reload();
   await expect(page.getByRole("heading", { name: "账号已注销", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "+86 4001082026", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "联系我们：+86 4001082026", exact: true })).toHaveCount(0);
   expect(submits).toBe(1);
   expect(await page.evaluate((key) => localStorage.getItem(key), receiptKey)).toBeNull();
   expect(urls.some((url) => url.includes(ticket) || url.includes("mock-password"))).toBe(false);
@@ -155,7 +152,7 @@ test("processing blockers explain unfinished cleanup and cannot show completion"
   await page.goto("/account-deletion");
   await expect(page.getByText("正常登录已停用，但以下未处理事项阻止了资料清理，注销尚未完成。")).toBeVisible();
   await expect(page.getByText("有需要核对的支付记录")).toBeVisible();
-  await expect(page.getByRole("link", { name: "+86 4001082026", exact: true })).toHaveAttribute("href", "tel:+864001082026");
+  await expect(page.getByRole("link", { name: "联系我们：+86 4001082026", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "账号已注销", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "确认重试注销", exact: true })).toHaveCount(0);
 });

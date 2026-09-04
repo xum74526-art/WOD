@@ -9,8 +9,7 @@
         <template v-for="section in document" :key="section.title">
           <text class="h2">{{ section.title }}</text>
           <template v-for="paragraph in section.paragraphs" :key="paragraph">
-            <text v-if="paragraph === t('platformContactNumber')" class="p deletion-contact" role="button" @tap="callContactPhone">{{ paragraph }}</text>
-            <text v-else class="p">{{ paragraph }}</text>
+            <text class="p">{{ paragraph }}</text>
           </template>
         </template>
       </view>
@@ -24,7 +23,6 @@ import { onLoad } from '@dcloudio/uni-app'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
-import { callContactPhone } from '@/utils/contact-phone'
 
 interface LegalSection {
   title: string
@@ -276,7 +274,6 @@ const PRIVACY_ZH: LegalSection[] = [
       '3. 可在“我的 → 设置 → 注销账号”检查未结事项、验证当前登录密码并提交注销。未成交需求、报价及上架资源经确认后撤回或下架；未履约、争议和待结算权益须先处理，不因注销自动清零。',
       '4. 注销会使全部设备登录失效，清理个人资料及非必要内容，并解除本平台的 KAI 绑定，不删除其他 KAI 产品账号。必要订单、账务及争议凭证按适用范围、用途和期限受限保留；备份按保留周期淘汰，恢复时须重新执行注销清理。注销无法恢复，重新注册不继承原账号记录。',
       '5. 最终确认后，本设备临时保存本次注销专用凭据、到期时间及用于区分本机会话的内部账号编号，不包含密码、普通登录令牌或其他账号资料；完成或最长七天到期后清除。可从登录页恢复状态查询。',
-      '+86 4001082026',
     ],
   },
   {
@@ -345,7 +342,6 @@ const PRIVACY_EN: LegalSection[] = [
       '3. Open Profile → Settings → Delete account to check outstanding matters, verify your current password and submit a deletion request. Unmatched requests, quotes and listings are withdrawn after confirmation. Active services, disputes and unsettled entitlements must be resolved first and are not forfeited through deletion.',
       '4. Deletion invalidates all device sessions, removes personal details and unnecessary content, and unlinks the WOD KAI identity without deleting other KAI product accounts. Necessary order, financial and dispute evidence is retained with restricted scope, purpose and duration. Backups expire under the retention policy and deletion cleanup must be reapplied after restoration. Deleted accounts cannot be restored and a new account does not inherit old records.',
       '5. After final confirmation, this device temporarily stores a deletion capability, its expiry time and an internal account ID to isolate local sessions. It contains no password, normal login token or other account details, and is cleared on completion or expiry within seven days. Resume status checks from the login page.',
-      '+86 4001082026',
     ],
   },
   {
@@ -383,7 +379,6 @@ onLoad((opts) => {
 </script>
 
 <style lang="scss" scoped>
-.p.deletion-contact { color: var(--primary); text-decoration: underline; }
 .page { min-height: 100vh; background: var(--bg); }
 .body { height: 100%; }
 .content { padding: 32rpx; padding-bottom: calc(60rpx + var(--safe-bottom)); }

@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { useI18n } from "@/components/locale-root";
 import { localizePersonName, personNameInputValue, personNameSaveValue } from "@/lib/person-name";
+import { ContactPhone } from "@/components/contact-phone";
 
 const roleLabels: Record<string, { key: string; zh: string }> = {
   personal: { key: "settings.role.personal", zh: "个人用户" },
@@ -128,7 +129,7 @@ export function MobileAccountSettings() {
 
   if (!profile && !error) return <section className="workspace-page"><div className="commerce-loading">{t("settings.loading", "正在读取账户资料…")}</div></section>;
   return <section className="workspace-page mobile-account-settings">
-    <div className="workspace-page__head"><p>ACCOUNT / PROFILE</p><h1>{t("settings.title", "账户设置")}</h1><span>{t("settings.description", "管理用户名、头像、密码和身份角色。")}</span></div>
+    <div className="workspace-page__head"><p>ACCOUNT / PROFILE</p><h1>{t("settings.title", "账户设置")}</h1><span>{t("settings.description", "管理用户名、头像、密码和身份角色。")}</span><ContactPhone /></div>
     {error && <div className="commerce-error">{error}</div>}{message && <div className="commerce-success">{message}</div>}
     {profile && <div className="mobile-account-grid">
       <aside className="mobile-account-card">

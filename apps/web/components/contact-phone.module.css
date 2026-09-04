@@ -1,16 +1,18 @@
 .phone.phone {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  min-height: 44px;
+  width: fit-content;
+  justify-self: center;
+  min-height: 32px;
   margin-top: 8px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--brand-strong, #007e91);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
+.phone.phone:hover { text-decoration: underline; text-underline-offset: 3px; }
 .phone:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }

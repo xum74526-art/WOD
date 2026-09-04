@@ -5,33 +5,29 @@ import ts from 'typescript'
 
 const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-test('home has one explicit pure-number contact entry before the existing asset and loading sections', () => {
-  const page = readSource('../src/pages/index/index.vue')
-  assert.match(page, /<button class="contact-phone" @tap="callContactPhone">\{\{ t\('platformContactNumber'\) \}\}<\/button>\s+<view class="hero">/)
-  assert.equal((page.match(/@tap="callContactPhone"/g) || []).length, 1)
-  assert.match(page, /import \{ callContactPhone \} from '@\/utils\/contact-phone'/)
-  assert.ok(page.indexOf('class="contact-phone"') < page.indexOf('v-if="homeLoadError"'))
-  // Adding the number must not change the existing home authentication boundary.
-  assert.match(page, /if \(!userStore\.isLogin\) \{ uni\.reLaunch\(\{ url: '\/pages\/login\/index' \}\); return \}/)
-  assert.match(page, /Promise\.all\(\[load\(\), loadHotMarket\(false\)\]\)/)
+test('only the shared login/register screen and settings provide a labeled contact action', () => {
+  const login = readSource('../src/pages/login/index.vue')
+  const settings = readSource('../src/pages/settings/index.vue')
+  const home = readSource('../src/pages/index/index.vue')
+  const support = readSource('../src/pages/kefu/index.vue')
+  const deletion = readSource('../src/pages/account-deletion/index.vue')
+  const agreement = readSource('../src/pages/agreement/index.vue')
+
+  for (const page of [login, settings]) {
+    assert.match(page, /t\('platformContactLink', \{ phone: t\('platformContactNumber'\) \}\)/)
+    assert.match(page, /@tap="callContactPhone"/)
+    assert.match(page, /import \{ callContactPhone \} from '@\/utils\/contact-phone'/)
+  }
+  for (const page of [home, support, deletion, agreement]) {
+    assert.doesNotMatch(page, /callContactPhone|platformContactNumber|platformContactLink|4001082026/)
+  }
 })
 
-test('support has one explicit pure-number contact entry outside loading and error branches', () => {
-  const page = readSource('../src/pages/kefu/index.vue')
-  assert.match(page, /<AppNavBar :title="t\('onlineService'\)" \/>\s+<button class="contact-phone" @tap="callContactPhone">\{\{ t\('platformContactNumber'\) \}\}<\/button>\s+<view class="service-banner">/)
-  assert.equal((page.match(/@tap="callContactPhone"/g) || []).length, 1)
-  assert.match(page, /import \{ callContactPhone \} from '@\/utils\/contact-phone'/)
-  assert.ok(page.indexOf('class="contact-phone"') < page.indexOf('v-if="initialLoading"'))
-  assert.ok(page.indexOf('class="contact-phone"') < page.indexOf('v-else-if="loadError"'))
-  // Preserve the existing authenticated support lifecycle and message entry.
-  assert.match(page, /onMounted\(loadSession\)/)
-  assert.match(page, /const session = await getSupportSession\(i18n\.lang\)/)
-  assert.match(page, /class="input-bar"/)
-})
-
-test('all supported languages display exactly the approved number with no added label', () => {
+test('all supported languages use the approved number and an explicit contact label', () => {
   const locale = readSource('../src/store/i18n.ts')
   assert.equal((locale.match(/platformContactNumber: '\+86 4001082026'/g) || []).length, 2)
+  assert.match(locale, /platformContactLink: '联系我们：\{phone\}'/)
+  assert.match(locale, /platformContactLink: 'Contact us: \{phone\}'/)
 })
 
 test('the shared contact helper only invokes the dialer after explicit activation', () => {

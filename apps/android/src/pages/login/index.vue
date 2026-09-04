@@ -79,6 +79,7 @@
           <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
         </view>
         <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
+        <button class="contact-link" @tap="callContactPhone">{{ t('platformContactLink', { phone: t('platformContactNumber') }) }}</button>
       </view>
     </view>
   </view>
@@ -100,6 +101,7 @@ import {
 } from '@/utils/kai-auth-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
+import { callContactPhone } from '@/utils/contact-phone'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -369,6 +371,8 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .page { min-height: 100vh; background: var(--bg-2); }
 .shell { padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
+.contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
+.contact-link::after { border: 0; }
 .logo-area { display: flex; align-items: center; margin: 28rpx 8rpx 40rpx; }
 .logo-img { width: 88rpx; height: 88rpx; border-radius: 22rpx; margin-right: 22rpx; }
 .brand-copy { display: flex; flex-direction: column; }
