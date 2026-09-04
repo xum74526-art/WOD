@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Buildings, ClipboardText, UsersThree } from "@phosphor-icons/react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { ContactPhone } from "@/components/contact-phone";
 import { GpuDailyTrendChart } from "@/components/gpu-candlestick-chart";
 import { MerchantResourceMarket } from "@/components/merchant-resource-market";
 import { MarketPulseRail } from "@/components/market-pulse-rail";
@@ -33,6 +34,7 @@ export function HomePageContent({ initialRanking, initialProducts, initialTrend 
               <Link className="outline-link outline-link--large" href="/supplier/apply">{t("home.publish", "商家发布服务器")}</Link>
             </div>
             <ul className="home-v2-assurances" aria-label="平台服务特性"><li>{t("home.assurance1", "实时行情可查")}</li><li>{t("home.assurance2", "资源来源清晰")}</li><li>{t("home.assurance3", "人工确认方案")}</li></ul>
+            <ContactPhone />
           </div>
           <div className="home-v2-hero__instrument"><GpuDailyTrendChart initialData={initialTrend} /></div>
         </section>

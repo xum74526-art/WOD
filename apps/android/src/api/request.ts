@@ -50,8 +50,10 @@ export function request<T = unknown>(options: {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   data?: UniNamespace.RequestOptions['data']
   silent?: boolean
+  /** Only credential-independent endpoints, such as deletion capability receipts. */
+  auth?: 'session' | 'none'
 }): Promise<T> {
-  const token = getToken()
+  const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
   const localize = (message: unknown, fallback = '请求失败') => i18n.tr(message || i18n.t(fallback))
   return new Promise((resolve, reject) => {
@@ -68,6 +70,10 @@ export function request<T = unknown>(options: {
       success: (res) => {
         const body = responseBody<T>(res.data)
         if (res.statusCode === 401 || body.code === 401) {
+          if (options.auth === 'none') {
+            reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
+            return
+          }
           expireSession(i18n)
           reject(new Error(i18n.t('未登录')))
           return

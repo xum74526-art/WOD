@@ -130,7 +130,7 @@ class ProfileSecurityTests(unittest.TestCase):
             self.db.refresh(self.user)
             self.assertEqual(self.user.avatar, relative_url)
 
-            response = user_router.public_avatar(f"avatar_{self.user.id}.png")
+            response = user_router.public_avatar(f"avatar_{self.user.id}.png", db=self.db)
             self.assertEqual(response.media_type, "image/png")
             self.assertEqual(response.headers["x-content-type-options"], "nosniff")
 

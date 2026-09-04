@@ -22,6 +22,8 @@ from app.services.reward_program import assert_reward_configuration_safe
 from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
 from app.services.notification_service import sync_operational_notifications
 from app.utils.response import BizError, error
+from app.routers import account_deletion
+from app.services.account_deletion import resume_deletions
 
 
 @asynccontextmanager
@@ -39,6 +41,7 @@ async def lifespan(app: FastAPI):
     except ZoneInfoNotFoundError:
         community_timezone = timezone(timedelta(hours=8))
     scheduler = BackgroundScheduler(timezone=community_timezone)
+    scheduler.add_job(resume_deletions, "interval", seconds=60, id="account_deletion_cleanup", max_instances=1, coalesce=True)
     # 收益结算：为活跃资产产生每日收益（基于 daily_rate）
     scheduler.add_job(settle_revenue, "interval", seconds=INTERVAL_SECONDS, id="settle_revenue")
     scheduler.add_job(expire_due, "interval", seconds=60, id="expire_due")
@@ -198,6 +201,7 @@ app.include_router(auth.router)
 app.include_router(platform.router)
 app.include_router(admin.router)
 app.include_router(user.router)
+app.include_router(account_deletion.router)
 app.include_router(product.router)
 app.include_router(market.router)
 app.include_router(asset.router)

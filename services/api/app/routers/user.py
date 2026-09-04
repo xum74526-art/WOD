@@ -17,6 +17,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import ChangePasswordIn, ProfileUpdateIn, UserOut
 from app.utils.response import BizError, success
+from app.services.account_lifecycle import active_user_exists, lock_active_user
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -93,6 +94,8 @@ async def upload_avatar(
         raise BizError("头像图片不能超过 2MB")
 
     extension = _verified_avatar_extension(content)
+    # Serialize filesystem writes with deletion's upload cleanup.
+    lock_active_user(db, user.id)
     filename = f"avatar_{user.id}.{extension}"
     destination = AVATAR_DIR / filename
     temp_name: str | None = None
@@ -127,10 +130,12 @@ async def upload_avatar(
 
 
 @router.get("/avatars/{filename}", include_in_schema=False)
-def public_avatar(filename: str):
+def public_avatar(filename: str, db: Session = Depends(get_db)):
     """Serve only validated public avatar names, never the upload root."""
     match = AVATAR_FILENAME_RE.fullmatch(filename)
     if not match:
+        raise HTTPException(status_code=404, detail="头像不存在")
+    if not active_user_exists(db, int(match.group(1))):
         raise HTTPException(status_code=404, detail="头像不存在")
     path = AVATAR_DIR / filename
     if not path.is_file():

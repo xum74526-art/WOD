@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api";
 import { createSupportTicket, getSupportSession, sendSupportMessage, type SupportSession } from "@/lib/mobile-support-api";
 import { formatDate } from "@/lib/commerce-ui";
 import { useI18n } from "@/components/locale-root";
+import { ContactPhone } from "@/components/contact-phone";
 
 const ticketStatuses: Record<string, { key: string; zh: string }> = {
   pending_unassigned: { key: "support.status.pending", zh: "待分配" },
@@ -86,6 +87,7 @@ export function MobileSupportWorkspace() {
         <ChatCircleDots size={38} />
         <h1>{t("support.loginTitle", "登录后使用在线客服")}</h1>
         <p>{t("support.loginDescription", "客服会话和工单将保存到当前账户。")}</p>
+        <div><ContactPhone /></div>
         <Link href="/login?return_to=/support">{t("support.loginAction", "登录")}</Link>
       </section>
     );
@@ -95,6 +97,7 @@ export function MobileSupportWorkspace() {
         <p className="hero-eyebrow">ACCOUNT SUPPORT</p>
         <h1>{t("support.title", "帮助与客服")}</h1>
         <span>{!session ? t("support.connecting", "正在连接在线客服…") : session.service_mode === "ai_assisted" ? t("support.aiOnline", "智能客服在线，可查询常见问题并创建客服工单。") : t("support.selfServiceOnline", "自助客服在线，可查询常见问题并创建客服工单。")}</span>
+        <div><ContactPhone /></div>
       </header>
       {error && <div className="commerce-error">{error}</div>}
       <div className="support-console">

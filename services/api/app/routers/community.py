@@ -114,6 +114,7 @@ def _media_path_from_url(url: str, user_id: int, expected_kind: str) -> Path:
 async def upload_community_media(
     media: UploadFile = File(...),
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     requested_extension = _requested_extension(media.filename)
     is_image = requested_extension in IMAGE_EXTENSIONS
@@ -127,6 +128,9 @@ async def upload_community_media(
     detected_extension = _verified_media_extension(content, "image" if is_image else "video")
     if detected_extension != requested_extension:
         raise BizError("文件扩展名与实际格式不一致")
+
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user.id)
 
     user_dir = COMMUNITY_DIR / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -182,7 +186,10 @@ def _file_range(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024)
 
 
 @public_router.get("/{user_id}/{filename}", include_in_schema=False)
-def public_community_media(user_id: int, filename: str, request: Request):
+def public_community_media(user_id: int, filename: str, request: Request, db: Session = Depends(get_db)):
+    from app.services.account_lifecycle import active_user_exists
+    if not active_user_exists(db, user_id):
+        raise HTTPException(status_code=404, detail="社区媒体不存在")
     path, extension = _public_community_media_path(user_id, filename)
     common_headers = {
         "Cache-Control": "public, max-age=31536000, immutable",

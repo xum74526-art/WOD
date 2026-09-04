@@ -9,6 +9,9 @@
         </view>
       </view>
 
+      <view v-if="pendingDeletion" class="auth-card" @tap="openDeletionStatus">
+        <text class="alink">{{ t('deletionResume') }}</text>
+      </view>
       <view class="auth-card">
         <view class="mode-switch">
           <view class="mode-item" :class="{ active: mode === 'login' }" @tap="setMode('login')">{{ t('登录') }}</view>
@@ -96,9 +99,13 @@ import {
   type KaiAuthCallback,
 } from '@/utils/kai-auth-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
+import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
+const pendingDeletion = ref(false)
+onShow(() => { pendingDeletion.value = !!readDeletionReceipt() })
+function openDeletionStatus() { uni.navigateTo({ url: '/pages/account-deletion/index' }) }
 const mode = ref<'login' | 'register'>('login')
 const authMethod = ref<'phone' | 'kai'>('phone')
 const form = reactive({ username: '', phone: '', password: '', invite_code: '', captcha_code: '' })

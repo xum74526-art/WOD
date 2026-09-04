@@ -2,6 +2,8 @@
   <view class="page">
     <AppNavBar :title="t('onlineService')" />
 
+    <button class="contact-phone" @tap="callContactPhone">{{ t('platformContactNumber') }}</button>
+
     <view class="service-banner">
       <view class="service-dot" :class="serviceMode"></view>
       <view class="service-copy">
@@ -105,6 +107,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import AppNavBar from '@/components/AppNavBar.vue'
+import { callContactPhone } from '@/utils/contact-phone'
 import {
   createSupportTicket,
   getSupportSession,
@@ -300,6 +303,8 @@ watch(() => i18n.lang, () => {
 
 <style lang="scss" scoped>
 .page { height: 100vh; background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+.contact-phone { display: block; flex-shrink: 0; width: fit-content; margin: 12rpx 28rpx 0 auto; padding: 12rpx 0; background: transparent; color: var(--primary); font-size: 26rpx; line-height: 1.5; text-decoration: underline; }
+.contact-phone::after { border: 0; }
 .service-banner { margin: 16rpx 28rpx 0; padding: 18rpx 22rpx; border: 1rpx solid var(--border); border-radius: 20rpx; background: var(--card); display: flex; align-items: center; gap: 16rpx; }
 .service-dot { width: 16rpx; height: 16rpx; border-radius: 50%; background: #1f9d68; box-shadow: 0 0 0 8rpx rgba(31, 157, 104, .1); }
 .service-dot.ai_assisted { background: #0ea5a8; box-shadow: 0 0 0 8rpx rgba(14, 165, 168, .1); }

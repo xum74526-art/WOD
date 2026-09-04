@@ -237,6 +237,11 @@ def reevaluate_invitee_qualification(
     ).with_for_update().first()
     if not is_v2_relationship(record):
         return record
+    # Deletion terminates future participation, not previously earned rights.
+    from app.services.account_lifecycle import try_lock_active_user
+    for owner in sorted({record.inviter_id, record.invitee_id}):
+        if not try_lock_active_user(db, owner):
+            return record
     if record.qualification_status in TERMINAL_STATUSES:
         return record
     if record.inviter_id == record.invitee_id:
@@ -314,6 +319,9 @@ def _create_commission(
     # this inviter. The same row is locked while daily slots are claimed.
     inviter = db.query(User).filter(User.id == record.inviter_id).with_for_update().first()
     if inviter is None:
+        return None
+    from app.services.account_lifecycle import try_lock_active_user
+    if not try_lock_active_user(db, record.inviter_id):
         return None
     existing = db.query(RewardAccrual).filter(RewardAccrual.idempotency_key == key).first()
     if existing:
