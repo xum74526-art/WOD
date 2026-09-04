@@ -81,6 +81,10 @@ def create_notification(
     """
     if notification_type not in VALID_NOTIFICATION_TYPES:
         raise ValueError(f"Unsupported notification type: {notification_type}")
+    # Historical assets/orders must not recreate an inbox after account deletion.
+    from app.services.account_lifecycle import try_lock_active_user
+    if not try_lock_active_user(db, user_id):
+        return None
     if respect_preferences and not notification_type_enabled(db, user_id, notification_type):
         return None
     if dedupe_key:

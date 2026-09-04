@@ -12,6 +12,7 @@ from app.core.security import create_access_token
 from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.utils.response import BizError
+from app.services.account_lifecycle import ensure_active_user, lock_active_user
 
 
 PLATFORMS = frozenset({"web", "ios", "android", "admin", "system", "legacy"})
@@ -78,6 +79,8 @@ def create_authenticated_session(
     client_id: str | None,
     auth_method: str,
 ) -> IssuedSession:
+    ensure_active_user(user)
+    lock_active_user(db, user.id)
     if platform not in PLATFORMS - {"system"}:
         raise BizError("会话来源无效")
     if platform == "admin" and user.role != "admin":

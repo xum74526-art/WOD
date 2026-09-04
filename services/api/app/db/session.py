@@ -27,6 +27,28 @@ if engine.dialect.name == "sqlite":
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+def _fence_authenticated_write(db):
+    user_id = db.info.get("authenticated_user_id")
+    if user_id is not None and not db.info.get("account_deletion_worker"):
+        from app.services.account_lifecycle import lock_active_user
+        lock_active_user(db, user_id)
+
+
+@event.listens_for(Session, "before_flush")
+def _account_deletion_flush_fence(db, _flush_context, _instances):
+    if db.new or db.dirty or db.deleted:
+        _fence_authenticated_write(db)
+        if db.new and not db.info.get("account_deletion_worker"):
+            from app.services.account_lifecycle import fence_new_business_owners
+            fence_new_business_owners(db)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _account_deletion_bulk_fence(state):
+    if state.is_update or state.is_delete or state.is_insert:
+        _fence_authenticated_write(state.session)
+
+
 def get_db():
     db = SessionLocal()
     try:

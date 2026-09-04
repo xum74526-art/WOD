@@ -536,6 +536,189 @@
         "title": "DealReasonIn",
         "type": "object"
       },
+      "DeletionBlocker": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "count"
+        ],
+        "title": "DeletionBlocker",
+        "type": "object"
+      },
+      "DeletionEligibility": {
+        "properties": {
+          "automatic_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Automatic Actions",
+            "type": "array"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/DeletionBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "eligible",
+          "blockers",
+          "automatic_actions"
+        ],
+        "title": "DeletionEligibility",
+        "type": "object"
+      },
+      "DeletionPasswordIn": {
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "DeletionPasswordIn",
+        "type": "object"
+      },
+      "DeletionResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeletionStatus"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "DeletionResponse",
+        "type": "object"
+      },
+      "DeletionStatus": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/DeletionBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status": {
+            "enum": [
+              "verified",
+              "blocked",
+              "processing",
+              "completed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DeletionStatus",
+        "type": "object"
+      },
+      "DeletionSubmitIn": {
+        "properties": {
+          "confirm": {
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "ticket": {
+            "maxLength": 128,
+            "minLength": 40,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket",
+          "confirm"
+        ],
+        "title": "DeletionSubmitIn",
+        "type": "object"
+      },
+      "DeletionTicketIn": {
+        "properties": {
+          "ticket": {
+            "maxLength": 128,
+            "minLength": 40,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "title": "DeletionTicketIn",
+        "type": "object"
+      },
+      "DeletionTicketOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "ticket": {
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket",
+          "expires_at"
+        ],
+        "title": "DeletionTicketOut",
+        "type": "object"
+      },
       "DeliveryIssueIn": {
         "properties": {
           "expected_version": {
@@ -561,6 +744,28 @@
           "reason"
         ],
         "title": "DeliveryIssueIn",
+        "type": "object"
+      },
+      "EligibilityResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeletionEligibility"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "EligibilityResponse",
         "type": "object"
       },
       "FailedWithdrawalIn": {
@@ -3233,6 +3438,28 @@
           "description"
         ],
         "title": "SupportTicketIn",
+        "type": "object"
+      },
+      "TicketResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeletionTicketOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TicketResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -10801,6 +11028,160 @@
         "summary": "Store Page",
         "tags": [
           "supplier"
+        ]
+      }
+    },
+    "/api/user/account-deletion/eligibility": {
+      "get": {
+        "operationId": "eligibility_api_user_account_deletion_eligibility_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibilityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Eligibility",
+        "tags": [
+          "account-deletion"
+        ]
+      }
+    },
+    "/api/user/account-deletion/status": {
+      "post": {
+        "operationId": "status_api_user_account_deletion_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionTicketIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "account-deletion"
+        ]
+      }
+    },
+    "/api/user/account-deletion/submit": {
+      "post": {
+        "operationId": "submit_api_user_account_deletion_submit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionSubmitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "account-deletion"
+        ]
+      }
+    },
+    "/api/user/account-deletion/verify": {
+      "post": {
+        "operationId": "verify_api_user_account_deletion_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionPasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Verify",
+        "tags": [
+          "account-deletion"
         ]
       }
     },

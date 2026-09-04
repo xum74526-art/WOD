@@ -17,7 +17,7 @@ from app.core.config import settings  # noqa: E402
 
 # 需要确保存在的列（兼容旧 wod.db）
 _ENSURE = {
-    "users": ["role", "supplier_status", "phone_bound", "created_platform"],
+    "users": ["role", "supplier_status", "phone_bound", "created_platform", "account_status", "deleted_at"],
     "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
     "orders": [
         "purchase_type", "ssh_info", "quantity", "client_request_id",
@@ -80,6 +80,7 @@ _ENSURE = {
 }
 
 _DATETIME_COLS = {
+    "deleted_at",
     "end_at", "start_at", "price_updated_at", "source_published_at",
     "rights_checked_at", "ingested_at", "reviewed_at", "updated_at",
     "ocr_updated_at",
@@ -114,7 +115,9 @@ def _ensure_columns(db_engine=None):
         existing = {c["name"] for c in insp.get_columns(table)}
         for col in cols:
             if col not in existing:
-                if col in _DATETIME_COLS:
+                if col == "account_status":
+                    col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
+                elif col in _DATETIME_COLS:
                     col_type = "DATETIME"
                 elif col in _DATE_COLS:
                     col_type = "DATE"

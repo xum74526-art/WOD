@@ -29,3 +29,6 @@ class User(Base):
         String(16), default="legacy", server_default="legacy", index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # Account deletion is independent of the business role and commerce flags.
+    account_status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

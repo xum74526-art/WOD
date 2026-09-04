@@ -74,6 +74,13 @@
 
       <SectionHeader :title="t('k_7116e7ec')" />
       <view class="card menu">
+        <view class="menu-item" @tap="nav('/pages/account-deletion/index')">
+          <view class="mi-left">
+            <AppIcon name="shield" :size="40" />
+            <text class="mi-text">{{ t('accountDeletion') }}</text>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
         <view class="menu-item danger" @tap="showLogout = true">
           <view class="mi-left">
             <AppIcon name="logout" :size="40" />

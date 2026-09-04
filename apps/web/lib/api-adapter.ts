@@ -2,6 +2,9 @@ import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
+import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
+import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
+import { DELETION_SESSION_COOKIE, deletionMarkerMatchesTicket, deletionMayClearSession, deletionSessionMarker } from "@/lib/server/account-deletion-session";
 import {
   callCanonicalApi as upstream,
   callCanonicalMultipart as upstreamMultipart,
@@ -613,6 +616,34 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
   const body = await requestBody(request);
+
+  if (path.startsWith("canonical/user/account-deletion")) {
+    const matched = path.match(/^canonical\/user\/account-deletion\/(eligibility|verify|submit|status)$/);
+    if (!matched) return apiError("注销接口不存在", 404);
+    const operation = matched[1] as AccountDeletionOperation;
+    if (request.method !== accountDeletionMethods[operation]) return apiError("此注销接口不支持该请求方法", 405);
+    if (request.nextUrl.search) return apiError("注销验证信息只能通过请求正文提交", 400);
+    const result = await upstream(request, `/api/user/account-deletion/${operation}`, accountDeletionProxyOptions(operation, body));
+    if (!result.ok) return upstreamFailure(result);
+    const response = apiSuccess(result.body.data, { source: "canonical-api" });
+    const currentBearer = request.cookies.get(TOKEN_COOKIE)?.value;
+    if (operation === "verify" && currentBearer && typeof object(result.body.data).ticket === "string") {
+      response.cookies.set(DELETION_SESSION_COOKIE, deletionSessionMarker(text(object(result.body.data).ticket), currentBearer), {
+        httpOnly: true, sameSite: "strict", secure: requestIsHttps(request), path: "/", maxAge: 7 * 24 * 60 * 60,
+      });
+    }
+    if ((operation === "submit" || operation === "status") && deletionRevokesNormalSession(result.body.data)) {
+      const marker = request.cookies.get(DELETION_SESSION_COOKIE)?.value;
+      const ticket = typeof body.ticket === "string" ? body.ticket : "";
+      if (deletionMayClearSession(marker, ticket, currentBearer)) clearAuthCookie(request, response);
+      if (object(result.body.data).status === "completed" && deletionMarkerMatchesTicket(marker, ticket)) {
+        response.cookies.set(DELETION_SESSION_COOKIE, "", {
+          httpOnly: true, sameSite: "strict", secure: requestIsHttps(request), path: "/", maxAge: 0,
+        });
+      }
+    }
+    return response;
+  }
 
   if (path === "health" && request.method === "GET") {
     const result = await upstream(request, "/health", { auth: false });

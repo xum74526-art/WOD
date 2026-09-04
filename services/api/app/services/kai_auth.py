@@ -279,6 +279,8 @@ def find_bound_user(db: Session, claims: dict[str, Any]) -> User | None:
     user = db.query(User).filter(User.id == identity.user_id).first()
     if not user:
         raise BizError("统一认证关联用户不存在")
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user.id)
     identity.email = _optional_text(claims.get("email"), 320)
     identity.email_verified = bool(claims.get("email_verified"))
     identity.display_name = _optional_text(claims.get("name"), 128)
@@ -297,6 +299,8 @@ def issue_handoff_ticket(
     platform: str = "legacy",
     client_id: str | None = None,
 ) -> str:
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user_id)
     ticket = secrets.token_urlsafe(32)
     db.add(
         ExternalAuthTicket(
@@ -347,6 +351,8 @@ def issue_bind_ticket(
     platform: str,
     client_id: str | None,
 ) -> str:
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user_id)
     subject = _optional_text(claims.get("sub"), 255)
     if not subject:
         raise BizError("统一认证缺少用户标识")
@@ -375,6 +381,8 @@ def bind_identity_with_ticket(db: Session, ticket: str, user: User) -> ExternalI
     """Atomically consume a verified ticket and bind it to its initiating user."""
     if not ticket:
         raise BizError("统一认证绑定凭证无效")
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user.id)
     now = _utcnow()
     row = db.query(ExternalAuthBindTicket).filter(
         ExternalAuthBindTicket.ticket_hash == _sha256(ticket)

@@ -22,6 +22,7 @@ RUN pip install --upgrade pip \
 
 COPY app ./app
 COPY init_db.py ./init_db.py
+COPY migrate_account_deletion.py ./migrate_account_deletion.py
 COPY docker-entrypoint.sh /usr/local/bin/kai-api-entrypoint
 
 RUN chmod 0755 /usr/local/bin/kai-api-entrypoint \

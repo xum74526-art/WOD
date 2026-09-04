@@ -427,6 +427,12 @@ def create_invite_accrual(
     if not program_enabled(PROGRAM_INVITE):
         return None
     key = f"reward:{PROGRAM_INVITE}:order:{order.id}"
+    existing = db.query(RewardAccrual).filter(RewardAccrual.idempotency_key == key).first()
+    if existing:
+        return existing
+    from app.services.account_lifecycle import try_lock_active_user
+    if not try_lock_active_user(db, beneficiary_user_id):
+        return None
     reward = reward_money(Decimal(str(order.amount or 0)) * Decimal(rate_bps) / Decimal("10000"))
     accrual, _ = create_reward_accrual(
         db,

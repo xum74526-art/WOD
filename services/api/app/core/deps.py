@@ -10,6 +10,7 @@ from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.core.config import settings
 from app.services.auth_session import utcnow
+from app.services.account_lifecycle import ensure_active_user
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
@@ -39,6 +40,9 @@ def get_current_auth_context(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")
+    # This must precede the legacy JWT branch, not just session validation.
+    ensure_active_user(user)
+    db.info["authenticated_user_id"] = user.id
     if not claims.session_id:
         # Signed tokens issued before server-side sessions remain usable during
         # migration, but can only be attributed to the explicit legacy bucket.

@@ -348,6 +348,8 @@ async def upload_id_photo(
     if back:
         prepared.append(await prepare_one(back, "back"))
 
+    from app.services.account_lifecycle import lock_active_user
+    lock_active_user(db, user.id)
     _reset_ocr(v)
     for side, content, filename in prepared:
         destination = UPLOAD_DIR / filename
