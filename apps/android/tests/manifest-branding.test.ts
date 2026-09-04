@@ -11,8 +11,8 @@ test('Android package branding presents WOD while preserving the existing icon a
   assert.equal(manifest.name, 'WOD')
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'WOD')
-  assert.equal(manifest.versionName, '1.0.10')
-  assert.equal(manifest.versionCode, '110')
+  assert.equal(manifest.versionName, '1.0.11')
+  assert.equal(manifest.versionCode, '111')
 
   const iconPaths = Object.values(manifest['app-plus'].distribute.icons.android) as string[]
   for (const iconPath of iconPaths) {

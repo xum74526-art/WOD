@@ -4,8 +4,8 @@
     "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hans",
     "vueVersion" : "3",
-    "versionName" : "1.0.10",
-    "versionCode" : "110",
+    "versionName" : "1.0.11",
+    "versionCode" : "111",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
