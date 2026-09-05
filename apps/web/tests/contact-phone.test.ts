@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("contact phone is labeled and limited to authentication and account settings", () => {
+test("contact phone is labeled and stays out of unrelated pages", () => {
   const read = (file: string) => readFileSync(new URL(`../components/${file}`, import.meta.url), "utf8");
   const phone = read("contact-phone.tsx");
   assert.match(phone, /<a className=\{styles.phone\} href="tel:\+864001082026">联系我们：\+86 4001082026<\/a>/);
