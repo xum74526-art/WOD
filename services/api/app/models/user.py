@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, String, DateTime, false, func
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, false, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -8,6 +8,15 @@ from app.db.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "ux_users_recovery_email_fingerprint",
+            "recovery_email_fingerprint",
+            unique=True,
+            sqlite_where=text("recovery_email_fingerprint IS NOT NULL"),
+            postgresql_where=text("recovery_email_fingerprint IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(64))
@@ -32,3 +41,14 @@ class User(Base):
     # Account deletion is independent of the business role and commerce flags.
     account_status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # The WOD-owned recovery address is encrypted at rest.  The keyed
+    # fingerprint is the lookup/uniqueness key; KAI profile email claims are
+    # deliberately kept separate in ``external_identities``.
+    recovery_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recovery_email_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recovery_email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Included in every newly issued JWT. Password recovery increments this
+    # value so even legacy tokens without a server-side session are revoked.
+    auth_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )

@@ -50,6 +50,25 @@ API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collec
 9. 确认稳定后清理源码目录内的 `node_modules`、`.next` 等可重建产物；至少保留当前和上一
    个稳定 release，不删除运行数据库、上传目录或未经确认的备份。
 
+### 账号找回首次启用
+
+账号找回会增加用户找回邮箱字段、一次性恢复票据及可靠邮件队列表。首次发布必须使用与
+计划发布完全相同的 API 镜像执行专用迁移，不能只依赖 `init_db.py`：
+
+1. 保持旧 API 继续运行，先完成数据库备份并校验备份非空；
+2. 确认私有 API 环境已经配置 `ACCOUNT_RECOVERY_*`，文件权限仅允许运行负责人读取；
+3. 使用新 API 镜像运行 `python migrate_account_recovery.py --check`。首次检查报告缺失项并
+   返回非零是预期结果；除预期的账号找回增量外，出现任何不兼容结构都必须停止发布；
+4. 运行 `python migrate_account_recovery.py`，随后再次运行 `--check`，必须显示 schema ready；
+5. 确认 `https://wod.kai.com/reset-password` 已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；
+6. 再启动候选 API，检查 `/health`、找回能力配置接口和近期日志，最后才切换正式流量。
+
+Docker 镜像必须包含 `migrate_account_recovery.py`，便于通过 `--entrypoint python` 在与正式服务
+相同的依赖环境中运行。迁移只允许增加账号找回所需结构，不从 KAI 身份或其他资料自动回填
+历史邮箱。容器和 systemd 启动入口会在通用 `init_db.py` 前检查该专用 schema；全新空库应先在
+受控初始化步骤执行 `init_db.py`，再通过专用 `--check` 后启动服务。SMTP 授权码不得写入镜像、
+Git、发布记录或命令行。
+
 ### 返佣账务首次启用
 
 返佣升级包含新增 `reward_accruals` 表和 `ledger.ref_reward_accrual_id`，属于向后兼容的

@@ -8,6 +8,31 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    # WOD-owned recovery email. This remains fail-closed until the private
+    # deployment supplies encrypted-field and SMTP configuration.
+    ACCOUNT_RECOVERY_EMAIL_ENABLED: bool = False
+    ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN: str = "https://wod.kai.com"
+    ACCOUNT_RECOVERY_VERIFY_TTL_SECONDS: int = 1800
+    ACCOUNT_RECOVERY_RESET_TTL_SECONDS: int = 1800
+    ACCOUNT_RECOVERY_KAI_TTL_SECONDS: int = 600
+    ACCOUNT_RECOVERY_SMTP_HOST: str = ""
+    ACCOUNT_RECOVERY_SMTP_PORT: int = 587
+    ACCOUNT_RECOVERY_SMTP_USERNAME: str = ""
+    ACCOUNT_RECOVERY_SMTP_PASSWORD: str = ""
+    ACCOUNT_RECOVERY_SMTP_FROM: str = ""
+    ACCOUNT_RECOVERY_SMTP_STARTTLS: bool = True
+    ACCOUNT_RECOVERY_SMTP_SSL: bool = False
+    ACCOUNT_RECOVERY_SMTP_TIMEOUT_SECONDS: float = 10.0
+    # Recovery messages use a persistent transactional outbox. Provider
+    # failures are retried by the API scheduler without keeping plaintext
+    # recipients or reset tokens in the database or process logs.
+    ACCOUNT_RECOVERY_MAIL_WORKER_SECONDS: int = 10
+    ACCOUNT_RECOVERY_MAIL_BATCH_SIZE: int = 10
+    ACCOUNT_RECOVERY_MAIL_MAX_ATTEMPTS: int = 5
+    ACCOUNT_RECOVERY_MAIL_RETRY_BASE_SECONDS: int = 30
+    ACCOUNT_RECOVERY_MAIL_RETRY_MAX_SECONDS: int = 900
+    ACCOUNT_RECOVERY_MAIL_LEASE_SECONDS: int = 120
+    ACCOUNT_RECOVERY_MAIL_RETENTION_SECONDS: int = 86400
     # Stable public client identifiers mapped to server-owned source labels.
     # Clients submit only an identifier; arbitrary platform headers are never
     # used for attribution. Unknown identifiers are rejected, while omitted

@@ -17,7 +17,11 @@ from app.core.config import settings  # noqa: E402
 
 # 需要确保存在的列（兼容旧 wod.db）
 _ENSURE = {
-    "users": ["role", "supplier_status", "phone_bound", "created_platform", "account_status", "deleted_at"],
+    "users": [
+        "role", "supplier_status", "phone_bound", "created_platform",
+        "account_status", "deleted_at", "recovery_email",
+        "recovery_email_fingerprint", "recovery_email_verified_at", "auth_version",
+    ],
     "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
     "orders": [
         "purchase_type", "ssh_info", "quantity", "client_request_id",
@@ -89,6 +93,7 @@ _DATETIME_COLS = {
     "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
     "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_resolved_at",
     "identity_verified_at", "qualified_at",
+    "recovery_email_verified_at",
 }
 _DATE_COLS = {"qualification_day"}
 _INTEGER_COLS = {
@@ -97,6 +102,7 @@ _INTEGER_COLS = {
     "ref_merchant_settlement_id", "reviewed_by", "dispute_resolved_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
     "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
+    "auth_version",
 }
 _NUMERIC_COLS = {
     "sell_price", "source_price", "exchange_rate", "reliability",
@@ -117,8 +123,14 @@ def _ensure_columns(db_engine=None):
             if col not in existing:
                 if col == "account_status":
                     col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
+                elif col == "auth_version":
+                    col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif col in _DATETIME_COLS:
-                    col_type = "DATETIME"
+                    col_type = (
+                        "TIMESTAMP WITHOUT TIME ZONE"
+                        if target_engine.dialect.name == "postgresql"
+                        else "DATETIME"
+                    )
                 elif col in _DATE_COLS:
                     col_type = "DATE"
                 elif col in _INTEGER_COLS:
@@ -145,6 +157,9 @@ def _ensure_columns(db_engine=None):
                 "UPDATE orders SET last_modified_platform = 'legacy' "
                 "WHERE last_modified_platform IS NULL OR TRIM(last_modified_platform) = ''"
             ))
+    if "users" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text("UPDATE users SET auth_version = 0 WHERE auth_version IS NULL"))
     if "order_renewals" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text(
@@ -1248,6 +1263,11 @@ def init():
         with engine.connect() as conn:
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
     with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_recovery_email_fingerprint "
+            "ON users (recovery_email_fingerprint) "
+            "WHERE recovery_email_fingerprint IS NOT NULL"
+        ))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_publish_batch ON posts (publish_batch)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_content_type ON posts (content_type)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_source_item_id ON posts (source_item_id)"))

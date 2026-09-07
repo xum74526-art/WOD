@@ -102,6 +102,7 @@ def create_authenticated_session(
             user.id,
             session_id=row.id,
             platform=row.platform,
+            auth_version=int(user.auth_version or 0),
             expires_at=token_expiry,
         ),
         session=row,

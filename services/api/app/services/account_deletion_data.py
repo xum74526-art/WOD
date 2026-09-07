@@ -25,7 +25,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Address, Asset, AuthSession, BankCard, BuyRequest, BuyRequestCredential,
+    AccountRecoveryMailOutbox, AccountRecoveryToken, Address, Asset, AuthSession, BankCard, BuyRequest, BuyRequestCredential,
     BuyRequestDeal, BuyRequestEvent, BuyRequestQuote, BuyRequestQuoteRevision,
     Comment, ComputeOnboarding, Coupon, ExternalAuthBindTicket,
     ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity, Follow, InviteCode,
@@ -235,7 +235,8 @@ def scrub_account_data(db: Session, user: User) -> list[str]:
     db.query(AuthSession).filter(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None)).update(
         {AuthSession.revoked_at: now}, synchronize_session="fetch")
     for model in (Address, Verification, ExternalIdentity, ExternalAuthFlow, ExternalAuthTicket,
-                  ExternalAuthBindTicket, Notification, NotificationPreference, InviteCode):
+                  ExternalAuthBindTicket, AccountRecoveryMailOutbox, AccountRecoveryToken, Notification,
+                  NotificationPreference, InviteCode):
         remove(model, model.user_id == user.id)
     # Deleting the verification row makes in-flight OCR token-guarded writes
     # affect zero rows, instead of restoring identity data after deletion.
@@ -382,6 +383,10 @@ def scrub_account_data(db: Session, user: User) -> list[str]:
     user.phone_bound = False
     user.password = "!account-deleted"
     user.avatar = None
+    user.recovery_email = None
+    user.recovery_email_fingerprint = None
+    user.recovery_email_verified_at = None
+    user.auth_version = int(user.auth_version or 0) + 1
     user.invited_by = None
     user.role = "personal"
     user.supplier_status = "none"

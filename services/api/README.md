@@ -103,6 +103,23 @@ python -m unittest discover -s tests -p "test_*.py" -v
 3. 再在短维护窗口执行正式迁移。
 4. 不要删除迁移标记或手工重放资金迁移。
 
+### 账号找回上线
+
+账号找回使用 WOD 内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到 WOD 账号。KAI 找回只认已经绑定的 `issuer + subject`。
+
+对已有数据库，先在备份副本执行只读检查，再运行范围受限的迁移：
+
+```powershell
+$env:DATABASE_URL = "sqlite:///D:/absolute/path/to/wod.db"
+python migrate_account_recovery.py --check
+python migrate_account_recovery.py
+python migrate_account_recovery.py --check
+```
+
+生产启用邮箱找回前，需要在私有环境文件中填写 `ACCOUNT_RECOVERY_SMTP_*`，确认发信域名的 SPF、DKIM、DMARC，并把 `https://wod.kai.com/reset-password` 加入 `KAI_AUTH_ALLOWED_RETURN_URLS`。`ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN` 必须是固定 HTTPS 站点来源，不能从请求头动态生成。
+
+重置链接的票据位于 URL fragment，恢复票据表只保存票据摘要；待发邮件通过同一数据库事务写入持久 outbox，收件地址和待发票据均使用敏感字段密钥加密。API 定时 worker 按 `ACCOUNT_RECOVERY_MAIL_*` 的批量、租约与指数退避参数投递，成功、过期或最终失败后立即清空加密 payload；已消费或过期的恢复票据会清除邮箱副本，并在短期运维保留窗口后删除。公开请求不再依赖进程内 `BackgroundTasks`。重置成功后会撤销该账号的全部 Web、iOS 和 Android 登录会话，用户必须重新登录。历史账号不会自动拥有找回邮箱，需要登录后在账户设置中主动绑定并完成邮件验证。
+
 ## 安全边界
 
 - OCR 只做身份证图片文字预审，最终结果必须由财务管理员确认。

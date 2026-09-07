@@ -91,6 +91,38 @@ export function changePassword(old_password: string, new_password: string) {
   return request({ url: '/user/password', method: 'POST', data: { old_password, new_password } })
 }
 
+export interface RecoveryEmailStatus {
+  email: string | null
+  verified: boolean
+}
+
+export interface AccountRecoveryConfig {
+  email_enabled: boolean
+  kai_enabled: boolean
+  reset_ttl_seconds: number
+}
+
+export function getAccountRecoveryConfig() {
+  return request<AccountRecoveryConfig>({
+    url: '/auth/recovery/config',
+    auth: 'none',
+    silent: true,
+  })
+}
+
+export function getRecoveryEmailStatus(silent = false) {
+  return request<RecoveryEmailStatus>({ url: '/user/recovery-email', silent })
+}
+
+export function requestRecoveryEmailVerification(email: string, currentPassword: string) {
+  return request<{ accepted: boolean; already_verified: boolean }>({
+    url: '/user/recovery-email/request-verification',
+    method: 'POST',
+    data: { email, current_password: currentPassword },
+    silent: true,
+  })
+}
+
 export function switchRole() {
   return request<{ role: string }>({ url: '/user/role/switch', method: 'POST' })
 }

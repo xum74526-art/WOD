@@ -19,5 +19,7 @@ if [ "$SECRET_KEY" = "wod-dev-secret-key-change-in-production-9f8a7b6c5d4e3f2a1b
     exit 1
 fi
 
+python migrate_account_recovery.py --check
 python init_db.py
+python migrate_account_recovery.py --check
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

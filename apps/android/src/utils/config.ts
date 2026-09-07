@@ -1,4 +1,7 @@
-import { normalizeNativeApiBase } from '@/utils/api-base'
+import {
+  normalizeNativeApiBase,
+  resolvePublicWebUrl as resolvePublicWebUrlFromApiBase,
+} from '@/utils/api-base'
 
 // H5 预览走 Vite 的同源 /api 代理；Android 正式包只接受 HTTPS 云端 API。
 const APP_API_BASE = normalizeNativeApiBase(import.meta.env.VITE_KAI_APP_API_BASE)
@@ -47,6 +50,11 @@ export function resolveBackendUrl(value?: string | null): string {
   if (typeof window !== 'undefined') return `${window.location.origin}${source}`
   // #endif
   return source
+}
+
+/** Resolve a Web page on the same HTTPS deployment as this App's API. */
+export function resolvePublicWebUrl(path: string): string {
+  return resolvePublicWebUrlFromApiBase(path, APP_API_BASE)
 }
 
 export { API_BASE }

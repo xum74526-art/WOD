@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_cors_origins, settings
 from app.core.sensitive import assert_sensitive_capabilities_secure
-from app.routers import address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, internal_ingestion, invite, market, notification, offline_purchase, onboarding, order, payment, platform, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
+from app.routers import account_recovery, address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, internal_ingestion, invite, market, notification, offline_purchase, onboarding, order, payment, platform, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
 from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
@@ -24,6 +24,7 @@ from app.services.notification_service import sync_operational_notifications
 from app.utils.response import BizError, error
 from app.routers import account_deletion
 from app.services.account_deletion import resume_deletions
+from app.services.account_recovery_mail import dispatch_account_recovery_mail
 
 
 @asynccontextmanager
@@ -42,6 +43,15 @@ async def lifespan(app: FastAPI):
         community_timezone = timezone(timedelta(hours=8))
     scheduler = BackgroundScheduler(timezone=community_timezone)
     scheduler.add_job(resume_deletions, "interval", seconds=60, id="account_deletion_cleanup", max_instances=1, coalesce=True)
+    scheduler.add_job(
+        dispatch_account_recovery_mail,
+        "interval",
+        seconds=max(5, settings.ACCOUNT_RECOVERY_MAIL_WORKER_SECONDS),
+        id="account_recovery_mail_outbox",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
     # 收益结算：为活跃资产产生每日收益（基于 daily_rate）
     scheduler.add_job(settle_revenue, "interval", seconds=INTERVAL_SECONDS, id="settle_revenue")
     scheduler.add_job(expire_due, "interval", seconds=60, id="expire_due")
@@ -198,6 +208,7 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 
 app.include_router(auth.router)
+app.include_router(account_recovery.router)
 app.include_router(platform.router)
 app.include_router(admin.router)
 app.include_router(user.router)

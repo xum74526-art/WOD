@@ -25,6 +25,7 @@
     { "path": "pages/verification/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/bank-cards/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/password/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/recovery-email/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/profile-edit/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/invite/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/coupons/index", "style": { "navigationStyle": "custom" } },

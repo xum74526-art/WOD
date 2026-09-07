@@ -42,6 +42,7 @@ def assert_sensitive_capabilities_secure() -> None:
             ("ID_OCR_ENABLED", settings.ID_OCR_ENABLED),
             ("MANUAL_BANK_CARD_ENABLED", settings.MANUAL_BANK_CARD_ENABLED),
             ("MANUAL_PAYOUT_ENABLED", settings.MANUAL_PAYOUT_ENABLED),
+            ("ACCOUNT_RECOVERY_EMAIL_ENABLED", settings.ACCOUNT_RECOVERY_EMAIL_ENABLED),
         ) if value
     ]
     if not enabled:

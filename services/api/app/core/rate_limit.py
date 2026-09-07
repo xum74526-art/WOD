@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import hashlib
 from threading import Lock
 from time import monotonic
 
 from fastapi import HTTPException, status
+
+from app.core.sensitive import fingerprint
 
 
 class SlidingWindowRateLimiter:
@@ -44,6 +47,11 @@ login_global_rate_limit = SlidingWindowRateLimiter(limit=1200, window_seconds=60
 login_account_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=60)
 support_message_rate_limit = SlidingWindowRateLimiter(limit=20, window_seconds=60)
 support_ticket_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=3600)
+recovery_request_global_rate_limit = SlidingWindowRateLimiter(limit=300, window_seconds=600)
+recovery_request_account_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
+recovery_confirm_global_rate_limit = SlidingWindowRateLimiter(limit=600, window_seconds=60)
+recovery_confirm_token_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=600)
+recovery_binding_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
 
 
 def _identity_key(value: str) -> str:
@@ -75,3 +83,21 @@ def limit_support_message(user_id: int) -> None:
 
 def limit_support_ticket(user_id: int) -> None:
     support_ticket_rate_limit.check(f"support-ticket:{int(user_id)}")
+
+
+def limit_password_reset_request(email: str) -> None:
+    recovery_request_global_rate_limit.check("recovery-request:global")
+    # Do not retain plaintext recovery addresses in the process-local limiter.
+    recovery_request_account_rate_limit.check(
+        f"recovery-request:{fingerprint(_identity_key(email))}"
+    )
+
+
+def limit_recovery_confirm(token: str) -> None:
+    recovery_confirm_global_rate_limit.check("recovery-confirm:global")
+    digest = hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+    recovery_confirm_token_rate_limit.check(f"recovery-confirm:{digest}")
+
+
+def limit_recovery_email_binding(user_id: int) -> None:
+    recovery_binding_rate_limit.check(f"recovery-binding:{int(user_id)}")

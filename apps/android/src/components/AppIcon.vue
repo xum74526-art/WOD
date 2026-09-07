@@ -21,6 +21,7 @@ const PATHS: Record<string, string> = {
   revenue: 'M4 16l4-5 4 3 4-6 4 4',
   settings: 'M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2',
   help: 'M12 22a10 10 0 100-20 10 10 0 000 20zM9.5 9a2.5 2.5 0 015 0c0 2.5-2.5 2-2.5 4M12 17h.01',
+  mail: 'M3 5h18v14H3zM3 7l9 7 9-7',
   shield: 'M12 3l8 3v6c0 4-3 7-8 9-5-2-8-5-8-9V6l8-3z',
   plus: 'M12 5v14M5 12h14',
   minus: 'M5 12h14',

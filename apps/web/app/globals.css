@@ -1304,6 +1304,8 @@ input:focus-visible {
   background: var(--surface-strong);
 }
 
+.auth-methods--recovery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
 .auth-methods::before {
   display: none !important;
 }
@@ -4596,6 +4598,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .mobile-account-card dt { color: var(--text-soft); font-size: 9px; }
 .mobile-account-card dd { margin: 0; font: 700 9px var(--font-mono); }
 .mobile-account-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mobile-account-forms .mobile-recovery-email-form { grid-column: 1 / -1; }
 .mobile-account-forms .mobile-role-card { grid-column: 1 / -1; }
 .mobile-role-card { padding: 20px; }
 .mobile-role-card header { display: flex; align-items: center; gap: 10px; }

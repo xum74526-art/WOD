@@ -19,3 +19,14 @@ export function normalizeNativeApiBase(value?: string | null): string {
   const normalizedPort = port && port !== 443 ? `:${port}` : ''
   return `https://${match[1].toLowerCase()}${normalizedPort}/api`
 }
+
+/** Build a Web page URL for the same deployment as the configured App API. */
+export function resolvePublicWebUrl(path: string, apiBase?: string | null): string {
+  const normalizedPath = String(path || '').trim()
+  if (!/^\/[a-z0-9][a-z0-9/_-]*$/i.test(normalizedPath)) {
+    throw new Error('Public Web path must be an absolute application path')
+  }
+
+  const normalizedApiBase = normalizeNativeApiBase(apiBase)
+  return `${normalizedApiBase.slice(0, -4)}${normalizedPath}`
+}

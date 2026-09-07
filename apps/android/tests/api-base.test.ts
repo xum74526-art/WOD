@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { normalizeNativeApiBase, PRODUCTION_API_BASE } from '../src/utils/api-base.ts'
+import {
+  normalizeNativeApiBase,
+  PRODUCTION_API_BASE,
+  resolvePublicWebUrl,
+} from '../src/utils/api-base.ts'
 
 test('native app defaults to the canonical cloud API', () => {
   assert.equal(normalizeNativeApiBase(), PRODUCTION_API_BASE)
@@ -31,4 +35,15 @@ test('native app refuses unsafe or ambiguous API endpoints', () => {
   ]) {
     assert.throws(() => normalizeNativeApiBase(value))
   }
+})
+
+test('account recovery opens the Web app on the same HTTPS deployment', () => {
+  assert.equal(resolvePublicWebUrl('/forgot-password'), 'https://wod.kai.com/forgot-password')
+  assert.equal(
+    resolvePublicWebUrl('/forgot-password', 'https://staging.wod.example:8443/api'),
+    'https://staging.wod.example:8443/forgot-password',
+  )
+  assert.throws(() => resolvePublicWebUrl('forgot-password'))
+  assert.throws(() => resolvePublicWebUrl('//attacker.example'))
+  assert.throws(() => resolvePublicWebUrl('/forgot-password?token=secret'))
 })

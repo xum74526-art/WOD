@@ -53,6 +53,9 @@
             <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" />
             <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
           </view>
+          <view v-if="mode === 'login'" class="account-recovery-row">
+            <button class="account-recovery-link" @tap="openAccountRecovery">{{ t('forgotPassword') }}</button>
+          </view>
         </view>
 
         <view v-else class="kai-panel">
@@ -102,6 +105,8 @@ import {
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
+import { resolvePublicWebUrl } from '@/utils/config'
+import { openExternalLink } from '@/utils/external-link'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -138,6 +143,13 @@ function setAuthMethod(value: 'phone' | 'kai') {
 
 function goAgreement(type: string) {
   uni.navigateTo({ url: '/pages/agreement/index?type=' + type })
+}
+
+function openAccountRecovery() {
+  openExternalLink(
+    resolvePublicWebUrl('/forgot-password'),
+    () => uni.showToast({ title: t('accountRecoveryLinkCopied'), icon: 'none' }),
+  )
 }
 
 async function refreshCaptcha() {
@@ -395,6 +407,9 @@ onUnmounted(() => {
 .captcha-placeholder { width: 112px; height: 46px; border-radius: 8rpx; background: var(--card); border: 1rpx solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22rpx; color: var(--text-sub); flex-shrink: 0; }
 .eye { position: absolute; right: 24rpx; bottom: 27rpx; color: var(--text-sub); }
 .eye.on { color: var(--primary); }
+.account-recovery-row { display: flex; justify-content: flex-end; margin: -8rpx 2rpx 4rpx; }
+.account-recovery-link { width: auto; margin: 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.4; }
+.account-recovery-link::after { border: 0; }
 .kai-panel { padding: 20rpx 8rpx 8rpx; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .kai-mark { width: 100rpx; height: 100rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center; background: #15272d; color: #fff; font-size: 24rpx; font-weight: 800; letter-spacing: 2rpx; box-shadow: inset 0 0 0 1rpx rgba(255,255,255,.12); }
 .kai-title { margin-top: 24rpx; font-size: 32rpx; font-weight: 700; color: var(--text); }

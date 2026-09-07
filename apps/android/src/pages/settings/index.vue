@@ -32,6 +32,16 @@
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
+        <view class="menu-item" @tap="nav('/pages/recovery-email/index')">
+          <view class="mi-left">
+            <AppIcon name="mail" :size="40" />
+            <view>
+              <text class="mi-text">{{ t('recoveryEmailTitle') }}</text>
+              <text class="binding-hint">{{ t('recoveryEmailMenuHint') }}</text>
+            </view>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
         <view class="menu-item" @tap="onHelp">
           <view class="mi-left">
             <AppIcon name="help" :size="40" />

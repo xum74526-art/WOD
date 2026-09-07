@@ -12,7 +12,7 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -101,7 +101,7 @@ def create_authorization_flow(
     client_id: str | None = None,
 ) -> str:
     _require_configured()
-    if intent not in {"login", "register", "bind"}:
+    if intent not in {"login", "register", "bind", "recover"}:
         raise BizError("统一认证请求类型无效")
     if intent == "bind" and not user_id:
         raise BizError("绑定统一认证前必须先登录", status_code=401)
@@ -143,6 +143,10 @@ def create_authorization_flow(
     }
     if intent == "register":
         params["prompt"] = "create"
+    elif intent == "recover":
+        # Recovery must be a fresh identity check, not silent reuse of an old
+        # provider session.
+        params["prompt"] = "login"
     issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     return f"{issuer}/oauth2/authorize?{urlencode(params)}"
 
@@ -445,3 +449,12 @@ def bind_identity_with_ticket(db: Session, ticket: str, user: User) -> ExternalI
 def append_return_params(return_url: str, **params: str) -> str:
     separator = "&" if "?" in return_url else "?"
     return f"{return_url}{separator}{urlencode(params)}"
+
+
+def append_return_fragment(return_url: str, **params: str) -> str:
+    """Put recovery secrets in the browser fragment, never the HTTP query."""
+
+    parsed = urlsplit(return_url)
+    fragment = dict(parse_qsl(parsed.fragment, keep_blank_values=True))
+    fragment.update(params)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, urlencode(fragment)))

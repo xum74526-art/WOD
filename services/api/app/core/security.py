@@ -25,6 +25,7 @@ class AccessTokenClaims:
     subject: str
     session_id: str | None
     platform: str | None
+    auth_version: int = 0
 
 
 def create_access_token(
@@ -33,13 +34,19 @@ def create_access_token(
     *,
     session_id: str | None = None,
     platform: str | None = None,
+    auth_version: int = 0,
     expires_at: datetime | None = None,
 ) -> str:
     expire = expires_at or (
         datetime.now(timezone.utc)
         + timedelta(minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload = {"sub": str(subject), "exp": expire, "jti": secrets.token_urlsafe(16)}
+    payload = {
+        "sub": str(subject),
+        "exp": expire,
+        "jti": secrets.token_urlsafe(16),
+        "av": int(auth_version),
+    }
     if session_id:
         payload["sid"] = session_id
     if platform:
@@ -53,10 +60,18 @@ def decode_access_token(token: str) -> AccessTokenClaims | None:
         subject = payload.get("sub")
         if not subject:
             return None
+        raw_auth_version = payload.get("av", 0)
+        if (
+            not isinstance(raw_auth_version, int)
+            or isinstance(raw_auth_version, bool)
+            or raw_auth_version < 0
+        ):
+            return None
         return AccessTokenClaims(
             subject=str(subject),
             session_id=str(payload["sid"]) if payload.get("sid") else None,
             platform=str(payload["platform"]) if payload.get("platform") else None,
+            auth_version=raw_auth_version,
         )
     except InvalidTokenError:
         return None

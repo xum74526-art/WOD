@@ -11,13 +11,13 @@ from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_user
-from app.core.security import verify_password, hash_password
+from app.core.deps import AuthContext, get_current_auth_context, get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import ChangePasswordIn, ProfileUpdateIn, UserOut
 from app.utils.response import BizError, success
 from app.services.account_lifecycle import active_user_exists, lock_active_user
+from app.services.account_recovery import change_password_and_revoke_other_sessions
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -171,9 +171,17 @@ def rebate_summary(user: User = Depends(get_current_user), db: Session = Depends
 
 
 @router.post("/password")
-def change_password(data: ChangePasswordIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not verify_password(data.old_password, user.password):
-        raise BizError("原密码错误")
-    user.password = hash_password(data.new_password)
-    db.commit()
-    return success({"changed": True})
+def change_password(
+    data: ChangePasswordIn,
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    user = context.user
+    revoked = change_password_and_revoke_other_sessions(
+        db,
+        user,
+        data.old_password,
+        data.new_password,
+        context.session_id,
+    )
+    return success({"changed": True, "revoked_other_sessions": revoked})

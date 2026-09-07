@@ -22,6 +22,7 @@ from app.services.auth_session import create_authenticated_session, resolve_clie
 from app.utils.response import success, BizError
 from app.utils.captcha import create_captcha, verify_captcha
 from app.services import kai_auth
+from app.services import account_recovery
 
 INIT_BALANCE = Decimal("0")  # 无初始余额
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -209,6 +210,15 @@ async def kai_callback(
         if not user:
             return RedirectResponse(
                 kai_auth.append_return_params(return_url, kai_error="identity_not_bound"),
+                status_code=302,
+            )
+        if flow.intent == "recover":
+            recovery_token = account_recovery.issue_kai_recovery_token(db, user)
+            return RedirectResponse(
+                kai_auth.append_return_fragment(
+                    return_url,
+                    kai_recovery_token=recovery_token,
+                ),
                 status_code=302,
             )
         ticket = kai_auth.issue_handoff_ticket(

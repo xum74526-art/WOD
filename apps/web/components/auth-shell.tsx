@@ -17,7 +17,7 @@ export function AuthShell({ mode }: AuthShellProps) {
     ? { kicker: "北斗 kai ACCOUNT ACCESS", title: t("auth.intro.login", "连接你的算力资源"), description: locale === "en" ? "One account for buyer, supplier, and platform workspaces, with features shown by role." : "一个账号进入买家、商家与平台工作台，按角色显示对应功能。" }
     : mode === "register"
       ? { kicker: "JOIN 北斗 kai", title: t("auth.intro.register", "创建你的北斗 kai 账号"), description: locale === "en" ? "Add an SSH public key after registration to rent compute and manage connections." : "注册后添加 SSH 公钥，即可租用算力并管理连接。" }
-      : { kicker: "ACCOUNT SECURITY", title: t("auth.intro.forgot", "找回北斗 kai 账号"), description: locale === "en" ? "Update your sign-in credentials and continue managing compute resources and leases." : "通过注册邮箱更新登录凭证，继续管理算力资源和租约。" };
+      : { kicker: "ACCOUNT SECURITY", title: t("auth.intro.forgot", "找回 WOD 账号"), description: locale === "en" ? "Recover your WOD account with a linked email or KAI identity." : "通过已绑定邮箱或 KAI 身份找回 WOD 账号并重置密码，继续管理算力资源和租约。" };
 
   return (
     <div className="site-page public-v2 auth-page">

@@ -99,6 +99,15 @@ function upstreamFailure(result: CanonicalApiResult) {
   return apiError(canonicalErrorMessage(result), result.status || 502);
 }
 
+function recoveryApiResponse(result: CanonicalApiResult) {
+  const response = result.ok
+    ? apiSuccess(result.body.data, { source: "canonical-api" })
+    : upstreamFailure(result);
+  response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
 function authUser(value: unknown) {
   const user = object(value);
   const role = ["personal", "supplier", "admin"].includes(text(user.role))
@@ -653,6 +662,33 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const result = await upstream(request, "/api/auth/captcha", { auth: false });
     return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
   }
+  if (path === "auth/recovery/config" && request.method === "GET") {
+    return recoveryApiResponse(await upstream(request, "/api/auth/recovery/config", { auth: false }));
+  }
+  if (path === "user/recovery-email" && request.method === "GET") {
+    return recoveryApiResponse(await upstream(request, "/api/user/recovery-email"));
+  }
+  if (path === "user/recovery-email/request-verification" && request.method === "POST") {
+    return recoveryApiResponse(await upstream(request, "/api/user/recovery-email/request-verification", {
+      method: "POST",
+      body: { email: text(body.email).trim(), current_password: text(body.current_password) },
+    }));
+  }
+  if (path === "auth/email/verification/confirm" && request.method === "POST") {
+    return recoveryApiResponse(await upstream(request, "/api/auth/email/verification/confirm", {
+      method: "POST", auth: false, body: { token: text(body.token) },
+    }));
+  }
+  if (path === "auth/email/password-reset/request" && request.method === "POST") {
+    return recoveryApiResponse(await upstream(request, "/api/auth/email/password-reset/request", {
+      method: "POST", auth: false, body: { email: text(body.email).trim() },
+    }));
+  }
+  if (path === "auth/email/password-reset/confirm" && request.method === "POST") {
+    return recoveryApiResponse(await upstream(request, "/api/auth/email/password-reset/confirm", {
+      method: "POST", auth: false, body: { token: text(body.token), password: text(body.password) },
+    }));
+  }
   if (["auth/password/login", "auth/password/register"].includes(path) && request.method === "POST") {
     const register = path.endsWith("register");
     const payload = register ? {
@@ -692,23 +728,29 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess(result.body.data) : upstreamFailure(result);
   }
   if (path === "auth/kai/start" && request.method === "GET") {
-    const intent = request.nextUrl.searchParams.get("intent") === "register" ? "register" : "login";
+    const requestedIntent = request.nextUrl.searchParams.get("intent");
+    const intent = requestedIntent === "register" || requestedIntent === "recover" ? requestedIntent : "login";
+    const recovering = intent === "recover";
     const result = await upstream(request, "/api/auth/kai/start", {
       method: "POST",
       auth: false,
-      body: { intent, return_url: `${publicOrigin(request)}/login`, client_id: "web" },
+      body: { intent, return_url: `${publicOrigin(request)}${recovering ? "/reset-password" : "/login"}`, client_id: "web" },
     });
     if (!result.ok) return upstreamFailure(result);
     const authorizationUrl = text(object(result.body.data).authorization_url);
     if (!authorizationUrl) return apiError("统一认证未返回授权地址", 502);
     const response = NextResponse.redirect(authorizationUrl, 302);
-    response.cookies.set(RETURN_TO_COOKIE, safeReturnPath(request.nextUrl.searchParams.get("return_to")), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: requestIsHttps(request),
-      path: "/",
-      maxAge: 60 * 10,
-    });
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    if (!recovering) {
+      response.cookies.set(RETURN_TO_COOKIE, safeReturnPath(request.nextUrl.searchParams.get("return_to")), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: requestIsHttps(request),
+        path: "/",
+        maxAge: 60 * 10,
+      });
+    }
     return response;
   }
   if (path === "auth/kai/exchange" && request.method === "POST") {
@@ -980,7 +1022,10 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   }
   if (path === "account/security/password" && request.method === "POST") {
     const result = await upstream(request, "/api/user/password", { method: "POST", body: { old_password: body.current_password, new_password: body.new_password } });
-    return result.ok ? apiSuccess({ changed: true, revoked_other_sessions: 0 }) : upstreamFailure(result);
+    return result.ok ? apiSuccess({
+      changed: true,
+      revoked_other_sessions: number(object(result.body.data).revoked_other_sessions),
+    }) : upstreamFailure(result);
   }
 
   if (path.startsWith("canonical/")) {

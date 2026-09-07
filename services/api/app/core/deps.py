@@ -42,6 +42,8 @@ def get_current_auth_context(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")
     # This must precede the legacy JWT branch, not just session validation.
     ensure_active_user(user)
+    if claims.auth_version != int(user.auth_version or 0):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "会话无效或已过期")
     db.info["authenticated_user_id"] = user.id
     if not claims.session_id:
         # Signed tokens issued before server-side sessions remain usable during

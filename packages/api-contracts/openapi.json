@@ -1513,7 +1513,8 @@
             "default": "login",
             "enum": [
               "login",
-              "register"
+              "register",
+              "recover"
             ],
             "title": "Intent",
             "type": "string"
@@ -2657,6 +2658,43 @@
         "title": "OrderRenewIn",
         "type": "object"
       },
+      "PasswordResetConfirmIn": {
+        "properties": {
+          "password": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "PasswordResetConfirmIn",
+        "type": "object"
+      },
+      "PasswordResetRequestIn": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "PasswordResetRequestIn",
+        "type": "object"
+      },
       "PostCreateIn": {
         "properties": {
           "content": {
@@ -2925,6 +2963,43 @@
           "payment_type"
         ],
         "title": "RechargePaymentCreateIn",
+        "type": "object"
+      },
+      "RecoveryEmailVerificationRequestIn": {
+        "properties": {
+          "current_password": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "current_password"
+        ],
+        "title": "RecoveryEmailVerificationRequestIn",
+        "type": "object"
+      },
+      "RecoveryTokenIn": {
+        "properties": {
+          "token": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "RecoveryTokenIn",
         "type": "object"
       },
       "RedeemIn": {
@@ -4877,6 +4952,123 @@
         ]
       }
     },
+    "/api/auth/email/password-reset/confirm": {
+      "post": {
+        "operationId": "confirm_password_reset_api_auth_email_password_reset_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Password Reset",
+        "tags": [
+          "account-recovery"
+        ]
+      }
+    },
+    "/api/auth/email/password-reset/request": {
+      "post": {
+        "operationId": "request_password_reset_api_auth_email_password_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Password Reset",
+        "tags": [
+          "account-recovery"
+        ]
+      }
+    },
+    "/api/auth/email/verification/confirm": {
+      "post": {
+        "operationId": "confirm_recovery_email_api_auth_email_verification_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Recovery Email",
+        "tags": [
+          "account-recovery"
+        ]
+      }
+    },
     "/api/auth/kai/bind/exchange": {
       "post": {
         "operationId": "kai_bind_exchange_api_auth_kai_bind_exchange_post",
@@ -5207,6 +5399,25 @@
         "summary": "Login",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/auth/recovery/config": {
+      "get": {
+        "operationId": "recovery_config_api_auth_recovery_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Recovery Config",
+        "tags": [
+          "account-recovery"
         ]
       }
     },
@@ -11362,6 +11573,74 @@
         "summary": "Rebate Summary",
         "tags": [
           "user"
+        ]
+      }
+    },
+    "/api/user/recovery-email": {
+      "get": {
+        "operationId": "get_recovery_email_api_user_recovery_email_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Recovery Email",
+        "tags": [
+          "account-recovery"
+        ]
+      }
+    },
+    "/api/user/recovery-email/request-verification": {
+      "post": {
+        "operationId": "request_recovery_email_verification_api_user_recovery_email_request_verification_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryEmailVerificationRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Request Recovery Email Verification",
+        "tags": [
+          "account-recovery"
         ]
       }
     },

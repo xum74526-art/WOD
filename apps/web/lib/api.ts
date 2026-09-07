@@ -190,8 +190,9 @@ export function exchangeKaiTicket(ticket: string) {
   });
 }
 
-export function kaiWebAuthorizationUrl(intent: "login" | "register", returnTo: string) {
-  const query = new URLSearchParams({ intent, return_to: returnTo });
+export function kaiWebAuthorizationUrl(intent: "login" | "register" | "recover", returnTo = "/") {
+  const query = new URLSearchParams({ intent });
+  if (intent !== "recover") query.set("return_to", returnTo);
   return `${apiBaseUrl}/api/v1/auth/kai/start?${query.toString()}`;
 }
 
@@ -227,14 +228,36 @@ export function confirmPasswordReset(token: string, password: string) {
   return apiRequest<{ reset: boolean }>("/api/v1/auth/email/password-reset/confirm", { method: "POST", body: JSON.stringify({ token, password }) });
 }
 
-export function resendEmailVerification() {
-  return apiRequest<{ accepted: boolean; already_verified: boolean }>("/api/v1/auth/email/verification/resend", { method: "POST" });
-}
-
 export function confirmEmailVerification(token: string) {
   return apiRequest<{ verified: boolean }>("/api/v1/auth/email/verification/confirm", {
     method: "POST",
     body: JSON.stringify({ token }),
+  });
+}
+
+export type AccountRecoveryConfig = {
+  email_enabled: boolean;
+  kai_enabled: boolean;
+  reset_ttl_seconds: number;
+};
+
+export type RecoveryEmailStatus = {
+  email: string | null;
+  verified: boolean;
+};
+
+export function getAccountRecoveryConfig() {
+  return apiRequest<AccountRecoveryConfig>("/api/v1/auth/recovery/config");
+}
+
+export function getRecoveryEmailStatus() {
+  return apiRequest<RecoveryEmailStatus>("/api/v1/user/recovery-email");
+}
+
+export function requestRecoveryEmailVerification(email: string, currentPassword: string) {
+  return apiRequest<{ accepted: boolean; already_verified: boolean }>("/api/v1/user/recovery-email/request-verification", {
+    method: "POST",
+    body: JSON.stringify({ email, current_password: currentPassword }),
   });
 }
 
