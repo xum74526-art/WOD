@@ -184,6 +184,27 @@ class AccountRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(BizError, "邮箱服务尚未配置"):
                 account_email.require_email_delivery()
 
+    def test_password_reset_email_supports_native_code_and_web_fallback(self):
+        with patch.object(account_email, "_deliver") as deliver:
+            account_email.send_account_recovery_email(
+                "password_reset_email",
+                "owner@example.com",
+                "synthetic-reset-token",
+            )
+
+        message = deliver.call_args.args[0]
+        content = message.get_content()
+        self.assertEqual(message["Subject"], "重置你的 WOD 密码")
+        self.assertIn("在 WOD App", content)
+        self.assertIn(
+            "页面输入以下重置码：\nsynthetic-reset-token\n\n",
+            content,
+        )
+        self.assertIn(
+            account_email._link("password_reset_email", "synthetic-reset-token"),
+            content,
+        )
+
     def test_email_binding_requires_password_and_persists_only_protected_proof(self):
         user = self._user()
         with self.assertRaisesRegex(BizError, "当前密码错误"):

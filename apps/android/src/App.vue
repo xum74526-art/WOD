@@ -7,16 +7,39 @@ import { useHostingStore } from './store/hosting'
 import { useNotificationStore } from './store/notification'
 import { useCommerceStore } from './store/commerce'
 import { kaiAuthCallbackFingerprint, parseKaiAuthUrl } from './utils/kai-auth-callback'
+import { stagePasswordResetCallback } from './utils/password-reset-callback'
 
 const HANDLED_KAI_BIND_CALLBACK_KEY = 'wod_kai_bind_callback_fingerprint'
 let kaiBindingCallbackProcessing = ''
 let kaiBindingProbeTimer: ReturnType<typeof setTimeout> | null = null
+let passwordResetNavigationTimer: ReturnType<typeof setTimeout> | null = null
+
+function runtimeArguments() {
+  // #ifdef APP-PLUS
+  return plus.runtime.arguments
+  // #endif
+  return ''
+}
 
 function runtimeKaiCallback() {
-  // #ifdef APP-PLUS
-  return parseKaiAuthUrl(plus.runtime.arguments)
-  // #endif
-  return null
+  return parseKaiAuthUrl(runtimeArguments())
+}
+
+function handlePasswordResetCallback(allowRepeatedIntent = false) {
+  if (!stagePasswordResetCallback(runtimeArguments(), allowRepeatedIntent)) return false
+  if (passwordResetNavigationTimer) clearTimeout(passwordResetNavigationTimer)
+  passwordResetNavigationTimer = setTimeout(() => {
+    passwordResetNavigationTimer = null
+    const pages = getCurrentPages()
+    const currentRoute = pages[pages.length - 1]?.route || ''
+    if (currentRoute === 'pages/reset-password/index') {
+      uni.$emit('wod-password-reset-token-ready')
+      return
+    }
+    const url = '/pages/reset-password/index'
+    uni.navigateTo({ url, fail: () => uni.reLaunch({ url }) })
+  }, 120)
+  return true
 }
 
 async function handleKaiBindingCallback() {
@@ -58,6 +81,7 @@ function registerKaiBindingListener() {
     globalEvent?: { addEventListener(event: string, listener: () => void): void }
   }).globalEvent
   globalEvent?.addEventListener('newintent', probeKaiBindingCallback)
+  globalEvent?.addEventListener('newintent', () => handlePasswordResetCallback(true))
   // #endif
 }
 
@@ -80,6 +104,7 @@ onLaunch(() => {
   user.restore()
   if (user.isLogin) useNotificationStore().startPolling()
   registerKaiBindingListener()
+  handlePasswordResetCallback()
   probeKaiBindingCallback()
 })
 onShow(() => {
@@ -88,6 +113,7 @@ onShow(() => {
   theme.applyTheme()
   if (useUserStore().isLogin) useNotificationStore().startPolling()
   void useCommerceStore().refresh()
+  handlePasswordResetCallback()
   probeKaiBindingCallback()
 })
 onHide(() => useNotificationStore().stopPolling())

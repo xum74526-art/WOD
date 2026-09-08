@@ -105,8 +105,6 @@ import {
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
-import { resolvePublicWebUrl } from '@/utils/config'
-import { openExternalLink } from '@/utils/external-link'
 
 const { t } = useI18nStore()
 const userStore = useUserStore()
@@ -146,10 +144,7 @@ function goAgreement(type: string) {
 }
 
 function openAccountRecovery() {
-  openExternalLink(
-    resolvePublicWebUrl('/forgot-password'),
-    () => uni.showToast({ title: t('accountRecoveryLinkCopied'), icon: 'none' }),
-  )
+  uni.navigateTo({ url: '/pages/forgot-password/index' })
 }
 
 async function refreshCaptcha() {

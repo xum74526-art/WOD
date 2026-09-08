@@ -8,6 +8,8 @@
     { "path": "pages/assets/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/login/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/forgot-password/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/reset-password/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/product/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/asset/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/devices/index", "style": { "navigationStyle": "custom" } },

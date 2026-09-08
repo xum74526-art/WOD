@@ -16,6 +16,15 @@ export interface AccountRecoveryConfig {
   reset_ttl_seconds: number
 }
 
+export interface PasswordResetRequestResult {
+  accepted: boolean
+  message: string
+}
+
+export interface PasswordResetConfirmResult {
+  reset: boolean
+}
+
 export function getAccountRecoveryConfig() {
   return request<AccountRecoveryConfig>({
     url: '/auth/recovery/config',
@@ -36,6 +45,26 @@ export function requestRecoveryEmailVerification(email: string, currentPassword:
     url: '/user/recovery-email/request-verification',
     method: 'POST',
     data: { email, current_password: currentPassword },
+    silent: true,
+  })
+}
+
+export function requestPasswordReset(email: string) {
+  return request<PasswordResetRequestResult>({
+    url: '/auth/email/password-reset/request',
+    method: 'POST',
+    data: { email },
+    auth: 'none',
+    silent: true,
+  })
+}
+
+export function confirmPasswordReset(token: string, password: string) {
+  return request<PasswordResetConfirmResult>({
+    url: '/auth/email/password-reset/confirm',
+    method: 'POST',
+    data: { token, password },
+    auth: 'none',
     silent: true,
   })
 }

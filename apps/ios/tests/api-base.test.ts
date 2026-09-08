@@ -37,13 +37,13 @@ test('native app refuses unsafe or ambiguous API endpoints', () => {
   }
 })
 
-test('account recovery opens the Web app on the same HTTPS deployment', () => {
-  assert.equal(resolvePublicWebUrl('/forgot-password'), 'https://wod.kai.com/forgot-password')
+test('the legacy public Web URL helper stays on the same HTTPS deployment', () => {
+  assert.equal(resolvePublicWebUrl('/help'), 'https://wod.kai.com/help')
   assert.equal(
-    resolvePublicWebUrl('/forgot-password', 'https://staging.wod.example:8443/api'),
-    'https://staging.wod.example:8443/forgot-password',
+    resolvePublicWebUrl('/help', 'https://staging.wod.example:8443/api'),
+    'https://staging.wod.example:8443/help',
   )
-  assert.throws(() => resolvePublicWebUrl('forgot-password'))
+  assert.throws(() => resolvePublicWebUrl('help'))
   assert.throws(() => resolvePublicWebUrl('//attacker.example'))
-  assert.throws(() => resolvePublicWebUrl('/forgot-password?token=secret'))
+  assert.throws(() => resolvePublicWebUrl('/help?token=secret'))
 })

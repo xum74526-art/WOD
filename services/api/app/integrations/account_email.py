@@ -98,10 +98,17 @@ def send_account_recovery_email(kind: RecoveryEmailKind, recipient: str, token: 
         intro = "我们收到了你的 WOD 密码重置请求。"
         action = "设置新密码"
     message = _message(recipient, subject)
-    message.set_content(
-        f"{intro}\n\n请点击以下链接{action}：\n{_link(kind, token)}\n\n"
-        "链接只能使用一次并会在短时间后失效。如果不是你本人操作，请忽略本邮件。"
-    )
+    if kind == "password_reset_email":
+        message.set_content(
+            f"{intro}\n\n在 WOD App 的“忘记密码”页面输入以下重置码：\n{token}\n\n"
+            f"也可以使用网页版{action}：\n{_link(kind, token)}\n\n"
+            "重置码和链接只能使用一次并会在短时间后失效。如果不是你本人操作，请忽略本邮件。"
+        )
+    else:
+        message.set_content(
+            f"{intro}\n\n请点击以下链接{action}：\n{_link(kind, token)}\n\n"
+            "链接只能使用一次并会在短时间后失效。如果不是你本人操作，请忽略本邮件。"
+        )
     _deliver(message)
 
 
