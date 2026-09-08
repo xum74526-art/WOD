@@ -68,8 +68,8 @@
             <text class="vlabel">{{ t('officialVideo') }}</text>
           </view>
         </view>
-        <view v-if="d.source_url" class="source-action" @tap.stop="openSource(d)">
-          <text>{{ t(d.content_type === 'video' ? 'watchOnSource' : 'viewOriginal') }}</text>
+        <view v-if="d.source_url && d.content_type !== 'video'" class="source-action" @tap.stop="openSource(d)">
+          <text>{{ t('viewOriginal') }}</text>
           <text>↗</text>
         </view>
         <view class="dactions">

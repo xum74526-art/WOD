@@ -44,7 +44,7 @@
         <view v-else-if="post.content_type === 'video'" class="dvideo">
           <!-- #ifdef H5 -->
           <iframe
-            v-if="post.embed_url"
+            v-if="playerUrl(post)"
             class="video-frame"
             :src="playerUrl(post)"
             title="Video player"
@@ -55,7 +55,7 @@
           />
           <!-- #endif -->
           <!-- #ifndef H5 -->
-          <view class="vthumb" @tap="openSource(post)">
+          <view class="vthumb" @tap="openVideo(post)">
             <image v-if="post.thumbnail_url" class="vimage" :src="post.thumbnail_url" mode="aspectFill" />
             <view class="vshade" />
             <view class="vplay">▶</view>
@@ -63,12 +63,12 @@
           <!-- #endif -->
           <view v-if="!hasInAppVideo(post)" class="video-unavailable">{{ t('videoUnavailable') }}</view>
         </view>
-        <view v-if="post.source_url" class="source-action" @tap="openSource(post)">
+        <view v-if="post.source_url && post.content_type !== 'video'" class="source-action" @tap="openSource(post)">
           <view>
             <text class="source-caption">{{ t('sourceLabel') }}</text>
             <text class="source-value">{{ displaySource(post) }}</text>
           </view>
-          <text class="source-link">{{ t(post.content_type === 'video' ? 'watchOnSource' : 'viewOriginal') }} ↗</text>
+          <text class="source-link">{{ t('viewOriginal') }} ↗</text>
         </view>
         <view class="dactions">
           <view class="dact" @tap="onLike">
@@ -120,6 +120,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizeCommunityText, localizePersonName } from '@/utils/localize-content'
 import { openExternalLink } from '@/utils/external-link'
+import { buildCommunityVideoPlayerUrl, buildCommunityVideoSourceUrl, openCommunityVideo } from '@/utils/community-video'
 import { resolveApiMediaUrl } from '@/utils/config'
 
 const i18n = useI18nStore()
@@ -169,6 +170,33 @@ function openSource(value: PostItem) {
   openExternalLink(url, () => uni.showToast({ title: t('openFailed'), icon: 'none' }))
 }
 
+function watchVideo(value: PostItem): boolean {
+  if (!buildCommunityVideoPlayerUrl(value)) return false
+  let failed = false
+  const opened = openCommunityVideo(value, t('video'), () => {
+    failed = true
+    const url = buildCommunityVideoSourceUrl(value)
+    if (!url) {
+      uni.showToast({ title: t('videoUnavailable'), icon: 'none' })
+      return
+    }
+    uni.showModal({
+      title: t('videoUnavailable'),
+      content: t('videoOpenExternalHint'),
+      confirmText: t('confirm'),
+      cancelText: t('cancel'),
+      success: ({ confirm }) => {
+        if (confirm) openExternalLink(url, () => uni.showToast({ title: t('openFailed'), icon: 'none' }))
+      },
+    })
+  })
+  return opened || failed
+}
+
+function openVideo(value: PostItem) {
+  if (!watchVideo(value)) uni.showToast({ title: t('videoUnavailable'), icon: 'none' })
+}
+
 function postImages(value: PostItem): string[] {
   if (value.origin !== 'user' || !Array.isArray(value.images)) return []
   return value.images.map(resolveApiMediaUrl).filter(Boolean)
@@ -185,26 +213,11 @@ function previewPostImages(value: PostItem, currentIndex: number) {
 }
 
 function hasInAppVideo(value: PostItem): boolean {
-  return Boolean(userVideoUrl(value) || value.embed_url)
+  return Boolean(userVideoUrl(value) || buildCommunityVideoPlayerUrl(value))
 }
 
 function playerUrl(value: PostItem): string {
-  const source = value.embed_url || ''
-  if (!source) return ''
-  if (value.video_provider !== 'youtube') return source
-  // YouTube requires an identifiable embedding client. Supplying the live
-  // origin also avoids error 153 in WebViews that omit the Referer header.
-  // #ifdef H5
-  try {
-    const url = new URL(source)
-    url.searchParams.set('origin', window.location.origin)
-    url.searchParams.set('widget_referrer', window.location.href.split('#')[0])
-    url.searchParams.set('enablejsapi', '1')
-    url.searchParams.set('rel', '0')
-    return url.toString()
-  } catch {}
-  // #endif
-  return source
+  return buildCommunityVideoPlayerUrl(value)
 }
 
 onLoad((opts) => {

@@ -8,10 +8,10 @@ export const metadata: Metadata = {
   description: "下载 北斗 kai Android App，或查看 iOS 与 Android 应用商店发布状态。",
 };
 
-const androidVersion = "1.0.13";
+const androidVersion = "1.0.16";
 const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "/download/wod.apk";
-const androidApkSize = "27.6 MB";
-const androidApkSha256 = "9EA5C12F2786143047BEF34BD12C5EF7390B681FDA283DE6E36E8EA072034DB7";
+const androidApkSize = "27.8 MB";
+const androidApkSha256 = "2592356B0028479EB0C9579E2990ACE6E68CDF8BF4BD6EEF4A7CAD1BC2EEE45B";
 
 export default function DownloadPage() {
   return (
