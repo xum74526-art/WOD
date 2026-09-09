@@ -118,7 +118,7 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
-import { localizeCommunityText, localizePersonName } from '@/utils/localize-content'
+import { localizeCommunityText, localizeInternalBrandText, localizePersonName } from '@/utils/localize-content'
 import { openExternalLink } from '@/utils/external-link'
 import { buildCommunityVideoPlayerUrl, buildCommunityVideoSourceUrl, openCommunityVideo } from '@/utils/community-video'
 import { resolveApiMediaUrl } from '@/utils/config'
@@ -146,13 +146,13 @@ function communityText(value?: string): string {
 }
 
 function postContent(value: PostItem): string {
-  if (i18n.lang === 'en' && value.content_en) return value.content_en
-  return communityText(value.content)
+  const content = i18n.lang === 'en' && value.content_en ? value.content_en : communityText(value.content)
+  return localizeInternalBrandText(content, value.source_key)
 }
 
 function postTopic(value: PostItem): string {
-  if (i18n.lang === 'en' && value.topic_en) return value.topic_en
-  return communityText(value.topic || t('讨论'))
+  const topic = i18n.lang === 'en' && value.topic_en ? value.topic_en : communityText(value.topic || t('讨论'))
+  return localizeInternalBrandText(topic, value.source_key)
 }
 
 function isAutoPost(value: PostItem): boolean {
@@ -160,7 +160,7 @@ function isAutoPost(value: PostItem): boolean {
 }
 
 function displaySource(value: PostItem): string {
-  if (i18n.lang === 'en' && value.source_key === 'wod-market') return 'WOD Market'
+  if (value.source_key === 'wod-market') return i18n.lang === 'en' ? 'ZTW Market' : 'ZTW 算力行情'
   return value.source_name || t('sourceLabel')
 }
 

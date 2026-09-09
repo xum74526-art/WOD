@@ -174,9 +174,9 @@ class AccountRecoveryTests(unittest.TestCase):
             )
 
         message = deliver.call_args.args[0]
-        self.assertEqual(message["Subject"], "验证你的 WOD 绑定邮箱")
+        self.assertEqual(message["Subject"], "验证你的 ZTW 绑定邮箱")
         content = message.get_content()
-        self.assertIn("为 WOD 账号绑定或更换邮箱", content)
+        self.assertIn("为 ZTW 账号绑定或更换邮箱", content)
         self.assertIn("完成邮箱绑定", content)
         self.assertNotIn("找回邮箱", f"{message['Subject']}\n{content}")
 
@@ -194,8 +194,8 @@ class AccountRecoveryTests(unittest.TestCase):
 
         message = deliver.call_args.args[0]
         content = message.get_content()
-        self.assertEqual(message["Subject"], "重置你的 WOD 密码")
-        self.assertIn("在 WOD App", content)
+        self.assertEqual(message["Subject"], "重置你的 ZTW 密码")
+        self.assertIn("在 ZTW App", content)
         self.assertIn(
             "页面输入以下重置码：\nsynthetic-reset-token\n\n",
             content,
@@ -470,8 +470,10 @@ class AccountRecoveryTests(unittest.TestCase):
 
         message = deliver.call_args.args[0]
         self.assertEqual(message["To"], "notice@example.com")
-        self.assertIn("密码已更新", message["Subject"])
+        self.assertEqual(message["Subject"], "你的 ZTW 密码已更新")
         content = message.get_content()
+        self.assertIn("ZTW 账号密码", content)
+        self.assertIn("ZTW 客服", content)
         self.assertNotIn("http://", content)
         self.assertNotIn("https://", content)
         self.assertNotIn("token", content.casefold())
@@ -690,7 +692,7 @@ class AccountRecoveryTests(unittest.TestCase):
                 {"sub": "unbound-subject", "email": "same-profile-email@example.com"},
             )
         )
-        # The same subject under a different issuer is also not a WOD binding.
+        # The same subject under a different issuer is also not a ZTW binding.
         self.assertIsNone(
             kai_auth.find_bound_user(
                 self.db,

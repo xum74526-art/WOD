@@ -90,7 +90,7 @@ def enqueue_suppressed_password_reset(
     now = utcnow()
     # Perform the same normalization, random-token generation and field-level
     # encryption work as a deliverable request, then discard it.  A terminal
-    # anti-enumeration row must never retain an address that WOD has not
+    # anti-enumeration row must never retain an address that ZTW has not
     # established belongs to one of its accounts.
     protected_recipient = protect(normalize_email(recipient))
     protected_token = protect(secrets.token_urlsafe(32))

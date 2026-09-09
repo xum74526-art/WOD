@@ -7,7 +7,7 @@ from app.db.base import Base
 
 
 class SupportConversation(Base):
-    """A durable support thread owned by exactly one WOD account."""
+    """A durable support thread owned by exactly one ZTW account."""
 
     __tablename__ = "support_conversations"
 

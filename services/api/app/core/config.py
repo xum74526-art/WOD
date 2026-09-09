@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
-    # WOD-owned recovery email. This remains fail-closed until the private
+    # ZTW-owned recovery email. This remains fail-closed until the private
     # deployment supplies encrypted-field and SMTP configuration.
     ACCOUNT_RECOVERY_EMAIL_ENABLED: bool = False
     ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN: str = "https://wod.kai.com"
@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     # Full payout instructions are sensitive. Finance must use the short-lived,
     # one-time proof returned by the reveal endpoint when recording a payment.
     PAYOUT_INSTRUCTION_REVEAL_TTL_SECONDS: int = 300
-    # Confirmed WOD merchant sales settle independently from promotional
+    # Confirmed ZTW merchant sales settle independently from promotional
     # reward card-hours and synthetic asset revenue. Ten percent = 1000 bps.
     MERCHANT_SERVICE_FEE_BPS: int = 1000
     # Reserved order funds cannot remain frozen forever. Pending delivery is
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     # Keep empty until each channel has passed a real provider-side check.
     MAPAY_PAYMENT_TYPES: str = ""
     MAPAY_HTTP_TIMEOUT: float = 10.0
-    # MaPay hosted orders expire after roughly five minutes.  WOD uses the
+    # MaPay hosted orders expire after roughly five minutes.  ZTW uses the
     # same deadline so it never presents an already-invalid checkout as open.
     MAPAY_CHECKOUT_TTL_SECONDS: int = 300
     # Human-readable MaPay addtime/endtime values use the provider timezone.
@@ -155,7 +155,7 @@ class Settings(BaseSettings):
     # Registration/invite/consumer/supplier rebates remain disabled until an
     # auditable verification and settlement policy is connected.
     REWARD_SERVICE_ENABLED: bool = False
-    # In-app card-hour rewards are spendable only inside WOD and are always
+    # In-app card-hour rewards are spendable only inside ZTW and are always
     # non-withdrawable, independently of recharge or payout configuration.
     # They use dedicated ledger types so legacy synthetic rewards stay excluded.
     CLOSED_TEST_REWARD_ENABLED: bool = False

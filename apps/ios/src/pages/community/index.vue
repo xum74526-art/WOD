@@ -105,7 +105,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
-import { localizeCommunityText, localizePersonName } from '@/utils/localize-content'
+import { localizeCommunityText, localizeInternalBrandText, localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
 
 const i18n = useI18nStore()
@@ -131,13 +131,13 @@ function communityText(value?: string): string {
 }
 
 function postContent(post: PostItem): string {
-  if (i18n.lang === 'en' && post.content_en) return post.content_en
-  return communityText(post.content)
+  const content = i18n.lang === 'en' && post.content_en ? post.content_en : communityText(post.content)
+  return localizeInternalBrandText(content, post.source_key)
 }
 
 function postTopic(post: PostItem): string {
-  if (i18n.lang === 'en' && post.topic_en) return post.topic_en
-  return communityText(post.topic || t('讨论'))
+  const topic = i18n.lang === 'en' && post.topic_en ? post.topic_en : communityText(post.topic || t('讨论'))
+  return localizeInternalBrandText(topic, post.source_key)
 }
 
 function isAutoPost(post: PostItem): boolean {
@@ -145,7 +145,7 @@ function isAutoPost(post: PostItem): boolean {
 }
 
 function displaySource(post: PostItem): string {
-  if (i18n.lang === 'en' && post.source_key === 'wod-market') return 'WOD Market'
+  if (post.source_key === 'wod-market') return i18n.lang === 'en' ? 'ZTW Market' : 'ZTW 算力行情'
   return post.source_name || t('sourceLabel')
 }
 

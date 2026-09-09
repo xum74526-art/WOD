@@ -42,7 +42,7 @@ test('homepage matching promotion replaces wallet messaging and opens request co
   const requestPromotion = HOME_PROMOTIONS[2]
   assert.equal(requestPromotion?.route, '/pages/buy-request/index?compose=1')
   assert.equal(requestPromotion?.titleKey, 'homePromoRequestTitle')
-  assert.match(i18n, /homePromoRequestKicker: 'WOD MATCHING'/)
+  assert.match(i18n, /homePromoRequestKicker: 'ZTW MATCHING'/)
   assert.match(i18n, /homePromoRequestTitle: '发布算力需求'/)
   assert.match(i18n, /homePromoRequestAction: '提交需求'/)
   assert.match(i18n, /homePromoRequestTitle: 'Post Compute Request'/)

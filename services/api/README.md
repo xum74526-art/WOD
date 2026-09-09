@@ -54,7 +54,7 @@ docker build -t kai-api .
 - Vast.ai 授权报价只写入 `vast_offers`、`vast_price_snapshots` 和 `vast_sync_status` 参考表，不创建商品、不代表平台库存，也不参与下单。
 - AutoDL 不再运行采集器或下载任务；已有来源标识、历史快照和订单仍保留用于审计。
 - KAI 商品使用显式 `market_source` 与 `external_product_id`，上游最大可配置数量不等同实时库存。
-- 新 KAI 订单只接受 `hours`（1–720 的整数）；`cycle_days` 仅用于历史 WOD 日周期订单。
+- 新 KAI 订单只接受 `hours`（1–720 的整数）；`cycle_days` 仅用于历史平台日周期订单（内部兼容来源键仍为 `wod`）。
 - 下单与续费使用客户端请求号保证幂等，金额、结束时间和续费审计均由后端计算。
 - `created_platform`/`last_modified_platform` 来自服务端认证会话，不接受客户端自报平台。
 
@@ -105,7 +105,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 ### 账号找回上线
 
-账号找回使用 WOD 内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到 WOD 账号。KAI 找回只认已经绑定的 `issuer + subject`。
+账号找回使用 ZTW 内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到 ZTW 账号。KAI 找回只认已经绑定的 `issuer + subject`。
 
 对已有数据库，先在备份副本执行只读检查，再运行范围受限的迁移：
 

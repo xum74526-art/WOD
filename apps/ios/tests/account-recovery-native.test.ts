@@ -104,5 +104,5 @@ test('native recovery routes and bilingual copy are complete', () => {
   assert.match(locale, /passwordRecoveryTitle: '找回密码'/)
   assert.match(locale, /passwordRecoveryTitle: 'Forgot password'/)
   assert.match(locale, /passwordRecoveryPrivacyNotice: '为保护账号，无论邮箱是否已绑定，提交后都会显示相同结果。'/)
-  assert.match(locale, /passwordResetSecurityNotice: '重置码只能使用一次，并会在短时间内失效。WOD 不会在设备中保存该重置码。'/)
+  assert.match(locale, /passwordResetSecurityNotice: '重置码只能使用一次，并会在短时间内失效。ZTW 不会在设备中保存该重置码。'/)
 })

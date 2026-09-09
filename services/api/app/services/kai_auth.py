@@ -1,6 +1,6 @@
 """Kai OAuth 2.1 / OpenID Connect integration.
 
-The browser callback never carries a WOD access token. It carries a short-lived,
+The browser callback never carries a ZTW access token. It carries a short-lived,
 single-use handoff ticket which the App exchanges through the API.
 """
 
@@ -271,7 +271,7 @@ async def enrich_with_userinfo(claims: dict[str, Any], access_token: str | None)
 
 
 def find_bound_user(db: Session, claims: dict[str, Any]) -> User | None:
-    """Find an explicitly bound local user; never create a WOD account."""
+    """Find an explicitly bound local user; never create a ZTW account."""
     issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     subject = str(claims["sub"])
     identity = db.query(ExternalIdentity).filter(

@@ -1293,7 +1293,7 @@ def _history_freshness(
 
 
 # KAI's ``gpuModel`` filter is exact.  These are observed public display names
-# whose vendor/generation token is intentionally removed by WOD's canonical
+# whose vendor/generation token is intentionally removed by ZTW's canonical
 # identity.  Keep this table explicit: guessing aliases risks mixing SKUs.
 _KAI_GPU_MODEL_ALIASES: dict[tuple[str, str], tuple[str, ...]] = {
     ("H100", "94GB"): ("H100 NVL 94GB",),
@@ -1315,7 +1315,7 @@ _KAI_GPU_MODEL_ALIASES: dict[tuple[str, str], tuple[str, ...]] = {
 def _upstream_gpu_model_filters(model: str, variant: str) -> tuple[str, ...]:
     """Return bounded exact KAI ``gpuModel`` values for one canonical SKU.
 
-    KAI's filter is exact.  WOD intentionally keeps only a small documented
+    KAI's filter is exact.  ZTW intentionally keeps only a small documented
     alias set for canonical names that discard a vendor/display token; every
     returned row is still normalized and checked against ``model``/``variant``
     before it can become a candidate.

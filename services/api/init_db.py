@@ -557,7 +557,7 @@ def _migrate_order_request_scope(db_engine=None) -> None:
 def _migrate_unverified_phone_flags(db_engine=None):
     """One-time truth migration for numbers never verified by an SMS flow.
 
-    WOD has not had a real phone-ownership verification service. Historical
+    ZTW has not had a real phone-ownership verification service. Historical
     ``phone_bound=true`` values therefore came only from an unsafe default.
     A durable marker makes this demotion idempotent and prevents a future,
     genuinely verified flag from being reset on every startup.

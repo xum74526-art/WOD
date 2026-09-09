@@ -7,7 +7,7 @@ import {
   takePendingPasswordResetToken,
 } from '../src/utils/password-reset-callback.ts'
 
-test('parses verified WOD reset links with fragment tokens', () => {
+test('parses verified ZTW reset links with fragment tokens', () => {
   assert.deepEqual(parsePasswordResetUrl('https://wod.kai.com/reset-password#token=secret%2Bvalue'), {
     token: 'secret+value',
   })

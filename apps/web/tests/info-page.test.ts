@@ -13,7 +13,7 @@ test("/info is an isolated static page with production metadata and assets", () 
   assert.match(nextConfig, /connect-src 'none'/);
   assert.match(html, /<meta name="robots" content="index, follow" \/>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/wod\.kai\.com\/info" \/>/);
-  assert.match(html, /<title>WOD 算力资源信息<\/title>/);
+  assert.match(html, /<title>ZTW 算力资源信息<\/title>/);
   assert.match(html, /href="\/info\/styles\.css"/);
   assert.match(html, /href="\/info\/showcase\.css"/);
   assert.match(html, /src="\/info\/app\.js"/);

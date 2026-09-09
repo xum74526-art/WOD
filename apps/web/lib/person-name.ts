@@ -3,7 +3,8 @@ import type { KaiLocale } from "@/components/locale-root";
 
 const PERSON_EN: Record<string, string> = {
   "体验用户": "Demo User",
-  "WOD资讯": "WOD News",
+  "WOD资讯": "ZTW News",
+  "ZTW资讯": "ZTW News",
 };
 
 /**
@@ -13,6 +14,7 @@ const PERSON_EN: Record<string, string> = {
  */
 export function localizePersonName(value: string | null | undefined, locale: KaiLocale) {
   const source = String(value ?? "").trim();
+  if (source === "WOD资讯" && locale === "zh-CN") return "ZTW资讯";
   if (!source || locale !== "en") return source;
   if (PERSON_EN[source]) return PERSON_EN[source];
   if (!/^[\u3400-\u9fff·]{2,12}$/.test(source)) return source;

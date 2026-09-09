@@ -55,7 +55,7 @@ def settle_merchant_sale(
     renewal: OrderRenewal | None = None,
     settled_at: datetime | None = None,
 ) -> MerchantSettlement | None:
-    """Settle one confirmed WOD merchant sale exactly once.
+    """Settle one confirmed ZTW merchant sale exactly once.
 
     Merchant sale proceeds are real withdrawable earnings. Consumer, supplier,
     and invite rewards are deliberately handled elsewhere and only increase the

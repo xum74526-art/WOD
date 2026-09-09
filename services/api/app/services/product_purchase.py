@@ -8,7 +8,7 @@ from app.models.user import User
 from app.services.market_freshness import product_market_source
 
 
-UNVERIFIED_SUPPLIER_REASON = "该资源尚未关联入驻资料已审核的 WOD 商家，暂不可下单"
+UNVERIFIED_SUPPLIER_REASON = "该资源尚未关联入驻资料已审核的 ZTW 商家，暂不可下单"
 UNAVAILABLE_LISTING_REASON = "该资源已下架或暂不可购买"
 RETIRED_MARKET_SOURCE_REASON = "该行情来源已停用，仅保留历史记录"
 PLATFORM_FULFILLMENT_UNAVAILABLE_REASON = "平台履约暂未配置，当前不可下单"
@@ -30,11 +30,11 @@ def configured_platform_fulfiller_ids(db: Session) -> set[int]:
 
 
 def product_purchase_availability(product, db: Session) -> tuple[bool, str | None]:
-    """Return whether WOD can actually fulfil this offer.
+    """Return whether ZTW can actually fulfil this offer.
 
     Provider-backed cards may enter the manual-fulfilment order workflow while their
     quote is live. They still require manual SSH fulfilment and never create an
-    asset at checkout. WOD listings additionally require an approved supplier.
+    asset at checkout. ZTW-branded listings additionally require an approved supplier.
     """
     if product.status != "on":
         return False, UNAVAILABLE_LISTING_REASON

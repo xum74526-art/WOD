@@ -68,7 +68,7 @@ class ProductCatalogTests(unittest.TestCase):
             self._product("kai-a100-40", "A100", "40GB", "4.00", now),
             self._product("kai-a100-80", "A100", "80GB", "5.00", now),
             Product(
-                name="WOD A40",
+                name="ZTW A40",
                 gpu_model="A40",
                 memory="48GB",
                 price=Decimal("1.00"),
@@ -241,7 +241,7 @@ class ProductCatalogTests(unittest.TestCase):
             db=self.db,
         )["data"]
 
-        self.assertNotIn("WOD A40", {item["name"] for item in data["items"]})
+        self.assertNotIn("ZTW A40", {item["name"] for item in data["items"]})
 
     def test_wod_filter_includes_approved_legacy_untyped_merchant_listing(self):
         supplier = self.db.query(Supplier).filter(

@@ -38,7 +38,7 @@ def eligibility(db: Session, user: User) -> dict:
 
 def verify_deletion_password(db: Session, user: User, password: str) -> dict:
     if not verify_password(password, user.password):
-        raise BizError("原密码不正确，请使用 WOD 账号密码验证")
+        raise BizError("原密码不正确，请使用 ZTW 账号密码验证")
     lock_active_user(db, user.id)
     # Re-read after the lock: a password change may have won the race.
     db.refresh(user)

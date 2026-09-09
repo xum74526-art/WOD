@@ -1,7 +1,7 @@
 """社区每日资讯任务。
 
 只读取代码内白名单中的官方 Feed/API，保存标题、短摘要和原链接；视频仅保存
-Bilibili 官方账号页面、缩略图和官方播放器地址。外部候选不足时使用 WOD 自有行情摘要补位。
+Bilibili 官方账号页面、缩略图和官方播放器地址。外部候选不足时使用 ZTW 自有行情摘要补位。
 """
 from __future__ import annotations
 
@@ -35,6 +35,11 @@ YT = "{http://www.youtube.com/xml/schemas/2015}"
 
 BILIBILI_VIDEO_PROVIDER = "bilibili"
 PLAYABLE_VIDEO_PROVIDERS = (BILIBILI_VIDEO_PROVIDER,)
+INTERNAL_SOURCE_KEY = "wod-market"
+INTERNAL_SOURCE_NAME = "ZTW 算力行情"
+INTERNAL_SOURCE_AUTHOR = "ZTW"
+INTERNAL_SYSTEM_PHONE = "wod-community"
+INTERNAL_SYSTEM_USERNAME = "ZTW资讯"
 BILIBILI_OFFICIAL_OWNER_ID = "1320140761"
 BILIBILI_SEARCH_QUERIES = (
     "NVIDIA英伟达",
@@ -642,13 +647,15 @@ def _seed_sources(db: Session) -> dict[str, ContentSource]:
 
 
 def _get_system_user(db: Session) -> User:
-    phone = "wod-community"
-    user = db.query(User).filter(User.phone == phone).first()
+    user = db.query(User).filter(User.phone == INTERNAL_SYSTEM_PHONE).first()
     if user:
+        if user.username != INTERNAL_SYSTEM_USERNAME:
+            user.username = INTERNAL_SYSTEM_USERNAME
+            db.flush()
         return user
     user = User(
-        username="WOD资讯",
-        phone=phone,
+        username=INTERNAL_SYSTEM_USERNAME,
+        phone=INTERNAL_SYSTEM_PHONE,
         password=hash_password(secrets.token_urlsafe(32)),
         role="personal",
         supplier_status="none",
@@ -681,6 +688,29 @@ def _backfill_bilibili_english_content(db: Session) -> int:
             post.source_name = SOURCE_BY_KEY[source_key].name
         if post.source_author != "NVIDIA":
             post.source_author = "NVIDIA"
+    return updated
+
+
+def _backfill_internal_branding(db: Session) -> int:
+    """Refresh display-only branding while retaining the legacy source key."""
+    updated = 0
+    posts = db.query(Post).filter(Post.source_key == INTERNAL_SOURCE_KEY).all()
+    for post in posts:
+        changed = False
+        for field in ("content", "content_en"):
+            value = getattr(post, field)
+            branded = re.sub(r"(?<![A-Z0-9_-])WOD(?![A-Z0-9_-])", "ZTW", value) if value else value
+            if value != branded:
+                setattr(post, field, branded)
+                changed = True
+        if post.source_name != INTERNAL_SOURCE_NAME:
+            post.source_name = INTERNAL_SOURCE_NAME
+            changed = True
+        if post.source_author != INTERNAL_SOURCE_AUTHOR:
+            post.source_author = INTERNAL_SOURCE_AUTHOR
+            changed = True
+        if changed:
+            updated += 1
     return updated
 
 
@@ -818,21 +848,21 @@ def _internal_candidates(db: Session, batch: str, count: int, start_index: int =
             region = product.region_name or "平台"
             price = f"{float(product.price):.2f}"
             stock = product.stock or 0
-            content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自 WOD 最新站内行情，实际下单前请再次确认。"
-            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region} is {price} CH/h, with {stock} units available. Price and availability come from the latest WOD market data; confirm again before ordering."
+            content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自 ZTW 最新站内行情，实际下单前请再次确认。"
+            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region} is {price} CH/h, with {stock} units available. Price and availability come from the latest ZTW market data; confirm again before ordering."
             title = f"{name} {batch} compute snapshot {index}"
         else:
             content_zh = f"今日算力使用提示 #{index + 1}\n\n开始训练前先确认显存、CUDA 版本和预计运行时长，可减少环境不匹配和闲置成本。"
             content_en = f"Daily Compute Tip #{index + 1}\n\nCheck VRAM, the CUDA version, and expected runtime before training to reduce environment mismatches and idle cost."
-            title = f"WOD compute tip {batch} {index}"
+            title = f"ZTW compute tip {batch} {index}"
         result.append(Candidate(
-            source_key="wod-market",
-            source_name="WOD 算力行情",
-            source_item_id=f"wod-market:{batch}:{index}",
+            source_key=INTERNAL_SOURCE_KEY,
+            source_name=INTERNAL_SOURCE_NAME,
+            source_item_id=f"{INTERNAL_SOURCE_KEY}:{batch}:{index}",
             title=title,
             summary="",
             url=None,
-            author="WOD",
+            author=INTERNAL_SOURCE_AUTHOR,
             published_at=now,
             content_type="article",
             bucket="internal",
@@ -903,7 +933,8 @@ def generate_daily_posts(count: int | None = None) -> int:
         system_user = _get_system_user(db)
         removed_games = _remove_disallowed_game_posts(db)
         localized_videos = _backfill_bilibili_english_content(db)
-        if removed_games or localized_videos:
+        branded_internal_posts = _backfill_internal_branding(db)
+        if removed_games or localized_videos or branded_internal_posts:
             db.commit()
         existing_count = db.query(Post).filter(Post.publish_batch == batch).count()
 

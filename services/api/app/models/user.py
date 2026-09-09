@@ -21,7 +21,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(64))
     phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
-    # False means WOD has not verified ownership by SMS. Kai-only accounts use
+    # False means ZTW has not verified ownership by SMS. Kai-only accounts use
     # an internal value; unverified phone sign-ups keep the entered number only
     # as a login identifier. API serializers hide it while this flag is false.
     phone_bound: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
@@ -41,7 +41,7 @@ class User(Base):
     # Account deletion is independent of the business role and commerce flags.
     account_status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # The WOD-owned recovery address is encrypted at rest.  The keyed
+    # The ZTW-owned recovery address is encrypted at rest.  The keyed
     # fingerprint is the lookup/uniqueness key; KAI profile email claims are
     # deliberately kept separate in ``external_identities``.
     recovery_email: Mapped[str | None] = mapped_column(Text, nullable=True)

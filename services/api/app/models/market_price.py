@@ -130,7 +130,7 @@ class MarketHistoryPoint(Base):
 
     Historical imports intentionally live outside ``market_price_snapshots``:
     a licensed third-party archive must never masquerade as a quote collected
-    directly by WOD. Prices are normalized to one GPU-hour before storage.
+    directly by ZTW. Prices are normalized to one GPU-hour before storage.
     """
 
     __tablename__ = "market_history_points"

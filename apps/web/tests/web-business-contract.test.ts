@@ -3,6 +3,19 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { hourlyOrderBody, kaiPricingQuery, webRequestId } from "../lib/web-business-contract.ts";
+import { communityDisplayText } from "../lib/community-ui.ts";
+
+test("legacy community brand values are renamed for display without changing backend identifiers", () => {
+  assert.equal(communityDisplayText("WOD资讯", "wod-market"), "ZTW资讯");
+  assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "ZTW 算力行情");
+  assert.equal(communityDisplayText("WOD 行情更新", "user-post"), "WOD 行情更新");
+  assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
+
+  const feed = fs.readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
+  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key\)/);
+  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key\)/);
+  assert.match(feed, /communityDisplayText\(row\.content, row\.source_key\)/);
+});
 
 test("all live market requests force KAI Pricing as the only source", () => {
   const query = new URLSearchParams(kaiPricingQuery({ model: "H100", variant: "80GB", sources: "vast,autodl" }));

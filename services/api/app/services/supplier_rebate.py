@@ -1,4 +1,4 @@
-"""Merchant sales rebate derived from confirmed WOD merchant orders."""
+"""Merchant sales rebate derived from confirmed ZTW merchant orders."""
 
 from datetime import date, datetime, time
 from decimal import Decimal, ROUND_HALF_UP

@@ -30,7 +30,7 @@
 
 ## Android 迁移白名单
 
-从旧 WOD Android/uni-app 项目仅迁移：
+从旧版 Android/uni-app 项目仅迁移：
 
 - `src/` 业务源码与打包静态资源；
 - `tests/` 客户端测试；

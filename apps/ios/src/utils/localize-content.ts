@@ -4,7 +4,7 @@ type AppLanguage = 'zh' | 'en'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
-  'WOD资讯': 'WOD News',
+  'WOD资讯': 'ZTW News',
 }
 
 const COMMUNITY_EN: Record<string, string> = {
@@ -196,7 +196,9 @@ function translateGeneratedPost(source: string): string | null {
 }
 
 export function localizePersonName(value: string, lang: AppLanguage): string {
-  if (!value || lang === 'zh') return value
+  if (!value) return value
+  if (value === 'WOD资讯') return lang === 'en' ? PERSON_EN[value] : 'ZTW资讯'
+  if (lang === 'zh') return value
   if (PERSON_EN[value]) return PERSON_EN[value]
   if (!/^[\u3400-\u9fff·]{2,12}$/.test(value)) return value
 
@@ -210,6 +212,12 @@ export function localizePersonName(value: string, lang: AppLanguage): string {
 export function localizeCommunityText(value: string, lang: AppLanguage): string {
   if (!value || lang === 'zh') return value
   return COMMUNITY_EN[value] ?? translateGeneratedPost(value) ?? value
+}
+
+/** Rename only historical first-party news copy; never rewrite user-authored content. */
+export function localizeInternalBrandText(value: string, sourceKey?: string | null): string {
+  if (!value || sourceKey !== 'wod-market') return value
+  return value.replace(/WOD(?![A-Z0-9_-])/g, 'ZTW')
 }
 
 export function localizeProductName(value: string | null | undefined, lang: AppLanguage): string {

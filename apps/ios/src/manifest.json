@@ -1,5 +1,5 @@
 {
-    "name" : "WOD",
+    "name" : "ZTW",
     "appid" : "__UNI__47CF9D3",
     "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hans",
@@ -42,7 +42,7 @@
         }
     },
     "h5" : {
-        "title" : "WOD",
+        "title" : "ZTW",
         "router" : {
             "mode" : "history",
             "base" : "/"

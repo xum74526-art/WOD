@@ -568,7 +568,7 @@ def store_page(sid: int, db: Session = Depends(get_db)):
     from app.routers.product import _product_out
     return success({
         "supplier": _public_supplier_out(s),
-        # Pass the session so approved WOD listings retain their real
+        # Pass the session so approved ZTW-branded listings retain their real
         # purchasability state on the public merchant page.
         "products": [_product_out(p, db) for p in products],
     })

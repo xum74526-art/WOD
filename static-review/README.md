@@ -1,4 +1,4 @@
-# WOD 静态审核页面
+# ZTW 静态审核页面
 
 > 标注：**静态审核**
 
@@ -24,7 +24,7 @@ python -m http.server 9200 --directory static-review
 ## 审核说明
 
 - 审核类型：静态页面审核
-- 页面名称：WOD 算力资源信息
+- 页面名称：ZTW 算力资源信息
 - 正式地址：`https://wod.kai.com/info`
 - 独立审核地址：`https://static-review.vercel.app`
 - 备案信息：仅在取得正式备案信息后填写，不使用占位备案号。

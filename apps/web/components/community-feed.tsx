@@ -17,7 +17,7 @@ import {
   type CommunityPost,
 } from "@/lib/mobile-community-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
-import { COMMUNITY_POST_MAX_LENGTH, communityShareText } from "@/lib/community-ui";
+import { COMMUNITY_POST_MAX_LENGTH, communityDisplayText, communityShareText } from "@/lib/community-ui";
 
 const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]] as const;
 
@@ -48,7 +48,7 @@ function ExternalVideoPreview({ row }: { row: CommunityPost }) {
   const href = postSourceHref(row);
   if (!href) return null;
   return (
-    <a className="community-video-cover" href={href} target="_blank" rel="noreferrer" aria-label={`观看视频：${row.content}`}>
+    <a className="community-video-cover" href={href} target="_blank" rel="noreferrer" aria-label={`观看视频：${communityDisplayText(row.content, row.source_key)}`}>
       {!thumbnailFailed && row.thumbnail_url ? (
         <img src={row.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setThumbnailFailed(true)} />
       ) : (
@@ -57,7 +57,7 @@ function ExternalVideoPreview({ row }: { row: CommunityPost }) {
       <span className="community-video-cover__shade" />
       <span className="community-video-cover__play"><Play size={22} weight="fill" /></span>
       <span className="community-video-cover__label">官方视频</span>
-      <span className="community-video-cover__source">{row.source_name || "在来源网站观看"}<ArrowUpRight size={15} /></span>
+      <span className="community-video-cover__source">{communityDisplayText(row.source_name, row.source_key) || "在来源网站观看"}<ArrowUpRight size={15} /></span>
     </a>
   );
 }
@@ -79,21 +79,24 @@ type CommunityCardProps = {
 
 function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShare, onShowComments, onSubmitComment }: CommunityCardProps) {
   const externalVideo = !row.video && (row.content_type === "video" || Boolean(row.video_url));
-  const sourceName = row.source_name || row.source_author;
+  const sourceName = communityDisplayText(row.source_name || row.source_author, row.source_key);
+  const authorName = communityDisplayText(row.author_name || row.source_author || row.source_name, row.source_key) || "社区用户";
+  const content = communityDisplayText(row.content, row.source_key);
+  const summary = communityDisplayText(row.summary, row.source_key);
   return (
     <article className={`community-post-card${featured ? " community-post-card--featured" : ""}${externalVideo ? " community-post-card--video" : ""}`}>
       <header className="community-post-card__author">
         <div className="community-user-avatar">
-          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : (row.author_name || "匿").slice(0, 1)}
+          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : communityDisplayText(row.author_name || "匿", row.source_key).slice(0, 1)}
         </div>
-        <span><strong>{row.author_name || row.source_author || row.source_name || "社区用户"}</strong><small>{formatDate(row.source_published_at || row.created_at)}{row.topic ? ` · ${row.topic}` : ""}</small></span>
+        <span><strong>{authorName}</strong><small>{formatDate(row.source_published_at || row.created_at)}{row.topic ? ` · ${row.topic}` : ""}</small></span>
         {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy === `follow-${row.id}`} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? "已关注" : "关注"}</button>}
       </header>
 
       <div className="community-post-card__copy">
         {row.origin === "aggregated" && <div className="community-source-line"><span>自动资讯</span><b>{sourceName || "公开来源"}</b></div>}
-        <p>{row.content}</p>
-        {row.summary && row.summary !== row.content && <small className="community-post-summary">{row.summary}</small>}
+        <p>{content}</p>
+        {summary && summary !== content && <small className="community-post-summary">{summary}</small>}
       </div>
 
       <div className="community-post-card__media">

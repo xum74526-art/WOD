@@ -287,7 +287,7 @@ class SecurityStateTests(unittest.TestCase):
             source_max_configurable_quantity=9, platform_stock_cap=9,
         )
         local = Product(
-            name="WOD 使用资源", gpu_model="RTX4090", memory="24GB",
+            name="ZTW 使用资源", gpu_model="RTX4090", memory="24GB",
             price=Decimal("0.01"), cycle=[30], stock=1,
             supplier_id=self.supplier.id, status="on",
         )

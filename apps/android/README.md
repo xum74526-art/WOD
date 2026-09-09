@@ -33,6 +33,6 @@ npm run build:android
 - Android 包名固定为 `com.kai.wod`；
 - KAI OAuth 回跳 scheme 为 `kai://auth`；
 - keystore、别名、密码、APK/AAB、`.env.local` 和 `dist/` 不得提交；
-- 正式签名由项目所有者保管，不能使用旧 WOD 测试包签名缓存。
+- 正式签名由项目所有者保管，不能使用旧版测试包签名缓存。
 
 旧项目中的 `WOD-Android-Package` 是编译产物，不属于本目录源码。

@@ -102,7 +102,9 @@ class AccountDeletionDataTests(unittest.TestCase):
                                   subject="Help", description="Question", category="other", status="pending_unassigned"))
         self.db.commit()
         self.assertEqual(self.codes(), set())
-        self.assertTrue(any("下架" in value for value in get_automatic_actions(self.db, self.user)))
+        actions = get_automatic_actions(self.db, self.user)
+        self.assertIn("退出全部设备并解除 ZTW 的 KAI 身份绑定", actions)
+        self.assertTrue(any("下架" in value for value in actions))
         self.assertEqual(self.product.status, "on")
 
     def test_every_wallet_bucket_blocks_without_changing_amounts(self):

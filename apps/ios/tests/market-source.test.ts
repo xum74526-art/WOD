@@ -55,7 +55,7 @@ test('current screens distinguish KAI Direct, merchants with reviewed onboarding
   assert.match(productSource, /commerce\.matchmakingEnabled[\s\S]*?product\.value\.inquiry_available !== false/)
   assert.match(productSource, /marketSourceDisplayName\(product\.value\?\.market_source \|\| 'wod', t\)/)
   assert.match(quoteSource, /marketSourceDisplayName\(item\.source, t, item\.source_name\)/)
-  assert.doesNotMatch([homeSource, marketSource, productSource, quoteSource, agreementSource, buyRequestSource].join('\n'), /AutoDL|Vast\.ai|WOD quotes|WOD 报价/i)
+  assert.doesNotMatch([homeSource, marketSource, productSource, quoteSource, agreementSource, buyRequestSource].join('\n'), /AutoDL|Vast\.ai|ZTW quotes|ZTW 报价/i)
 })
 
 test('legacy protocol types remain readable while the agreement describes separated hourly ordering', () => {

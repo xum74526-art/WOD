@@ -31,7 +31,7 @@ const AGREEMENT_ZH: LegalSection[] = [
   {
     title: '一、总则',
     paragraphs: [
-        'WOD（以下简称“本平台”）提供算力行情参考、已审核 WOD 商家算力使用订单、设备管理和社区交流等功能。用户注册即视为同意本协议全部条款。',
+        'ZTW（以下简称“本平台”）提供算力行情参考、已审核 ZTW 商家算力使用订单、设备管理和社区交流等功能。用户注册即视为同意本协议全部条款。',
     ],
   },
   {
@@ -48,7 +48,7 @@ const AGREEMENT_ZH: LegalSection[] = [
     paragraphs: [
       '1. 算力市场分为 KAI 自营和入驻资料已审核商家资源；下架、来源不可用、库存不足或无履约额度的资源不可购买。',
       '2. 算力订单仅按整数小时购买。KAI 自营展示人民币/GPU 小时并换算卡时扣减；商家资源按商家发布的卡时/GPU 小时价格扣减。',
-      '3. 订单金额会全额冻结，由 WOD 平台或已审核商家人工交付有效 SSH，用户确认后才创建对应资产。',
+      '3. 订单金额会全额冻结，由 ZTW 平台或已审核商家人工交付有效 SSH，用户确认后才创建对应资产。',
       '4. 商家交付 SSH 前可取消订单并退回冻结卡时；SSH 交付后不可自行取消。',
       '5. 平台服务费从商家结算额中计算，不会作为买家额外扣款。',
     ],
@@ -103,7 +103,7 @@ const AGREEMENT_EN: LegalSection[] = [
   {
     title: '1. General Terms',
     paragraphs: [
-        'WOD (the “Platform”) provides market-reference data, usage orders from approved WOD merchants, device management and community features. By registering, you agree to these terms.',
+        'ZTW (the “Platform”) provides market-reference data, usage orders from approved ZTW merchants, device management and community features. By registering, you agree to these terms.',
     ],
   },
   {
@@ -120,7 +120,7 @@ const AGREEMENT_EN: LegalSection[] = [
     paragraphs: [
       '1. The compute market separates KAI Direct resources from offers by merchants with reviewed onboarding materials. Delisted, unavailable, out-of-stock, or unfulfillable resources cannot be purchased.',
       '2. Compute orders use whole hours only. KAI Direct prices are shown in CNY per GPU-hour and converted to CH; merchant offers debit the seller-listed CH per GPU-hour price.',
-      '3. The full order amount is frozen. WOD or an approved merchant manually provides valid SSH access, and the matching asset is created only after buyer confirmation.',
+      '3. The full order amount is frozen. ZTW or an approved merchant manually provides valid SSH access, and the matching asset is created only after buyer confirmation.',
       '4. An order may be canceled before SSH delivery and its frozen CH returned. It cannot be self-canceled after SSH delivery.',
       '5. The service fee is calculated from the merchant settlement and is not an additional buyer charge.',
     ],
@@ -174,7 +174,7 @@ const AGREEMENT_EN: LegalSection[] = [
 const MATCHMAKING_AGREEMENT_ZH: LegalSection[] = AGREEMENT_ZH.map((section, index) => {
   if (index === 0) return {
     ...section,
-    paragraphs: ['WOD（以下简称“本平台”）提供算力行情与资讯、算力需求撮合、设备管理和社区交流等功能。用户注册即视为同意本协议全部条款。'],
+    paragraphs: ['ZTW（以下简称“本平台”）提供算力行情与资讯、算力需求撮合、设备管理和社区交流等功能。用户注册即视为同意本协议全部条款。'],
   }
   if (index === 2) return {
     title: '三、算力需求撮合',
@@ -200,7 +200,7 @@ const MATCHMAKING_AGREEMENT_ZH: LegalSection[] = AGREEMENT_ZH.map((section, inde
 const MATCHMAKING_AGREEMENT_EN: LegalSection[] = AGREEMENT_EN.map((section, index) => {
   if (index === 0) return {
     ...section,
-    paragraphs: ['WOD (the “Platform”) provides compute-market information, requirement matchmaking, device management and community features. By registering, you agree to these terms.'],
+    paragraphs: ['ZTW (the “Platform”) provides compute-market information, requirement matchmaking, device management and community features. By registering, you agree to these terms.'],
   }
   if (index === 2) return {
     title: '3. Compute Requirement Matchmaking',
@@ -338,7 +338,7 @@ const PRIVACY_EN: LegalSection[] = [
       '1. You may view and update your personal information.',
       '2. You may delete linked bank cards and saved addresses.',
       '3. Open Profile → Settings → Delete account to check outstanding matters, verify your current password and submit a deletion request. Unmatched requests, quotes and listings are withdrawn after confirmation. Active services, disputes and unsettled entitlements must be resolved first and are not forfeited through deletion.',
-      '4. Deletion invalidates all device sessions, removes personal details and unnecessary content, and unlinks the WOD KAI identity without deleting other KAI product accounts. Necessary order, financial and dispute evidence is retained with restricted scope, purpose and duration. Backups expire under the retention policy and deletion cleanup must be reapplied after restoration. Deleted accounts cannot be restored and a new account does not inherit old records.',
+      '4. Deletion invalidates all device sessions, removes personal details and unnecessary content, and unlinks the ZTW KAI identity without deleting other KAI product accounts. Necessary order, financial and dispute evidence is retained with restricted scope, purpose and duration. Backups expire under the retention policy and deletion cleanup must be reapplied after restoration. Deleted accounts cannot be restored and a new account does not inherit old records.',
       '5. After final confirmation, this device temporarily stores a deletion capability, its expiry time and an internal account ID to isolate local sessions. It contains no password, normal login token or other account details, and is cleared on completion or expiry within seven days. Resume status checks from the login page.',
     ],
   },

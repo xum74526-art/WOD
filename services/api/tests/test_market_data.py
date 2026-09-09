@@ -519,16 +519,16 @@ class MarketDataTests(unittest.TestCase):
             product("KAI offer", "kai", "CNY"),
             product("Vast offer", "vast", "USD"),
             product("AutoDL offer", "autodl", "CNY"),
-            product("WOD listing", "wod", None),
+            product("ZTW listing", "wod", None),
         ])
-        wod_listing = db.query(Product).filter(Product.name == "WOD listing").one()
+        wod_listing = db.query(Product).filter(Product.name == "ZTW listing").one()
         wod_listing.supplier_id = merchant.id
         db.commit()
 
         delayed = _current_product_query(db, {"kai": "delayed"}).all()
-        self.assertEqual({item.name for item in delayed}, {"KAI offer", "WOD listing"})
+        self.assertEqual({item.name for item in delayed}, {"KAI offer", "ZTW listing"})
         unavailable = _current_product_query(db, {"kai": "unavailable"}).all()
-        self.assertEqual([item.name for item in unavailable], ["WOD listing"])
+        self.assertEqual([item.name for item in unavailable], ["ZTW listing"])
         db.close()
 
     def test_regional_quote_compares_one_exact_kai_identity_only(self):
