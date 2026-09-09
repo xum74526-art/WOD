@@ -19,7 +19,7 @@ const navigation = [
   { key: "nav.download", label: "下载 App", href: "/download" },
 ];
 
-const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim();
+const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "/download/wod.apk";
 const mobileDownloadUrl = androidApkUrl || "https://wod.kai.com/download";
 
 function isNavigationActive(pathname: string, href: string) {
