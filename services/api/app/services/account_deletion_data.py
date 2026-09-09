@@ -210,7 +210,7 @@ def _owned_media(value: str | None, user_id: int) -> str | None:
     if parsed.scheme or parsed.netloc:
         return None
     path = parsed.path
-    match = re.fullmatch(rf"/(?:api/)?uploads/community/{user_id}/([0-9a-f]{{32}}\.(?:jpg|png|webp|mp4|webm))", path)
+    match = re.fullmatch(rf"/(?:api/)?uploads/community/{user_id}/([0-9a-f]{{32}}\.(?:jpg|png|webp|mp4|mov|webm))", path)
     return f"community/{user_id}/{match.group(1)}" if match else None
 
 

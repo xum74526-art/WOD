@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ChatCircle, Heart, ImageSquare, MagnifyingGlass, PaperPlaneTilt, Play, Plus, ShareNetwork, UserPlus, VideoCamera } from "@phosphor-icons/react";
 import { ApiError } from "@/lib/api";
 import {
@@ -17,6 +17,7 @@ import {
   type CommunityPost,
 } from "@/lib/mobile-community-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
+import { acquireCommunityAction, releaseCommunityAction } from "@/lib/community-action-lock";
 import {
   COMMUNITY_POST_MAX_LENGTH,
   COMMUNITY_MEDIA_LIMIT_TEXT,
@@ -73,7 +74,7 @@ function ExternalVideoPreview({ row }: { row: CommunityPost }) {
 type CommunityCardProps = {
   row: CommunityPost;
   featured: boolean;
-  busy: string;
+  busy: ReadonlySet<string>;
   openComments: number | null;
   comments: Record<number, CommunityComment[]>;
   comment: string;
@@ -98,7 +99,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
           {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : communityDisplayText(row.author_name || "匿", row.source_key).slice(0, 1)}
         </div>
         <span><strong>{authorName}</strong><small>{formatDate(row.source_published_at || row.created_at)}{row.topic ? ` · ${row.topic}` : ""}</small></span>
-        {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy === `follow-${row.id}`} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? "已关注" : "关注"}</button>}
+        {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy.has(`follow-${row.id}`)} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? "已关注" : "关注"}</button>}
       </header>
 
       <div className="community-post-card__copy">
@@ -114,15 +115,15 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
       </div>
 
       <footer className="community-post-card__actions">
-        <button className={row.is_liked ? "liked" : ""} disabled={busy === `like-${row.id}`} onClick={() => onLike(row)}><Heart size={18} weight={row.is_liked ? "fill" : "regular"} />{row.likes}</button>
+        <button className={row.is_liked ? "liked" : ""} disabled={busy.has(`like-${row.id}`)} onClick={() => onLike(row)}><Heart size={18} weight={row.is_liked ? "fill" : "regular"} />{row.likes}</button>
         <button onClick={() => onShowComments(row.id)}><ChatCircle size={18} />{row.comments}</button>
-        <button disabled={busy === `share-${row.id}`} onClick={() => onShare(row)}><ShareNetwork size={18} />{busy === `share-${row.id}` ? "复制中…" : `分享${row.shares ? ` ${row.shares}` : ""}`}</button>
+        <button disabled={busy.has(`share-${row.id}`)} onClick={() => onShare(row)}><ShareNetwork size={18} />{busy.has(`share-${row.id}`) ? "复制中…" : `分享${row.shares ? ` ${row.shares}` : ""}`}</button>
         {row.source_url && <a href={row.source_url} target="_blank" rel="noreferrer">查看来源<ArrowUpRight size={15} /></a>}
       </footer>
 
       {openComments === row.id && <section className="community-comments">
         {comments[row.id]?.length ? comments[row.id].map((item) => <article key={item.id}><strong>{item.author_name || "社区用户"}</strong><p>{item.content}</p><time>{formatDate(item.created_at)}</time></article>) : <p className="community-comments__empty">还没有评论，写下第一条。</p>}
-        <form onSubmit={(event) => onSubmitComment(event, row.id)}><input maxLength={500} value={comment} onChange={(event) => onCommentChange(event.target.value)} placeholder="写下评论…" /><button disabled={busy === `comment-${row.id}`}>发送</button></form>
+        <form onSubmit={(event) => onSubmitComment(event, row.id)}><input maxLength={500} value={comment} onChange={(event) => onCommentChange(event.target.value)} placeholder="写下评论…" /><button disabled={busy.has(`comment-${row.id}`)}>发送</button></form>
       </section>}
     </article>
   );
@@ -141,10 +142,11 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState({ content: "", topic: "" });
   const [files, setFiles] = useState<File[]>([]);
-  const [busy, setBusy] = useState("");
+  const pendingActions = useRef(new Set<string>());
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const [openComments, setOpenComments] = useState<number | null>(null);
   const [comments, setComments] = useState<Record<number, CommunityComment[]>>({});
-  const [comment, setComment] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -162,12 +164,25 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
 
   useEffect(() => { void load(); }, [load]);
 
+  function beginAction(key: string): boolean {
+    if (!acquireCommunityAction(pendingActions.current, key)) return false;
+    setBusy(new Set(pendingActions.current));
+    return true;
+  }
+
+  function finishAction(key: string) {
+    releaseCommunityAction(pendingActions.current, key);
+    setBusy(new Set(pendingActions.current));
+  }
+
   async function publish(event: FormEvent) {
     event.preventDefault();
     if (!draft.content.trim()) return;
     const validationError = communityMediaUploadError(files);
     if (validationError) { setError(validationError); return; }
-    setBusy("publish"); setError("");
+    const action = "publish";
+    if (!beginAction(action)) return;
+    setError("");
     try {
       const videoFile = files.find(isCommunityVideoFile);
       if (videoFile && files.length > 1) throw new Error("视频不能与其他图片或视频同时发布");
@@ -178,27 +193,31 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
       await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: duration });
       setDraft({ content: "", topic: "" }); setFiles([]); setComposerOpen(false); setPage(1); await load();
     } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    finally { finishAction(action); }
   }
 
   async function like(row: CommunityPost) {
-    setBusy(`like-${row.id}`);
+    const action = `like-${row.id}`;
+    if (!beginAction(action)) return;
     try { const result = await toggleCommunityLike(row.id); setRows((items) => items.map((item) => item.id === row.id ? { ...item, likes: result.likes, is_liked: result.liked } : item)); }
     catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    finally { finishAction(action); }
   }
 
   async function follow(row: CommunityPost) {
-    setBusy(`follow-${row.id}`);
+    const action = `follow-${row.id}`;
+    if (!beginAction(action)) return;
     try { const result = await toggleCommunityFollow(row.user_id); setRows((items) => items.map((item) => item.user_id === row.user_id ? { ...item, is_following: result.following } : item)); }
     catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    finally { finishAction(action); }
   }
 
   async function share(row: CommunityPost) {
     const text = communityShareText(row);
     if (!text) return;
-    setBusy(`share-${row.id}`); setError(""); setMessage("");
+    const action = `share-${row.id}`;
+    if (!beginAction(action)) return;
+    setError(""); setMessage("");
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -216,7 +235,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
       }
       setMessage("动态内容已复制，可以粘贴分享");
     } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    finally { finishAction(action); }
   }
 
   async function showComments(id: number) {
@@ -228,16 +247,22 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
 
   async function submitComment(event: FormEvent, id: number) {
     event.preventDefault();
-    const value = comment.trim();
+    const value = (commentDrafts[id] || "").trim();
     if (!value) return;
-    setBusy(`comment-${id}`);
+    const action = `comment-${id}`;
+    if (!beginAction(action)) return;
     try {
-      await createCommunityComment(id, value); setComment("");
+      await createCommunityComment(id, value);
+      setCommentDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[id];
+        return next;
+      });
       const next = await getCommunityComments(id);
       setComments((items) => ({ ...items, [id]: next }));
       setRows((items) => items.map((item) => item.id === id ? { ...item, comments: next.length } : item));
     } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    finally { finishAction(action); }
   }
 
   function submitSearch(event: FormEvent) {
@@ -261,16 +286,16 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
       <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
       <textarea required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
       <footer><label><ImageSquare size={16}/>添加图片或视频（{COMMUNITY_MEDIA_LIMIT_TEXT}）<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => {
-        const selected = Array.from(event.currentTarget.files || []).slice(0, 9);
+        const selected = Array.from(event.currentTarget.files || []);
         const validationError = communityMediaUploadError(selected);
         if (validationError) { setError(validationError); event.currentTarget.value = ""; return; }
         setError(""); setFiles(selected);
-      }}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
+      }}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy.has("publish")}>{busy.has("publish") ? "发布中…" : "发布"}</button></footer>
     </form>}
 
     {error && <div className="commerce-error">{error}</div>}
     {message && <div className="commerce-success">{message}</div>}
-    {loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={comment} onCommentChange={setComment} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShare={(item) => void share(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}
+    {loading ? <div className="news-skeleton"><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={commentDrafts[row.id] || ""} onCommentChange={(value) => setCommentDrafts((drafts) => ({ ...drafts, [row.id]: value }))} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShare={(item) => void share(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>当前没有动态</strong><p>切换标签或发布第一条内容。</p></div>}</div>}
 
     {total > 10 && <nav className="community-page-nav"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><span>第 {page} 页</span><button disabled={page * 10 >= total} onClick={() => setPage((value) => value + 1)}>下一页</button></nav>}
   </section>;

@@ -374,7 +374,7 @@ class AccountDeletionDataTests(unittest.TestCase):
         self.assertEqual(self.product.status, "on")
 
     def test_community_tombstone_preserves_other_authors_and_counts(self):
-        owned_url = f"/uploads/community/{self.user.id}/{'a' * 32}.png"
+        owned_url = f"/uploads/community/{self.user.id}/{'a' * 32}.mov"
         other_url = f"/uploads/community/{self.other.id}/{'b' * 32}.png"
         post = Post(user_id=self.user.id, content="private", images=json.dumps([owned_url, other_url, "https://other.example/private.png"]), comments=2, likes=2)
         other_post = Post(user_id=self.other.id, content="keep me", comments=2, likes=1)
@@ -390,7 +390,7 @@ class AccountDeletionDataTests(unittest.TestCase):
         self.db.commit()
         files = scrub_account_data(self.db, self.user)
         self.db.commit()
-        self.assertIn(f"community/{self.user.id}/{'a' * 32}.png", files)
+        self.assertIn(f"community/{self.user.id}/{'a' * 32}.mov", files)
         self.assertFalse(any(f"community/{self.other.id}/" in file for file in files))
         self.assertEqual(post.content, "[内容已删除]")
         self.assertIsNone(post.images)

@@ -54,5 +54,6 @@ test('oversized chosen videos stop before creating a draft or starting upload', 
     chooseVideoSuccess,
     /if \(isCommunityVideoTooLarge\(res\.size\)\) \{[\s\S]*t\('communityVideoTooLarge'\)[\s\S]*return[\s\S]*const item: VideoDraft/,
   )
+  assert.match(chooseVideoSuccess, /extension: \['mp4', 'mov', 'webm'\]/)
   assert.match(chooseVideoSuccess, /videoDraft\.value = item[\s\S]*void uploadVideo\(item\)/)
 })

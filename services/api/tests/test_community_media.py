@@ -34,6 +34,10 @@ def minimal_mp4_bytes() -> bytes:
     return b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2mp41" + b"0" * 48
 
 
+def minimal_mov_bytes() -> bytes:
+    return b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00qt  " + b"0" * 48
+
+
 def minimal_webm_bytes() -> bytes:
     return b"\x1a\x45\xdf\xa3\x9f\x42\x82\x84webm" + b"0" * 48
 
@@ -167,11 +171,35 @@ class CommunityMediaTests(unittest.TestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.headers["content-type"], "video/webm")
 
+    def test_valid_iphone_mov_is_accepted_with_correct_public_mime_and_ranges(self):
+        uploaded = self.upload("iphone.MOV", minimal_mov_bytes(), "video/quicktime")
+        self.assertEqual(uploaded.status_code, 200)
+        media_url = uploaded.json()["data"]["url"]
+        self.assertTrue(media_url.endswith(".mov"))
+        self.assertEqual(uploaded.json()["data"]["content_type"], "video/quicktime")
+
+        public = self.client.get("/api" + media_url)
+        self.assertEqual(public.status_code, 200)
+        self.assertEqual(public.headers["content-type"], "video/quicktime")
+        self.assertEqual(public.headers["accept-ranges"], "bytes")
+        partial = self.client.get("/api" + media_url, headers={"Range": "bytes=8-11"})
+        self.assertEqual(partial.status_code, 206)
+        self.assertEqual(partial.content, b"qt  ")
+
     def test_extension_and_magic_bytes_must_match(self):
         response = self.upload("not-really.jpg", image_bytes("PNG"), "image/jpeg")
         self.assertEqual(response.status_code, 400)
         self.assertIn("扩展名", response.json()["msg"])
         self.assertEqual(list(Path(self.temp_dir.name).rglob("*.*")), [])
+
+        for filename, content, mime in (
+            ("renamed.mov", minimal_mp4_bytes(), "video/quicktime"),
+            ("renamed.mp4", minimal_mov_bytes(), "video/mp4"),
+        ):
+            with self.subTest(filename=filename):
+                response = self.upload(filename, content, mime)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("扩展名", response.json()["msg"])
 
     def test_damaged_image_magic_is_rejected(self):
         response = self.upload(
@@ -214,8 +242,8 @@ class CommunityMediaTests(unittest.TestCase):
             self.assertIn("COMMUNITY_VIDEO_MAX_BYTES=20971520", environment)
         for platform in ("android", "ios"):
             copy = (repository / "apps" / platform / "src" / "store" / "i18n.ts").read_text(encoding="utf-8")
-            self.assertIn("支持 MP4、WebM，不超过 20MB", copy)
-            self.assertIn("MP4 or WebM, up to 20 MB", copy)
+            self.assertIn("支持 MP4、MOV、WebM，不超过 20MB", copy)
+            self.assertIn("MP4, MOV or WebM, up to 20 MB", copy)
             self.assertNotIn("社区视频不能超过 50MB", copy)
 
     def test_post_rejects_phone_paths_remote_urls_missing_and_other_user_media(self):

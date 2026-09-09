@@ -34,17 +34,18 @@ UPLOAD_ROOT = (
 )
 COMMUNITY_DIR = UPLOAD_ROOT / "community"
 COMMUNITY_DIR.mkdir(parents=True, exist_ok=True)
-COMMUNITY_FILENAME_RE = re.compile(r"^([0-9a-f]{32})\.(jpg|png|webp|mp4|webm)$")
+COMMUNITY_FILENAME_RE = re.compile(r"^([0-9a-f]{32})\.(jpg|png|webp|mp4|mov|webm)$")
 COMMUNITY_MEDIA_URL_RE = re.compile(
-    r"^/uploads/community/([1-9]\d*)/([0-9a-f]{32})\.(jpg|png|webp|mp4|webm)$"
+    r"^/uploads/community/([1-9]\d*)/([0-9a-f]{32})\.(jpg|png|webp|mp4|mov|webm)$"
 )
 IMAGE_EXTENSIONS = {"jpg", "png", "webp"}
-VIDEO_EXTENSIONS = {"mp4", "webm"}
+VIDEO_EXTENSIONS = {"mp4", "mov", "webm"}
 MEDIA_TYPES = {
     "jpg": "image/jpeg",
     "png": "image/png",
     "webp": "image/webp",
     "mp4": "video/mp4",
+    "mov": "video/quicktime",
     "webm": "video/webm",
 }
 
@@ -62,7 +63,7 @@ def _requested_extension(filename: str | None) -> str:
     if extension == "jpeg":
         extension = "jpg"
     if extension not in MEDIA_TYPES:
-        raise BizError("仅支持 JPG、PNG、WebP、MP4 或 WebM")
+        raise BizError("仅支持 JPG、PNG、WebP、MP4、MOV 或 WebM")
     return extension
 
 
@@ -89,9 +90,11 @@ def _verified_media_extension(content: bytes, expected_kind: str) -> str:
             raise BizError("文件扩展名与实际格式不一致")
         return detected
 
-    # ISO Base Media File Format: MP4 stores the ftyp box at byte offset 4.
+    # MP4 and QuickTime MOV both use ISO-BMFF. QuickTime declares the `qt  `
+    # major brand, so keep the original container extension instead of trusting
+    # the client-provided filename.
     if len(content) >= 12 and content[4:8] == b"ftyp":
-        return "mp4"
+        return "mov" if content[8:12] == b"qt  " else "mp4"
     # WebM is EBML and declares the webm DocType near the beginning.
     if content.startswith(b"\x1a\x45\xdf\xa3") and b"webm" in content[:4096].lower():
         return "webm"

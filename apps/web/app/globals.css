@@ -4137,6 +4137,28 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
   animation: workspace-gate-spin .75s linear infinite;
 }
 
+.workspace-gate--error {
+  padding: 24px;
+}
+
+.workspace-gate__error {
+  width: min(440px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+.workspace-gate__error strong { color: var(--text); font-size: 20px; }
+.workspace-gate__error p { margin: 0; color: var(--text-muted); line-height: 1.6; }
+.workspace-gate__error > div { display: flex; justify-content: center; gap: 10px; }
+.workspace-gate__error button,
+.workspace-gate__error a { min-height: 42px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); color: var(--text); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; font: inherit; cursor: pointer; }
+.workspace-gate__error button { border-color: var(--brand); color: #fff; background: var(--brand); }
+
 @keyframes workspace-gate-spin { to { transform: rotate(360deg); } }
 
 .workspace-shell--admin { background: #eef3f3; }

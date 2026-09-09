@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   COMMUNITY_IMAGE_MAX_BYTES,
   COMMUNITY_MEDIA_LIMIT_TEXT,
+  COMMUNITY_MEDIA_MAX_FILES,
   COMMUNITY_POST_MAX_LENGTH,
   COMMUNITY_VIDEO_MAX_BYTES,
   communityMediaUploadError,
@@ -18,9 +19,21 @@ test("community composer uses the same 500 character limit as the apps", () => {
 });
 
 test("community composer shows the shared image and video limits", () => {
+  assert.equal(COMMUNITY_MEDIA_MAX_FILES, 9);
   assert.equal(COMMUNITY_IMAGE_MAX_BYTES, 5 * 1024 * 1024);
   assert.equal(COMMUNITY_VIDEO_MAX_BYTES, 20 * 1024 * 1024);
-  assert.equal(COMMUNITY_MEDIA_LIMIT_TEXT, "图片最大 5MB，视频最大 20MB");
+  assert.equal(COMMUNITY_MEDIA_LIMIT_TEXT, "图片最多 9 张且单张最大 5MB，视频最大 20MB");
+});
+
+test("community media selection rejects more than nine files instead of silently truncating", () => {
+  const files = Array.from({ length: COMMUNITY_MEDIA_MAX_FILES }, (_, index) => ({
+    name: `${index}.jpg`,
+    type: "image/jpeg",
+    size: 100,
+  }));
+
+  assert.equal(communityMediaUploadError(files), "");
+  assert.match(communityMediaUploadError([...files, { name: "extra.jpg", type: "image/jpeg", size: 100 }]), /最多选择 9 个文件/);
 });
 
 test("community video validation accepts the exact byte limit and detects extension fallback", () => {

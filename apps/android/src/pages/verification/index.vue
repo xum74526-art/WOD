@@ -124,6 +124,7 @@ import {
   ocrSummaryValue,
   shouldPollOcr,
 } from '@/utils/verification-ocr'
+import { normalizeTempFilePaths } from '@/utils/file-selection'
 
 const { t, tr } = useI18nStore()
 const info = ref<VerificationInfo | null>(null)
@@ -227,8 +228,10 @@ function choosePhoto(side: 'front' | 'back') {
     count: 1,
     success: (res) => {
       submissionError.value = ''
-      if (side === 'front') frontPhoto.value = res.tempFilePaths[0]
-      else backPhoto.value = res.tempFilePaths[0]
+      const [selectedPath] = normalizeTempFilePaths(res.tempFilePaths)
+      if (!selectedPath) return
+      if (side === 'front') frontPhoto.value = selectedPath
+      else backPhoto.value = selectedPath
     },
   })
 }

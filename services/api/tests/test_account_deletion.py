@@ -173,6 +173,8 @@ class AccountDeletionTests(unittest.TestCase):
         for relative in ("../secret", "D:/secret", "avatars/avatar_999.png", "community/999/" + "a" * 32 + ".jpg"):
             with self.assertRaises(ValueError):
                 service._owned_path(self.root, relative, self.user.id)
+        owned_mov = f"community/{self.user.id}/" + "a" * 32 + ".mov"
+        self.assertEqual(service._owned_path(self.root, owned_mov, self.user.id), self.root / owned_mov)
 
     def test_windows_junction_inside_root_is_rejected(self):
         relative = f"community/{self.user.id}/" + "a" * 32 + ".png"

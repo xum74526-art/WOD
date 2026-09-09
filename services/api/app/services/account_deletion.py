@@ -137,7 +137,7 @@ def _owned_path(root: Path, relative: str, user_id: int) -> Path:
     patterns = (
         rf"avatars/avatar_{user_id}\.(jpg|png|webp)",
         rf"id_cards/id_(front|back)_{user_id}\.(jpg|png|webp)",
-        rf"community/{user_id}/[0-9a-f]{{32}}\.(jpg|png|webp|mp4|webm)",
+        rf"community/{user_id}/[0-9a-f]{{32}}\.(jpg|png|webp|mp4|mov|webm)",
     )
     if not any(re.fullmatch(pattern, relative) for pattern in patterns):
         raise ValueError("unowned_cleanup_path")

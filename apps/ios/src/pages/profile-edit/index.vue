@@ -41,6 +41,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
+import { normalizeTempFilePaths } from '@/utils/file-selection'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -83,7 +84,9 @@ function changeAvatar() {
         uni.showToast({ title: t('avatarTooLarge'), icon: 'none' })
         return
       }
-      pendingAvatarPath.value = res.tempFilePaths[0]
+      const [selectedPath] = normalizeTempFilePaths(res.tempFilePaths)
+      if (!selectedPath) return
+      pendingAvatarPath.value = selectedPath
       avatarLoadFailed.value = false
     },
   })

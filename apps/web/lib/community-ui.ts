@@ -1,7 +1,8 @@
 export const COMMUNITY_POST_MAX_LENGTH = 500;
+export const COMMUNITY_MEDIA_MAX_FILES = 9;
 export const COMMUNITY_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const COMMUNITY_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
-export const COMMUNITY_MEDIA_LIMIT_TEXT = "图片最大 5MB，视频最大 20MB";
+export const COMMUNITY_MEDIA_LIMIT_TEXT = "图片最多 9 张且单张最大 5MB，视频最大 20MB";
 
 type CommunityMediaFile = Pick<File, "name" | "size" | "type">;
 
@@ -14,6 +15,9 @@ export function isCommunityVideoFile(file: CommunityMediaFile) {
 }
 
 export function communityMediaUploadError(files: readonly CommunityMediaFile[]) {
+  if (files.length > COMMUNITY_MEDIA_MAX_FILES) {
+    return `一次最多选择 ${COMMUNITY_MEDIA_MAX_FILES} 个文件，请重新选择`;
+  }
   for (const file of files) {
     if (isCommunityImageFile(file) && file.size > COMMUNITY_IMAGE_MAX_BYTES) {
       return "社区图片不能超过 5MB，请重新选择";

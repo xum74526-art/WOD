@@ -33,7 +33,7 @@ import {
 } from "@phosphor-icons/react";
 import { Brand } from "@/components/brand";
 import { UiSettings } from "@/components/ui-settings";
-import { ApiError, getCurrentUser, type AuthUser } from "@/lib/api";
+import { ApiError, getCurrentUser, logoutCurrentUser, type AuthUser } from "@/lib/api";
 import { loginHref } from "@/lib/auth-navigation";
 import { useI18n } from "@/components/locale-root";
 
@@ -113,10 +113,16 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
   const [ready, setReady] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
+  const [gateFailed, setGateFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    getCurrentUser().then(async ({ user: current }) => {
+    setReady(false);
+    setGateFailed(false);
+    getCurrentUser(loadAttempt > 0).then(async ({ user: current }) => {
       if (!active) return;
       if (variant === "admin" && current.role !== "admin") { window.location.replace("/"); return; }
       const destination = redirectForRole(current, variant);
@@ -129,14 +135,34 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
     }).catch((reason) => {
       if (!active) return;
       setUser(null);
-      if (reason instanceof ApiError && reason.status === 401) window.location.replace(loginHref(pathname));
+      if (reason instanceof ApiError && reason.status === 401) {
+        window.location.replace(loginHref(pathname));
+        return;
+      }
+      setGateFailed(true);
+      setReady(true);
     });
     return () => { active = false; };
-  }, [variant]);
+  }, [loadAttempt, variant]);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutFailed(false);
+    try {
+      await logoutCurrentUser();
+      setUser(null);
+      setMobileNavOpen(false);
+      window.location.replace("/login");
+    } catch {
+      setLogoutFailed(true);
+      setLoggingOut(false);
+    }
+  }
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -151,6 +177,10 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [mobileNavOpen]);
+
+  if (gateFailed) {
+    return <div className={`workspace-shell workspace-shell--${variant}`}><main className="workspace-gate workspace-gate--error" role="alert"><div className="workspace-gate__error"><strong>{locale === "en" ? "Workspace unavailable" : "工作台暂时无法加载"}</strong><p>{locale === "en" ? "Check your network connection and try again." : "请检查网络连接后重试。"}</p><div><button type="button" onClick={() => setLoadAttempt((value) => value + 1)}>{locale === "en" ? "Try again" : "重新加载"}</button><Link href="/">{locale === "en" ? "Back to home" : "返回首页"}</Link></div></div></main></div>;
+  }
 
   if (!ready || !user) {
     return <div className={`workspace-shell workspace-shell--${variant}`}><main className="workspace-gate" aria-label="正在验证工作台权限"><span /></main></div>;
@@ -179,7 +209,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
           {variant === "account" && user.role === "supplier" && <Link href="/supplier"><Storefront size={18}/>{locale === "en" ? "Back to Supplier Console" : "返回商家后台"}</Link>}
           {variant === "supplier" && <Link href="/account"><Users size={18}/>{locale === "en" ? "Buyer Workspace" : "买家工作台"}</Link>}
           {variant === "admin" && <Link href="/"><Storefront size={18}/>{locale === "en" ? "View Public Site" : "查看公开网站"}</Link>}
-          <Link href="/login"><SignOut size={18}/>{locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</Link>
+          <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : logoutFailed ? (locale === "en" ? "Sign-out failed. Try again" : "退出失败，请重试") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
           <button type="button" onClick={() => setNavCollapsed((value) => !value)} aria-expanded={!navCollapsed} title={navCollapsed ? (locale === "en" ? "Expand navigation" : "展开导航") : (locale === "en" ? "Collapse navigation" : "收起导航")}><SidebarSimple size={18}/><span>{navCollapsed ? (locale === "en" ? "Expand navigation" : "展开导航") : (locale === "en" ? "Collapse navigation" : "收起导航")}</span></button>
         </div>
       </aside>
@@ -218,7 +248,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
             </nav>
             <footer>
               <Link href="/"><ArrowSquareOut size={18}/><span>{t("workspace.publicSite", "公开网站")}</span></Link>
-              <Link href="/login"><SignOut size={18}/><span>{locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></Link>
+              <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : logoutFailed ? (locale === "en" ? "Sign-out failed. Try again" : "退出失败，请重试") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
             </footer>
           </aside>
         </div>}

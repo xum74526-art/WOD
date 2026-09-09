@@ -193,7 +193,7 @@ async function proxyAvatar(request: NextRequest, filename: string) {
 }
 
 async function proxyCommunityMedia(request: NextRequest, userId: string, filename: string) {
-  if (!/^[1-9]\d*$/.test(userId) || !/^[0-9a-f]{32}\.(?:jpg|png|webp|mp4|webm)$/.test(filename)) return apiError("社区媒体不存在", 404);
+  if (!/^[1-9]\d*$/.test(userId) || !/^[0-9a-f]{32}\.(?:jpg|png|webp|mp4|mov|webm)$/.test(filename)) return apiError("社区媒体不存在", 404);
   const headers = new Headers({ Accept: request.headers.get("accept") || "*/*" });
   const range = request.headers.get("range");
   if (range) headers.set("Range", range);
@@ -591,7 +591,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   if (checkout && request.method === "GET") return proxyCheckout(request, checkout[1] as "mapay" | "qixiang", checkout[2]);
   const avatar = path.match(/^canonical\/user\/avatars\/(avatar_\d+\.(?:jpg|png|webp))$/);
   if (avatar && request.method === "GET") return proxyAvatar(request, avatar[1]);
-  const communityMedia = path.match(/^canonical\/uploads\/community\/([1-9]\d*)\/([0-9a-f]{32}\.(?:jpg|png|webp|mp4|webm))$/);
+  const communityMedia = path.match(/^canonical\/uploads\/community\/([1-9]\d*)\/([0-9a-f]{32}\.(?:jpg|png|webp|mp4|mov|webm))$/);
   if (communityMedia && request.method === "GET") return proxyCommunityMedia(request, communityMedia[1], communityMedia[2]);
   const verificationPhoto = path.match(/^canonical\/finance\/verifications\/(\d+)\/photo\/(front|back)$/);
   if (verificationPhoto && request.method === "GET") {

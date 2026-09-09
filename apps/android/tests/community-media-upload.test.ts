@@ -48,6 +48,7 @@ test('community publisher rejects an oversized image batch before drafting or up
 
 test('community publisher rejects an oversized selection before drafting or uploading it', () => {
   const page = readFileSync(new URL('../src/pages/community/publish.vue', import.meta.url), 'utf8')
+  assert.match(page, /uni\.chooseVideo\(\{[\s\S]*extension: \['mp4', 'mov', 'webm'\]/)
   const selection = page.indexOf('success: (res) => {', page.indexOf('uni.chooseVideo'))
   const limitCheck = page.indexOf('if (isCommunityVideoTooLarge(res.size))', selection)
   const rejection = page.indexOf("t('communityVideoTooLarge')", limitCheck)
