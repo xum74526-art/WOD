@@ -10,6 +10,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        ffmpeg \
         tzdata \
         tesseract-ocr \
         tesseract-ocr-chi-sim \

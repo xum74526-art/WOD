@@ -62,15 +62,18 @@ export interface CommunityMediaUpload {
   kind: 'image' | 'video'
   content_type: string
   size: number
+  duration?: number | null
+  standardized?: boolean
 }
 
-export function uploadCommunityMedia(filePath: string) {
+export function uploadCommunityMedia(filePath: string, onProgress?: (progress: number) => void) {
   return upload<CommunityMediaUpload>({
     url: '/community/media/upload',
     filePath,
     name: 'media',
     silent: true,
-    timeout: 120000,
+    timeout: 240000,
+    onProgress,
   })
 }
 

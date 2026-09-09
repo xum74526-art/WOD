@@ -35,6 +35,7 @@ YT = "{http://www.youtube.com/xml/schemas/2015}"
 
 BILIBILI_VIDEO_PROVIDER = "bilibili"
 PLAYABLE_VIDEO_PROVIDERS = (BILIBILI_VIDEO_PROVIDER,)
+BILIBILI_VIDEO_ID_RE = re.compile(r"^BV[0-9A-Za-z]{10}$")
 INTERNAL_SOURCE_KEY = "wod-market"
 INTERNAL_SOURCE_NAME = "ZTW 算力行情"
 INTERNAL_SOURCE_AUTHOR = "ZTW"
@@ -484,6 +485,14 @@ def _is_relevant_bilibili_video(title: str) -> bool:
     return False
 
 
+def _is_playable_video_reference(video_provider: str | None, video_id: str | None) -> bool:
+    """Accept only a provider/id pair that every client can reconstruct safely."""
+    return (
+        video_provider == BILIBILI_VIDEO_PROVIDER
+        and bool(BILIBILI_VIDEO_ID_RE.fullmatch(str(video_id or "").strip()))
+    )
+
+
 def _parse_bilibili_official_page(page: str, spec: SourceSpec) -> list[Candidate]:
     result: list[Candidate] = []
     owner_marker = f'//space.bilibili.com/{BILIBILI_OFFICIAL_OWNER_ID}'
@@ -797,7 +806,8 @@ def _choose_candidates(
     existing = db.query(Post).filter(Post.publish_batch == batch).all()
     video_need = max(0, video_target - sum(
         1 for post in existing
-        if post.content_type == "video" and post.video_provider in PLAYABLE_VIDEO_PROVIDERS
+        if post.content_type == "video"
+        and _is_playable_video_reference(post.video_provider, post.video_id)
     ))
     release_need = max(0, 2 - sum(1 for post in existing if (post.source_key or "").startswith("github-")))
     news_target = max(0, settings.COMMUNITY_DAILY_TARGET - video_target - 2)
@@ -809,7 +819,8 @@ def _choose_candidates(
     pools = {
         "video": [
             item for item in candidates
-            if item.bucket == "video" and item.video_provider in PLAYABLE_VIDEO_PROVIDERS
+            if item.bucket == "video"
+            and _is_playable_video_reference(item.video_provider, item.video_id)
         ],
         "news": [item for item in candidates if item.bucket == "news"],
         "release": [item for item in candidates if item.bucket == "release"],
@@ -830,6 +841,10 @@ def _choose_candidates(
     for item in sorted(candidates, key=lambda value: (value.score, value.published_at), reverse=True):
         if regular_slots <= 0:
             break
+        if item.content_type == "video" and not _is_playable_video_reference(
+            item.video_provider, item.video_id,
+        ):
+            continue
         if item not in selected:
             selected.append(item)
             regular_slots -= 1

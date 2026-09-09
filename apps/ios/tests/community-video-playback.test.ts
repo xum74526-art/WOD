@@ -21,12 +21,13 @@ const validSource = {
   video_id: 'BV1Ab411C7De',
 } as const
 
-function fakeNativeRuntime() {
+function fakeNativeRuntime(autoLoad = true) {
   const capture: {
     id: string
     styles: Record<string, any>
     overrideOptions: Record<string, unknown>
     intercepted?: (event: unknown) => void
+    loadedListener?: (event: unknown) => void
     errorListener?: (event: unknown) => void
     closeListener?: (event: unknown) => void
     loadedUrl: string
@@ -73,12 +74,14 @@ function fakeNativeRuntime() {
             capture.intercepted = callback
           },
           addEventListener(event, callback) {
-            if (event === 'error') capture.errorListener = callback
+            if (event === 'loaded') capture.loadedListener = callback
+            else if (event === 'error') capture.errorListener = callback
             else capture.closeListener = callback
           },
           loadURL(url, headers = {}) {
             capture.loadedUrl = url
             capture.loadHeaders = headers
+            if (autoLoad) capture.loadedListener?.({})
           },
           show(animation = '') {
             if (capture.throwOnShow) {
@@ -184,6 +187,16 @@ test('native playback closes the player and reports a load failure', () => {
   assert.equal(failures[0]?.code, 'player-load-failed')
   assert.equal(failures[0]?.message, 'network unavailable')
   assert.deepEqual(capture.userAgentCalls, [])
+})
+
+test('native playback stops an endless player shell and reports a recoverable timeout', async () => {
+  const { runtime, capture } = fakeNativeRuntime(false)
+  const failures: CommunityVideoFailure[] = []
+  openNativeCommunityVideo(runtime, validSource, '视频', failure => failures.push(failure), 5)
+  await new Promise(resolve => setTimeout(resolve, 15))
+  assert.equal(capture.closeAnimation, 'none')
+  assert.equal(failures[0]?.code, 'player-load-failed')
+  assert.equal(failures[0]?.message, '视频播放器加载超时')
 })
 
 test('blocked top-level navigation closes the player and reports a recoverable failure', () => {

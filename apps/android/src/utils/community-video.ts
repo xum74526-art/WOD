@@ -46,7 +46,7 @@ interface NativeCommunityVideoWebview {
     },
     callback: (event: unknown) => void,
   ): void
-  addEventListener(event: 'error' | 'close', callback: (event: unknown) => void): void
+  addEventListener(event: 'loaded' | 'error' | 'close', callback: (event: unknown) => void): void
   loadURL(url: string, additionalHttpHeaders?: Record<string, string>): void
   show(animation?: string): void
   close(animation?: string): void
@@ -68,6 +68,7 @@ export interface NativeCommunityVideoRuntime {
 
 export const BILIBILI_PLAYER_ORIGIN = 'https://player.bilibili.com'
 export const BILIBILI_REFERER = 'https://www.bilibili.com/'
+export const NATIVE_VIDEO_LOAD_TIMEOUT_MS = 15000
 export const BLOCK_UNTRUSTED_PLAYER_NAVIGATION =
   '^(?!(?:https://player\\.bilibili\\.com/player\\.html|https://www\\.bilibili\\.com/blackboard/webplayer/mbplayer\\.html)(?:[?#]|$)).*'
 
@@ -169,6 +170,7 @@ export function openNativeCommunityVideo(
   source: CommunityVideoSource,
   title: string,
   onError?: CommunityVideoFailureHandler,
+  loadTimeoutMs: number = NATIVE_VIDEO_LOAD_TIMEOUT_MS,
 ): boolean {
   const target = buildCommunityVideoPlayerUrl(source)
   if (!target) {
@@ -221,6 +223,12 @@ export function openNativeCommunityVideo(
     const createdPlayer = player
 
     let terminal = false
+    let loadTimer: ReturnType<typeof setTimeout> | null = null
+    const clearLoadTimer = () => {
+      if (!loadTimer) return
+      clearTimeout(loadTimer)
+      loadTimer = null
+    }
     const finish = (
       shouldClose: boolean,
       code?: CommunityVideoFailureCode,
@@ -229,6 +237,7 @@ export function openNativeCommunityVideo(
     ) => {
       if (terminal) return
       terminal = true
+      clearLoadTimer()
       if (activePlayer?.webview === createdPlayer) activePlayer = null
       if (shouldClose) {
         try { createdPlayer.close('none') } catch {}
@@ -253,9 +262,14 @@ export function openNativeCommunityVideo(
         error,
       )
     })
+    createdPlayer.addEventListener('loaded', clearLoadTimer)
     createdPlayer.addEventListener('close', () => finish(false))
     activePlayer = { runtime, target, webview: createdPlayer }
     try {
+      loadTimer = setTimeout(() => {
+        finish(true, 'player-load-failed', '视频播放器加载超时')
+      }, Math.max(1, loadTimeoutMs))
+      ;(loadTimer as unknown as { unref?: () => void }).unref?.()
       createdPlayer.loadURL(target, headers)
       createdPlayer.show('pop-in')
     } catch (error) {

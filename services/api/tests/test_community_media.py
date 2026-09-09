@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.models import User  # noqa: F401
 from app.models.community import Post
 from app.routers import community as community_router
+from app.services.community_video import StandardizedCommunityVideo
 from app.utils.response import BizError, error
 
 
@@ -59,6 +60,22 @@ class CommunityMediaTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.dir_patcher = patch.object(community_router, "COMMUNITY_DIR", Path(self.temp_dir.name))
         self.dir_patcher.start()
+        self.standardized_video = minimal_mp4_bytes() + b"standardized"
+        self.standardize_patcher = patch.object(
+            community_router,
+            "standardize_community_video",
+            side_effect=lambda content, input_extension, max_bytes: StandardizedCommunityVideo(
+                content=self.standardized_video,
+                duration_seconds=17,
+            ),
+        )
+        self.duration_patcher = patch.object(
+            community_router,
+            "standardized_video_duration",
+            return_value=17,
+        )
+        self.standardize_patcher.start()
+        self.duration_patcher.start()
 
         app = FastAPI()
 
@@ -79,6 +96,8 @@ class CommunityMediaTests(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+        self.duration_patcher.stop()
+        self.standardize_patcher.stop()
         self.dir_patcher.stop()
         self.temp_dir.cleanup()
         self.db.close()
@@ -142,6 +161,10 @@ class CommunityMediaTests(unittest.TestCase):
         uploaded = self.upload("clip.mp4", minimal_mp4_bytes(), "video/mp4")
         self.assertEqual(uploaded.status_code, 200)
         media_url = uploaded.json()["data"]["url"]
+        self.assertTrue(media_url.endswith(".mp4"))
+        self.assertEqual(uploaded.json()["data"]["content_type"], "video/mp4")
+        self.assertEqual(uploaded.json()["data"]["duration"], 17)
+        self.assertTrue(uploaded.json()["data"]["standardized"])
 
         created = self.client.post(
             "/api/community/posts",
@@ -159,32 +182,44 @@ class CommunityMediaTests(unittest.TestCase):
         self.assertEqual(public.headers["accept-ranges"], "bytes")
         partial = self.client.get("/api" + media_url, headers={"Range": "bytes=4-11"})
         self.assertEqual(partial.status_code, 206)
-        self.assertEqual(partial.content, minimal_mp4_bytes()[4:12])
+        self.assertEqual(partial.content, self.standardized_video[4:12])
         self.assertTrue(partial.headers["content-range"].startswith("bytes 4-11/"))
 
-    def test_valid_webm_is_accepted_with_correct_public_mime(self):
+    def test_valid_webm_is_standardized_to_public_mp4(self):
         uploaded = self.upload("clip.webm", minimal_webm_bytes(), "video/webm")
         self.assertEqual(uploaded.status_code, 200)
         media_url = uploaded.json()["data"]["url"]
-        self.assertTrue(media_url.endswith(".webm"))
+        self.assertTrue(media_url.endswith(".mp4"))
+        self.assertTrue(uploaded.json()["data"]["standardized"])
         public = self.client.get("/api" + media_url)
         self.assertEqual(public.status_code, 200)
-        self.assertEqual(public.headers["content-type"], "video/webm")
+        self.assertEqual(public.headers["content-type"], "video/mp4")
 
-    def test_valid_iphone_mov_is_accepted_with_correct_public_mime_and_ranges(self):
+    def test_valid_iphone_mov_is_standardized_to_mp4_with_ranges(self):
         uploaded = self.upload("iphone.MOV", minimal_mov_bytes(), "video/quicktime")
         self.assertEqual(uploaded.status_code, 200)
         media_url = uploaded.json()["data"]["url"]
-        self.assertTrue(media_url.endswith(".mov"))
-        self.assertEqual(uploaded.json()["data"]["content_type"], "video/quicktime")
+        self.assertTrue(media_url.endswith(".mp4"))
+        self.assertEqual(uploaded.json()["data"]["content_type"], "video/mp4")
 
         public = self.client.get("/api" + media_url)
         self.assertEqual(public.status_code, 200)
-        self.assertEqual(public.headers["content-type"], "video/quicktime")
+        self.assertEqual(public.headers["content-type"], "video/mp4")
         self.assertEqual(public.headers["accept-ranges"], "bytes")
         partial = self.client.get("/api" + media_url, headers={"Range": "bytes=8-11"})
         self.assertEqual(partial.status_code, 206)
-        self.assertEqual(partial.content, b"qt  ")
+        self.assertEqual(partial.content, self.standardized_video[8:12])
+
+    def test_failed_video_standardization_never_publishes_the_original_file(self):
+        with patch.object(
+            community_router,
+            "standardize_community_video",
+            side_effect=BizError("视频转换失败，请更换视频后重试"),
+        ):
+            response = self.upload("broken.mov", minimal_mov_bytes(), "video/quicktime")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("转换失败", response.json()["msg"])
+        self.assertEqual(list(Path(self.temp_dir.name).rglob("*.*")), [])
 
     def test_extension_and_magic_bytes_must_match(self):
         response = self.upload("not-really.jpg", image_bytes("PNG"), "image/jpeg")
@@ -228,23 +263,31 @@ class CommunityMediaTests(unittest.TestCase):
 
     def test_default_video_limit_matches_mobile_copy_and_proxy_headroom(self):
         limit = Settings.model_fields["COMMUNITY_VIDEO_MAX_BYTES"].default
+        duration_limit = Settings.model_fields["COMMUNITY_VIDEO_MAX_DURATION_SECONDS"].default
         self.assertEqual(limit, 20 * 1024 * 1024)
+        self.assertEqual(duration_limit, 300)
         self.assertEqual(community_router._file_size_limit_label(limit), "20MB")
 
         repository = Path(__file__).resolve().parents[3]
         nginx = (repository / "infra" / "kai-nginx.conf").read_text(encoding="utf-8")
         self.assertIn("client_max_body_size 21m;", nginx)
+        self.assertIn("location = /api/v1/canonical/community/media/upload", nginx)
+        self.assertIn("location = /api/community/media/upload", nginx)
+        self.assertGreaterEqual(nginx.count("proxy_read_timeout 240s;"), 2)
         for environment_template in (
             repository / "services" / "api" / ".env.example",
             repository / "infra" / "api.env.example",
         ):
             environment = environment_template.read_text(encoding="utf-8")
             self.assertIn("COMMUNITY_VIDEO_MAX_BYTES=20971520", environment)
+            self.assertIn("COMMUNITY_VIDEO_MAX_DURATION_SECONDS=300", environment)
         for platform in ("android", "ios"):
             copy = (repository / "apps" / platform / "src" / "store" / "i18n.ts").read_text(encoding="utf-8")
-            self.assertIn("支持 MP4、MOV、WebM，不超过 20MB", copy)
-            self.assertIn("MP4, MOV or WebM, up to 20 MB", copy)
+            self.assertIn("上传后统一转换为兼容 MP4；最长 5 分钟，不超过 20MB", copy)
+            self.assertIn("converted to compatible MP4 after upload; up to 5 minutes and 20 MB", copy)
             self.assertNotIn("社区视频不能超过 50MB", copy)
+        dockerfile = (repository / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ffmpeg", dockerfile)
 
     def test_post_rejects_phone_paths_remote_urls_missing_and_other_user_media(self):
         bad_values = [
@@ -281,14 +324,21 @@ class CommunityMediaTests(unittest.TestCase):
         self.assertEqual(too_many.status_code, 400)
         self.assertIn("最多", too_many.json()["msg"])
 
-    def test_video_reference_requires_duration_and_cannot_mix_with_images(self):
+    def test_video_reference_uses_server_duration_and_cannot_mix_with_images(self):
         image_url = self.upload("one.png", image_bytes(), "image/png").json()["data"]["url"]
         video_url = self.upload("one.mp4", minimal_mp4_bytes(), "video/mp4").json()["data"]["url"]
         no_duration = self.client.post(
             "/api/community/posts", json={"content": "缺少时长", "video": video_url},
         )
-        self.assertEqual(no_duration.status_code, 400)
-        self.assertIn("时长", no_duration.json()["msg"])
+        self.assertEqual(no_duration.status_code, 200)
+        self.assertEqual(no_duration.json()["data"]["video_duration"], 17)
+
+        forged_duration = self.client.post(
+            "/api/community/posts",
+            json={"content": "伪造时长", "video": video_url, "video_duration": 999},
+        )
+        self.assertEqual(forged_duration.status_code, 200)
+        self.assertEqual(forged_duration.json()["data"]["video_duration"], 17)
 
         mixed = self.client.post(
             "/api/community/posts",
@@ -299,6 +349,22 @@ class CommunityMediaTests(unittest.TestCase):
         )
         self.assertEqual(mixed.status_code, 400)
         self.assertIn("不能同时", mixed.json()["msg"])
+
+    def test_post_rejects_a_legacy_unstandardized_video_container(self):
+        user_dir = Path(self.temp_dir.name) / str(self.user.id)
+        user_dir.mkdir(parents=True)
+        filename = f"{'a' * 32}.mov"
+        (user_dir / filename).write_bytes(minimal_mov_bytes())
+        response = self.client.post(
+            "/api/community/posts",
+            json={
+                "content": "旧容器",
+                "video": f"/uploads/community/{self.user.id}/{filename}",
+                "video_duration": 12,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("兼容处理", response.json()["msg"])
 
     def test_public_route_cannot_traverse_to_private_upload_siblings(self):
         with self.assertRaises(HTTPException) as raised:

@@ -97,6 +97,7 @@ export async function callCanonicalMultipart(
   fileFields: string[],
   failureMessage: string,
   textFields: string[] = [],
+  timeoutMs: number = 60_000,
 ): Promise<CanonicalApiResult> {
   const headers = authHeaders(request);
   const incoming = await request.formData();
@@ -117,7 +118,7 @@ export async function callCanonicalMultipart(
       headers,
       body: outgoing,
       cache: "no-store",
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     return unavailable(failureMessage);

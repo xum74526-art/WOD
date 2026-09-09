@@ -15,6 +15,8 @@ Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/home/ubuntu/wod/runtime/api.env
 # This unit is supervised and rate-limited above; local/Docker defaults remain off.
 Environment=KAI_PRICING_HTTP_FAIL_FAST_ENABLED=true
+ExecStartPre=/usr/bin/test -x /usr/bin/ffmpeg
+ExecStartPre=/usr/bin/test -x /usr/bin/ffprobe
 ExecStartPre=/home/ubuntu/wod/services/api/.venv/bin/python migrate_account_recovery.py --check
 ExecStartPre=/home/ubuntu/wod/services/api/.venv/bin/python init_db.py
 ExecStartPre=/home/ubuntu/wod/services/api/.venv/bin/python migrate_account_recovery.py --check

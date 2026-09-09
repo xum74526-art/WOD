@@ -10,6 +10,7 @@ from app.services.community_daily import (
     _get_system_user,
     _internal_candidates,
     _is_relevant_bilibili_video,
+    _is_playable_video_reference,
     canonicalize_url,
     strip_html,
 )
@@ -44,6 +45,12 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertTrue(_is_relevant_bilibili_video("NVIDIA AI 工厂与算力集群"))
         self.assertFalse(_is_relevant_bilibili_video("DOTA2 TI 2026 电竞宣传片"))
         self.assertFalse(_is_relevant_bilibili_video("新游戏公测 | DLSS 画面演示"))
+
+    def test_external_video_reference_requires_the_supported_provider_and_exact_id(self):
+        self.assertTrue(_is_playable_video_reference("bilibili", "BV1Ab411C7De"))
+        self.assertFalse(_is_playable_video_reference("youtube", "BV1Ab411C7De"))
+        self.assertFalse(_is_playable_video_reference("bilibili", "BV1Ab411C7De&autoplay=1"))
+        self.assertFalse(_is_playable_video_reference("bilibili", ""))
 
     def test_internal_fallback_uses_ztw_display_name_and_legacy_source_key(self):
         db = MagicMock()

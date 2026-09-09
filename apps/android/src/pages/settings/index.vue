@@ -53,6 +53,16 @@
 
       <SectionHeader :title="t('k_81d9f505')" />
       <view class="card menu">
+        <view class="menu-item" :class="{ disabled: updateChecking }" @tap="onCheckUpdate">
+          <view class="mi-left">
+            <AppIcon name="refresh" :size="40" />
+            <text class="mi-text">{{ t(updateChecking ? 'appUpdateChecking' : 'appUpdateCheck') }}</text>
+          </view>
+          <view class="mi-right">
+            <text class="mi-sub">v{{ appVersion }}</text>
+            <AppIcon name="chevron" :size="36" />
+          </view>
+        </view>
         <view class="menu-item" @tap="onAbout">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
@@ -130,6 +140,7 @@ import { callContactPhone } from '@/utils/contact-phone'
 import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
+import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -139,6 +150,7 @@ const notificationStore = useNotificationStore()
 const showLogout = ref(false)
 const kaiBinding = ref<KaiBindingStatus | null>(null)
 const kaiBindingLoading = ref(false)
+const updateChecking = ref(false)
 const themeOptions: Array<{ mode: ThemeMode; key: string }> = [
   { mode: 'system', key: 'themeSystem' },
   { mode: 'light', key: 'themeLight' },
@@ -148,13 +160,7 @@ const themeLabel = computed(() => t(themeOptions.find((item) => item.mode === th
 const notificationSummary = computed(() => notificationStore.unread > 0
   ? t('unreadNotificationCount', { count: notificationStore.unread })
   : t('inAppNotificationsEnabledShort'))
-const appVersion = (() => {
-  try {
-    return uni.getAppBaseInfo().appVersion || '1.0.3'
-  } catch {
-    return '1.0.3'
-  }
-})()
+const appVersion = getInstalledAppVersion().name
 
 function onNotify() {
   nav('/pages/notifications/index')
@@ -229,6 +235,15 @@ function onHelp() {
     showCancel: false,
     confirmText: t('知道了'),
   })
+}
+async function onCheckUpdate() {
+  if (updateChecking.value) return
+  updateChecking.value = true
+  try {
+    await checkForAppUpdate('android', { manual: true })
+  } finally {
+    updateChecking.value = false
+  }
 }
 function onAbout() {
   uni.showModal({

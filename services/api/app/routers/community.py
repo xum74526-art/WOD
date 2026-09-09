@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import case, or_
+from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -20,6 +21,10 @@ from app.models.user import User
 from app.schemas.community import CommentIn, CommentOut, PostCreateIn, PostOut
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
+from app.services.community_video import (
+    standardize_community_video,
+    standardized_video_duration,
+)
 
 router = APIRouter(prefix="/api/community", tags=["community"])
 public_router = APIRouter(prefix="/api/uploads/community", tags=["community-media"])
@@ -141,6 +146,21 @@ async def upload_community_media(
     if detected_extension != requested_extension:
         raise BizError("文件扩展名与实际格式不一致")
 
+    standardized_duration: int | None = None
+    if not is_image:
+        # Container signatures only identify the input. Decode and normalize it
+        # before it becomes public so Android, iOS and web all receive the same
+        # H.264/AAC MP4 profile and a server-measured duration.
+        standardized = await asyncio.to_thread(
+            standardize_community_video,
+            content,
+            detected_extension,
+            max_bytes,
+        )
+        content = standardized.content
+        detected_extension = "mp4"
+        standardized_duration = standardized.duration_seconds
+
     from app.services.account_lifecycle import lock_active_user
     lock_active_user(db, user.id)
 
@@ -168,6 +188,8 @@ async def upload_community_media(
         "kind": "image" if is_image else "video",
         "content_type": MEDIA_TYPES[detected_extension],
         "size": len(content),
+        "duration": standardized_duration,
+        "standardized": not is_image,
     })
 
 
@@ -299,6 +321,18 @@ def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
         ).all()
     ]
     q = q.filter(or_(Post.origin != "aggregated", Post.origin.is_(None), Post.source_key.in_(enabled_source_keys)))
+    # Do not surface external video rows that native/Web clients cannot safely
+    # reconstruct. User-hosted videos are governed by the standardized upload
+    # path above; aggregated videos use the one supported provider/id contract.
+    q = q.filter(or_(
+        Post.content_type != "video",
+        Post.origin != "aggregated",
+        Post.origin.is_(None),
+        and_(
+            Post.video_provider == "bilibili",
+            Post.video_id.like("BV__________"),
+        ),
+    ))
     # 关键词搜索：匹配内容、话题、作者名
     if keyword:
         kw = f"%{keyword}%"
@@ -354,10 +388,15 @@ def create_post(
         _media_path_from_url(image_url, user.id, "image")
 
     video = data.video.strip() if data.video else None
+    video_duration: int | None = None
     if video:
-        _media_path_from_url(video, user.id, "video")
-        if not data.video_duration or data.video_duration <= 0:
-            raise BizError("视频时长无效")
+        video_path = _media_path_from_url(video, user.id, "video")
+        if video_path.suffix.lower() != ".mp4":
+            raise BizError("视频未完成兼容处理，请重新上传")
+        # Never trust the client duration. The upload may come from web,
+        # Android or iOS, but the persisted value is derived from the exact
+        # standardized file referenced by the post.
+        video_duration = standardized_video_duration(video_path)
     elif data.video_duration is not None:
         raise BizError("视频时长只能随视频提交")
 
@@ -365,7 +404,7 @@ def create_post(
     source_platform = normalize_platform(platform)
     p = Post(
         user_id=user.id, content=data.content, images=images_str,
-        video=video, video_duration=data.video_duration if video else None,
+        video=video, video_duration=video_duration,
         topic=data.topic, origin="user",
         content_type="video" if video else ("image" if images else "text"),
         created_platform=source_platform,

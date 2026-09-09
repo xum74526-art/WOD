@@ -612,7 +612,14 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
   if (path === "canonical/community/media/upload" && request.method === "POST") {
-    const result = await upstreamMultipart(request, "/api/community/media/upload", ["media"], "社区媒体上传失败，请稍后重试");
+    const result = await upstreamMultipart(
+      request,
+      "/api/community/media/upload",
+      ["media"],
+      "社区媒体上传失败，请稍后重试",
+      [],
+      240_000,
+    );
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
   const markPaid = path.match(/^canonical\/finance\/withdrawals\/(\d+)\/mark-paid$/);

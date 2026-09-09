@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,6 +8,7 @@ import {
   COMMUNITY_MEDIA_MAX_FILES,
   COMMUNITY_POST_MAX_LENGTH,
   COMMUNITY_VIDEO_MAX_BYTES,
+  COMMUNITY_VIDEO_MAX_DURATION_SECONDS,
   communityMediaUploadError,
   communityShareText,
   isCommunityImageFile,
@@ -22,7 +24,8 @@ test("community composer shows the shared image and video limits", () => {
   assert.equal(COMMUNITY_MEDIA_MAX_FILES, 9);
   assert.equal(COMMUNITY_IMAGE_MAX_BYTES, 5 * 1024 * 1024);
   assert.equal(COMMUNITY_VIDEO_MAX_BYTES, 20 * 1024 * 1024);
-  assert.equal(COMMUNITY_MEDIA_LIMIT_TEXT, "图片最多 9 张且单张最大 5MB，视频最大 20MB");
+  assert.equal(COMMUNITY_VIDEO_MAX_DURATION_SECONDS, 300);
+  assert.equal(COMMUNITY_MEDIA_LIMIT_TEXT, "图片最多 9 张且单张最大 5MB；视频最长 5 分钟、最大 20MB，上传后统一转换为兼容 MP4");
 });
 
 test("community media selection rejects more than nine files instead of silently truncating", () => {
@@ -41,9 +44,31 @@ test("community video validation accepts the exact byte limit and detects extens
     { name: "clip.mp4", type: "video/mp4", size: COMMUNITY_VIDEO_MAX_BYTES },
   ]), "");
   assert.equal(isCommunityVideoFile({ name: "clip.webm", type: "", size: 1 }), true);
+  assert.equal(isCommunityVideoFile({ name: "IPHONE.MOV", type: "", size: 1 }), true);
   assert.match(communityMediaUploadError([
     { name: "clip.webm", type: "", size: COMMUNITY_VIDEO_MAX_BYTES + 1 },
   ]), /不能超过 20MB/);
+});
+
+test("web video normalization waits longer than the backend transcode ceiling", () => {
+  const adapter = readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../lib/server/canonical-api-client.ts", import.meta.url), "utf8");
+  assert.match(adapter, /"\/api\/community\/media\/upload",[\s\S]*240_000/);
+  assert.match(client, /timeoutMs: number = 60_000/);
+  assert.match(client, /AbortSignal\.timeout\(timeoutMs\)/);
+});
+
+test("web community uploads expose transfer progress and server processing separately", () => {
+  const api = readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../lib/mobile-community-api.ts", import.meta.url), "utf8");
+  const composer = readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
+
+  assert.match(api, /request\.upload\.onprogress/);
+  assert.match(api, /phase: "processing"/);
+  assert.match(adapter, /apiUploadRequest/);
+  assert.match(composer, /正在上传第 \$\{progress\.current\}\/\$\{progress\.total\} 个文件/);
+  assert.match(composer, /服务器正在\$\{progress\.video \? "转换兼容视频" : "处理文件"\}/);
+  assert.match(composer, /community-upload-progress/);
 });
 
 test("community image validation accepts the exact byte limit and detects MIME or extension", () => {

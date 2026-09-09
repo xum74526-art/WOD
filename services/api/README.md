@@ -18,6 +18,10 @@ DATABASE_URL=sqlite:///./wod.db
 UPLOAD_ROOT=./uploads
 ```
 
+社区视频上传依赖系统命令 `ffmpeg` 和 `ffprobe`。服务会先验证真实视频流和时长，
+再统一转换为 H.264/AAC、`yuv420p`、最多 1280 像素宽、30fps、支持快速起播的 MP4；
+原始 MP4、iPhone MOV 和 WebM 都不会直接公开。当前限制为 5 分钟、20MB。
+
 生成并填写两个独立密钥：
 
 ```powershell
@@ -38,7 +42,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 docker build -t kai-api .
 ```
 
-镜像包含 Tesseract、`chi_sim` 与 `eng`。入口脚本会拒绝空的必需变量和源码内置开发密钥，并在启动前执行 `init_db.py`。
+镜像包含 FFmpeg、Tesseract、`chi_sim` 与 `eng`。入口脚本会拒绝空的必需变量和源码内置开发密钥，并在启动前执行 `init_db.py`。
 
 ## 数据目录
 

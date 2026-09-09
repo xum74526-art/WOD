@@ -30,6 +30,38 @@ import {
 
 const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]] as const;
 
+type PublishProgress = {
+  phase: "idle" | "preparing" | "uploading" | "processing" | "publishing";
+  percent: number;
+  current: number;
+  total: number;
+  fileName: string;
+  video: boolean;
+};
+
+const idlePublishProgress: PublishProgress = { phase: "idle", percent: 0, current: 0, total: 0, fileName: "", video: false };
+
+function formatUploadBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function publishProgressText(progress: PublishProgress) {
+  if (progress.phase === "preparing") return "正在检查视频时长与格式…";
+  if (progress.phase === "uploading") return `正在上传第 ${progress.current}/${progress.total} 个文件 · ${progress.percent}%`;
+  if (progress.phase === "processing") return `第 ${progress.current}/${progress.total} 个文件已上传，服务器正在${progress.video ? "转换兼容视频" : "处理文件"}…`;
+  if (progress.phase === "publishing") return "媒体处理完成，正在发布动态…";
+  return "";
+}
+
+function publishButtonText(progress: PublishProgress) {
+  if (progress.phase === "preparing") return "检查中…";
+  if (progress.phase === "uploading") return `上传 ${progress.percent}%`;
+  if (progress.phase === "processing") return "处理中…";
+  if (progress.phase === "publishing") return "发布中…";
+  return "发布";
+}
+
 function readVideoDuration(file: File) {
   return new Promise<number>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -142,6 +174,8 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState({ content: "", topic: "" });
   const [files, setFiles] = useState<File[]>([]);
+  const [publishProgress, setPublishProgress] = useState<PublishProgress>(idlePublishProgress);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pendingActions = useRef(new Set<string>());
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const [openComments, setOpenComments] = useState<number | null>(null);
@@ -173,6 +207,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   function finishAction(key: string) {
     releaseCommunityAction(pendingActions.current, key);
     setBusy(new Set(pendingActions.current));
+    if (key === "publish") setPublishProgress(idlePublishProgress);
   }
 
   async function publish(event: FormEvent) {
@@ -186,12 +221,28 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     try {
       const videoFile = files.find(isCommunityVideoFile);
       if (videoFile && files.length > 1) throw new Error("视频不能与其他图片或视频同时发布");
-      const duration = videoFile ? await readVideoDuration(videoFile) : undefined;
-      const uploaded = await uploadCommunityMediaBatch(files, uploadCommunityMedia);
+      if (videoFile) setPublishProgress({ phase: "preparing", percent: 0, current: 1, total: 1, fileName: videoFile.name, video: true });
+      const inputDuration = videoFile ? await readVideoDuration(videoFile) : undefined;
+      if (inputDuration && inputDuration > 300) throw new Error("社区视频不能超过 5 分钟");
+      let completed = 0;
+      const uploaded = await uploadCommunityMediaBatch(files, async (file) => {
+        const current = completed + 1;
+        const video = isCommunityVideoFile(file);
+        setPublishProgress({ phase: "uploading", percent: 0, current, total: files.length, fileName: file.name, video });
+        const result = await uploadCommunityMedia(file, (progress) => {
+          setPublishProgress({ phase: progress.phase, percent: progress.percent, current, total: files.length, fileName: file.name, video });
+        });
+        completed += 1;
+        return result;
+      });
       const images = uploaded.filter((item) => item.kind === "image").map((item) => item.url);
       const video = uploaded.find((item) => item.kind === "video");
-      await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: duration });
-      setDraft({ content: "", topic: "" }); setFiles([]); setComposerOpen(false); setPage(1); await load();
+      if (video && (video.content_type !== "video/mp4" || !video.url.toLowerCase().endsWith(".mp4") || !video.standardized || !video.duration)) {
+        throw new Error("视频兼容处理未完成，请重新上传");
+      }
+      setPublishProgress({ phase: "publishing", percent: 100, current: files.length, total: files.length, fileName: "", video: Boolean(video) });
+      await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: video?.duration || undefined });
+      setDraft({ content: "", topic: "" }); setFiles([]); if (fileInput.current) fileInput.current.value = ""; setComposerOpen(false); setPage(1); await load();
     } catch (reason) { setError(errorMessage(reason)); }
     finally { finishAction(action); }
   }
@@ -270,6 +321,9 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     if (page === 1) void load(); else setPage(1);
   }
 
+  const publishing = busy.has("publish");
+  const selectedBytes = files.reduce((totalBytes, file) => totalBytes + file.size, 0);
+
   if (loginRequired) return <div className="community-login"><ChatCircle size={38}/><h2>登录后进入算力社区</h2><p>登录后可发布动态、关注、点赞和评论。</p><Link href="/login?return_to=/community">登录</Link></div>;
 
   return <section className="mobile-community-feed">
@@ -283,14 +337,16 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
 
     {composerOpen && <form className="community-composer" onSubmit={publish}>
       <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布社区动态</h2></div></header>
-      <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
-      <textarea required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
-      <footer><label><ImageSquare size={16}/>添加图片或视频（{COMMUNITY_MEDIA_LIMIT_TEXT}）<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => {
+      <input disabled={publishing} maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
+      <textarea disabled={publishing} required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
+      {files.length > 0 && <div className="community-upload-selection"><div><strong>已选择 {files.length} 个文件 · {formatUploadBytes(selectedBytes)}</strong><small>{files.map((file) => file.name).join("、")}</small></div><button type="button" disabled={publishing} onClick={() => { setFiles([]); if (fileInput.current) fileInput.current.value = ""; }}>清除</button></div>}
+      {publishProgress.phase !== "idle" && <div className="community-upload-progress" role="status" aria-live="polite"><div><strong>{publishProgressText(publishProgress)}</strong><small>{publishProgress.fileName || "正在写入动态"}</small></div><span><i style={{ width: `${publishProgress.percent}%` }}/></span></div>}
+      <footer><label aria-disabled={publishing}><ImageSquare size={16}/>添加图片或视频（{COMMUNITY_MEDIA_LIMIT_TEXT}）<input ref={fileInput} disabled={publishing} hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,.mov" onChange={(event) => {
         const selected = Array.from(event.currentTarget.files || []);
         const validationError = communityMediaUploadError(selected);
         if (validationError) { setError(validationError); event.currentTarget.value = ""; return; }
         setError(""); setFiles(selected);
-      }}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy.has("publish")}>{busy.has("publish") ? "发布中…" : "发布"}</button></footer>
+      }}/></label><span>{files.length ? `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH} 字` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={publishing}>{publishButtonText(publishProgress)}</button></footer>
     </form>}
 
     {error && <div className="commerce-error">{error}</div>}

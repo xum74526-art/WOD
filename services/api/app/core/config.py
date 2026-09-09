@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     # used for attribution. Unknown identifiers are rejected, while omitted
     # identifiers remain "legacy" during the installed-client transition.
     AUTH_CLIENT_PLATFORM_MAP: str = "web=web,ios=ios,android=android,admin=admin"
+    # Public native-app release metadata. Update these values only after the
+    # corresponding package is available at the trusted HTTPS address.
+    APP_ANDROID_RELEASE_ENABLED: bool = True
+    APP_ANDROID_LATEST_VERSION_NAME: str = "1.1.8"
+    APP_ANDROID_LATEST_VERSION_CODE: int = 118
+    APP_ANDROID_UPDATE_URL: str = "https://wod.kai.com/download/wod.apk"
+    APP_ANDROID_RELEASE_NOTES_ZH: str = ""
+    APP_ANDROID_RELEASE_NOTES_EN: str = ""
+    # iOS stays unavailable until an official App Store page exists.
+    APP_IOS_RELEASE_ENABLED: bool = False
+    APP_IOS_LATEST_VERSION_NAME: str = ""
+    APP_IOS_LATEST_VERSION_CODE: int = 0
+    APP_IOS_UPDATE_URL: str = ""
+    APP_IOS_RELEASE_NOTES_ZH: str = ""
+    APP_IOS_RELEASE_NOTES_EN: str = ""
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:9000"
     # Sensitive fields are encrypted at rest. Set a dedicated Fernet key in
     # production; local development falls back to a key derived from SECRET_KEY.
@@ -60,6 +75,11 @@ class Settings(BaseSettings):
     AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
     COMMUNITY_IMAGE_MAX_BYTES: int = 5 * 1024 * 1024
     COMMUNITY_VIDEO_MAX_BYTES: int = 20 * 1024 * 1024
+    # Every newly uploaded community video is normalized to a cross-platform
+    # MP4 profile before it can be referenced by a post.
+    COMMUNITY_VIDEO_MAX_DURATION_SECONDS: int = 300
+    COMMUNITY_VIDEO_TRANSCODE_TIMEOUT_SECONDS: int = 180
+    COMMUNITY_VIDEO_TRANSCODE_CONCURRENCY: int = 1
     # Direct checkout and other in-app transaction commitments stay disabled
     # until the required company qualifications and payment rails are ready.
     # Inquiry submission and human follow-up remain available independently.

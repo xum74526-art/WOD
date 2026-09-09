@@ -109,11 +109,12 @@ export function upload<T = unknown>(options: {
   formData?: Record<string, string>
   silent?: boolean
   timeout?: number
+  onProgress?: (progress: number) => void
 }): Promise<T> {
   const token = getToken()
   const i18n = useI18nStore()
   return new Promise((resolve, reject) => {
-    uni.uploadFile({
+    const task = uni.uploadFile({
       url: API_BASE + options.url,
       filePath: options.filePath,
       name: options.name,
@@ -148,6 +149,10 @@ export function upload<T = unknown>(options: {
         if (!options.silent) uni.showToast({ title: i18n.t('网络异常'), icon: 'none' })
         reject(err)
       },
+    })
+    task.onProgressUpdate?.((event) => {
+      const progress = Math.max(0, Math.min(100, Math.round(Number(event.progress) || 0)))
+      options.onProgress?.(progress)
     })
   })
 }

@@ -58,6 +58,13 @@ export type ApiEnvelope<T, M extends Record<string, unknown> = Record<string, un
   meta: M;
 };
 
+export type ApiUploadProgress = {
+  phase: "uploading" | "processing";
+  percent: number;
+  loaded: number;
+  total: number;
+};
+
 const publicEnvelopeCache = new Map<string, { expiresAt: number; value: ApiEnvelope<unknown> }>();
 const publicEnvelopeRequests = new Map<string, Promise<ApiEnvelope<unknown>>>();
 let currentUserCache: { expiresAt: number; value: { user: AuthUser } } | null = null;
@@ -157,6 +164,49 @@ export function publicApiEnvelopeRequest<T, M extends Record<string, unknown> = 
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await apiEnvelopeRequest<T>(path, init)).data;
+}
+
+/** Uploads browser media with byte progress, then exposes the server-processing wait separately. */
+export function apiUploadRequest<T>(
+  path: string,
+  form: FormData,
+  onProgress?: (progress: ApiUploadProgress) => void,
+  timeoutMs = 250_000,
+): Promise<T> {
+  if (typeof XMLHttpRequest === "undefined") {
+    return apiRequest<T>(path, { method: "POST", body: form });
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${apiBaseUrl}${path}`);
+    request.withCredentials = true;
+    request.timeout = timeoutMs;
+
+    request.upload.onprogress = (event) => {
+      const total = event.lengthComputable ? event.total : 0;
+      const percent = total > 0 ? Math.max(0, Math.min(100, Math.round((event.loaded / total) * 100))) : 0;
+      onProgress?.({ phase: "uploading", percent, loaded: event.loaded, total });
+    };
+    request.upload.onload = () => {
+      onProgress?.({ phase: "processing", percent: 100, loaded: form.get("media") instanceof File ? (form.get("media") as File).size : 0, total: form.get("media") instanceof File ? (form.get("media") as File).size : 0 });
+    };
+
+    request.onload = () => {
+      let body: (Partial<ApiEnvelope<T>> & ApiErrorBody) | null = null;
+      try { body = JSON.parse(request.responseText) as Partial<ApiEnvelope<T>> & ApiErrorBody; } catch { /* handled below */ }
+      if (request.status >= 200 && request.status < 300 && body && "data" in body) {
+        resolve(body.data as T);
+        return;
+      }
+      const message = body?.detail ?? body?.message ?? body?.error?.message ?? `请求失败 (${request.status || "网络异常"})`;
+      reject(new ApiError(message, body?.error?.code, request.status || undefined));
+    };
+    request.onerror = () => reject(new Error("网络连接失败，请检查网络后重试"));
+    request.ontimeout = () => reject(new Error("上传处理超时，请检查网络后重试"));
+    request.onabort = () => reject(new Error("上传已取消"));
+    request.send(form);
+  });
 }
 
 export function emailLogin(input: { email: string; password: string }) {

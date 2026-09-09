@@ -149,6 +149,99 @@
         "title": "AddressUpdate",
         "type": "object"
       },
+      "AppReleaseInfo": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "latest_version_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Code"
+          },
+          "latest_version_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version Name"
+          },
+          "platform": {
+            "enum": [
+              "android",
+              "ios"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "release_notes_en": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Release Notes En",
+            "type": "array"
+          },
+          "release_notes_zh": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Release Notes Zh",
+            "type": "array"
+          },
+          "update_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update Url"
+          }
+        },
+        "required": [
+          "platform",
+          "available",
+          "release_notes_zh",
+          "release_notes_en"
+        ],
+        "title": "AppReleaseInfo",
+        "type": "object"
+      },
+      "AppReleaseResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AppReleaseInfo"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AppReleaseResponse",
+        "type": "object"
+      },
       "ApproveWithdrawalIn": {
         "properties": {
           "note": {
@@ -10036,6 +10129,53 @@
         "summary": "Create Payment",
         "tags": [
           "payment"
+        ]
+      }
+    },
+    "/api/platform/app-release": {
+      "get": {
+        "description": "Return trusted public release metadata without requiring a session.",
+        "operationId": "release_api_platform_app_release_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": true,
+            "schema": {
+              "enum": [
+                "android",
+                "ios"
+              ],
+              "title": "Platform",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppReleaseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release",
+        "tags": [
+          "platform"
         ]
       }
     },

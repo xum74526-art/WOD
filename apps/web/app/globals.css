@@ -6138,6 +6138,20 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .community-composer footer label,
 .community-composer footer > button { min-height: 40px; padding-inline: 14px; font-size: 12px; }
 .community-composer footer > span { font-size: 11px; }
+.community-upload-selection,
+.community-upload-progress { min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--brand-soft) 54%, var(--surface)); display: flex; align-items: center; gap: 14px; }
+.community-upload-selection > div,
+.community-upload-progress > div { min-width: 0; display: grid; gap: 3px; }
+.community-upload-selection strong,
+.community-upload-progress strong { color: var(--text); font-size: 12px; }
+.community-upload-selection small,
+.community-upload-progress small { overflow: hidden; color: var(--text-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.community-upload-selection button { margin-left: auto; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--brand-strong); background: var(--surface); cursor: pointer; }
+.community-upload-selection button:disabled,
+.community-composer footer label[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.community-upload-progress { align-items: stretch; flex-direction: column; }
+.community-upload-progress > span { height: 5px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.community-upload-progress > span > i { display: block; height: 100%; border-radius: inherit; background: var(--brand-strong); transition: width .18s ease; }
 
 .mobile-community-list {
   max-width: none;
@@ -6286,6 +6300,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
   .community-composer footer { align-items: stretch; flex-wrap: wrap; }
   .community-composer footer > span { margin-left: 0; align-self: center; }
   .community-composer footer > button { margin-left: auto; }
+  .community-upload-selection { align-items: flex-start; }
   .mobile-community-list { gap: 16px; }
   .community-post-card { border-radius: 14px; }
   .community-post-card__copy > p,

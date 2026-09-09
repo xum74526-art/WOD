@@ -2,7 +2,8 @@ export const COMMUNITY_POST_MAX_LENGTH = 500;
 export const COMMUNITY_MEDIA_MAX_FILES = 9;
 export const COMMUNITY_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const COMMUNITY_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
-export const COMMUNITY_MEDIA_LIMIT_TEXT = "图片最多 9 张且单张最大 5MB，视频最大 20MB";
+export const COMMUNITY_VIDEO_MAX_DURATION_SECONDS = 5 * 60;
+export const COMMUNITY_MEDIA_LIMIT_TEXT = "图片最多 9 张且单张最大 5MB；视频最长 5 分钟、最大 20MB，上传后统一转换为兼容 MP4";
 
 type CommunityMediaFile = Pick<File, "name" | "size" | "type">;
 
@@ -11,7 +12,7 @@ export function isCommunityImageFile(file: CommunityMediaFile) {
 }
 
 export function isCommunityVideoFile(file: CommunityMediaFile) {
-  return file.type.toLowerCase().startsWith("video/") || /\.(mp4|webm)$/i.test(file.name);
+  return file.type.toLowerCase().startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name);
 }
 
 export function communityMediaUploadError(files: readonly CommunityMediaFile[]) {
