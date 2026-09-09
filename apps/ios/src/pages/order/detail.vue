@@ -264,7 +264,7 @@ function submitRenewalRequirement() {
     gpu_hours: Math.max(1, Number(current.duration_hours ?? current.purchase_hours) || 24),
     product_name: current.product_name || '',
   })
-  nav('/pages/buy-request/index?new=1')
+  nav('/pages/buy-request/index?compose=1')
 }
 
 function goAsset() {

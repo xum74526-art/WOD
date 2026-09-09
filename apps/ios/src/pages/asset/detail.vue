@@ -163,7 +163,7 @@ function submitRenewalRequirement() {
     gpu_hours: 24,
     product_name: current.product_name || '',
   })
-  nav('/pages/buy-request/index?new=1')
+  nav('/pages/buy-request/index?compose=1')
 }
 </script>
 

@@ -259,7 +259,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
 
 function enterAuthenticatedApp() {
   if (hasInquiryRequestPrefill()) {
-    uni.reLaunch({ url: '/pages/buy-request/index?new=1' })
+    uni.reLaunch({ url: '/pages/buy-request/index?compose=1' })
     return
   }
   uni.switchTab({

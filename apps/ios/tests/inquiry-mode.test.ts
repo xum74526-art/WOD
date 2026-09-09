@@ -24,7 +24,7 @@ test('product inquiry preserves configuration and market context without checkou
   assert.match(product, /v-model\.number="hours"/)
   assert.match(product, /quantity\.value/)
   assert.match(product, /saveInquiryRequestPrefill\([\s\S]*?product_id:[\s\S]*?supplier_id:[\s\S]*?gpu_hours:/)
-  assert.match(product, /\/pages\/buy-request\/index\?new=1/)
+  assert.match(product, /\/pages\/buy-request\/index\?compose=1/)
   assert.doesNotMatch(product, /createOrder|getWallet|getRebateSummary|ConfirmSheet/)
 })
 
@@ -36,6 +36,7 @@ test('request form requires contact details, carries listing identity, and suppo
   assert.match(requestPage, /source: inquiryContext\.value\?\.source/)
   assert.match(requestPage, /product_name: inquiryContext\.value\?\.product_name/)
   assert.match(requestPage, /clearInquiryRequestPrefill\(\)/)
+  assert.match(requestPage, /String\(options\?\.compose \|\| ''\) === '1'/)
   assert.doesNotMatch(requestPage, /getLatestMarket|max_unit_price|budget:/)
   assert.match(requestPage, /selectBuyRequestQuote\(requestId, quote\.id\)/)
   assert.match(requestPage, /canBuyerSelectQuote\(\{/)
@@ -47,7 +48,9 @@ test('request form requires contact details, carries listing identity, and suppo
 
 test('authentication and public catalogue entries return to the inquiry flow', () => {
   assert.match(login, /hasInquiryRequestPrefill\(\)/)
-  assert.match(login, /reLaunch\(\{ url: '\/pages\/buy-request\/index\?new=1' \}\)/)
+  assert.match(login, /reLaunch\(\{ url: '\/pages\/buy-request\/index\?compose=1' \}\)/)
+  assert.match(home, /\/pages\/buy-request\/index\?compose=1/)
+  assert.doesNotMatch(`${product}\n${login}\n${home}\n${orderDetail}\n${assetDetail}`, /\/pages\/buy-request\/index\?new=1/)
   for (const view of [home, market, store, card]) {
     assert.match(view, /inquiry/)
     assert.match(view, /submitRequirement/)

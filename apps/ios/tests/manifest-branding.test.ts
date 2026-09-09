@@ -11,6 +11,8 @@ test('iOS package identity and icon paths use the ZTW Vue 3 source tree', () => 
   assert.equal(manifest.name, 'ZTW')
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'ZTW')
+  assert.equal(manifest.versionName, '1.1.8')
+  assert.equal(manifest.versionCode, '118')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
   assert.equal(manifest['app-plus'].distribute.ios.appid, 'com.kai.wod')

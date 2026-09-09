@@ -432,7 +432,7 @@ function submitInquiry() {
     uni.reLaunch({ url: '/pages/login/index' })
     return
   }
-  nav('/pages/buy-request/index?new=1')
+  nav('/pages/buy-request/index?compose=1')
   submitting.value = false
 }
 

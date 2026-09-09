@@ -62,7 +62,7 @@
           </view>
         </template>
         <template v-else-if="commerce.matchmakingEnabled">
-          <view class="q-item" @tap="go('/pages/buy-request/index?new=1')">
+          <view class="q-item" @tap="go('/pages/buy-request/index?compose=1')">
             <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
             <text class="q-text">{{ t('submitRequirement') }}</text>
           </view>
