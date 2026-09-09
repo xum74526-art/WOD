@@ -17,7 +17,15 @@ import {
   type CommunityPost,
 } from "@/lib/mobile-community-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
-import { COMMUNITY_POST_MAX_LENGTH, communityDisplayText, communityShareText } from "@/lib/community-ui";
+import {
+  COMMUNITY_POST_MAX_LENGTH,
+  COMMUNITY_MEDIA_LIMIT_TEXT,
+  communityDisplayText,
+  communityMediaUploadError,
+  communityShareText,
+  isCommunityVideoFile,
+  uploadCommunityMediaBatch,
+} from "@/lib/community-ui";
 
 const tabs = [["recommend", "推荐"], ["latest", "最新"], ["follow", "关注"], ["video", "视频"]] as const;
 
@@ -157,13 +165,14 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   async function publish(event: FormEvent) {
     event.preventDefault();
     if (!draft.content.trim()) return;
+    const validationError = communityMediaUploadError(files);
+    if (validationError) { setError(validationError); return; }
     setBusy("publish"); setError("");
     try {
-      const videoFile = files.find((file) => file.type.startsWith("video/"));
+      const videoFile = files.find(isCommunityVideoFile);
       if (videoFile && files.length > 1) throw new Error("视频不能与其他图片或视频同时发布");
       const duration = videoFile ? await readVideoDuration(videoFile) : undefined;
-      const uploaded = [];
-      for (const file of files) uploaded.push(await uploadCommunityMedia(file));
+      const uploaded = await uploadCommunityMediaBatch(files, uploadCommunityMedia);
       const images = uploaded.filter((item) => item.kind === "image").map((item) => item.url);
       const video = uploaded.find((item) => item.kind === "video");
       await createCommunityPost({ content: draft.content.trim(), topic: draft.topic.trim() || undefined, images: images.length ? images : undefined, video: video?.url, video_duration: duration });
@@ -251,7 +260,12 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
       <header><PaperPlaneTilt size={20}/><div><small>CREATE POST</small><h2>发布社区动态</h2></div></header>
       <input maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder="话题（可选）" />
       <textarea required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="分享算力设备、行情或使用经验…" />
-      <footer><label><ImageSquare size={16}/>添加图片或视频<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 9))}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
+      <footer><label><ImageSquare size={16}/>添加图片或视频（{COMMUNITY_MEDIA_LIMIT_TEXT}）<input hidden multiple type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => {
+        const selected = Array.from(event.currentTarget.files || []).slice(0, 9);
+        const validationError = communityMediaUploadError(selected);
+        if (validationError) { setError(validationError); event.currentTarget.value = ""; return; }
+        setError(""); setFiles(selected);
+      }}/></label><span>{files.length ? `已选择 ${files.length} 个文件` : `${draft.content.length}/${COMMUNITY_POST_MAX_LENGTH}`}</span><button disabled={busy === "publish"}>{busy === "publish" ? "发布中…" : "发布"}</button></footer>
     </form>}
 
     {error && <div className="commerce-error">{error}</div>}

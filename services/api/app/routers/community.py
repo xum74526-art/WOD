@@ -49,6 +49,14 @@ MEDIA_TYPES = {
 }
 
 
+def _file_size_limit_label(byte_count: int) -> str:
+    for unit, divisor in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if byte_count >= divisor:
+            value = byte_count / divisor
+            return f"{value:g}{unit}"
+    return f"{byte_count}B"
+
+
 def _requested_extension(filename: str | None) -> str:
     extension = Path(filename or "").suffix.lower().lstrip(".")
     if extension == "jpeg":
@@ -123,7 +131,8 @@ async def upload_community_media(
     if not content:
         raise BizError("请选择要上传的社区媒体")
     if len(content) > max_bytes:
-        raise BizError("社区图片不能超过 5MB" if is_image else "社区视频不能超过 50MB")
+        media_name = "图片" if is_image else "视频"
+        raise BizError(f"社区{media_name}不能超过 {_file_size_limit_label(max_bytes)}")
 
     detected_extension = _verified_media_extension(content, "image" if is_image else "video")
     if detected_extension != requested_extension:

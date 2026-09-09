@@ -50,6 +50,7 @@ import { createPost, uploadCommunityMedia } from '@/api/community'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
+import { hasOversizedCommunityImage, isCommunityVideoTooLarge } from '@/utils/community-media'
 
 const { t } = useI18nStore()
 type PublishType = 'text' | 'image' | 'video'
@@ -114,6 +115,10 @@ function pickMedia() {
     uni.chooseImage({
       count: Math.max(1, 9 - imageDrafts.value.length),
       success: (res) => {
+        if (hasOversizedCommunityImage(res.tempFiles)) {
+          uni.showToast({ title: t('communityImageTooLarge'), icon: 'none' })
+          return
+        }
         const paths = (res.tempFilePaths as string[]) || []
         paths.slice(0, 9 - imageDrafts.value.length).forEach((localPath) => {
           const item: ImageDraft = { id: draftId(), localPath, remoteUrl: '', status: 'uploading' }
@@ -125,6 +130,10 @@ function pickMedia() {
   } else {
     uni.chooseVideo({
       success: (res) => {
+        if (isCommunityVideoTooLarge(res.size)) {
+          uni.showToast({ title: t('communityVideoTooLarge'), icon: 'none' })
+          return
+        }
         const item: VideoDraft = {
           localPath: res.tempFilePath,
           remoteUrl: '',

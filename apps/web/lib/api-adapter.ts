@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
 import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
+import { safeReturnPath } from "@/lib/auth-navigation";
 import { DELETION_SESSION_COOKIE, deletionMarkerMatchesTicket, deletionMayClearSession, deletionSessionMarker } from "@/lib/server/account-deletion-session";
 import {
   callCanonicalApi as upstream,
@@ -148,11 +149,6 @@ function clearAuthCookie(request: NextRequest, response: NextResponse) {
     path: "/",
     maxAge: 0,
   });
-}
-
-function safeReturnPath(value: unknown) {
-  const path = text(value, "/");
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/";
 }
 
 function publicOrigin(request: NextRequest) {

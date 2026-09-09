@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     ID_OCR_MAX_OUTPUT_CHARS: int = 50_000
     AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
     COMMUNITY_IMAGE_MAX_BYTES: int = 5 * 1024 * 1024
-    COMMUNITY_VIDEO_MAX_BYTES: int = 50 * 1024 * 1024
+    COMMUNITY_VIDEO_MAX_BYTES: int = 20 * 1024 * 1024
     # Direct checkout and other in-app transaction commitments stay disabled
     # until the required company qualifications and payment rails are ready.
     # Inquiry submission and human follow-up remain available independently.

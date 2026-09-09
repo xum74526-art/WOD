@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.deps import get_current_platform, get_current_user
 from app.db.base import Base
 from app.db.session import get_db
@@ -185,13 +185,38 @@ class CommunityMediaTests(unittest.TestCase):
         with patch.object(settings, "COMMUNITY_IMAGE_MAX_BYTES", 32):
             response = self.upload("large.png", oversized, "image/png")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("5MB", response.json()["msg"])
+        self.assertIn("32B", response.json()["msg"])
 
     def test_video_size_limit_is_enforced(self):
-        with patch.object(settings, "COMMUNITY_VIDEO_MAX_BYTES", 16):
-            response = self.upload("large.mp4", minimal_mp4_bytes(), "video/mp4")
+        content = minimal_mp4_bytes()
+        with patch.object(settings, "COMMUNITY_VIDEO_MAX_BYTES", len(content)):
+            accepted = self.upload("exact-limit.mp4", content, "video/mp4")
+        self.assertEqual(accepted.status_code, 200)
+
+        with patch.object(settings, "COMMUNITY_VIDEO_MAX_BYTES", len(content) - 1):
+            response = self.upload("over-limit.mp4", content, "video/mp4")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("50MB", response.json()["msg"])
+        self.assertIn(f"{len(content) - 1}B", response.json()["msg"])
+
+    def test_default_video_limit_matches_mobile_copy_and_proxy_headroom(self):
+        limit = Settings.model_fields["COMMUNITY_VIDEO_MAX_BYTES"].default
+        self.assertEqual(limit, 20 * 1024 * 1024)
+        self.assertEqual(community_router._file_size_limit_label(limit), "20MB")
+
+        repository = Path(__file__).resolve().parents[3]
+        nginx = (repository / "infra" / "kai-nginx.conf").read_text(encoding="utf-8")
+        self.assertIn("client_max_body_size 21m;", nginx)
+        for environment_template in (
+            repository / "services" / "api" / ".env.example",
+            repository / "infra" / "api.env.example",
+        ):
+            environment = environment_template.read_text(encoding="utf-8")
+            self.assertIn("COMMUNITY_VIDEO_MAX_BYTES=20971520", environment)
+        for platform in ("android", "ios"):
+            copy = (repository / "apps" / platform / "src" / "store" / "i18n.ts").read_text(encoding="utf-8")
+            self.assertIn("支持 MP4、WebM，不超过 20MB", copy)
+            self.assertIn("MP4 or WebM, up to 20 MB", copy)
+            self.assertNotIn("社区视频不能超过 50MB", copy)
 
     def test_post_rejects_phone_paths_remote_urls_missing_and_other_user_media(self):
         bad_values = [

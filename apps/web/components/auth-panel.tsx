@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowClockwise, CheckCircle, Eye, EyeSlash, Key, LockKey, Phone, ShieldCheck, User } from "@phosphor-icons/react";
 import { Button, Callout, Checkbox, TextField } from "@radix-ui/themes";
 import { exchangeKaiTicket, getAuthCaptcha, getKaiAuthConfig, kaiWebAuthorizationUrl, passwordLogin, passwordRegister } from "@/lib/api";
+import { safeReturnPath as normalizeReturnPath } from "@/lib/auth-navigation";
 import { useI18n } from "@/components/locale-root";
 import { ContactPhone } from "@/components/contact-phone";
 
@@ -15,8 +16,7 @@ const KAI_REGISTRATION_NOTICE_KEY = "wod_kai_registration_notice";
 function safeReturnPath() {
   const params = new URLSearchParams(window.location.search);
   const requested = params.get("return_to") || params.get("next");
-  if (!requested) return "/";
-  return requested.startsWith("/") && !requested.startsWith("//") ? requested : "/";
+  return normalizeReturnPath(requested);
 }
 
 export function AuthPanel({ mode }: AuthPanelProps) {
@@ -50,7 +50,8 @@ export function AuthPanel({ mode }: AuthPanelProps) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get("return_to") || params.get("next");
+    const requestedReturnTo = params.get("return_to") || params.get("next");
+    const returnTo = requestedReturnTo ? normalizeReturnPath(requestedReturnTo) : "";
     const suffix = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
     setSwitchHref(`${isRegister ? "/login" : "/register"}${suffix}`);
     const kaiError = params.get("kai_error");
@@ -89,7 +90,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       setMessageTone("info");
       setMessage("Kai 身份已确认，正在建立 Web 安全会话…");
       exchangeKaiTicket(kaiTicket)
-        .then((result) => window.location.replace(result.return_to || "/"))
+        .then((result) => window.location.replace(normalizeReturnPath(result.return_to)))
         .catch((reason) => {
           setMessageTone("error");
           setMessage(reason instanceof Error ? reason.message : "Kai 登录票据无效或已过期");
