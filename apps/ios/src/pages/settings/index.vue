@@ -127,6 +127,8 @@
       </view>
     </scroll-view>
 
+    <LanguageSelectorSheet v-model:visible="showLanguageSelector" />
+
     <ConfirmSheet
       :visible="showLogout"
       :title="t('k_44efd179')"
@@ -154,13 +156,14 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import LanguageSelectorSheet from '@/components/LanguageSelectorSheet.vue'
 import { callContactPhone } from '@/utils/contact-phone'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
 import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
-import { type AppLanguage } from '@/utils/language'
+import { languageOption } from '@/utils/language'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -168,6 +171,7 @@ const userStore = useUserStore()
 const themeStore = useThemeStore()
 const notificationStore = useNotificationStore()
 const showLogout = ref(false)
+const showLanguageSelector = ref(false)
 const kaiBinding = ref<KaiBindingStatus | null>(null)
 const kaiBindingLoading = ref(false)
 const updateChecking = ref(false)
@@ -182,12 +186,7 @@ const themeOptions: Array<{ mode: ThemeMode; key: string }> = [
   { mode: 'dark', key: 'themeDark' },
 ]
 const themeLabel = computed(() => t(themeOptions.find((item) => item.mode === themeStore.mode)?.key || 'themeSystem'))
-const languageOptions: Array<{ language: AppLanguage; key: string }> = [
-  { language: 'zh-Hant', key: 'traditionalChinese' },
-  { language: 'zh-Hans', key: 'simplifiedChinese' },
-  { language: 'en', key: 'englishLanguage' },
-]
-const languageLabel = computed(() => t(languageOptions.find((item) => item.language === i18n.lang)?.key || 'traditionalChinese'))
+const languageLabel = computed(() => languageOption(i18n.lang).label)
 const notificationSummary = computed(() => notificationStore.unread > 0
   ? t('unreadNotificationCount', { count: notificationStore.unread })
   : t('inAppNotificationsEnabledShort'))
@@ -311,17 +310,7 @@ function onTheme() {
   })
 }
 function onLanguage() {
-  uni.showActionSheet({
-    title: t('switchLanguage'),
-    itemList: languageOptions.map((item) => {
-      const label = t(item.key)
-      return item.language === i18n.lang ? `✓ ${label}` : label
-    }),
-    success: ({ tapIndex }) => {
-      const selected = languageOptions[tapIndex]
-      if (selected) i18n.setLanguage(selected.language)
-    },
-  })
+  showLanguageSelector.value = true
 }
 function onPassword() {
   nav('/pages/password/index')

@@ -4,8 +4,10 @@ import test from 'node:test'
 
 import {
   DEFAULT_LANGUAGE,
+  LANGUAGE_OPTIONS,
   languageDocumentTag,
   languageLocale,
+  languageOption,
   nextLanguage,
   normalizeStoredLanguage,
   supportApiLanguage,
@@ -26,6 +28,14 @@ test('Traditional Chinese is the default and legacy Chinese preferences migrate 
 })
 
 test('language metadata and switch order cover all three app languages', () => {
+  assert.deepEqual(LANGUAGE_OPTIONS, [
+    { language: 'zh-Hant', label: '繁體中文', shortLabel: '繁中', locale: 'zh-TW', mark: '繁' },
+    { language: 'zh-Hans', label: '简体中文', shortLabel: '简中', locale: 'zh-CN', mark: '简' },
+    { language: 'en', label: 'English', shortLabel: 'EN', locale: 'en-US', mark: 'EN' },
+  ])
+  assert.equal(languageOption('zh-Hant').label, '繁體中文')
+  assert.equal(languageOption('zh-Hans').locale, 'zh-CN')
+  assert.equal(languageOption('en').mark, 'EN')
   assert.equal(languageLocale('zh-Hant'), 'zh-TW')
   assert.equal(languageLocale('zh-Hans'), 'zh-CN')
   assert.equal(languageLocale('en'), 'en-US')
@@ -46,6 +56,7 @@ test('the converter covers fixed and runtime business terminology', () => {
 test('Android entry points apply Traditional Chinese beyond the home page', () => {
   const i18n = source('../src/store/i18n.ts')
   const languageToggle = source('../src/components/LanguageToggle.vue')
+  const languageSelector = source('../src/components/LanguageSelectorSheet.vue')
   const settings = source('../src/pages/settings/index.vue')
   const agreement = source('../src/pages/agreement/index.vue')
   const support = source('../src/pages/kefu/index.vue')
@@ -74,14 +85,29 @@ test('Android entry points apply Traditional Chinese beyond the home page', () =
   assert.equal(uniLocale.common?.['uni.chooseImage.sourceType.album'], '從相簿選擇')
   assert.match(i18n, /normalizeStoredLanguage\(saved\)/)
   assert.match(i18n, /toTraditionalChinese\(value\)/)
-  assert.match(languageToggle, /uni\.showActionSheet/)
-  assert.match(languageToggle, /language: 'zh-Hant', label: '繁體中文'/)
-  assert.match(languageToggle, /language: 'zh-Hans', label: '简体中文'/)
-  assert.match(languageToggle, /language: 'en', label: 'English'/)
+  assert.match(languageToggle, /LanguageSelectorSheet/)
+  assert.match(languageToggle, /aria-haspopup="dialog"/)
+  assert.match(languageToggle, /languageOption\(i18n\.lang\)/)
+  assert.doesNotMatch(languageToggle, /uni\.showActionSheet/)
   assert.doesNotMatch(languageToggle, /i18n\.toggle\(\)/)
-  assert.match(settings, /language: 'zh-Hant'/)
-  assert.match(settings, /language: 'zh-Hans'/)
-  assert.match(settings, /language: 'en'/)
+  assert.match(languageSelector, /role="dialog"/)
+  assert.match(languageSelector, /role="radiogroup"/)
+  assert.match(languageSelector, /role="radio"/)
+  assert.match(languageSelector, /aria-checked/)
+  assert.match(languageSelector, /LANGUAGE_OPTIONS/)
+  assert.match(languageSelector, /i18n\.setLanguage\(language\)/)
+  assert.match(languageSelector, /uni\.hideTabBar/)
+  assert.match(languageSelector, /uni\.showTabBar/)
+  assert.match(languageSelector, /var\(--safe-bottom\)/)
+  assert.match(languageSelector, /prefers-reduced-motion: reduce/)
+  assert.match(languageSelector, /event\.key === 'Escape'/)
+  assert.match(languageSelector, /restoreFocus\(\)/)
+  assert.doesNotMatch(languageSelector, /uni\.showActionSheet/)
+  assert.match(settings, /<LanguageSelectorSheet v-model:visible="showLanguage"/)
+  assert.match(settings, /languageOption\(i18n\.lang\)\.label/)
+  assert.match(settings, /showLanguage\.value = true/)
+  assert.doesNotMatch(settings, /const languageOptions/)
+  assert.equal((settings.match(/uni\.showActionSheet/g) || []).length, 1)
   assert.match(settings, /t\('versionLabel'\)/)
   assert.doesNotMatch(settings, /i18n\.lang === 'en' \? 'Version' : '版本'/)
   assert.match(rechargeOrders, /:aria-label="t\('loading'\)"/)

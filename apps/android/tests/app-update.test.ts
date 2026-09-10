@@ -15,15 +15,15 @@ import {
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 test('version comparison uses the native numeric code and handles dotted fallbacks', () => {
-  assert.equal(normalizeVersionCode('119'), 119)
+  assert.equal(normalizeVersionCode('120'), 120)
   assert.equal(normalizeVersionCode('0'), null)
   assert.equal(compareVersionNames('1.2.0', '1.1.10'), 1)
   assert.equal(compareVersionNames('1.1.9', '1.1.9.0'), 0)
-  assert.equal(isNewerRelease('1.1.9', 119, {
+  assert.equal(isNewerRelease('1.2.0', 120, {
     platform: 'android',
     available: true,
-    latest_version_name: '1.1.10',
-    latest_version_code: 120,
+    latest_version_name: '1.2.1',
+    latest_version_code: 121,
     update_url: 'https://wod.kai.com/download/wod.apk',
   }), true)
 })
@@ -40,8 +40,8 @@ test('release metadata must match the requesting platform', () => {
   const release = {
     platform: 'android' as const,
     available: true,
-    latest_version_name: '1.1.9',
-    latest_version_code: 119,
+    latest_version_name: '1.2.0',
+    latest_version_code: 120,
     update_url: 'https://wod.kai.com/download/wod.apk',
   }
   assert.equal(isValidRelease(release, 'android'), true)
@@ -56,10 +56,10 @@ test('Android app wires automatic and manual update checks without changing rele
   const update = readFileSync(resolve(appRoot, 'src/utils/app-update.ts'), 'utf8')
   const api = readFileSync(resolve(appRoot, 'src/api/platform.ts'), 'utf8')
 
-  assert.equal(manifest.versionName, '1.1.9')
-  assert.equal(manifest.versionCode, '119')
-  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.1\.9'/)
-  assert.match(update, /APP_FALLBACK_VERSION_CODE = 119/)
+  assert.equal(manifest.versionName, '1.2.0')
+  assert.equal(manifest.versionCode, '120')
+  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.0'/)
+  assert.match(update, /APP_FALLBACK_VERSION_CODE = 120/)
   assert.match(app, /checkForAppUpdate\('android'\)/)
   assert.match(settings, /checkForAppUpdate\('android', \{ manual: true \}\)/)
   assert.match(settings, /appUpdateCheck/)

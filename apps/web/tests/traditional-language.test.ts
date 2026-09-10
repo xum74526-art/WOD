@@ -65,9 +65,17 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   assert.match(settings, /value: "zh-Hant", label: "繁體中文"/);
   assert.match(settings, /value: "zh-Hans", label: "简体中文"/);
   assert.match(settings, /value: "en", label: "English"/);
-  assert.match(settings, /<select/);
+  assert.match(settings, /DropdownMenu\.Root/);
+  assert.match(settings, /DropdownMenu\.RadioGroup/);
+  assert.match(settings, /DropdownMenu\.RadioItem/);
+  assert.match(settings, /code: "zh-TW"/);
+  assert.match(settings, /code: "zh-CN"/);
+  assert.match(settings, /code: "en-US"/);
   assert.match(settings, /data-i18n-skip/);
-  assert.match(settings, /onChange=\{\(event\) => setLocale/);
+  assert.match(settings, /onValueChange=\{selectLanguage\}/);
+  assert.match(settings, /aria-label=\{currentLanguageLabel\}/);
+  assert.match(settings, /className="ui-language-popover"/);
+  assert.doesNotMatch(settings, /<select/);
   assert.doesNotMatch(settings, /onClick=\{toggleLocale\}/);
 });
 

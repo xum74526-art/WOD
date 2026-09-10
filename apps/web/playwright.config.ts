@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const frontendDir = __dirname;
+const frontendDir = dirname(fileURLToPath(import.meta.url));
 const backendDir = resolve(frontendDir, "../../services/api");
 const webPort = Number(process.env.WEB_E2E_PORT || 9100);
 const apiPort = Number(process.env.API_E2E_PORT || 8000);
@@ -40,7 +41,7 @@ export default defineConfig({
     },
     {
       name: "frontend",
-      command: `./node_modules/.bin/next dev -p ${webPort}`,
+      command: `${JSON.stringify(process.execPath)} node_modules/next/dist/bin/next dev -p ${webPort}`,
       cwd: frontendDir,
       url: `http://127.0.0.1:${webPort}`,
       env: { ...process.env, API_ORIGIN: `http://127.0.0.1:${apiPort}` },

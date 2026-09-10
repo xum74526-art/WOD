@@ -11,8 +11,8 @@ test('Android package branding presents ZTW while preserving the existing icon a
   assert.equal(manifest.name, 'ZTW')
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'ZTW')
-  assert.equal(manifest.versionName, '1.1.9')
-  assert.equal(manifest.versionCode, '119')
+  assert.equal(manifest.versionName, '1.2.0')
+  assert.equal(manifest.versionCode, '120')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
   assert.equal(manifest['app-plus'].distribute.android.packagename, 'com.kai.wod')
 
