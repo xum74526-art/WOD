@@ -14,6 +14,16 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
+        <view class="menu-item" @tap="onLanguage">
+          <view class="mi-left">
+            <AppIcon name="language" :size="40" />
+            <text class="mi-text">{{ t('language') }}</text>
+          </view>
+          <view class="mi-right">
+            <text class="mi-sub">{{ languageLabel }}</text>
+            <AppIcon name="chevron" :size="36" />
+          </view>
+        </view>
         <view class="menu-item" @tap="onNotify">
           <view class="mi-left">
             <AppIcon name="bell" :size="40" />
@@ -150,6 +160,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
 import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
+import { type AppLanguage } from '@/utils/language'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -171,6 +182,12 @@ const themeOptions: Array<{ mode: ThemeMode; key: string }> = [
   { mode: 'dark', key: 'themeDark' },
 ]
 const themeLabel = computed(() => t(themeOptions.find((item) => item.mode === themeStore.mode)?.key || 'themeSystem'))
+const languageOptions: Array<{ language: AppLanguage; key: string }> = [
+  { language: 'zh-Hant', key: 'traditionalChinese' },
+  { language: 'zh-Hans', key: 'simplifiedChinese' },
+  { language: 'en', key: 'englishLanguage' },
+]
+const languageLabel = computed(() => t(languageOptions.find((item) => item.language === i18n.lang)?.key || 'traditionalChinese'))
 const notificationSummary = computed(() => notificationStore.unread > 0
   ? t('unreadNotificationCount', { count: notificationStore.unread })
   : t('inAppNotificationsEnabledShort'))
@@ -290,6 +307,19 @@ function onTheme() {
     success: ({ tapIndex }) => {
       const selected = themeOptions[tapIndex]
       if (selected) themeStore.setMode(selected.mode)
+    },
+  })
+}
+function onLanguage() {
+  uni.showActionSheet({
+    title: t('switchLanguage'),
+    itemList: languageOptions.map((item) => {
+      const label = t(item.key)
+      return item.language === i18n.lang ? `✓ ${label}` : label
+    }),
+    success: ({ tapIndex }) => {
+      const selected = languageOptions[tapIndex]
+      if (selected) i18n.setLanguage(selected.language)
     },
   })
 }

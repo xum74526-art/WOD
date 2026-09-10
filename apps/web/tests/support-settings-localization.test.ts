@@ -6,9 +6,11 @@ import { localizePersonName, personNameInputValue, personNameSaveValue } from ".
 
 test("English account display romanizes Chinese names without changing raw editable values", () => {
   assert.equal(localizePersonName("陈志强", "en"), "Chen Zhiqiang");
-  assert.equal(localizePersonName("陈志强", "zh-CN"), "陈志强");
+  assert.equal(localizePersonName("陈志强", "zh-Hans"), "陈志强");
+  assert.equal(localizePersonName("陈志强", "zh-Hant"), "陳志強");
   assert.equal(localizePersonName("alice_01", "en"), "alice_01");
-  assert.equal(localizePersonName("WOD资讯", "zh-CN"), "ZTW资讯");
+  assert.equal(localizePersonName("WOD资讯", "zh-Hans"), "ZTW资讯");
+  assert.equal(localizePersonName("WOD资讯", "zh-Hant"), "ZTW資訊");
   assert.equal(localizePersonName("WOD资讯", "en"), "ZTW News");
   assert.equal(personNameInputValue("陈志强", "en", false), "Chen Zhiqiang");
   assert.equal(personNameSaveValue("陈志强", "Chen Zhiqiang", false), "陈志强");

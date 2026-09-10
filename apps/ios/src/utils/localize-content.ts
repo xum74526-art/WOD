@@ -1,6 +1,6 @@
 import { pinyin } from 'pinyin-pro'
-
-type AppLanguage = 'zh' | 'en'
+import type { AppLanguage } from './language.ts'
+import { toTraditionalChinese } from './traditional-chinese.ts'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
@@ -197,8 +197,9 @@ function translateGeneratedPost(source: string): string | null {
 
 export function localizePersonName(value: string, lang: AppLanguage): string {
   if (!value) return value
-  if (value === 'WOD资讯') return lang === 'en' ? PERSON_EN[value] : 'ZTW资讯'
-  if (lang === 'zh') return value
+  if (value === 'WOD资讯') return lang === 'en' ? PERSON_EN[value] : lang === 'zh-Hant' ? 'ZTW資訊' : 'ZTW资讯'
+  if (lang === 'zh-Hans') return value
+  if (lang === 'zh-Hant') return value === '体验用户' ? toTraditionalChinese(value) : value
   if (PERSON_EN[value]) return PERSON_EN[value]
   if (!/^[\u3400-\u9fff·]{2,12}$/.test(value)) return value
 
@@ -209,8 +210,28 @@ export function localizePersonName(value: string, lang: AppLanguage): string {
   return given ? `${surname} ${given.charAt(0).toUpperCase()}${given.slice(1)}` : surname
 }
 
+export function profileUsernameDisplayValue(
+  originalUsername: string,
+  editedUsername: string,
+  usernameEdited: boolean,
+  lang: AppLanguage,
+): string {
+  return usernameEdited
+    ? editedUsername
+    : localizePersonName(originalUsername, lang)
+}
+
+export function profileUsernameSubmissionValue(
+  originalUsername: string,
+  editedUsername: string,
+  usernameEdited: boolean,
+): string {
+  return usernameEdited ? editedUsername : originalUsername
+}
+
 export function localizeCommunityText(value: string, lang: AppLanguage): string {
-  if (!value || lang === 'zh') return value
+  if (!value || lang === 'zh-Hans') return value
+  if (lang === 'zh-Hant') return toTraditionalChinese(value)
   return COMMUNITY_EN[value] ?? translateGeneratedPost(value) ?? value
 }
 
@@ -222,5 +243,6 @@ export function localizeInternalBrandText(value: string, sourceKey?: string | nu
 
 export function localizeProductName(value: string | null | undefined, lang: AppLanguage): string {
   const source = value || ''
-  return lang === 'en' ? productName(source) : source
+  if (lang === 'en') return productName(source)
+  return lang === 'zh-Hant' ? toTraditionalChinese(source) : source
 }

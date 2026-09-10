@@ -4,7 +4,7 @@ import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
-export const metadata: Metadata = { title: "关于 北斗 kai", description: "了解北斗 kai 未来算力中心的交付方法与责任模型。" };
+export const metadata: Metadata = { title: "關於 北斗 kai", description: "瞭解北斗 kai 未來算力中心的交付方法與責任模型。" };
 
 const principles = [
   ["可预期", "按已指定的模型、版本、区域及服务时段安排容量。"],

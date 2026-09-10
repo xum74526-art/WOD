@@ -275,11 +275,14 @@ test('community list opens video details before playback and preserves comments'
 test('legacy internal market sources always display the current ZTW brand', () => {
   const indexPage = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
   const detailPage = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
+  const locale = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
   for (const page of [indexPage, detailPage]) {
     assert.match(page, /source_key === 'wod-market'/)
-    assert.match(page, /i18n\.lang === 'en' \? 'ZTW Market' : 'ZTW 算力行情'/)
+    assert.match(page, /return t\('ztwMarketName'\)/)
     assert.match(page, /localizeInternalBrandText\(content, (?:post|value)\.source_key\)/)
     assert.match(page, /localizeInternalBrandText\(topic, (?:post|value)\.source_key\)/)
     assert.doesNotMatch(page, /return 'WOD Market'/)
   }
+  assert.match(locale, /ztwMarketName: 'ZTW 算力行情'/)
+  assert.match(locale, /ztwMarketName: 'ZTW Compute Market'/)
 })

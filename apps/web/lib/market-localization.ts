@@ -1,4 +1,5 @@
-import type { KaiLocale } from "@/components/locale-root";
+import type { KaiLocale } from "./language.ts";
+import { toTraditionalChinese } from "./traditional-chinese.ts";
 
 const supplierNames: Record<string, string> = {
   "北京智算中心": "Beijing Intelligent Computing Center",
@@ -46,17 +47,20 @@ const regionNames: Record<string, string> = {
 
 export function localizeSupplierName(value: string | null | undefined, locale: KaiLocale) {
   const source = value?.trim() || "第三方商家";
-  return locale === "en" ? supplierNames[source] ?? source : source;
+  if (locale === "en") return supplierNames[source] ?? source;
+  return locale === "zh-Hant" ? toTraditionalChinese(source) : source;
 }
 
 export function localizeMarketRegion(value: string | null | undefined, locale: KaiLocale) {
   const source = value?.trim() || "—";
+  if (locale === "zh-Hant") return toTraditionalChinese(source);
   if (locale !== "en") return source;
   const normalized = source.replace(/\s*\/\s*/g, "/").toLowerCase();
   return regionNames[source] ?? regionNames[normalized] ?? source;
 }
 
 export function localizeMarketProductName(value: string, locale: KaiLocale) {
+  if (locale === "zh-Hant") return toTraditionalChinese(value);
   if (locale !== "en") return value;
   return value
     .replace("独占训练节点", "Dedicated Training Node")

@@ -5,8 +5,8 @@ import { SimplePage } from "@/components/simple-page";
 export async function generateMetadata(): Promise<Metadata> {
   const english = (await cookies()).get("kai.locale")?.value === "en";
   return {
-    title: { absolute: english ? "KAI Sign-in Help" : "登录帮助 | 北斗 kai" },
-    description: english ? "Guidance for phone and Kai SSO access." : "手机号密码与 Kai 统一身份登录指引。",
+    title: { absolute: english ? "KAI Sign-in Help" : "登入幫助 | 北斗 kai" },
+    description: english ? "Guidance for phone and Kai SSO access." : "手機號密碼與 Kai 統一身份登入指引。",
   };
 }
 

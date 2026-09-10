@@ -45,13 +45,17 @@ test('formatNumber safely normalizes non-finite API values', () => {
 })
 
 test('card-hour units follow an in-page language switch without storage reload', () => {
-  setFormatLanguage('zh')
+  setFormatLanguage('zh-Hans')
   assert.equal(fmtCH(1.002), '1卡时')
   assert.equal(fmtCHr(1.002), '1卡时/h')
+
+  setFormatLanguage('zh-Hant')
+  assert.equal(fmtCH(1.002), '1卡時')
+  assert.equal(fmtCHr(1.002), '1卡時/h')
 
   setFormatLanguage('en')
   assert.equal(fmtCH(1.002), '1 CH')
   assert.equal(fmtCHr(1.002), '1 CH/h')
 
-  setFormatLanguage('zh')
+  setFormatLanguage('zh-Hant')
 })

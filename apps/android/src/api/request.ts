@@ -64,7 +64,7 @@ export function request<T = unknown>(options: {
       timeout: 15000,
       header: {
         'Content-Type': 'application/json',
-        'Accept-Language': i18n.lang === 'en' ? 'en-US' : 'zh-CN',
+        'Accept-Language': i18n.locale,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success: (res) => {
@@ -122,7 +122,7 @@ export function upload<T = unknown>(options: {
       formData: options.formData,
       timeout: options.timeout || 30000,
       header: {
-        'Accept-Language': i18n.lang === 'en' ? 'en-US' : 'zh-CN',
+        'Accept-Language': i18n.locale,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success: (res) => {

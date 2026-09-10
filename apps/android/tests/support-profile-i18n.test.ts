@@ -37,11 +37,12 @@ test('an edited nickname is displayed and submitted exactly as entered', () => {
 
   assert.equal(profileUsernameDisplayValue(original, edited, true, 'en'), edited)
   assert.equal(profileUsernameSubmissionValue(original, edited, true), edited)
-  assert.equal(profileUsernameDisplayValue(original, original, false, 'zh'), original)
+  assert.equal(profileUsernameDisplayValue(original, original, false, 'zh-Hans'), original)
 })
 
 test('legacy WOD news account is presented with the ZTW brand without changing stored data', () => {
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh'), 'ZTW资讯')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), 'ZTW资讯')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), 'ZTW資訊')
   assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'ZTW News')
   assert.equal(profileUsernameSubmissionValue('WOD资讯', 'ZTW资讯', false), 'WOD资讯')
 })

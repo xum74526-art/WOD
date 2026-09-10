@@ -2,12 +2,26 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { ZH_GEN, EN_GEN } from './i18n_generated'
 import { setFormatLanguage } from '@/utils/format'
+import {
+  languageDocumentTag,
+  languageLocale,
+  nextLanguage,
+  normalizeStoredLanguage,
+  type AppLanguage,
+} from '@/utils/language'
+import { toTraditionalChinese } from '@/utils/traditional-chinese'
 
-type Lang = 'zh' | 'en'
+type Lang = AppLanguage
 
 type Params = Record<string, string | number>
 
 const ZH: Record<string, string> = {
+  language: '语言',
+  ztwMarketName: 'ZTW 算力行情',
+  traditionalChinese: '繁体中文',
+  simplifiedChinese: '简体中文',
+  englishLanguage: '英文',
+  switchLanguage: '切换语言',
   accountDeletion: '注销账号',
   deletionBeforeTitle: '注销前，请确认这些影响',
   deletionImpact: '注销包含个人和商家身份。账号无法恢复，所有设备将退出登录；个人资料、绑定信息及非必要内容将清理，未成交需求、报价与上架资源按下方清单撤回或下架。',
@@ -1697,6 +1711,12 @@ const ZH: Record<string, string> = {
 }
 
 const EN: Record<string, string> = {
+  language: 'Language',
+  ztwMarketName: 'ZTW Compute Market',
+  traditionalChinese: 'Traditional Chinese',
+  simplifiedChinese: 'Simplified Chinese',
+  englishLanguage: 'English',
+  switchLanguage: 'Switch language',
   accountDeletion: 'Delete account',
   deletionBeforeTitle: 'Before you delete your account',
   deletionImpact: 'Deletion includes your personal and merchant identities and cannot be undone. All devices will be signed out. Personal details, linked identities and unnecessary content will be cleared. Unmatched requests, quotes and listings will be withdrawn as listed below.',
@@ -3835,9 +3855,9 @@ function translateDynamicText(source: string): string | null {
 }
 
 export const useI18nStore = defineStore('i18n', () => {
-  const saved = uni.getStorageSync('xod-lang') as Lang
-  const lang = ref<Lang>(saved === 'en' || saved === 'zh' ? saved : 'zh')
-  const locale = computed(() => lang.value === 'en' ? 'en-US' : 'zh-CN')
+  const saved = uni.getStorageSync('xod-lang')
+  const lang = ref<Lang>(normalizeStoredLanguage(saved))
+  const locale = computed(() => languageLocale(lang.value))
 
   // Numeric formatters also render localized CH units. Synchronize them with
   // the reactive language state so switching language never requires reload.
@@ -3864,35 +3884,42 @@ export const useI18nStore = defineStore('i18n', () => {
   }
 
   function toggle() {
-    lang.value = lang.value === 'zh' ? 'en' : 'zh'
+    setLanguage(nextLanguage(lang.value))
+  }
+
+  function setLanguage(language: Lang) {
+    lang.value = language
     uni.setStorageSync('xod-lang', lang.value)
     applyLocale()
     updateTabBar()
   }
 
   function applyLocale() {
-    const targetLocale = lang.value === 'en' ? 'en' : 'zh-Hans'
+    const targetLocale = languageDocumentTag(lang.value)
     // The visible App UI is driven by the reactive `lang` state above.
     // Do not call uni.setLocale here: on Android App it restarts the native
     // runtime, so a language toggle would close and reopen the application.
     // #ifdef H5
     if (typeof window !== 'undefined') window.localStorage.setItem('UNI_LOCALE', targetLocale)
-    if (typeof document !== 'undefined') document.documentElement.lang = lang.value === 'en' ? 'en' : 'zh-CN'
+    if (typeof document !== 'undefined') document.documentElement.lang = targetLocale
     // #endif
   }
 
-  const dict = computed(() => lang.value === 'zh' ? ZH : EN)
+  const dict = computed(() => lang.value === 'en' ? EN : ZH)
 
   function t(key: string, params?: Params): string {
-    const value = lang.value === 'zh'
-      ? ZH[key] ?? ZH_GEN[key] ?? key
-      : EN[key] ?? EXTRA_EN[key] ?? EN_GEN[key] ?? EN_BY_ZH[key] ?? key
-    return interpolate(value, params)
+    const simplified = ZH[key] ?? ZH_GEN[key] ?? key
+    if (lang.value === 'en') {
+      return interpolate(EN[key] ?? EXTRA_EN[key] ?? EN_GEN[key] ?? EN_BY_ZH[key] ?? key, params)
+    }
+    const value = interpolate(simplified, params)
+    return lang.value === 'zh-Hant' ? toTraditionalChinese(value) : value
   }
 
   function tr(value: unknown): string {
     const source = value == null ? '' : String(value)
-    if (!source || lang.value === 'zh') return source
+    if (!source || lang.value === 'zh-Hans') return source
+    if (lang.value === 'zh-Hant') return toTraditionalChinese(source)
     const exact = t(source)
     if (exact !== source) return exact
     const dynamic = translateDynamicText(source)
@@ -3903,5 +3930,5 @@ export const useI18nStore = defineStore('i18n', () => {
     )
   }
 
-  return { lang, locale, init, toggle, updateTabBar, t, tr }
+  return { lang, locale, init, toggle, setLanguage, updateTabBar, t, tr }
 })

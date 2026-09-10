@@ -116,6 +116,7 @@ import {
   type SupportTicketStatus,
 } from '@/api/chat'
 import { useI18nStore } from '@/store/i18n'
+import { supportApiLanguage } from '@/utils/language'
 
 interface ViewMessage {
   localId: string
@@ -157,7 +158,7 @@ function fromServer(message: SupportMessage): ViewMessage {
     localId: `server-${message.id}`,
     id: message.id,
     role: message.role,
-    content: message.content,
+    content: message.role === 'user' ? message.content : i18n.tr(message.content),
     responseMode: message.response_mode,
     topic: message.topic,
     can_create_ticket: message.can_create_ticket,
@@ -170,7 +171,7 @@ async function loadSession() {
   initialLoading.value = true
   loadError.value = false
   try {
-    const session = await getSupportSession(i18n.lang)
+    const session = await getSupportSession(supportApiLanguage(i18n.lang))
     conversationId.value = session.conversation_id
     serviceMode.value = session.service_mode
     messages.value = session.messages.map(fromServer)
@@ -217,7 +218,7 @@ async function deliverMessage(message: ViewMessage) {
       message: message.content,
       conversationId: conversationId.value,
       clientMessageId: message.clientMessageId || makeClientMessageId(),
-      lang: i18n.lang,
+      lang: supportApiLanguage(i18n.lang),
     })
     message.status = 'sent'
     conversationId.value = response.conversation_id
@@ -255,7 +256,7 @@ async function createTicket(message: ViewMessage, index: number) {
       subject: question.slice(0, 120),
       description: question.slice(0, 2000),
       category: message.topic || 'other',
-      lang: i18n.lang,
+      lang: supportApiLanguage(i18n.lang),
     })
     message.ticket = response.ticket
     tickets.value = [response.ticket, ...tickets.value.filter(item => item.id !== response.ticket.id)]

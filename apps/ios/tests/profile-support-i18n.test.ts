@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-import { localizeInternalBrandText, localizePersonName } from '../src/utils/localize-content.ts'
+import {
+  localizeInternalBrandText,
+  localizePersonName,
+  profileUsernameDisplayValue,
+  profileUsernameSubmissionValue,
+} from '../src/utils/localize-content.ts'
 
 const profileEdit = readFileSync(new URL('../src/pages/profile-edit/index.vue', import.meta.url), 'utf8')
 const supportPage = readFileSync(new URL('../src/pages/kefu/index.vue', import.meta.url), 'utf8')
@@ -11,12 +16,15 @@ const i18n = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf
 test('English profile edit localizes an untouched name without overwriting the stored nickname', () => {
   assert.equal(localizePersonName('陈志强', 'en'), 'Chen Zhiqiang')
   assert.equal(localizePersonName('custom-nickname', 'en'), 'custom-nickname')
-  assert.equal(localizePersonName('WOD资讯', 'zh'), 'ZTW资讯')
+  assert.equal(localizePersonName('WOD资讯', 'zh-Hans'), 'ZTW资讯')
+  assert.equal(localizePersonName('WOD资讯', 'zh-Hant'), 'ZTW資訊')
   assert.equal(localizePersonName('WOD资讯', 'en'), 'ZTW News')
+  assert.equal(profileUsernameDisplayValue('陈志强', '陈志强', false, 'zh-Hant'), '陈志强')
+  assert.equal(profileUsernameSubmissionValue('陈志强', 'Chen Zhiqiang', false), '陈志强')
   assert.match(profileEdit, /originalUsername\.value = userStore\.userInfo\?\.username \|\| ''/)
-  assert.match(profileEdit, /form\.username = localizePersonName\(originalUsername\.value, i18n\.lang\)/)
-  assert.match(profileEdit, /@input="usernameEdited = true"/)
-  assert.match(profileEdit, /const username = usernameEdited\.value \? form\.username : originalUsername\.value/)
+  assert.match(profileEdit, /v-model="displayUsername"/)
+  assert.match(profileEdit, /profileUsernameDisplayValue\(originalUsername\.value, form\.username, usernameEdited\.value, i18n\.lang\)/)
+  assert.match(profileEdit, /profileUsernameSubmissionValue\(originalUsername\.value, form\.username, usernameEdited\.value\)/)
   assert.match(profileEdit, /updateProfile\(\{ username \}\)/)
   assert.doesNotMatch(profileEdit, /updateProfile\(\{ username: form\.username \}\)/)
 })

@@ -5,6 +5,7 @@ import { ArrowRight, ChartLine, Database } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
 import { useI18n } from "@/components/locale-root";
+import { localeForFormatting, type KaiLocale } from "@/lib/language";
 import { getMobileMarketCandles, type MobileMarketModel } from "@/lib/mobile-market-api";
 import type { InitialGpuTrend } from "@/lib/public-data";
 
@@ -49,9 +50,9 @@ function formatPrice(value: number) {
   return value.toFixed(2);
 }
 
-function formatDate(value: string, locale: "zh-CN" | "en") {
+function formatDate(value: string, locale: KaiLocale) {
   const timestamp = value.includes("T") ? value : `${value}T00:00:00Z`;
-  return new Date(timestamp).toLocaleDateString(locale === "en" ? "en-US" : "zh-CN", {
+  return new Date(timestamp).toLocaleDateString(localeForFormatting(locale), {
     month: "2-digit",
     day: "2-digit",
     timeZone: "UTC",

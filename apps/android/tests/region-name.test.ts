@@ -24,8 +24,14 @@ const MARKET_REGIONS = [
 test('all canonical market regions have explicit English labels', () => {
   for (const [code, zh, en] of MARKET_REGIONS) {
     assert.equal(localizeRegionName(zh, 'en', code), en)
-    assert.equal(localizeRegionName(zh, 'zh', code), zh)
+    assert.equal(localizeRegionName(zh, 'zh-Hans', code), zh)
   }
+})
+
+test('Traditional Chinese localizes upstream region labels without changing stable codes', () => {
+  assert.equal(localizeRegionName('华东', 'zh-Hant', 'east_china'), '華東')
+  assert.equal(localizeRegionName('台湾省', 'zh-Hant'), '臺灣省')
+  assert.equal(localizeMarketLocation('中国大陆', 'china_unspecified', '华北', 'zh-Hant'), '中國大陸 · 華北')
 })
 
 test('the six regions currently used by the KAI catalogue never leak Chinese in English mode', () => {

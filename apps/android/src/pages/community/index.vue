@@ -145,8 +145,8 @@ function isAutoPost(post: PostItem): boolean {
 }
 
 function displaySource(post: PostItem): string {
-  if (post.source_key === 'wod-market') return i18n.lang === 'en' ? 'ZTW Market' : 'ZTW 算力行情'
-  return post.source_name || t('sourceLabel')
+  if (post.source_key === 'wod-market') return t('ztwMarketName')
+  return post.source_name ? i18n.tr(post.source_name) : t('sourceLabel')
 }
 
 function openSource(post: PostItem) {

@@ -1,12 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { localeForFormatting, nextLocale, type KaiLocale } from "@/lib/language";
+import { toTraditionalChinese } from "@/lib/traditional-chinese";
 
-export type KaiLocale = "zh-CN" | "en";
+export type { KaiLocale } from "@/lib/language";
 
 const english: Record<string, string> = {
   "language.switchEnglish": "Switch to English",
   "language.switchChinese": "切换到中文",
+  "language.switchTraditional": "Switch to Traditional Chinese",
+  "language.switchSimplified": "Switch to Simplified Chinese",
   "theme.light": "Light mode",
   "theme.dark": "Dark mode",
   "theme.toLight": "Switch to light mode",
@@ -489,32 +493,42 @@ const legacyEnglish: Record<string, string> = {
 function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
   const originalText = useRef(new Map<Text, string>());
   const originalAttributes = useRef(new Map<Element, Map<string, string>>());
-  useEffect(() => {
+  useLayoutEffect(() => {
     const textEntries = originalText.current;
     const attributeEntries = originalAttributes.current;
-    if (locale !== "en") {
-      textEntries.forEach((value, node) => { if (node.isConnected) node.nodeValue = value; });
-      attributeEntries.forEach((values, element) => { if (element.isConnected) values.forEach((value, name) => element.setAttribute(name, value)); });
-      textEntries.clear();
-      attributeEntries.clear();
-      return;
-    }
-    const translateText = (node: Text) => {
-      const raw = node.nodeValue || "";
+    textEntries.forEach((value, node) => { if (node.isConnected) node.nodeValue = value; });
+    attributeEntries.forEach((values, element) => { if (element.isConnected) values.forEach((value, name) => element.setAttribute(name, value)); });
+    textEntries.clear();
+    attributeEntries.clear();
+
+    if (locale === "zh-Hans") return;
+
+    const translate = (raw: string) => {
+      if (locale === "zh-Hant") return toTraditionalChinese(raw);
       const trimmed = raw.trim();
       const translated = legacyEnglish[trimmed];
-      if (!translated) return;
+      return translated ? raw.replace(trimmed, translated) : raw;
+    };
+    const shouldSkip = (element: Element | null) => Boolean(element?.closest("script, style, noscript, code, pre, [data-i18n-skip]"));
+    const translateText = (node: Text) => {
+      const raw = node.nodeValue || "";
+      if (!raw.trim() || shouldSkip(node.parentElement)) return;
+      const translated = translate(raw);
+      if (translated === raw) return;
       textEntries.set(node, raw);
-      node.nodeValue = raw.replace(trimmed, translated);
+      node.nodeValue = translated;
     };
     const translateElement = (element: Element) => {
-      for (const name of ["placeholder", "title", "aria-label"]) {
+      if (shouldSkip(element)) return;
+      for (const name of ["placeholder", "title", "aria-label", "aria-description", "alt"]) {
         const raw = element.getAttribute(name);
-        if (!raw || !legacyEnglish[raw]) continue;
+        if (!raw) continue;
+        const translated = translate(raw);
+        if (translated === raw) continue;
         let values = attributeEntries.get(element);
         if (!values) { values = new Map(); attributeEntries.set(element, values); }
         values.set(name, raw);
-        element.setAttribute(name, legacyEnglish[raw]);
+        element.setAttribute(name, translated);
       }
     };
     const translateTree = (root: Node) => {
@@ -528,9 +542,16 @@ function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
     translateTree(document.body);
     const observer = new MutationObserver((mutations) => mutations.forEach((mutation) => {
       if (mutation.type === "characterData") translateText(mutation.target as Text);
+      if (mutation.type === "attributes") translateElement(mutation.target as Element);
       mutation.addedNodes.forEach(translateTree);
     }));
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["placeholder", "title", "aria-label", "aria-description", "alt"],
+    });
     return () => observer.disconnect();
   }, [locale]);
   return null;
@@ -555,16 +576,16 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
     document.cookie = `kai.locale=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax`;
     localStorage.setItem("kai.locale", next);
   }, []);
-  const toggleLocale = useCallback(() => setLocale(locale === "en" ? "zh-CN" : "en"), [locale, setLocale]);
+  const toggleLocale = useCallback(() => setLocale(nextLocale(locale)), [locale, setLocale]);
   const t = useCallback((key: string, fallback: string, values?: Record<string, string | number>) => {
-    const template = locale === "en" ? english[key] || fallback : fallback;
-    return Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), template);
+    const localized = locale === "en" ? english[key] || fallback : locale === "zh-Hant" ? toTraditionalChinese(fallback) : fallback;
+    return Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localized);
   }, [locale]);
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dataset.locale = locale;
   }, [locale]);
-  const value = useMemo(() => ({ locale, setLocale, toggleLocale, t, dateLocale: locale === "en" ? "en-US" : "zh-CN" }), [locale, setLocale, toggleLocale, t]);
+  const value = useMemo(() => ({ locale, setLocale, toggleLocale, t, dateLocale: localeForFormatting(locale) }), [locale, setLocale, toggleLocale, t]);
   return <LocaleContext.Provider value={value}><LegacyLocaleBridge locale={locale}/>{children}</LocaleContext.Provider>;
 }
 

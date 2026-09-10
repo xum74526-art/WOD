@@ -103,6 +103,7 @@ async function runCheck(platform: MobilePlatform, manual: boolean): Promise<AppU
   const rawNotes = i18n.lang === 'en' ? release.release_notes_en : release.release_notes_zh
   const notes = (Array.isArray(rawNotes) ? rawNotes : [])
     .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    .map((item) => i18n.lang === 'zh-Hant' ? i18n.tr(item) : item)
     .slice(0, 5)
   const summary = i18n.t('appUpdateContent', {
     current: current.name,

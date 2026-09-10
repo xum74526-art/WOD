@@ -1,4 +1,6 @@
 import { pinyin } from 'pinyin-pro'
+import type { AppLanguage } from './language.ts'
+import { toTraditionalChinese } from './traditional-chinese.ts'
 
 const REGION_EN: Record<string, string> = {
   '华北': 'North China',
@@ -162,15 +164,16 @@ export function englishRegionName(name: string, regionCode = ''): string {
   return `${romanize(sourceName)}${suffix?.[1] || ''}`
 }
 
-export function localizeRegionName(name: string, lang: 'zh' | 'en', regionCode = ''): string {
-  return lang === 'en' ? englishRegionName(name, regionCode) : name
+export function localizeRegionName(name: string, lang: AppLanguage, regionCode = ''): string {
+  if (lang === 'en') return englishRegionName(name, regionCode)
+  return lang === 'zh-Hant' ? toTraditionalChinese(name) : name
 }
 
 export function localizeMarketLocation(
   regionName: string | null | undefined,
   regionCode: string | null | undefined,
   detail: string | null | undefined,
-  lang: 'zh' | 'en',
+  lang: AppLanguage,
 ): string {
   const rawRegion = String(regionName || '').trim()
   const rawDetail = String(detail || '').trim()

@@ -23,7 +23,8 @@ test("Web English market localizes every canonical KAI region", () => {
   assert.equal(localizeMarketRegion("欧洲", "en"), "Europe");
   assert.equal(localizeMarketRegion("全球 / 未披露", "en"), "Global / Undisclosed");
   assert.equal(localizeMarketRegion("global_unspecified", "en"), "Global / Undisclosed");
-  assert.equal(localizeMarketRegion("北美", "zh-CN"), "北美");
+  assert.equal(localizeMarketRegion("北美", "zh-Hans"), "北美");
+  assert.equal(localizeMarketRegion("华东", "zh-Hant"), "華東");
 });
 
 test("hour purchases estimate expiry rebates from the authenticated personal tier policy", () => {

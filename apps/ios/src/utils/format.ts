@@ -1,9 +1,10 @@
 import { ref } from 'vue'
+import { languageLocale, normalizeStoredLanguage, type AppLanguage } from './language.ts'
 
-type FormatLang = 'zh' | 'en'
+type FormatLang = AppLanguage
 
 function storedLang(): FormatLang {
-  try { return uni.getStorageSync('xod-lang') === 'en' ? 'en' : 'zh' } catch { return 'zh' }
+  try { return normalizeStoredLanguage(uni.getStorageSync('xod-lang')) } catch { return 'zh-Hant' }
 }
 
 // Keep the unit language reactive. Reading storage directly inside a formatter
@@ -20,7 +21,7 @@ function currentLang(): FormatLang {
 }
 
 function currentLocale(): string {
-  return currentLang() === 'en' ? 'en-US' : 'zh-CN'
+  return languageLocale(currentLang())
 }
 
 type NumericValue = number | string | undefined | null
@@ -124,14 +125,14 @@ export function fromCardHours(cardHours: number | string | undefined | null): nu
 /** 格式化为 "1,423.3卡时" */
 export function fmtCH(rmb: number | string | undefined | null): string {
   const num = toCardHours(rmb)
-  const unit = currentLang() === 'en' ? ' CH' : '卡时'
+  const unit = currentLang() === 'en' ? ' CH' : currentLang() === 'zh-Hant' ? '卡時' : '卡时'
   return formatNumber(num) + unit
 }
 
 /** 格式化为 "1.98卡时/h"（小时费率） */
 export function fmtCHr(rmb: number | string | undefined | null): string {
   const num = toCardHours(rmb)
-  const unit = currentLang() === 'en' ? ' CH/h' : '卡时/h'
+  const unit = currentLang() === 'en' ? ' CH/h' : currentLang() === 'zh-Hant' ? '卡時/h' : '卡时/h'
   return formatNumber(num) + unit
 }
 

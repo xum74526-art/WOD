@@ -65,7 +65,7 @@ test('removing the support phone preserves session loading, errors and message e
   assert.match(page, /v-if="initialLoading"/)
   assert.match(page, /v-else-if="loadError"/)
   assert.match(page, /onMounted\(loadSession\)/)
-  assert.match(page, /const session = await getSupportSession\(i18n\.lang\)/)
+  assert.match(page, /const session = await getSupportSession\(supportApiLanguage\(i18n\.lang\)\)/)
   assert.match(page, /class="input-bar"/)
 })
 

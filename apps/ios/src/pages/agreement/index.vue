@@ -23,6 +23,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
+import { toTraditionalChinese } from '@/utils/traditional-chinese'
 
 interface LegalSection {
   title: string
@@ -368,9 +369,16 @@ const type = ref<'agreement' | 'privacy'>('agreement')
 const title = computed(() => t(type.value === 'privacy' ? '隐私政策' : '用户协议'))
 const document = computed(() => {
   const english = i18n.lang === 'en'
-  if (type.value === 'privacy') return english ? PRIVACY_EN : PRIVACY_ZH
-  if (commerce.directTradeEnabled) return english ? AGREEMENT_EN : AGREEMENT_ZH
-  return english ? MATCHMAKING_AGREEMENT_EN : MATCHMAKING_AGREEMENT_ZH
+  const source = type.value === 'privacy'
+    ? (english ? PRIVACY_EN : PRIVACY_ZH)
+    : commerce.directTradeEnabled
+      ? (english ? AGREEMENT_EN : AGREEMENT_ZH)
+      : (english ? MATCHMAKING_AGREEMENT_EN : MATCHMAKING_AGREEMENT_ZH)
+  if (i18n.lang !== 'zh-Hant') return source
+  return source.map((section) => ({
+    title: toTraditionalChinese(section.title),
+    paragraphs: section.paragraphs.map(toTraditionalChinese),
+  }))
 })
 
 onLoad((opts) => {

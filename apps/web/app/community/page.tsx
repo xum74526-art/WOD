@@ -4,7 +4,7 @@ import { CommunityFeed } from "@/components/community-feed";
 import { SiteHeader } from "@/components/site-header";
 import { I18nText } from "@/components/locale-root";
 
-export const metadata: Metadata = { title: "资讯", description: "发现 GPU、AI、云计算与算力行业的最新内容。" };
+export const metadata: Metadata = { title: "資訊", description: "發現 GPU、AI、雲計算與算力行業的最新內容。" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

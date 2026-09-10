@@ -24,9 +24,11 @@ test('iOS localizes every canonical KAI market region', () => {
   ]
   for (const [code, source, expected] of cases) {
     assert.equal(englishRegionName(source, code), expected)
-    assert.equal(localizeRegionName(source, 'zh', code), source)
+    assert.equal(localizeRegionName(source, 'zh-Hans', code), source)
   }
-  assert.equal(localizeRegionName('北美', 'zh'), '北美')
+  assert.equal(localizeRegionName('北美', 'zh-Hans'), '北美')
+  assert.equal(localizeRegionName('华东', 'zh-Hant'), '華東')
+  assert.equal(localizeRegionName('台湾省', 'zh-Hant'), '臺灣省')
   assert.equal(localizeRegionName('全球 / 未披露', 'en'), 'Global / Undisclosed')
   assert.equal(localizeRegionName('旧地区名', 'en', 'europe'), 'Europe')
   assert.equal(localizeMarketLocation('欧洲', 'europe', '欧洲', 'en'), 'Europe')

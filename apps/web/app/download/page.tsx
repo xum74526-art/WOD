@@ -4,8 +4,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "下载 北斗 kai App",
-  description: "下载 北斗 kai Android App，或查看 iOS 与 Android 应用商店发布状态。",
+  title: "下載 北斗 kai App",
+  description: "下載 北斗 kai Android App，或查看 iOS 與 Android 應用商店發佈狀態。",
 };
 
 const androidVersion = "1.1.8";

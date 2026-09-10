@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = { title: "联系我们", description: "联系北斗 kai 未来算力中心，申请机构接入。" };
+export const metadata: Metadata = { title: "聯絡我們", description: "聯絡北斗 kai 未來算力中心，申請機構接入。" };
 
 export default function ContactPage() {
   return <div className="site-page public-v2 kai-company-page"><SiteHeader/><main>

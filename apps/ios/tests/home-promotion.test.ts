@@ -99,9 +99,9 @@ test('iOS keeps every pre-existing live homepage section wired to its original c
   ]) assert.ok(homePage.includes(marker), `homepage must retain ${marker}`)
 })
 
-test('iOS keeps community as the internal route while its visible tab name is News', () => {
+test('iOS keeps community as the internal route while its default native tab is Traditional Chinese', () => {
   const communityTab = pages.tabBar.list.find((item) => item.pagePath === 'pages/community/index')
-  assert.equal(communityTab?.text, '资讯')
+  assert.equal(communityTab?.text, '資訊')
   assert.equal(zhLocale['tab.community'], '资讯')
   assert.equal(enLocale['tab.community'], 'News')
   assert.match(i18n, /tabCommunity: '资讯'/)

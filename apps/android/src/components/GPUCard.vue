@@ -3,7 +3,7 @@
     <image class="gpu-img" :src="imageUrl" mode="aspectFill" @error="imageFailed = true" />
     <view class="gpu-body">
       <view class="gpu-head">
-        <text class="gpu-name">{{ product.name }}</text>
+        <text class="gpu-name">{{ localizeProductName(product.name, i18n.lang) }}</text>
         <text class="gpu-tag">{{ product.memory }}</text>
       </view>
       <view class="gpu-price">
@@ -36,7 +36,9 @@ import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
-const { t } = useI18nStore()
+import { localizeProductName } from '@/utils/localize-content'
+const i18n = useI18nStore()
+const { t } = i18n
 const commerce = useCommerceStore()
 const props = defineProps<{ product: Product }>()
 const emit = defineEmits<{ (e: 'tap', p: Product): void }>()

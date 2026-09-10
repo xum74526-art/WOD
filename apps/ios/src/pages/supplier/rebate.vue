@@ -101,9 +101,9 @@ function tierRange(tier: SupplierTier, index: number) {
     if (previous == null) return `Up to ${formatNumber(upper)} CH / month`
     return `Over ${formatNumber(previous)} to ${formatNumber(upper)} CH / month`
   }
-  if (upper == null) return `月累计超过 ${formatNumber(previous ?? 0)} 卡时`
-  if (previous == null) return `月累计不超过 ${formatNumber(upper)} 卡时`
-  return `月累计超过 ${formatNumber(previous)} 至 ${formatNumber(upper)} 卡时`
+  if (upper == null) return tr(`月累计超过 ${formatNumber(previous ?? 0)} 卡时`)
+  if (previous == null) return tr(`月累计不超过 ${formatNumber(upper)} 卡时`)
+  return tr(`月累计超过 ${formatNumber(previous)} 至 ${formatNumber(upper)} 卡时`)
 }
 
 async function load() {

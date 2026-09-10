@@ -82,9 +82,14 @@
   --shadow-card: none;
   --shadow-float: none;
   --control-height: var(--kai-min-target);
-  --font-sans: "Work Sans Variable", "Work Sans", "Noto Sans SC Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "DM Sans Variable", "DM Sans", "Noto Sans SC Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-cjk: "Noto Sans TC Variable", "Noto Sans TC", "Noto Sans SC Variable", "Noto Sans SC";
+  --font-sans: "Work Sans Variable", "Work Sans", var(--font-cjk), ui-sans-serif, system-ui, sans-serif;
+  --font-display: "DM Sans Variable", "DM Sans", var(--font-cjk), ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", "Noto Sans Mono CJK SC", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html[data-locale="zh-Hans"] {
+  --font-cjk: "Noto Sans SC Variable", "Noto Sans SC", "Noto Sans TC Variable", "Noto Sans TC";
 }
 
 html.dark,

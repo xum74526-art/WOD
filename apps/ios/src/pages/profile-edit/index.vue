@@ -12,13 +12,7 @@
       <view class="card form">
         <view class="field">
           <text class="flabel">{{ t('k_23eb0e60') }}</text>
-          <input
-            v-model="form.username"
-            class="finput"
-            :placeholder="t('k_916ff9ed')"
-            placeholder-class="ph"
-            @input="usernameEdited = true"
-          />
+          <input class="finput" v-model="displayUsername" :placeholder="t('k_916ff9ed')" placeholder-class="ph" />
         </view>
         <view class="field">
           <text class="flabel">{{ t('k_8098e2b4') }}</text>
@@ -39,7 +33,7 @@ import { useUserStore } from '@/store/user'
 import * as userApi from '@/api/user'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
-import { localizePersonName } from '@/utils/localize-content'
+import { localizePersonName, profileUsernameDisplayValue, profileUsernameSubmissionValue } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
 import { normalizeTempFilePaths } from '@/utils/file-selection'
 
@@ -50,9 +44,16 @@ const user = computed(() => userStore.userInfo)
 const form = reactive({ username: '' })
 const originalUsername = ref('')
 const usernameEdited = ref(false)
+const displayUsername = computed({
+  get: () => profileUsernameDisplayValue(originalUsername.value, form.username, usernameEdited.value, i18n.lang),
+  set: (value: string) => {
+    form.username = value
+    usernameEdited.value = true
+  },
+})
 const pendingAvatarPath = ref('')
 const avatarLoadFailed = ref(false)
-const avatarText = computed(() => localizePersonName(form.username || user.value?.username || 'W', i18n.lang).slice(0, 1).toUpperCase())
+const avatarText = computed(() => localizePersonName(displayUsername.value || 'W', i18n.lang).slice(0, 1).toUpperCase())
 const avatarUrl = computed(() => avatarLoadFailed.value ? '' : (pendingAvatarPath.value || resolveApiMediaUrl(user.value?.avatar)))
 const phoneDisplay = computed(() => user.value?.phone_bound === false
   ? t('phoneNotBound')
@@ -67,8 +68,8 @@ onShow(async () => {
     try { await userStore.fetchProfile() } catch {}
   }
   originalUsername.value = userStore.userInfo?.username || ''
+  form.username = originalUsername.value
   usernameEdited.value = false
-  form.username = localizePersonName(originalUsername.value, i18n.lang)
   pendingAvatarPath.value = ''
   avatarLoadFailed.value = false
 })
@@ -94,7 +95,7 @@ function changeAvatar() {
 
 async function onSave() {
   if (submitting.value) return
-  const username = usernameEdited.value ? form.username : originalUsername.value
+  const username = profileUsernameSubmissionValue(originalUsername.value, form.username, usernameEdited.value).trim()
   if (!username) { uni.showToast({ title: t('k_916ff9ed'), icon: 'none' }); return }
   submitting.value = true
   try {

@@ -1,6 +1,6 @@
 <template>
-  <view class="lang-toggle" @tap="toggle">
-    <text class="lang-text">{{ isEn ? 'EN' : '中' }}</text>
+  <view class="lang-toggle" role="button" :aria-label="i18n.t('switchLanguage')" @tap="toggle">
+    <text class="lang-text">{{ languageMark }}</text>
   </view>
 </template>
 
@@ -9,7 +9,11 @@ import { computed } from 'vue'
 import { useI18nStore } from '@/store/i18n'
 
 const i18n = useI18nStore()
-const isEn = computed(() => i18n.lang === 'en')
+const languageMark = computed(() => ({
+  'zh-Hant': '繁',
+  'zh-Hans': '简',
+  en: 'EN',
+}[i18n.lang]))
 
 function toggle() {
   i18n.toggle()

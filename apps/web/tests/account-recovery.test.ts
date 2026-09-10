@@ -71,7 +71,7 @@ test("recovery UI distinguishes linked-email settings from email recovery and ne
   assert.match(recovery, /已绑定邮箱/);
   assert.match(settings, /绑定邮箱/);
   assert.match(verification, /绑定邮箱验证完成/);
-  assert.match(verifyPage, /验证绑定邮箱/);
+  assert.match(verifyPage, /驗證綁定郵箱/);
   assert.doesNotMatch(recovery + verification + verifyPage + authShell + settings, /找回邮箱/);
   assert.match(recovery, /kaiWebAuthorizationUrl\("recover"\)/);
   assert.match(recovery, /无论邮箱是否存在，页面都会显示相同结果/);

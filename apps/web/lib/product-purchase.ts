@@ -1,3 +1,6 @@
+import { localeForFormatting, type KaiLocale } from "./language.ts";
+import { toTraditionalChinese } from "./traditional-chinese.ts";
+
 export type ProductPurchaseType = "usage" | "holding";
 
 export type RebateTier = {
@@ -81,8 +84,9 @@ export function estimateProductExpiryRebate(
   };
 }
 
-export function localizeRebateHint(value: string | null | undefined, locale: "zh-CN" | "en") {
+export function localizeRebateHint(value: string | null | undefined, locale: KaiLocale) {
   const source = String(value || "").trim();
+  if (locale === "zh-Hant") return toTraditionalChinese(source);
   if (locale !== "en" || !source) return source;
 
   let match = source.match(/^再消费\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/);
@@ -97,10 +101,10 @@ export function localizeRebateHint(value: string | null | undefined, locale: "zh
     : source;
 }
 
-export function rebateTierRange(tiers: RebateTier[], index: number, locale: "zh-CN" | "en") {
+export function rebateTierRange(tiers: RebateTier[], index: number, locale: KaiLocale) {
   const previous = index > 0 ? tiers[index - 1]?.max_month_spent : 0;
   const current = tiers[index]?.max_month_spent;
-  const format = (value: number) => value.toLocaleString(locale === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: 2 });
+  const format = (value: number) => value.toLocaleString(localeForFormatting(locale), { maximumFractionDigits: 2 });
   if (current == null) return `${format(Number(previous || 0))}+`;
   return `${format(Number(previous || 0))} – ${format(Number(current))}`;
 }
