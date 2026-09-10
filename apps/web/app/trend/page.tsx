@@ -2,9 +2,25 @@ import type { Metadata } from "next";
 import { LiveMarketPanel } from "@/components/live-market-panel";
 import { SiteHeader } from "@/components/site-header";
 import { I18nText } from "@/components/locale-root";
+import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 import { getInitialMarketDashboard } from "@/lib/server/public-page-data";
 
-export const metadata: Metadata = { title: "算力行情" };
+export function generateMetadata(): Promise<Metadata> {
+  return localizedPageMetadata({
+    "zh-Hant": {
+      title: "算力行情 | 北斗 kai",
+      description: "查看不同 GPU 型號的卡時價格變化與目前市場區間。",
+    },
+    "zh-Hans": {
+      title: "算力行情 | 北斗 kai",
+      description: "查看不同 GPU 型号的卡时价格变化与当前市场区间。",
+    },
+    en: {
+      title: "GPU Compute Market Trends | KAI",
+      description: "Compare card-hour price movements and current market ranges across GPU models.",
+    },
+  });
+}
 
 export default async function TrendsPage() {
   const initialData = await getInitialMarketDashboard();

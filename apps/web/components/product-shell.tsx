@@ -183,7 +183,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
   }
 
   if (!ready || !user) {
-    return <div className={`workspace-shell workspace-shell--${variant}`}><main className="workspace-gate" aria-label="正在验证工作台权限"><span /></main></div>;
+    return <div className={`workspace-shell workspace-shell--${variant}`}><main className="workspace-gate" aria-label={t("workspace.verifying", "正在验证工作台权限")}><span /></main></div>;
   }
 
   const navigation = variant === "admin" ? adminNav : variant === "supplier" ? supplierNav : user.role === "supplier" ? supplierAccountNav : buyerNav;
@@ -193,11 +193,11 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
 
   return (
     <div className={`workspace-shell workspace-shell--${variant}${navCollapsed ? " workspace-shell--collapsed" : ""}`}>
-      <a className="skip-to-content" href="#workspace-content">跳到主要内容</a>
+      <a className="skip-to-content" href="#workspace-content">{t("accessibility.skipToContent", "跳到主要内容")}</a>
       <aside className="workspace-sidebar">
         <Brand />
         <div className="workspace-identity"><span>{roleName}</span><strong>{workspaceName}</strong><small>{user.display_name}</small></div>
-        <nav aria-label={`${workspaceName}导航`}>
+        <nav aria-label={t("workspace.navigation", "{name}导航", { name: workspaceName })}>
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -233,7 +233,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
         </header>
         {mobileNavOpen && <div className="workspace-mobile-overlay">
           <button className="workspace-mobile-backdrop" type="button" aria-label={locale === "en" ? "Close navigation" : "关闭导航"} onClick={() => setMobileNavOpen(false)} />
-          <aside id="workspace-mobile-drawer" className="workspace-mobile-drawer" role="dialog" aria-modal="true" aria-label={`${workspaceName}${locale === "en" ? " navigation" : "导航"}`}>
+          <aside id="workspace-mobile-drawer" className="workspace-mobile-drawer" role="dialog" aria-modal="true" aria-label={t("workspace.navigation", "{name}导航", { name: workspaceName })}>
             <header>
               <Brand />
               <button type="button" aria-label={locale === "en" ? "Close navigation" : "关闭导航"} onClick={() => setMobileNavOpen(false)}><X size={20}/></button>

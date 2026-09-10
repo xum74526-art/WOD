@@ -1,6 +1,6 @@
 """Public and authenticated account-recovery HTTP boundaries."""
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -25,6 +25,7 @@ from app.schemas.auth import (
 from app.services import account_recovery as recovery
 from app.services import kai_auth
 from app.utils.response import BizError, error, success
+from app.utils.api_locale import localize_api_message, resolve_request_locale
 
 
 class RecoveryRoute(APIRoute):
@@ -34,23 +35,26 @@ class RecoveryRoute(APIRoute):
         handler = super().get_route_handler()
 
         async def handle(request):
+            locale = resolve_request_locale(request)
             try:
                 result = await handler(request)
             except RequestValidationError:
                 result = JSONResponse(
                     status_code=422,
-                    content=error("找回请求参数无效，请检查后重试"),
+                    content=error(localize_api_message(
+                        "找回请求参数无效，请检查后重试", locale,
+                    )),
                 )
             except BizError as exc:
                 result = JSONResponse(
                     status_code=exc.status_code,
-                    content=error(exc.msg, exc.code),
+                    content=error(localize_api_message(exc.msg, locale), exc.code),
                 )
             except HTTPException as exc:
                 message = exc.detail if isinstance(exc.detail, str) else "请求错误"
                 result = JSONResponse(
                     status_code=exc.status_code,
-                    content=error(message),
+                    content=error(localize_api_message(message, locale)),
                     headers=exc.headers,
                 )
             result.headers["Cache-Control"] = "no-store"
@@ -70,10 +74,7 @@ router = APIRouter(
     route_class=RecoveryRoute,
     dependencies=[Depends(no_store)],
 )
-_GENERIC_REQUEST_RESULT = {
-    "accepted": True,
-    "message": "如果该邮箱已绑定，重置邮件会在几分钟内送达",
-}
+_GENERIC_REQUEST_MESSAGE = "如果该邮箱已绑定，重置邮件会在几分钟内送达"
 
 
 @router.get("/api/auth/recovery/config")
@@ -118,11 +119,16 @@ def confirm_recovery_email(data: RecoveryTokenIn, db: Session = Depends(get_db))
 @router.post("/api/auth/email/password-reset/request")
 def request_password_reset(
     data: PasswordResetRequestIn,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     limit_password_reset_request(data.email)
     recovery.request_password_reset(db, data.email)
-    return success(_GENERIC_REQUEST_RESULT)
+    locale = resolve_request_locale(request)
+    return success({
+        "accepted": True,
+        "message": localize_api_message(_GENERIC_REQUEST_MESSAGE, locale),
+    })
 
 
 @router.post("/api/auth/email/password-reset/confirm")

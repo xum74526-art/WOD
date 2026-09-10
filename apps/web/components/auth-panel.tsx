@@ -13,6 +13,23 @@ type AuthPanelProps = { mode: "login" | "register" };
 const PENDING_KAI_INTENT_KEY = "wod_kai_auth_intent";
 const KAI_REGISTRATION_NOTICE_KEY = "wod_kai_registration_notice";
 
+type Translate = (key: string, fallback: string, values?: Record<string, string | number>) => string;
+
+function localizedAuthError(error: unknown, t: Translate) {
+  if (!(error instanceof Error) || !error.message.trim()) {
+    return t("auth.networkFailed", "网络连接失败，请稍后重试");
+  }
+  const raw = error.message.trim();
+  const known: Record<string, [string, string]> = {
+    "请求过于频繁，请稍后再试": ["auth.error.rateLimited", "请求过于频繁，请稍后再试。"],
+    "验证码错误或已过期": ["auth.error.captchaInvalid", "验证码错误或已过期"],
+    "该手机号已注册": ["auth.error.phoneRegistered", "该手机号已注册"],
+    "手机号或密码错误": ["auth.error.credentialsInvalid", "手机号或密码错误"],
+  };
+  const match = known[raw.replace(/[。.]+$/u, "")];
+  return match ? t(match[0], match[1]) : raw;
+}
+
 function safeReturnPath() {
   const params = new URLSearchParams(window.location.search);
   const requested = params.get("return_to") || params.get("next");
@@ -20,7 +37,7 @@ function safeReturnPath() {
 }
 
 export function AuthPanel({ mode }: AuthPanelProps) {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const isRegister = mode === "register";
   const [method, setMethod] = useState<"password" | "kai">("password");
   const [name, setName] = useState("");
@@ -44,7 +61,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       .then(setCaptcha)
       .catch(() => {
         setMessageTone("error");
-        setMessage("验证码读取失败，请稍后重试");
+        setMessage(t("auth.captcha.loadFailed", "验证码读取失败，请稍后重试"));
       });
   }
 
@@ -63,22 +80,23 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         window.location.replace(`/register${suffix}`);
         return;
       }
-      const errors: Record<string, string> = {
-        access_denied: "已取消 Kai 授权",
-        identity_not_bound: "该 Kai 身份尚未绑定，请先使用手机号登录，再到账户设置中绑定",
-        identity_conflict: "Kai 身份与现有账号冲突，请联系支持",
-        missing_code: "Kai 未返回有效授权信息",
-        invalid_issuer: "Kai 身份签发方无效",
-        authorization_failed: "Kai 身份验证失败，请重新授权",
+      const errors: Record<string, [string, string]> = {
+        access_denied: ["auth.kaiError.accessDenied", "已取消 KAI 授权"],
+        identity_not_bound: ["auth.kaiError.identityNotBound", "该 KAI 身份尚未绑定，请先使用手机号登录，再到账户设置中绑定"],
+        identity_conflict: ["auth.kaiError.identityConflict", "KAI 身份与现有账号冲突，请联系支持"],
+        missing_code: ["auth.kaiError.missingCode", "KAI 未返回有效授权信息"],
+        invalid_issuer: ["auth.kaiError.invalidIssuer", "KAI 身份签发方无效"],
+        authorization_failed: ["auth.kaiError.authorizationFailed", "KAI 身份验证失败，请重新授权"],
       };
       setMessageTone("error");
-      setMessage(errors[kaiError] || "Kai 登录失败，请重试");
+      const errorCopy = errors[kaiError];
+      setMessage(errorCopy ? t(errorCopy[0], errorCopy[1]) : t("auth.kaiError.fallback", "KAI 登录失败，请重试"));
       setMethod("kai");
     }
     if (isRegister && window.sessionStorage.getItem(KAI_REGISTRATION_NOTICE_KEY) === "complete") {
       window.sessionStorage.removeItem(KAI_REGISTRATION_NOTICE_KEY);
       setMessageTone("info");
-      setMessage(locale === "en" ? "Kai registration is complete. Create your phone account, then link the Kai identity from account settings." : "Kai 注册已完成。请继续创建手机号账号，登录后再到账户设置中绑定 Kai 身份。");
+      setMessage(t("auth.kai.registrationComplete", "KAI 注册已完成。请继续创建手机号账号，登录后再到账户设置中绑定 KAI 身份。"));
       setMethod("password");
     }
     const kaiTicket = params.get("kai_ticket");
@@ -88,12 +106,14 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       setMethod("kai");
       setSubmitting(true);
       setMessageTone("info");
-      setMessage("Kai 身份已确认，正在建立 Web 安全会话…");
+      setMessage(t("auth.kai.sessionCreating", "KAI 身份已确认，正在建立 Web 安全会话…"));
       exchangeKaiTicket(kaiTicket)
         .then((result) => window.location.replace(normalizeReturnPath(result.return_to)))
         .catch((reason) => {
           setMessageTone("error");
-          setMessage(reason instanceof Error ? reason.message : "Kai 登录票据无效或已过期");
+          setMessage(reason instanceof Error
+            ? localizedAuthError(reason, t)
+            : t("auth.kai.ticketInvalid", "KAI 登录票据无效或已过期"));
           setSubmitting(false);
         });
     }
@@ -108,19 +128,19 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     setMessage("");
     if (isRegister && !acceptedTerms) {
       setMessageTone("error");
-      setMessage("请先阅读并同意用户协议和隐私说明");
+      setMessage(t("auth.termsRequired", "请先阅读并同意用户协议和隐私说明"));
       return;
     }
     setSubmitting(true);
     try {
       if (method === "kai") {
-        if (!kaiConfigured) throw new Error("Kai 统一认证尚未配置");
+        if (!kaiConfigured) throw new Error(t("auth.kai.notConfigured", "KAI 统一认证尚未配置"));
         window.sessionStorage.setItem(PENDING_KAI_INTENT_KEY, mode);
         window.location.assign(kaiWebAuthorizationUrl(mode, safeReturnPath()));
         return;
       }
       if (isRegister) {
-        if (!captcha) throw new Error("请刷新图形验证码后重试");
+        if (!captcha) throw new Error(t("auth.captcha.refreshFirst", "请刷新图形验证码后重试"));
         await passwordRegister({
           display_name: name.trim(),
           identifier: identifier.trim(),
@@ -133,11 +153,16 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       else await passwordLogin({ identifier: identifier.trim(), password });
       const destination = safeReturnPath();
       setMessageTone("info");
-      setMessage(`${isRegister ? "账号已创建" : "登录成功"}，${destination === "/" ? "正在返回首页" : "正在返回之前的页面"}`);
+      setMessage(t("auth.successMessage", "{action}，{destination}", {
+        action: isRegister ? t("auth.accountCreated", "账号已创建") : t("auth.signedIn", "登录成功"),
+        destination: destination === "/"
+          ? t("auth.returningHome", "正在返回首页")
+          : t("auth.returningPrevious", "正在返回之前的页面"),
+      }));
       window.location.assign(destination);
     } catch (error) {
       setMessageTone("error");
-      setMessage(error instanceof Error ? error.message : "网络连接失败，请稍后重试");
+      setMessage(localizedAuthError(error, t));
       if (isRegister && method === "password") {
         setCaptchaCode("");
         refreshCaptcha();
@@ -150,17 +175,17 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   return (
     <section className="auth-panel" aria-labelledby="auth-title">
       <div className="auth-panel__heading">
-        <p className="auth-eyebrow">{isRegister ? "CREATE YOUR ACCOUNT" : "WELCOME BACK"}</p>
+        <p className="auth-eyebrow">{isRegister ? t("auth.register.kicker", "创建你的账号") : t("auth.login.kicker", "欢迎回来")}</p>
         <h1 id="auth-title">{isRegister ? t("auth.register.title", "创建账号") : t("auth.login.title", "欢迎回来")}</h1>
         <p>{isRegister ? t("auth.register.desc", "创建统一账户，集中管理订单、资产和钱包数据。") : t("auth.login.desc", "登录统一账户，查看订单、资产和钱包数据。")}</p>
       </div>
 
-      <div className="auth-methods" role="tablist" aria-label={locale === "en" ? (isRegister ? "Registration method" : "Sign-in method") : (isRegister ? "注册方式" : "登录方式")}>
+      <div className="auth-methods" role="tablist" aria-label={isRegister ? t("auth.method.register", "注册方式") : t("auth.method.login", "登录方式")}>
         <button type="button" role="tab" data-state={method === "password" ? "active" : "inactive"} aria-selected={method === "password"} onClick={() => setMethod("password")}>
           <Key size={16}/>{t("auth.phone", "手机号")}
         </button>
         <button type="button" role="tab" data-state={method === "kai" ? "active" : "inactive"} aria-selected={method === "kai"} onClick={() => setMethod("kai")}>
-          <ShieldCheck size={16}/>{t("auth.kai", "Kai 统一认证")}
+          <ShieldCheck size={16}/>{t("auth.kai", "KAI 统一认证")}
         </button>
       </div>
 
@@ -185,7 +210,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
               <span className="form-field__label"><label htmlFor="auth-password">{isRegister ? t("auth.setPassword", "设置密码") : t("auth.password", "密码")}</label>{!isRegister && <Link href="/forgot-password">{t("auth.forgot", "忘记密码？")}</Link>}</span>
               <TextField.Root id="auth-password" type={passwordVisible ? "text" : "password"} autoComplete={isRegister ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength={isRegister ? 6 : 1} maxLength={64} required>
                 <TextField.Slot><Key size={17} /></TextField.Slot>
-                <TextField.Slot side="right"><button className="auth-password-toggle" type="button" aria-label={passwordVisible ? (locale === "en" ? "Hide password" : "隐藏输入内容") : (locale === "en" ? "Show password" : "显示输入内容")} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <EyeSlash size={17}/> : <Eye size={17}/>}</button></TextField.Slot>
+                <TextField.Slot side="right"><button className="auth-password-toggle" type="button" aria-label={passwordVisible ? t("auth.password.hide", "隐藏输入内容") : t("auth.password.show", "显示输入内容")} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <EyeSlash size={17}/> : <Eye size={17}/>}</button></TextField.Slot>
               </TextField.Root>
             </div>
             {isRegister && <>
@@ -198,7 +223,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
                 <div className="auth-captcha-row">
                   <TextField.Root type="text" autoComplete="off" value={captchaCode} onChange={(event) => setCaptchaCode(event.target.value.toUpperCase().slice(0, 4))} minLength={4} maxLength={4} required />
                   <button type="button" className="auth-captcha-image" onClick={refreshCaptcha} aria-label={t("auth.refreshCaptcha", "刷新图形验证码")}>
-                    {captcha ? <img src={captcha.image} alt="图形验证码" /> : <ArrowClockwise size={19} />}
+                    {captcha ? <img src={captcha.image} alt={t("auth.captcha.imageAlt", "图形验证码")} /> : <ArrowClockwise size={19} />}
                   </button>
                 </div>
               </label>
@@ -207,17 +232,21 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         ) : (
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
-            <h2>{locale === "en" ? (isRegister ? "Create a Kai identity" : "Sign in with a linked Kai identity") : (isRegister ? "创建 Kai 身份" : "使用已绑定的 Kai 身份登录")}</h2>
-            <p>{locale === "en" ? "北斗 kai receives only the verified identity result and never reads or stores your Kai password." : "北斗 kai 只接收统一身份结果，不会读取或保存你的 Kai 密码。"}</p>
-            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false ? (locale === "en" ? "Kai client credentials are not configured" : "管理员尚未配置 Kai 客户端凭据") : isRegister ? (locale === "en" ? "After Kai registration, create a phone account here and link the identity from account settings" : "完成 Kai 注册后，请先在此创建手机号账号，再到账户设置中绑定") : (locale === "en" ? "Unlinked identities must sign in by phone first, then link from account settings" : "未绑定身份需先用手机号登录，再在账户设置中绑定")}</span></div>
+            <h2>{isRegister ? t("auth.kai.createTitle", "创建 KAI 身份") : t("auth.kai.signInTitle", "使用已绑定的 KAI 身份登录")}</h2>
+            <p>{t("auth.kai.privacyDescription", "ZTW 只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
+            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false
+              ? t("auth.kai.credentialsMissing", "管理员尚未配置 KAI 客户端凭据")
+              : isRegister
+                ? t("auth.kai.registrationScope", "完成 KAI 注册后，请先在此创建手机号账号，再到账户设置中绑定")
+                : t("auth.kai.unlinkedScope", "未绑定身份需先用手机号登录，再在账户设置中绑定")}</span></div>
           </div>
         )}
         {isRegister && (
           <>
-            {method === "password" && <p className="form-note">{locale === "en" ? "Use an 11-digit mainland China phone number and a password of at least 6 characters." : "手机号需为 11 位；密码至少 6 个字符。"}</p>}
+            {method === "password" && <p className="form-note">{t("auth.phoneRule", "手机号需为 11 位；密码至少 6 个字符。")}</p>}
             <label className="auth-consent">
               <Checkbox checked={acceptedTerms} onCheckedChange={(checked) => setAcceptedTerms(checked === true)} />
-              <span>{t("auth.termsPrefix", "我已阅读并同意")} <Link href="/terms">{t("footer.terms", "用户协议")}</Link> {locale === "en" ? "and" : "和"} <Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link></span>
+              <span>{t("auth.termsPrefix", "我已阅读并同意")} <Link href="/terms">{t("footer.terms", "用户协议")}</Link> {t("auth.conjunction.and", "和")} <Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link></span>
             </label>
           </>
         )}
@@ -227,9 +256,9 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           </Callout.Root>
         )}
         <Button className="auth-submit" type="submit" size="3" disabled={submitting || (method === "kai" && kaiConfigured === false)}>
-          {submitting ? t("auth.processing", "正在处理…") : method === "kai" ? (locale === "en" ? (isRegister ? "Continue to Kai registration" : "Sign in with Kai") : (isRegister ? "前往 Kai 注册" : "使用 Kai 登录")) : (isRegister ? t("auth.register", "创建账号") : t("auth.login", "登录"))}
+          {submitting ? t("auth.processing", "正在处理…") : method === "kai" ? (isRegister ? t("auth.kai.continueRegistration", "前往 KAI 注册") : t("auth.kai.signIn", "使用 KAI 登录")) : (isRegister ? t("auth.register", "创建账号") : t("auth.login", "登录"))}
         </Button>
-        <div className="auth-security-note"><LockKey size={15}/><span>{locale === "en" ? `${method === "kai" ? "Authorization code + PKCE" : "Encrypted password verification"} · Session lasts up to 2 hours` : `${method === "kai" ? "授权码 + PKCE 保护" : "密码加密验证"} · 登录状态最长保留 2 小时`}</span><CheckCircle size={14}/></div>
+        <div className="auth-security-note"><LockKey size={15}/><span>{method === "kai" ? t("auth.security.kai", "授权码 + PKCE 保护") : t("auth.security.password", "密码加密验证")} · {t("auth.security.session", "登录状态最长保留 2 小时")}</span><CheckCircle size={14}/></div>
       </form>
 
       <div className="auth-panel__footer">

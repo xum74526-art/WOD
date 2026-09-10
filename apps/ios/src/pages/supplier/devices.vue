@@ -100,7 +100,7 @@ import { fallbackProductImage, resolveProductImage } from '@/utils/product-image
 import { localizeRegionName } from '@/utils/region-name'
 
 const i18n = useI18nStore()
-const { t } = i18n
+const { t, localizedErrorMessage } = i18n
 const devices = ref<SupplierDeviceItem[]>([])
 const failedImages = ref<Record<number, boolean>>({})
 const loading = ref(false)
@@ -250,7 +250,7 @@ function markImageFailed(id: number) {
 }
 
 function toastError(error: unknown) {
-  uni.showToast({ title: error instanceof Error && error.message ? error.message : t('操作失败'), icon: 'none' })
+  uni.showToast({ title: localizedErrorMessage(error, '操作失败'), icon: 'none' })
 }
 
 function goAdd() {

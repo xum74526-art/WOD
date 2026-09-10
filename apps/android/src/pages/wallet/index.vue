@@ -49,7 +49,7 @@
         <view class="payment-order-number">
           <view>
             <text class="payment-order-label">{{ t('rechargeOrderNumber') }}</text>
-            <text class="payment-order-value">{{ pendingPayment.order_no }}</text>
+            <text class="payment-order-value">{{ displayBusinessReference(pendingPayment.order_no) }}</text>
           </view>
           <view class="payment-order-copy" role="button" @tap="copyRechargeOrderNo(pendingPayment.order_no)">{{ t('copyOrderNumber') }}</view>
         </view>
@@ -140,6 +140,7 @@ import DirectTradeWalletActions from '@/components/direct-trade/DirectTradeWalle
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
+import { displayBusinessReference } from '@/utils/display-reference'
 import {
   formatPaymentCountdown,
   paymentRemainingMs,

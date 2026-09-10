@@ -16,7 +16,7 @@ from app.db.session import get_db
 from app.models.support import SupportConversation, SupportMessage, SupportTicket
 from app.models.user import User
 from app.schemas.support import SupportMessageIn, SupportMessageOut, SupportTicketIn, SupportTicketOut
-from app.services.support import asks_for_human, human_request_reply, match_faq, unknown_reply
+from app.services.support import asks_for_human, human_request_reply, localized_builtin_reply, match_faq, unknown_reply
 from app.services.trade_mode import direct_trade_enabled, matchmaking_enabled
 from app.utils.response import BizError, success
 
@@ -113,11 +113,14 @@ def _conversation_for_user(
     return conversation
 
 
-def _message_dict(message: SupportMessage) -> dict:
+def _message_dict(message: SupportMessage, lang: str | None = None) -> dict:
+    content = message.content
+    if lang in {"zh", "en"} and message.role == "assistant" and message.response_mode == "self_service":
+        content = localized_builtin_reply(message.topic, lang) or content
     return SupportMessageOut(
         id=message.id,
         role=message.role,
-        content=message.content,
+        content=content,
         response_mode=message.response_mode,
         topic=message.topic,
         can_create_ticket=message.can_create_ticket,
@@ -201,7 +204,7 @@ def get_support_session(
         "conversation_id": conversation.id if conversation else None,
         "service_mode": _service_mode(),
         "human_support_configured": False,
-        "messages": [_message_dict(item) for item in messages],
+        "messages": [_message_dict(item, lang) for item in messages],
         "tickets": [_ticket_dict(item) for item in tickets],
         "notice": (
             "Self-service FAQ is available. Human agents are not configured."

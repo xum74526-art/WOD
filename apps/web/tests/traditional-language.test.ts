@@ -52,7 +52,35 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   assert.match(layout, /default: "北斗 kai 算力市場"/);
   assert.match(localeRoot, /locale === "zh-Hant" \? toTraditionalChinese\(fallback\)/);
   assert.match(localeRoot, /locale === "zh-Hant"\) return toTraditionalChinese\(raw\)/);
+  for (const key of [
+    "market.kai.directDescription",
+    "market.merchant.directDescription",
+    "market.availableDirect",
+    "market.unavailableDirect",
+  ]) {
+    assert.match(localeRoot, new RegExp(`"${key}": "[^"]+"`));
+  }
   assert.match(localeRoot, /MutationObserver/);
   assert.match(localeRoot, /"aria-description", "alt"/);
-  assert.match(settings, /locale === "zh-Hant" \? "繁" : locale === "zh-Hans" \? "简" : "EN"/);
+  assert.match(settings, /value: "zh-Hant", label: "繁體中文"/);
+  assert.match(settings, /value: "zh-Hans", label: "简体中文"/);
+  assert.match(settings, /value: "en", label: "English"/);
+  assert.match(settings, /<select/);
+  assert.match(settings, /data-i18n-skip/);
+  assert.match(settings, /onChange=\{\(event\) => setLocale/);
+  assert.doesNotMatch(settings, /onClick=\{toggleLocale\}/);
+});
+
+test("home market pulse formats visible values with the selected locale", () => {
+  const home = fs.readFileSync(new URL("../components/home-page-content.tsx", import.meta.url), "utf8");
+  const pulse = fs.readFileSync(new URL("../components/market-pulse-rail.tsx", import.meta.url), "utf8");
+  const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
+
+  assert.match(home, /t\("home\.assurancesAria"/);
+  assert.match(home, /t\("home\.flow\.aria"/);
+  assert.match(pulse, /const \{ t, dateLocale \} = useI18n\(\)/);
+  assert.match(pulse, /toLocaleDateString\(dateLocale\)/);
+  assert.match(pulse, /toLocaleString\(dateLocale/);
+  assert.doesNotMatch(pulse, /locale === "en"/);
+  assert.match(localeRoot, /"home\.pulse\.updated": "Updated \{date\}"/);
 });

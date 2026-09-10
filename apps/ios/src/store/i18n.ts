@@ -43,7 +43,9 @@ const ZH: Record<string, string> = {
   appUpdateNow: '立即更新',
   appUpdateLater: '稍后',
   appUpdateLinkCopied: '下载地址已复制',
+  versionLabel: '版本',
   recoveryEmail: '绑定邮箱',
+  recoveryEmailKicker: '邮箱绑定',
   recoveryEmailBound: '已绑定邮箱',
   recoveryEmailUnbound: '未绑定邮箱',
   recoveryEmailBoundHint: '已绑定邮箱，可用于忘记密码和账号找回',
@@ -54,9 +56,9 @@ const ZH: Record<string, string> = {
   recoveryEmailBindTitle: '绑定邮箱',
   recoveryEmailReplaceTitle: '更换绑定邮箱',
   recoveryEmailAddressLabel: '绑定邮箱',
-  recoveryEmailAddressPlaceholder: '请输入邮箱地址',
+  recoveryEmailAddressPlaceholder: '请输入要绑定的邮箱',
   recoveryEmailPasswordLabel: '当前 ZTW 登录密码',
-  recoveryEmailPasswordPlaceholder: '请输入当前登录密码',
+  recoveryEmailPasswordPlaceholder: '请输入当前 ZTW 登录密码',
   recoveryEmailSubmit: '发送验证邮件',
   recoveryEmailSubmitting: '正在发送...',
   recoveryEmailInvalid: '请输入有效的邮箱地址',
@@ -66,13 +68,14 @@ const ZH: Record<string, string> = {
   recoveryEmailAlreadyVerifiedHint: '该邮箱已经是当前账号的已绑定邮箱，无需重复操作。',
   recoveryEmailPrivacyHint: '密码仅用于本次身份验证，不会保存在设备上。',
   recoveryEmailStatusUnavailable: '状态暂不可用',
-  recoveryEmailLoadFailed: '暂时无法读取绑定邮箱状态，请稍后重试。',
-  recoveryEmailUnavailable: '邮箱绑定服务暂未开放',
+  recoveryEmailLoadFailed: '暂时无法读取邮箱绑定状态，请稍后重试。',
+  recoveryEmailUnavailable: '邮箱服务暂不可用，目前不能绑定或更换邮箱。',
   recoveryEmailUnavailableHint: '当前无法发送邮箱验证邮件，请稍后再试。',
   recoveryEmailPasswordIncorrect: '当前密码错误',
   recoveryEmailRequestInvalid: '绑定请求参数无效，请检查后重试',
-  recoveryEmailTooFrequent: '请求过于频繁，请稍后再试',
+  recoveryEmailTooFrequent: '请求过于频繁，请稍后再试。',
   passwordRecoveryTitle: '找回密码',
+  passwordRecoveryKicker: '账号找回',
   passwordRecoveryDescription: '输入当前账号已绑定的邮箱，我们会发送一次性密码重置码，并附上网页备用链接。',
   passwordRecoveryEmailLabel: '已绑定邮箱',
   passwordRecoveryEmailPlaceholder: '请输入已绑定邮箱',
@@ -92,6 +95,7 @@ const ZH: Record<string, string> = {
   passwordRecoveryTooFrequent: '请求过于频繁，请稍后再试。',
   passwordRecoveryRequestFailed: '密码找回请求未完成，请稍后重试。',
   passwordResetTitle: '设置新密码',
+  passwordResetKicker: '安全重置密码',
   passwordResetDescription: '输入邮件中的一次性重置码和新密码。新密码生效后，其他设备上的旧登录会话将立即退出。',
   passwordResetCode: '邮件重置码',
   passwordResetCodePlaceholder: '粘贴邮件中的一次性重置码',
@@ -505,7 +509,7 @@ const ZH: Record<string, string> = {
   threeMonthsCycle: '3个月',
   sixMonthsCycle: '6个月',
   oneYearCycle: '1年',
-  buyRequests: '求购',
+  buyRequests: '需求',
   myBuyRequests: '我的需求',
   postBuyRequest: '提交需求',
   myRequirements: '我的需求',
@@ -520,7 +524,7 @@ const ZH: Record<string, string> = {
   inquiryRiskHint: '此页面仅收集需求，不会创建订单、扣减卡时或发起支付。',
   referenceAvailability: '参考可用量',
   inquirySummary: '需求概览',
-  inquiryQuantityHint: '填写本次预计需要的 GPU 数量',
+  inquiryQuantityHint: '填写预计数量，实际可用量将在需求沟通时确认。',
   inquiryAvailabilityPending: '公开可用量暂未确认，您仍可提交需求，由工作人员核实资源。',
   requiredQuantity: '需求数量',
   requiredDurationHours: '需求时长（小时）',
@@ -757,7 +761,7 @@ const ZH: Record<string, string> = {
   withdraw: '提现',
   withdrawalUnavailableShort: '提现暂未开放',
   operationTemporarilyUnavailable: '该操作暂未开放',
-  buyCompute: '购买算力',
+  buyCompute: '算力市场',
   orders: '订单',
   today: '今日',
   noRunning: '暂无运行中算力',
@@ -819,6 +823,7 @@ const ZH: Record<string, string> = {
   follow: '关注',
   latest: '最新',
   video: '视频',
+  videoPlayer: '视频播放器',
   noPosts: '暂无动态',
   share: '转发',
   publish: '发布',
@@ -1730,11 +1735,13 @@ const EN: Record<string, string> = {
   appUpdateLatest: 'You’re up to date',
   appUpdateUnavailable: 'Unable to check for updates. Please try again later.',
   appUpdateTitle: 'Version {version} is available',
+  versionLabel: 'Version',
   appUpdateContent: 'Current version: {current}. Latest version: {latest}.',
   appUpdateNow: 'Update',
   appUpdateLater: 'Later',
   appUpdateLinkCopied: 'Download link copied',
   recoveryEmail: 'Email binding',
+  recoveryEmailKicker: 'EMAIL BINDING',
   recoveryEmailBound: 'Linked email',
   recoveryEmailUnbound: 'No email linked',
   recoveryEmailBoundHint: 'Linked email for password and account recovery',
@@ -1745,9 +1752,9 @@ const EN: Record<string, string> = {
   recoveryEmailBindTitle: 'Bind email',
   recoveryEmailReplaceTitle: 'Change bound email',
   recoveryEmailAddressLabel: 'Email to bind',
-  recoveryEmailAddressPlaceholder: 'Enter an email address',
+  recoveryEmailAddressPlaceholder: 'Enter the email to bind',
   recoveryEmailPasswordLabel: 'Current ZTW password',
-  recoveryEmailPasswordPlaceholder: 'Enter your current password',
+  recoveryEmailPasswordPlaceholder: 'Enter your current ZTW password',
   recoveryEmailSubmit: 'Send verification email',
   recoveryEmailSubmitting: 'Sending...',
   recoveryEmailInvalid: 'Enter a valid email address',
@@ -1757,19 +1764,20 @@ const EN: Record<string, string> = {
   recoveryEmailAlreadyVerifiedHint: 'This is already the linked email for your account.',
   recoveryEmailPrivacyHint: 'Your password is used only for this verification and is not saved on this device.',
   recoveryEmailStatusUnavailable: 'Status unavailable',
-  recoveryEmailLoadFailed: 'Bound email status is temporarily unavailable. Please try again.',
-  recoveryEmailUnavailable: 'Email binding is unavailable',
+  recoveryEmailLoadFailed: 'Email binding status is temporarily unavailable. Please try again.',
+  recoveryEmailUnavailable: 'Email service is unavailable, so an email cannot be bound or changed right now.',
   recoveryEmailUnavailableHint: 'Verification emails cannot be sent right now. Please try again later.',
   recoveryEmailPasswordIncorrect: 'Current password is incorrect',
   recoveryEmailRequestInvalid: 'The email-binding request is invalid. Check the information and try again.',
   recoveryEmailTooFrequent: 'Too many requests. Please try again later.',
   passwordRecoveryTitle: 'Forgot password',
+  passwordRecoveryKicker: 'ACCOUNT RECOVERY',
   passwordRecoveryDescription: 'Enter the email linked to your account. We will send a one-time reset code and a web fallback link.',
   passwordRecoveryEmailLabel: 'Linked email',
   passwordRecoveryEmailPlaceholder: 'Enter your linked email',
   passwordRecoveryPrivacyNotice: 'To protect your account, the result is identical whether or not the email is linked.',
   passwordRecoverySend: 'Send password reset email',
-  passwordRecoverySending: 'Sending...',
+  passwordRecoverySending: 'Sending…',
   passwordRecoveryEmailSentTitle: 'Check your email',
   passwordRecoveryEmailSentMessage: 'If the email is linked, a password reset message will arrive within a few minutes. Copy its one-time reset code and set a new password inside the ZTW App.',
   passwordRecoveryEnterCode: 'Enter email reset code',
@@ -1783,6 +1791,7 @@ const EN: Record<string, string> = {
   passwordRecoveryTooFrequent: 'Too many requests. Please try again later.',
   passwordRecoveryRequestFailed: 'The password recovery request could not be completed. Please try again later.',
   passwordResetTitle: 'Set a new password',
+  passwordResetKicker: 'SECURE PASSWORD RESET',
   passwordResetDescription: 'Enter the one-time code from your email and a new password. Existing sessions on other devices will then be signed out.',
   passwordResetCode: 'Email reset code',
   passwordResetCodePlaceholder: 'Paste the one-time code from the email',
@@ -2196,7 +2205,7 @@ const EN: Record<string, string> = {
   threeMonthsCycle: '3 Months',
   sixMonthsCycle: '6 Months',
   oneYearCycle: '1 Year',
-  buyRequests: 'Buy Requests',
+  buyRequests: 'Requests',
   myBuyRequests: 'My Requests',
   postBuyRequest: 'Submit Request',
   myRequirements: 'My Requests',
@@ -2211,7 +2220,7 @@ const EN: Record<string, string> = {
   inquiryRiskHint: 'This page only collects your request. It does not create an order, deduct card-hours, or start a payment.',
   referenceAvailability: 'Reference Availability',
   inquirySummary: 'Request Summary',
-  inquiryQuantityHint: 'Enter the expected number of GPUs',
+  inquiryQuantityHint: 'Enter the expected quantity. Availability will be confirmed during follow-up.',
   inquiryAvailabilityPending: 'Public availability is not confirmed yet. You can still submit a request for a specialist to verify.',
   requiredQuantity: 'Required Quantity',
   requiredDurationHours: 'Required Duration (hours)',
@@ -2448,7 +2457,7 @@ const EN: Record<string, string> = {
   withdraw: 'Withdraw',
   withdrawalUnavailableShort: 'Withdrawals Unavailable',
   operationTemporarilyUnavailable: 'Temporarily Unavailable',
-  buyCompute: 'Buy',
+  buyCompute: 'Compute Market',
   orders: 'Orders',
   today: 'Today',
   noRunning: 'No active compute',
@@ -2510,6 +2519,7 @@ const EN: Record<string, string> = {
   follow: 'Following',
   latest: 'Latest',
   video: 'Video',
+  videoPlayer: 'Video player',
   noPosts: 'No posts yet',
   share: 'Share',
   publish: 'Post',
@@ -3834,6 +3844,30 @@ const PARTIAL_EN = Object.entries({ ...EN_BY_ZH, ...EXTRA_EN })
   .filter(([source]) => source.length >= 2)
   .sort(([a], [b]) => b.length - a.length)
 
+const TRANSLATION_KEY_BY_TEXT = new Map<string, string>()
+
+function registerTranslationText(text: string, key: string) {
+  if (text && !TRANSLATION_KEY_BY_TEXT.has(text)) TRANSLATION_KEY_BY_TEXT.set(text, key)
+}
+
+for (const [key, value] of Object.entries(ZH)) {
+  registerTranslationText(key, key)
+  registerTranslationText(value, key)
+  registerTranslationText(toTraditionalChinese(value), key)
+}
+for (const [key, value] of Object.entries(EN)) registerTranslationText(value, key)
+for (const [key, value] of Object.entries(ZH_GEN)) {
+  registerTranslationText(key, key)
+  registerTranslationText(value, key)
+  registerTranslationText(toTraditionalChinese(value), key)
+}
+for (const [key, value] of Object.entries(EN_GEN)) registerTranslationText(value, key)
+for (const [source, value] of Object.entries(EXTRA_EN)) {
+  registerTranslationText(source, source)
+  registerTranslationText(toTraditionalChinese(source), source)
+  registerTranslationText(value, source)
+}
+
 function interpolate(text: string, params?: Params): string {
   if (!params) return text
   return Object.entries(params).reduce(
@@ -3936,5 +3970,15 @@ export const useI18nStore = defineStore('i18n', () => {
     )
   }
 
-  return { lang, locale, init, toggle, setLanguage, updateTabBar, t, tr }
+  function localizedErrorMessage(
+    cause: unknown,
+    fallbackKey: string,
+    aliases: Readonly<Record<string, string>> = {},
+  ): string {
+    const source = cause instanceof Error ? cause.message.trim() : ''
+    const key = aliases[source] || TRANSLATION_KEY_BY_TEXT.get(source)
+    return t(key || fallbackKey)
+  }
+
+  return { lang, locale, init, toggle, setLanguage, updateTabBar, t, tr, localizedErrorMessage }
 })

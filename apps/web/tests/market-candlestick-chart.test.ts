@@ -465,7 +465,8 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   assert.match(chart, /"24h": 30_000/);
   assert.match(chart, /"7d": 300_000/);
   assert.match(chart, /"90d": 300_000/);
-  assert.match(chart, /value: "90d", label: "90天"/);
+  assert.match(chart, /value: "90d"/);
+  assert.match(chart, />\{rangeLabel\(option\.value, t\)\}<\/button>/);
   assert.match(chart, /preserveAspectRatio="xMidYMid meet"/);
   assert.match(chart, /period: 5/);
   assert.match(chart, /period: 10/);
@@ -482,7 +483,8 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   assert.match(chart, /const latestValue = latestCandle\?\.close/);
   assert.match(chart, /const displayedLatestValue = latestReadout\.price/);
   assert.match(chart, /最新收盘/);
-  assert.match(chart, /accessibleReadout[\s\S]*latestReadout\.label/);
+  assert.match(chart, /const latestReadoutLabel = latestReadout\.label/);
+  assert.match(chart, /accessibleReadout[\s\S]*latestReadoutLabel/);
   assert.doesNotMatch(chart, /`当前报价 \$\{formatPrice\(reference\.price/);
   assert.match(chart, /viewportStart/);
   assert.match(chart, /chartTimeTicks/);
@@ -522,4 +524,40 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   assert.match(styles, /touch-action: pan-y pinch-zoom/);
   assert.match(styles, /\.candleRise rect[\s\S]*?fill: var\(--kline-card\)/);
   assert.match(styles, /\.candleFall rect[\s\S]*?fill: var\(--kline-fall\)/);
+});
+
+test("Web K-line renderer localizes chart copy, accessibility text, and formatting", () => {
+  const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
+  const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
+
+  assert.match(chart, /const \{ t, dateLocale \} = useI18n\(\)/);
+  assert.doesNotMatch(chart, /toLocale(?:Date|Time)?String\("zh-CN"/);
+  assert.match(chart, /formatDateTime\([\s\S]*dateLocale/);
+  assert.match(chart, /formatTimeLabel\([\s\S]*dateLocale/);
+  assert.match(chart, /formatPrice\([\s\S]*dateLocale/);
+  assert.match(chart, /trends\.chartRange\.90Days/);
+  assert.match(chart, /trends\.candles\.history\.coverage/);
+  assert.match(chart, /trends\.candles\.state\.errorDescription/);
+  assert.match(chart, /trends\.candles\.accessibility\.ohlc/);
+  assert.match(chart, /trends\.candles\.ohlc\.open/);
+  assert.match(chart, /trends\.candles\.maAria/);
+  assert.match(chart, /trends\.candles\.viewport/);
+  assert.match(chart, /trends\.candles\.chartAria/);
+  assert.match(chart, /trends\.candles\.historyAccumulating/);
+  assert.match(chart, /trends\.candles\.stale/);
+
+  for (const key of [
+    "trends.candles.bucket.hours",
+    "trends.candles.history.complete",
+    "trends.candles.state.loading",
+    "trends.candles.state.emptyDescription",
+    "trends.candles.accessibility.summary",
+    "trends.candles.ohlc.close",
+    "trends.candles.zoomOut",
+    "trends.candles.chartAria",
+    "trends.candles.quarantine.label",
+    "trends.candles.liveRefresh",
+  ]) {
+    assert.match(localeRoot, new RegExp(`"${key.replaceAll(".", "\\.")}"\\s*:`));
+  }
 });

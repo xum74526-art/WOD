@@ -15,7 +15,7 @@
     <scroll-view v-if="tickets.length" scroll-x class="tickets-strip" show-scrollbar="false">
       <view class="tickets-row">
         <view v-for="ticket in tickets" :key="ticket.id" class="ticket-card">
-          <text class="ticket-no">{{ ticket.ticket_no }}</text>
+          <text class="ticket-no">{{ displayBusinessReference(ticket.ticket_no) }}</text>
           <text class="ticket-status">{{ ticketStatusLabel(ticket.status) }}</text>
           <text class="ticket-subject">{{ ticket.subject }}</text>
         </view>
@@ -66,8 +66,9 @@
             </view>
             <view v-if="message.ticket" class="created-ticket">
               <text class="created-ticket-title">{{ t('supportTicketCreated') }}</text>
-              <text class="created-ticket-no">{{ message.ticket.ticket_no }}</text>
+              <text class="created-ticket-no">{{ displayBusinessReference(message.ticket.ticket_no) }}</text>
               <text class="created-ticket-status">{{ ticketStatusLabel(message.ticket.status) }}</text>
+              <text class="created-ticket-note">{{ t('supportTicketPendingNotice') }}</text>
             </view>
           </view>
         </template>
@@ -116,6 +117,7 @@ import {
 } from '@/api/chat'
 import { useI18nStore } from '@/store/i18n'
 import { supportApiLanguage } from '@/utils/language'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 interface ViewMessage {
   localId: string
@@ -338,6 +340,7 @@ watch(() => i18n.lang, () => {
 .created-ticket-title { color: #775019; font-size: 22rpx; }
 .created-ticket-no { color: #3f2c0f; font-size: 24rpx; font-weight: 700; }
 .created-ticket-status { color: #a56512; font-size: 21rpx; }
+.created-ticket-note { width: 100%; color: #876d49; font-size: 20rpx; line-height: 1.5; }
 .typing { display: flex; gap: 8rpx; padding-top: 28rpx; padding-bottom: 28rpx; }
 .typing-dot { width: 10rpx; height: 10rpx; border-radius: 50%; background: var(--text-dim); animation: pulse 1s infinite ease-in-out; }
 .typing-dot:nth-child(2) { animation-delay: .15s; }

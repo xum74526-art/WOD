@@ -349,7 +349,7 @@ async function onCheckUpdate() {
 function onAbout() {
   uni.showModal({
     title: t('k_17651c8f'),
-    content: `ZTW - ${t('算力资源撮合平台')}\n${i18n.lang === 'en' ? 'Version' : '版本'} v${appVersion}`,
+    content: `ZTW - ${t('算力资源撮合平台')}\n${t('versionLabel')} v${appVersion}`,
     showCancel: false,
     confirmText: t('知道了'),
   })

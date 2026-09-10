@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api";
 import { createSupportTicket, getSupportSession, sendSupportMessage, type SupportSession } from "@/lib/mobile-support-api";
 import { formatDate } from "@/lib/commerce-ui";
 import { useI18n } from "@/components/locale-root";
+import { displayBusinessReference } from "@/lib/display-reference";
 
 const ticketStatuses: Record<string, { key: string; zh: string }> = {
   pending_unassigned: { key: "support.status.pending", zh: "待分配" },
@@ -184,10 +185,10 @@ export function MobileSupportWorkspace() {
                 <span>
                   <strong>{item.subject}</strong>
                   <small>
-                    {item.ticket_no} · {formatDate(item.created_at, dateLocale)}
+                    {displayBusinessReference(item.ticket_no)} · {formatDate(item.created_at, dateLocale)}
                   </small>
                 </span>
-                <b>{ticketStatuses[item.status] ? t(ticketStatuses[item.status].key, ticketStatuses[item.status].zh) : item.status}</b>
+                <b>{ticketStatuses[item.status] ? t(ticketStatuses[item.status].key, ticketStatuses[item.status].zh) : t("support.status.unknown", "状态待确认")}</b>
               </article>
             ))
           ) : (

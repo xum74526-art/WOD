@@ -41,8 +41,8 @@ class AppReleaseTests(unittest.TestCase):
         data = response.json()["data"]
         self.assertEqual(data["platform"], "android")
         self.assertTrue(data["available"])
-        self.assertEqual(data["latest_version_name"], "1.1.8")
-        self.assertEqual(data["latest_version_code"], 118)
+        self.assertEqual(data["latest_version_name"], "1.1.9")
+        self.assertEqual(data["latest_version_code"], 119)
         self.assertEqual(data["update_url"], "https://wod.kai.com/download/wod.apk")
 
     def test_ios_update_is_unavailable_until_an_app_store_page_is_configured(self):

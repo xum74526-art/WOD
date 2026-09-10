@@ -56,6 +56,10 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session["conversation_id"], first["data"]["conversation_id"])
         self.assertEqual(len(session["messages"]), 2)
         self.assertFalse(session["human_support_configured"])
+        english_session = get_support_session("en", self.user, self.db)["data"]
+        self.assertEqual(english_session["messages"][0]["content"], request.message)
+        self.assertIn("submit a requirement", english_session["messages"][1]["content"].lower())
+        self.assertNotRegex(english_session["messages"][1]["content"], r"[\u3400-\u9fff]")
 
     async def test_unknown_question_can_create_real_unassigned_ticket(self):
         with patch.object(settings, "AI_PROVIDER", ""), patch.object(settings, "AI_API_KEY", ""), patch.object(settings, "DEEPSEEK_API_KEY", ""):

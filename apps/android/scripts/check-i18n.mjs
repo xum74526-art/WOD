@@ -5,6 +5,7 @@ import ts from 'typescript'
 
 const root = path.resolve(import.meta.dirname, '..')
 const srcRoot = path.join(root, 'src')
+const pagesRoot = path.join(srcRoot, 'pages')
 
 function sourceFile(file) {
   return ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
@@ -55,6 +56,15 @@ function lineOf(source, index) {
 
 const storeFile = path.join(srcRoot, 'store', 'i18n.ts')
 const generatedFile = path.join(srcRoot, 'store', 'i18n_generated.ts')
+const pagesConfig = JSON.parse(fs.readFileSync(path.join(srcRoot, 'pages.json'), 'utf8'))
+const registeredPageFiles = new Set(
+  [
+    ...(pagesConfig.pages || []).map((page) => page.path),
+    ...(pagesConfig.subPackages || pagesConfig.subpackages || []).flatMap((group) =>
+      (group.pages || []).map((page) => path.join(group.root, page.path)),
+    ),
+  ].map((pagePath) => path.resolve(srcRoot, `${pagePath}.vue`)),
+)
 const zh = readStringMap(storeFile, 'ZH')
 const en = readStringMap(storeFile, 'EN')
 const extraEn = readStringMap(storeFile, 'EXTRA_EN')
@@ -79,7 +89,21 @@ const translatedChinese = new Set(extraEn.keys())
 for (const [key, value] of zh) if (en.has(key)) translatedChinese.add(value)
 for (const [key, value] of zhGenerated) if (enGenerated.has(key)) translatedChinese.add(value)
 const semanticKeys = new Set([...zh.keys(), ...en.keys(), ...zhGenerated.keys(), ...enGenerated.keys()])
-const appFiles = walk(srcRoot, ['.vue', '.ts']).filter((file) => !file.endsWith('store\\i18n.ts') && !file.endsWith('store\\i18n_generated.ts'))
+const dictionaryFiles = new Set([storeFile, generatedFile].map((file) => path.resolve(file)))
+const appFiles = walk(srcRoot, ['.vue', '.ts']).filter((file) => {
+  const absoluteFile = path.resolve(file)
+  if (dictionaryFiles.has(absoluteFile)) return false
+
+  const relativeToPages = path.relative(pagesRoot, absoluteFile)
+  const isPageFile = file.endsWith('.vue')
+    && relativeToPages !== ''
+    && !relativeToPages.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relativeToPages)
+  const isDesignPreview = isPageFile
+    && relativeToPages.split(path.sep)[0]?.startsWith('ui-preview')
+
+  return !isDesignPreview && (!isPageFile || registeredPageFiles.has(absoluteFile))
+})
 
 for (const file of appFiles) {
   const source = fs.readFileSync(file, 'utf8')
@@ -104,11 +128,17 @@ for (const file of appFiles) {
     const raw = match[1].replace(/{{[\s\S]*?}}/g, '').trim()
     if (/[\u3400-\u9fff]/.test(raw)) {
       errors.push(`${relative}:${lineOf(source, source.indexOf(match[0]))} raw template text: ${raw}`)
+    } else if (/[A-Za-z]{2}/.test(raw) && !/[="]/.test(raw) && !/^(?:ZTW|KAI|Kai|GPU|CUDA|SSH|AI)\s*:?$/.test(raw)) {
+      errors.push(`${relative}:${lineOf(source, source.indexOf(match[0]))} raw Latin template text: ${raw}`)
     }
   }
   const nativePlaceholderPattern = /<(?:input|textarea)\b[^>]*?(?<!:)placeholder\s*=\s*(['"])([^'"]*[\u3400-\u9fff][^'"]*)\1/gi
   for (const match of visible.matchAll(nativePlaceholderPattern)) {
     errors.push(`${relative}:${lineOf(source, source.indexOf(match[0]))} raw native placeholder: ${match[2]}`)
+  }
+  const nativeAriaLabelPattern = /(?:^|\s)aria-label\s*=\s*(['"])([^'"]+)\1/gi
+  for (const match of visible.matchAll(nativeAriaLabelPattern)) {
+    errors.push(`${relative}:${lineOf(source, source.indexOf(match[0]))} raw aria-label: ${match[2]}`)
   }
 }
 

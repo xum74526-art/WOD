@@ -43,6 +43,7 @@ const ZH: Record<string, string> = {
   appUpdateNow: '立即更新',
   appUpdateLater: '稍后',
   appUpdateLinkCopied: '下载地址已复制',
+  versionLabel: '版本',
   deletionAutomaticActions: '注销时一并处理',
   deletionAcknowledgement: '我已阅读注销影响，并同意清理账号资料及上方列出的撤回、下架事项，知悉注销后无法恢复。',
   deletionPasswordLabel: '验证当前 ZTW 登录密码',
@@ -87,6 +88,7 @@ const ZH: Record<string, string> = {
   kaiBindingFailed: 'Kai 身份绑定失败，请重试',
   kaiIdentityNotBoundLogin: '该 Kai 身份尚未绑定，请先使用手机号登录或注册，再到设置中完成绑定。',
   recoveryEmailTitle: '绑定邮箱',
+  recoveryEmailKicker: '邮箱绑定',
   recoveryEmailMenuHint: '在 App 内绑定或更换',
   recoveryEmailStatusTitle: '当前绑定邮箱',
   recoveryEmailStatusLoading: '正在读取绑定状态…',
@@ -118,6 +120,7 @@ const ZH: Record<string, string> = {
   recoveryEmailAlreadyVerifiedTitle: '邮箱已绑定',
   recoveryEmailAlreadyVerifiedMessage: '该邮箱已经是当前账号的已绑定邮箱。',
   passwordRecoveryTitle: '找回密码',
+  passwordRecoveryKicker: '账号找回',
   passwordRecoveryDescription: '输入当前账号已绑定的邮箱，我们会发送一次性密码重置码，并附上网页备用链接。',
   passwordRecoveryEmailLabel: '已绑定邮箱',
   passwordRecoveryEmailPlaceholder: '请输入已绑定邮箱',
@@ -137,6 +140,7 @@ const ZH: Record<string, string> = {
   passwordRecoveryTooFrequent: '请求过于频繁，请稍后再试。',
   passwordRecoveryRequestFailed: '密码找回请求未完成，请稍后重试。',
   passwordResetTitle: '设置新密码',
+  passwordResetKicker: '安全重置密码',
   passwordResetDescription: '输入邮件中的一次性重置码和新密码。新密码生效后，其他设备上的旧登录会话将立即退出。',
   passwordResetCode: '邮件重置码',
   passwordResetCodePlaceholder: '粘贴邮件中的一次性重置码',
@@ -821,6 +825,7 @@ const ZH: Record<string, string> = {
   follow: '关注',
   latest: '最新',
   video: '视频',
+  videoPlayer: '视频播放器',
   noPosts: '暂无动态',
   share: '转发',
   publish: '发布',
@@ -1186,6 +1191,7 @@ const ZH: Record<string, string> = {
   supportTicketDefaultSubject: '客服问题',
   supportTicketCreateFailed: '工单创建失败，请重试',
   supportTicketRefreshFailed: '工单状态刷新失败',
+  supportTicketPendingNotice: '工单已保存并进入待分配队列，客服团队将按顺序处理。',
   supportTicketStatus_pending_unassigned: '待分配',
   supportTicketStatus_assigned: '处理中',
   supportTicketStatus_resolved: '已解决',
@@ -1734,6 +1740,7 @@ const EN: Record<string, string> = {
   appUpdateLatest: 'You’re up to date',
   appUpdateUnavailable: 'Unable to check for updates. Please try again later.',
   appUpdateTitle: 'Version {version} is available',
+  versionLabel: 'Version',
   appUpdateContent: 'Current version: {current}. Latest version: {latest}.',
   appUpdateNow: 'Update',
   appUpdateLater: 'Later',
@@ -1782,6 +1789,7 @@ const EN: Record<string, string> = {
   kaiBindingFailed: 'Could not link Kai identity. Please try again.',
   kaiIdentityNotBoundLogin: 'This Kai identity is not linked yet. Sign in or register with your phone, then link it in Settings.',
   recoveryEmailTitle: 'Bind email',
+  recoveryEmailKicker: 'EMAIL BINDING',
   recoveryEmailMenuHint: 'Link or change it in the app',
   recoveryEmailStatusTitle: 'Current bound email',
   recoveryEmailStatusLoading: 'Loading email binding status…',
@@ -1813,6 +1821,7 @@ const EN: Record<string, string> = {
   recoveryEmailAlreadyVerifiedTitle: 'Email already linked',
   recoveryEmailAlreadyVerifiedMessage: 'This email is already linked to your account.',
   passwordRecoveryTitle: 'Forgot password',
+  passwordRecoveryKicker: 'ACCOUNT RECOVERY',
   passwordRecoveryDescription: 'Enter the email linked to your account. We will send a one-time reset code and a web fallback link.',
   passwordRecoveryEmailLabel: 'Linked email',
   passwordRecoveryEmailPlaceholder: 'Enter your linked email',
@@ -1832,6 +1841,7 @@ const EN: Record<string, string> = {
   passwordRecoveryTooFrequent: 'Too many requests. Please try again later.',
   passwordRecoveryRequestFailed: 'The password recovery request could not be completed. Please try again later.',
   passwordResetTitle: 'Set a new password',
+  passwordResetKicker: 'SECURE PASSWORD RESET',
   passwordResetDescription: 'Enter the one-time code from your email and a new password. Existing sessions on other devices will then be signed out.',
   passwordResetCode: 'Email reset code',
   passwordResetCodePlaceholder: 'Paste the one-time code from the email',
@@ -2516,6 +2526,7 @@ const EN: Record<string, string> = {
   follow: 'Following',
   latest: 'Latest',
   video: 'Video',
+  videoPlayer: 'Video player',
   noPosts: 'No posts yet',
   share: 'Share',
   publish: 'Post',
@@ -2881,6 +2892,7 @@ const EN: Record<string, string> = {
   supportTicketDefaultSubject: 'Support question',
   supportTicketCreateFailed: 'Could not create the ticket. Please retry.',
   supportTicketRefreshFailed: 'Could not refresh ticket status',
+  supportTicketPendingNotice: 'Your ticket has been saved and queued. The support team will handle it in order.',
   supportTicketStatus_pending_unassigned: 'Pending assignment',
   supportTicketStatus_assigned: 'In progress',
   supportTicketStatus_resolved: 'Resolved',
@@ -3828,6 +3840,30 @@ const PARTIAL_EN = Object.entries({ ...EN_BY_ZH, ...EXTRA_EN })
   .filter(([source]) => source.length >= 2)
   .sort(([a], [b]) => b.length - a.length)
 
+const TRANSLATION_KEY_BY_TEXT = new Map<string, string>()
+
+function registerTranslationText(text: string, key: string) {
+  if (text && !TRANSLATION_KEY_BY_TEXT.has(text)) TRANSLATION_KEY_BY_TEXT.set(text, key)
+}
+
+for (const [key, value] of Object.entries(ZH)) {
+  registerTranslationText(key, key)
+  registerTranslationText(value, key)
+  registerTranslationText(toTraditionalChinese(value), key)
+}
+for (const [key, value] of Object.entries(EN)) registerTranslationText(value, key)
+for (const [key, value] of Object.entries(ZH_GEN)) {
+  registerTranslationText(key, key)
+  registerTranslationText(value, key)
+  registerTranslationText(toTraditionalChinese(value), key)
+}
+for (const [key, value] of Object.entries(EN_GEN)) registerTranslationText(value, key)
+for (const [source, value] of Object.entries(EXTRA_EN)) {
+  registerTranslationText(source, source)
+  registerTranslationText(toTraditionalChinese(source), source)
+  registerTranslationText(value, source)
+}
+
 function interpolate(text: string, params?: Params): string {
   if (!params) return text
   return Object.entries(params).reduce(
@@ -3930,5 +3966,15 @@ export const useI18nStore = defineStore('i18n', () => {
     )
   }
 
-  return { lang, locale, init, toggle, setLanguage, updateTabBar, t, tr }
+  function localizedErrorMessage(
+    cause: unknown,
+    fallbackKey: string,
+    aliases: Readonly<Record<string, string>> = {},
+  ): string {
+    const source = cause instanceof Error ? cause.message.trim() : ''
+    const key = aliases[source] || TRANSLATION_KEY_BY_TEXT.get(source)
+    return t(key || fallbackKey)
+  }
+
+  return { lang, locale, init, toggle, setLanguage, updateTabBar, t, tr, localizedErrorMessage }
 })

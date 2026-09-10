@@ -5,7 +5,7 @@ import test from "node:test";
 test("contact phone is labeled and stays out of unrelated pages", () => {
   const read = (file: string) => readFileSync(new URL(`../components/${file}`, import.meta.url), "utf8");
   const phone = read("contact-phone.tsx");
-  assert.match(phone, /<a className=\{styles.phone\} href="tel:\+864001082026">联系我们：\+86 4001082026<\/a>/);
+  assert.match(phone, /href="tel:\+864001082026">\{t\("contact\.phoneLabel", "联系我们：\{phone\}"/);
   assert.doesNotMatch(phone, /onClick|onMouse|useEffect|window\.|fetch\(/);
   assert.match(read("auth-panel.tsx"), /<ContactPhone\s*\/>/);
   assert.match(read("mobile-account-settings.tsx"), /<ContactPhone\s*\/>/);

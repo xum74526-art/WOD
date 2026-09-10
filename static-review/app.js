@@ -612,7 +612,7 @@ quoteForm.addEventListener("submit", (event) => {
   if (!resource) return;
 
   const order = {
-    id: `WOD-${Date.now().toString(36).toUpperCase()}`,
+    id: `ZTW-${Date.now().toString(36).toUpperCase()}`,
     resourceId: resource.id,
     resourceName: displayResource(resource).name,
     region: String(formData.get("region")),

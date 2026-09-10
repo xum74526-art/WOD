@@ -6,6 +6,7 @@ import {
   profileUsernameDisplayValue,
   profileUsernameSubmissionValue,
 } from '../src/utils/localize-content.ts'
+import { displayBusinessReference } from '../src/utils/display-reference.ts'
 
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -13,12 +14,18 @@ function source(path: string) {
 
 const supportPage = source('../src/pages/kefu/index.vue')
 const profileEditPage = source('../src/pages/profile-edit/index.vue')
+const i18n = source('../src/store/i18n.ts')
 
 test('support cards keep the positive service state without negative configuration lines', () => {
   assert.match(supportPage, /supportAiAssisted/)
   assert.match(supportPage, /supportSelfService/)
   assert.doesNotMatch(supportPage, /supportHumanNotConfigured/)
-  assert.doesNotMatch(supportPage, /supportTicketPendingNotice/)
+  assert.match(supportPage, /supportTicketPendingNotice/)
+  assert.match(i18n, /supportTicketPendingNotice: '工单已保存并进入待分配队列，客服团队将按顺序处理。'/)
+  assert.match(i18n, /supportTicketPendingNotice: 'Your ticket has been saved and queued\. The support team will handle it in order\.'/)
+  assert.match(supportPage, /displayBusinessReference\(ticket\.ticket_no\)/)
+  assert.match(supportPage, /displayBusinessReference\(message\.ticket\.ticket_no\)/)
+  assert.equal(displayBusinessReference('WOD-20260910-4E9F8B'), 'ZTW-20260910-4E9F8B')
 })
 
 test('English profile display localizes an untouched Chinese nickname without saving the display value', () => {

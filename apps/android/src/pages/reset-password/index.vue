@@ -3,7 +3,7 @@
     <AppNavBar :title="t('passwordResetTitle')" />
     <scroll-view scroll-y class="body">
       <view class="card intro-card">
-        <text class="eyebrow">SECURE PASSWORD RESET</text>
+        <text class="eyebrow">{{ t('passwordResetKicker') }}</text>
         <text class="heading">{{ t('passwordResetTitle') }}</text>
         <text class="description">{{ t('passwordResetDescription') }}</text>
       </view>
@@ -64,7 +64,7 @@ import { confirmPasswordReset } from '@/api/account-recovery'
 import { useI18nStore } from '@/store/i18n'
 import { takePendingPasswordResetToken } from '@/utils/password-reset-callback'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 const token = ref('')
 const password = ref('')
 const confirmation = ref('')
@@ -97,8 +97,7 @@ function clearSensitiveFields() {
 }
 
 function requestErrorMessage(cause: unknown) {
-  const source = cause instanceof Error ? cause.message : ''
-  return t(REQUEST_ERROR_KEYS[source] || source || 'passwordResetFailed')
+  return localizedErrorMessage(cause, 'passwordResetFailed', REQUEST_ERROR_KEYS)
 }
 
 async function submitReset() {

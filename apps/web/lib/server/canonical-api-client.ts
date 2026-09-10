@@ -5,6 +5,7 @@ import type { NextRequest } from "next/server";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 
 export const WEB_TOKEN_COOKIE = "wod_web_token";
+const WEB_LOCALE_COOKIE = "kai.locale";
 
 export type CanonicalEnvelope = {
   code?: number;
@@ -53,6 +54,11 @@ function unavailable(message: string): CanonicalApiResult {
 
 function authHeaders(request: NextRequest, auth = true) {
   const headers = new Headers({ Accept: "application/json" });
+  const locale = request.cookies.get(WEB_LOCALE_COOKIE)?.value;
+  headers.set(
+    "Accept-Language",
+    locale === "en" ? "en-US,en;q=0.9" : locale === "zh-Hans" ? "zh-CN,zh;q=0.9" : "zh-TW,zh-Hant;q=0.9,zh;q=0.8",
+  );
   const token = request.cookies.get(WEB_TOKEN_COOKIE)?.value;
   if (auth && token) headers.set("Authorization", `Bearer ${token}`);
   return headers;

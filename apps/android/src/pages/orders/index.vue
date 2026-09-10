@@ -15,7 +15,7 @@
           <view class="o-top">
             <view class="o-name-wrap">
               <text class="o-name">{{ localizeProductName(o.product_name || t('算力订单'), i18n.lang) }}</text>
-              <text class="o-no">{{ t('orderNo') }} {{ o.order_no || ('#' + o.id) }}</text>
+              <text class="o-no">{{ t('orderNo') }} {{ displayBusinessReference(o.order_no) || ('#' + o.id) }}</text>
             </view>
             <StatusBadge :text="statusMeta(o.status).text" :type="statusMeta(o.status).type" />
           </view>
@@ -65,6 +65,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 const i18n = useI18nStore()
 const { t } = i18n

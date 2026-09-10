@@ -14,7 +14,7 @@
           <view class="hero-top">
             <view class="hero-name-wrap">
               <text class="hero-name">{{ localizeProductName(order.product_name || t('算力订单'), i18n.lang) }}</text>
-              <text class="hero-no">{{ t('orderNo') }} {{ order.order_no || ('#' + order.id) }}</text>
+              <text class="hero-no">{{ t('orderNo') }} {{ displayBusinessReference(order.order_no) || ('#' + order.id) }}</text>
             </view>
             <StatusBadge :text="badge.text" :type="badge.type" />
           </view>
@@ -128,6 +128,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
 import { localizeProductName } from '@/utils/localize-content'
 import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 const i18n = useI18nStore()
 const { t } = i18n

@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Cube, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
 import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice } from "@/lib/supplier-api";
 import { errorMessage } from "@/lib/commerce-ui";
+import { displayBusinessReference } from "@/lib/display-reference";
 
 const blank = {
   name: "",
@@ -150,7 +151,7 @@ export function ResourceWorkspace() {
                 }}
               >
                 <span>
-                  <small>WOD-P-{item.id}</small>
+                  <small>{displayBusinessReference(`WOD-P-${item.id}`)}</small>
                   <strong>{item.name}</strong>
                   <em>
                     {item.gpu_model} · {item.region}
@@ -174,7 +175,7 @@ export function ResourceWorkspace() {
           {editing ? (
             <form className="resource-form" onSubmit={(event) => void save(event)}>
               <header>
-                <p>{selected ? `EDIT / WOD-P-${selected.id}` : "NEW MOBILE PRODUCT"}</p>
+                <p>{selected ? `EDIT / ${displayBusinessReference(`WOD-P-${selected.id}`)}` : "NEW MOBILE PRODUCT"}</p>
                 <h2>{selected ? "编辑商品" : "新增算力商品"}</h2>
               </header>
               <div className="resource-form__grid">
@@ -231,7 +232,7 @@ export function ResourceWorkspace() {
             <div className="resource-dossier">
               <header>
                 <div>
-                  <p>WOD-P-{selected.id}</p>
+                  <p>{displayBusinessReference(`WOD-P-${selected.id}`)}</p>
                   <h2>{selected.name}</h2>
                   <span>
                     {selected.gpu_model} · {selected.memory}

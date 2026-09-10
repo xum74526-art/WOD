@@ -47,7 +47,7 @@
             v-if="playerUrl(post)"
             class="video-frame"
             :src="playerUrl(post)"
-            title="Video player"
+            :title="t('videoPlayer')"
             frameborder="0"
             allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerpolicy="strict-origin-when-cross-origin"

@@ -1,15 +1,24 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { MobileSupportWorkspace } from "@/components/mobile-support-workspace";
+import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const english = (await cookies()).get("kai.locale")?.value === "en";
-  return {
-    title: { absolute: english ? "KAI Help & Support" : "幫助與客服 | 北斗 kai" },
-    description: english ? "KAI self-service support and account tickets." : "北斗 kai 自助客服與帳戶工單。",
-  };
+export function generateMetadata(): Promise<Metadata> {
+  return localizedPageMetadata({
+    "zh-Hant": {
+      title: "幫助與客服 | 北斗 kai",
+      description: "北斗 kai 自助客服與帳號工單。",
+    },
+    "zh-Hans": {
+      title: "帮助与客服 | 北斗 kai",
+      description: "北斗 kai 自助客服与账号工单。",
+    },
+    en: {
+      title: "KAI Help & Support",
+      description: "KAI self-service support and account tickets.",
+    },
+  });
 }
 
 export default function SupportPage() {

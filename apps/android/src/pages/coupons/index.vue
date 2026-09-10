@@ -54,7 +54,7 @@ import SegmentedControl from '@/components/SegmentedControl.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 
-const { t, tr } = useI18nStore()
+const { t, tr, localizedErrorMessage } = useI18nStore()
 const list = ref<CouponItem[]>([])
 const loading = ref(true)
 const loadError = ref('')
@@ -74,7 +74,7 @@ async function load() {
     list.value = await getCoupons(STATUS[tab.value])
   } catch (error) {
     list.value = []
-    loadError.value = error instanceof Error ? error.message : t('couponLoadFailedHint')
+    loadError.value = localizedErrorMessage(error, 'couponLoadFailedHint')
   }
   finally { loading.value = false }
 }

@@ -282,7 +282,7 @@ function parseApiDate(value: string) {
 }
 const offerUpdateText = computed(() => {
   if (!product.value?.price_updated_at) return t('notUpdated')
-  const formatted = parseApiDate(product.value.price_updated_at).toLocaleString()
+  const formatted = parseApiDate(product.value.price_updated_at).toLocaleString(i18n.locale)
   return product.value.is_market_current ? formatted : `${formatted} · ${t(product.value.market_source_status === 'unavailable' ? 'sourceUnavailable' : 'staleData')}`
 })
 

@@ -5,7 +5,7 @@
       <view class="card status-card">
         <view class="status-heading">
           <view>
-            <text class="eyebrow">EMAIL BINDING</text>
+            <text class="eyebrow">{{ t('recoveryEmailKicker') }}</text>
             <text class="heading">{{ t('recoveryEmailStatusTitle') }}</text>
           </view>
           <view v-if="status?.verified" class="status-badge verified">{{ t('recoveryEmailVerified') }}</view>
@@ -83,7 +83,7 @@ import {
 } from '@/api/account-recovery'
 import { useI18nStore } from '@/store/i18n'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 const status = ref<RecoveryEmailStatus | null>(null)
 const config = ref<AccountRecoveryConfig | null>(null)
 const email = ref('')
@@ -112,8 +112,7 @@ function clearSensitiveFields() {
 }
 
 function requestErrorMessage(cause: unknown) {
-  const source = cause instanceof Error ? cause.message : ''
-  return t(REQUEST_ERROR_KEYS[source] || source || 'recoveryEmailRequestFailed')
+  return localizedErrorMessage(cause, 'recoveryEmailRequestFailed', REQUEST_ERROR_KEYS)
 }
 
 async function refreshPage(generation: number) {

@@ -18,7 +18,7 @@
             <text class="on">{{ localizeProductName(o.product_name, i18n.lang) }}</text>
             <StatusBadge :text="statusText(o.status)" :type="statusType(o.status)" />
           </view>
-          <text class="og">{{ o.order_no }} · {{ o.gpu_model }} × {{ o.quantity || 1 }} · {{ orderAmountText(o) }}</text>
+          <text class="og">{{ displayBusinessReference(o.order_no) }} · {{ o.gpu_model }} × {{ o.quantity || 1 }} · {{ orderAmountText(o) }}</text>
           <text v-if="o.buyer_name || o.buyer_phone" class="buyer-line">{{ t('buyer') }}：{{ o.buyer_name || '-' }}{{ o.buyer_phone ? ` · ${o.buyer_phone}` : '' }}</text>
           <text v-if="deadlineText(o)" class="deadline">{{ deadlineText(o) }}</text>
           <text class="delivery-type">{{ t(o.fulfillment_mode === 'platform_manual' ? 'platformManualSshDelivery' : 'merchantManualSshDelivery') }}</text>
@@ -35,7 +35,7 @@
     <view v-if="deliveryShow" class="delivery-mask" @tap="closeDelivery">
       <view class="delivery-sheet" @tap.stop>
         <text class="delivery-sheet-title">{{ t('deliverComputeResource') }}</text>
-        <text class="delivery-sheet-desc">{{ t('deliverComputeResourceHint', { order: deliveryTarget?.order_no || '-' }) }}</text>
+        <text class="delivery-sheet-desc">{{ t('deliverComputeResourceHint', { order: displayBusinessReference(deliveryTarget?.order_no) || '-' }) }}</text>
         <textarea
           v-model="sshInfo"
           class="ssh-input"
@@ -65,9 +65,10 @@ import { fmtCardHours, formatDeadline, toCardHours } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
 import { isValidSshInfo } from '@/utils/ssh-info'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 const i18n = useI18nStore()
-const { t } = i18n
+const { t, localizedErrorMessage } = i18n
 const list = ref<SupplierOrderItem[]>([])
 const loading = ref(true)
 const loadError = ref(false)
@@ -150,7 +151,7 @@ async function submitDelivery() {
     uni.showToast({ title: t('deliverySubmitted'), icon: 'success' })
     await load()
   } catch (error) {
-    uni.showToast({ title: error instanceof Error && error.message ? error.message : t('operationFailed'), icon: 'none' })
+    uni.showToast({ title: localizedErrorMessage(error, 'operationFailed'), icon: 'none' })
   } finally {
     delivering.value = false
   }

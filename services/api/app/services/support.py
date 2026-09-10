@@ -171,3 +171,17 @@ def human_request_reply(lang: str) -> str:
             "it will be stored as Pending assignment, without claiming that an agent has accepted it."
         )
     return "人工坐席尚未接入。您仍可在下方创建真实工单；工单将保存为“待分配”，不会虚构已接通或已受理。"
+
+
+def localized_builtin_reply(topic: str | None, lang: str) -> str | None:
+    """Return current-language copy for persisted deterministic support replies."""
+
+    if topic == "human_support":
+        return human_request_reply(lang)
+    if topic == "other":
+        return unknown_reply(lang)
+    answer = next((item for item in FAQ_ANSWERS if item.topic == topic), None)
+    if not answer:
+        return None
+    localized = _runtime_answer(answer)
+    return localized.en if lang == "en" else localized.zh

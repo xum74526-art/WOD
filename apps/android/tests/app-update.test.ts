@@ -18,12 +18,12 @@ test('version comparison uses the native numeric code and handles dotted fallbac
   assert.equal(normalizeVersionCode('119'), 119)
   assert.equal(normalizeVersionCode('0'), null)
   assert.equal(compareVersionNames('1.2.0', '1.1.10'), 1)
-  assert.equal(compareVersionNames('1.1.8', '1.1.8.0'), 0)
-  assert.equal(isNewerRelease('1.1.8', 118, {
+  assert.equal(compareVersionNames('1.1.9', '1.1.9.0'), 0)
+  assert.equal(isNewerRelease('1.1.9', 119, {
     platform: 'android',
     available: true,
-    latest_version_name: '1.1.9',
-    latest_version_code: 119,
+    latest_version_name: '1.1.10',
+    latest_version_code: 120,
     update_url: 'https://wod.kai.com/download/wod.apk',
   }), true)
 })
@@ -56,10 +56,10 @@ test('Android app wires automatic and manual update checks without changing rele
   const update = readFileSync(resolve(appRoot, 'src/utils/app-update.ts'), 'utf8')
   const api = readFileSync(resolve(appRoot, 'src/api/platform.ts'), 'utf8')
 
-  assert.equal(manifest.versionName, '1.1.8')
-  assert.equal(manifest.versionCode, '118')
-  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.1\.8'/)
-  assert.match(update, /APP_FALLBACK_VERSION_CODE = 118/)
+  assert.equal(manifest.versionName, '1.1.9')
+  assert.equal(manifest.versionCode, '119')
+  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.1\.9'/)
+  assert.match(update, /APP_FALLBACK_VERSION_CODE = 119/)
   assert.match(app, /checkForAppUpdate\('android'\)/)
   assert.match(settings, /checkForAppUpdate\('android', \{ manual: true \}\)/)
   assert.match(settings, /appUpdateCheck/)

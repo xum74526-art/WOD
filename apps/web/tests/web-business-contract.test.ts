@@ -48,7 +48,8 @@ test("Web registration offers phone and Kai registration through the existing au
   assert.match(panel, /sessionStorage\.setItem\(PENDING_KAI_INTENT_KEY, mode\)/);
   assert.match(panel, /kaiError === "identity_not_bound" && pendingKaiIntent === "register"/);
   assert.match(panel, /window\.location\.replace\(`\/register\$\{suffix\}`\)/);
-  assert.match(panel, /isRegister \? "Continue to Kai registration" : "Sign in with Kai"/);
+  assert.match(panel, /isRegister \? t\("auth\.kai\.continueRegistration"/);
+  assert.match(panel, /t\("auth\.kai\.signIn"/);
 });
 
 test("released clients do not describe canonical data as coming from mobile", () => {

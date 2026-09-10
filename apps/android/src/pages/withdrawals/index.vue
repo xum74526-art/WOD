@@ -19,7 +19,7 @@
       <view v-for="order in orders" :key="order.id" class="card order-card" @tap="openDetail(order.id)">
         <view class="order-head">
           <view>
-            <text class="order-no">{{ order.order_no }}</text>
+            <text class="order-no">{{ displayBusinessReference(order.order_no) }}</text>
             <text class="order-time">{{ formatDate(order.created_at || undefined) }}</text>
           </view>
           <text class="status" :class="statusTone(order.status)">{{ t(statusLabel(order.status)) }}</text>
@@ -48,6 +48,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatDate, formatMoney, formatNumber } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 const { t, tr } = useI18nStore()
 const filter = ref<WithdrawalStatus | ''>('')

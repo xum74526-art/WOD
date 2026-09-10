@@ -3,7 +3,7 @@
     <AppNavBar :title="t('passwordRecoveryTitle')" />
     <scroll-view scroll-y class="body">
       <view class="card intro-card">
-        <text class="eyebrow">ACCOUNT RECOVERY</text>
+        <text class="eyebrow">{{ t('passwordRecoveryKicker') }}</text>
         <text class="heading">{{ t('passwordRecoveryTitle') }}</text>
         <text class="description">{{ t('passwordRecoveryDescription') }}</text>
       </view>
@@ -61,7 +61,7 @@ import {
 } from '@/api/account-recovery'
 import { useI18nStore } from '@/store/i18n'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 const config = ref<AccountRecoveryConfig | null>(null)
 const email = ref('')
 const loading = ref(false)
@@ -82,8 +82,7 @@ let active = false
 let pageGeneration = 0
 
 function requestErrorMessage(cause: unknown) {
-  const source = cause instanceof Error ? cause.message : ''
-  return t(REQUEST_ERROR_KEYS[source] || source || 'passwordRecoveryRequestFailed')
+  return localizedErrorMessage(cause, 'passwordRecoveryRequestFailed', REQUEST_ERROR_KEYS)
 }
 
 async function loadConfig() {

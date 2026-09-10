@@ -81,10 +81,10 @@ test("complete market filters keep the compact original controls", () => {
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
-  assert.match(panel, /placeholder="搜索完整行情"/);
-  assert.match(panel, /<option value="all">全部显存<\/option>/);
-  assert.match(panel, /\["up", "只看上涨"\]/);
-  assert.match(panel, /\["down", "只看下跌"\]/);
+  assert.match(panel, /placeholder=\{t\("trends\.table\.search", "搜索完整行情"\)\}/);
+  assert.match(panel, /<option value="all">\{t\("trends\.table\.allVram", "全部显存"\)\}<\/option>/);
+  assert.match(panel, /\["up", "trends\.table\.directionUp", "只看上涨"\]/);
+  assert.match(panel, /\["down", "trends\.table\.directionDown", "只看下跌"\]/);
   assert.match(styles, /\.trend-table-filters \{[^}]*flex-wrap: nowrap/);
   assert.match(styles, /\.trend-search input:focus-visible \{[^}]*outline: 0/);
   assert.doesNotMatch(styles, /\.trend-table-filters \{[^}]*grid-template-columns/);
@@ -95,9 +95,9 @@ test("trend ranges use real calendar windows and peak-preserving full-width spar
   const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
-  assert.match(panel, /value: 28, label: "4周"/);
-  assert.match(panel, /value: 56, label: "8周"/);
-  assert.match(panel, /value: 90, label: "3个月"/);
+  assert.match(panel, /value: 28, key: "trends\.range\.4Weeks", label: "4周"/);
+  assert.match(panel, /value: 56, key: "trends\.range\.8Weeks", label: "8周"/);
+  assert.match(panel, /value: 90, key: "trends\.range\.3Months", label: "3个月"/);
   assert.match(panel, /86_400_000/);
   assert.match(panel, /function visualTrendPoints/);
   assert.match(panel, /targetCount = 36/);
@@ -107,23 +107,39 @@ test("trend ranges use real calendar windows and peak-preserving full-width spar
   assert.doesNotMatch(panel, /pathLength="1"/);
   assert.match(panel, /MarketCandlestickChart/);
   assert.match(panel, /长期排行周期/);
-  assert.match(panel, /长期 · \{longRangeLabel\}涨跌/);
+  assert.match(panel, /trends\.focus\.longRangeChange/);
   assert.match(panel, /onSnapshot=\{setChartSnapshot\}/);
   assert.match(panel, /activeChartSnapshot\?\.range === "90d"/);
-  assert.match(panel, /\? "90天"/);
-  assert.match(panel, /\{chartRangeLabel\}历史最高价/);
-  assert.match(panel, /\{chartRangeLabel\}历史最低价/);
-  assert.match(panel, /\{chartRangeLabel\}历史中位价/);
+  assert.match(panel, /trends\.chartRange\.90Days/);
+  assert.match(panel, /trends\.chartStats\.high/);
+  assert.match(panel, /trends\.chartStats\.low/);
+  assert.match(panel, /trends\.chartStats\.median/);
   assert.match(panel, /chartSummary\.changePct/);
   assert.doesNotMatch(panel, /selectedStatsRangeLabel/);
   assert.doesNotMatch(chart, /value: "24h", label: "24小时"/);
-  assert.match(chart, /value: "7d", label: "7天"/);
-  assert.match(chart, /value: "30d", label: "30天"/);
-  assert.match(chart, /value: "90d", label: "90天"/);
+  assert.match(chart, /\{ value: "7d" \}/);
+  assert.match(chart, /\{ value: "30d" \}/);
+  assert.match(chart, /\{ value: "90d" \}/);
+  assert.match(chart, /rangeLabel\(option\.value, t\)/);
   assert.match(chart, /preserveAspectRatio="xMidYMid meet"/);
   assert.doesNotMatch(chart, /preserveAspectRatio="none"/);
   assert.match(api, /range: "90d"/);
   assert.doesNotMatch(panel, /slice\(0, weeks\)/);
+});
+
+test("trend panel explicitly localizes controls, states, and locale-sensitive values", () => {
+  const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
+
+  assert.match(panel, /const \{ t, dateLocale \} = useI18n\(\)/);
+  assert.match(panel, /new Intl\.NumberFormat\(dateLocale/);
+  assert.match(panel, /new Intl\.DateTimeFormat\(dateLocale/);
+  assert.match(panel, /trends\.state\.loading/);
+  assert.match(panel, /trends\.table\.searchAria/);
+  assert.match(panel, /trends\.pagination\.aria/);
+  assert.doesNotMatch(panel, /toLocale(?:Date|Time)String\("zh-CN"/);
+  assert.match(localeRoot, /"trends\.state\.loading": "Loading compute market"/);
+  assert.match(localeRoot, /"trends\.pagination\.next": "Next"/);
 });
 
 test("trend selection and candle statistics reject stale cross-identity state", () => {

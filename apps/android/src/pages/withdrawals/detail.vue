@@ -41,7 +41,7 @@
         </view>
 
         <view class="card detail-card">
-          <view class="data-row"><text>{{ t('orderNumber') }}</text><text class="mono">{{ order.order_no }}</text></view>
+          <view class="data-row"><text>{{ t('orderNumber') }}</text><text class="mono">{{ displayBusinessReference(order.order_no) }}</text></view>
           <view class="data-row"><text>{{ t('submittedAt') }}</text><text>{{ formatDate(order.created_at || undefined) }}</text></view>
           <view v-if="order.bank_reference" class="data-row"><text>{{ t('bankReference') }}</text><text class="mono">{{ order.bank_reference }}</text></view>
           <view v-if="order.paid_at" class="data-row"><text>{{ t('paidAt') }}</text><text>{{ formatDate(order.paid_at) }}</text></view>
@@ -60,6 +60,7 @@ import { cancelWithdrawal, getWithdrawal, type WithdrawalOrder, type WithdrawalS
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
 import { formatDate, formatMoney, formatNumber } from '@/utils/format'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 const { t, tr } = useI18nStore()
 const id = ref('')

@@ -59,7 +59,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
 import { navigateTo } from '@/utils/nav'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 const userStore = useUserStore()
 const loading = ref(false)
 const loadError = ref(false)
@@ -118,7 +118,7 @@ async function submit() {
     await userStore.fetchProfile().catch(() => undefined)
     uni.showToast({ title: t('入驻申请已提交'), icon: 'success' })
   } catch (error) {
-    uni.showToast({ title: error instanceof Error && error.message ? error.message : t('operationFailed'), icon: 'none' })
+    uni.showToast({ title: localizedErrorMessage(error, 'operationFailed'), icon: 'none' })
   } finally {
     submitting.value = false
   }

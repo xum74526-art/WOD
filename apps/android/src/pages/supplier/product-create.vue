@@ -62,7 +62,7 @@ import { localizeRegionName } from '@/utils/region-name'
 import { navigateBack } from '@/utils/nav'
 
 const i18n = useI18nStore()
-const { t } = i18n
+const { t, localizedErrorMessage } = i18n
 const submitting = ref(false)
 
 const regions = [
@@ -120,8 +120,7 @@ function onPriceInput(event: any) {
 }
 
 function toastError(error: unknown) {
-  const message = error instanceof Error && error.message ? error.message : t('操作失败')
-  uni.showToast({ title: message, icon: 'none' })
+  uni.showToast({ title: localizedErrorMessage(error, '操作失败'), icon: 'none' })
 }
 
 async function onSubmit() {

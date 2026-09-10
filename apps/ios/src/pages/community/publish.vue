@@ -55,7 +55,7 @@ import { useI18nStore } from '@/store/i18n'
 import { hasOversizedCommunityImage, isCommunityVideoTooLarge } from '@/utils/community-media'
 import { normalizeTempFilePaths } from '@/utils/file-selection'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 type PublishType = 'text' | 'image' | 'video'
 type UploadStatus = 'uploading' | 'processing' | 'ready' | 'failed'
 interface ImageDraft {
@@ -122,7 +122,7 @@ async function uploadImage(item: ImageDraft) {
     item.status = 'ready'
   } catch (error) {
     item.status = 'failed'
-    uni.showToast({ title: error instanceof Error ? error.message : t('上传失败'), icon: 'none' })
+    uni.showToast({ title: localizedErrorMessage(error, '上传失败'), icon: 'none' })
   }
 }
 
@@ -150,7 +150,7 @@ async function uploadVideo(item: VideoDraft) {
     item.status = 'ready'
   } catch (error) {
     item.status = 'failed'
-    uni.showToast({ title: error instanceof Error ? error.message : t('上传失败'), icon: 'none' })
+    uni.showToast({ title: localizedErrorMessage(error, '上传失败'), icon: 'none' })
   }
 }
 

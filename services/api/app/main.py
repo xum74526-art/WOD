@@ -25,6 +25,7 @@ from app.utils.response import BizError, error
 from app.routers import account_deletion
 from app.services.account_deletion import resume_deletions
 from app.services.account_recovery_mail import dispatch_account_recovery_mail
+from app.utils.api_locale import localize_api_message, resolve_request_locale
 
 
 @asynccontextmanager
@@ -177,13 +178,19 @@ app.add_middleware(
 
 @app.exception_handler(BizError)
 async def biz_handler(request: Request, exc: BizError):
-    return JSONResponse(status_code=exc.status_code, content=error(exc.msg, exc.code))
+    message = localize_api_message(exc.msg, resolve_request_locale(request))
+    return JSONResponse(status_code=exc.status_code, content=error(message, exc.code))
 
 
 @app.exception_handler(FastAPIHTTPException)
 async def http_handler(request: Request, exc: FastAPIHTTPException):
     msg = exc.detail if isinstance(exc.detail, str) else "请求错误"
-    return JSONResponse(status_code=exc.status_code, content=error(msg))
+    message = localize_api_message(msg, resolve_request_locale(request))
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error(message),
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(RequestValidationError)

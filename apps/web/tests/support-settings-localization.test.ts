@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { localizePersonName, personNameInputValue, personNameSaveValue } from "../lib/person-name.ts";
+import { displayBusinessReference } from "../lib/display-reference.ts";
 
 test("English account display romanizes Chinese names without changing raw editable values", () => {
   assert.equal(localizePersonName("陈志强", "en"), "Chen Zhiqiang");
@@ -41,6 +42,11 @@ test("Web support requests the selected locale and localizes system UI while pre
   assert.doesNotMatch(support, /session\?\.notice|人工坐席尚未配置|人工坐席尚未接入|客服.*未启用/);
   assert.match(support, /<p>\{item\.content\}<\/p>/);
   assert.match(support, /<strong>\{item\.subject\}<\/strong>/);
+  assert.match(support, /displayBusinessReference\(item\.ticket_no\)/);
+  assert.equal(displayBusinessReference("WOD-20260910-4E9F8B"), "ZTW-20260910-4E9F8B");
+  assert.equal(displayBusinessReference("WOD-P-12"), "ZTW-P-12");
+  assert.equal(displayBusinessReference("WODR202609100001"), "ZTWR202609100001");
+  assert.equal(displayBusinessReference("ZTW-20260910-4E9F8B"), "ZTW-20260910-4E9F8B");
   assert.match(locale, /"support\.assistant": "KAI Self-service Support"/);
   assert.match(locale, /"support\.title": "Help & Support"/);
   assert.match(locale, /"support\.status\.pending": "Pending assignment"/);

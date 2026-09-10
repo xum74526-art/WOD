@@ -70,7 +70,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import { useI18nStore } from '@/store/i18n'
 
-const { t } = useI18nStore()
+const { t, localizedErrorMessage } = useI18nStore()
 const status = ref<RecoveryEmailStatus | null>(null)
 const loadFailed = ref(false)
 const loading = ref(false)
@@ -91,6 +91,10 @@ const submitErrorKeys: Record<string, string> = {
   'The recovery request is invalid. Check the information and try again.': 'recoveryEmailRequestInvalid',
   '请求过于频繁，请稍后再试': 'recoveryEmailTooFrequent',
   'Too many requests. Please try again later.': 'recoveryEmailTooFrequent',
+}
+
+function requestErrorMessage(cause: unknown) {
+  return localizedErrorMessage(cause, '请求失败', submitErrorKeys)
 }
 
 function validEmail(value: string) {
@@ -167,9 +171,7 @@ async function submit() {
     if (alreadyVerified) await loadStatus()
   } catch (error) {
     if (!active || generation !== submitGeneration) return
-    const message = error instanceof Error ? error.message : ''
-    const key = submitErrorKeys[message]
-    uni.showToast({ title: key ? t(key) : (message || t('请求失败')), icon: 'none' })
+    uni.showToast({ title: requestErrorMessage(error), icon: 'none' })
   } finally {
     if (generation === submitGeneration) {
       form.currentPassword = ''

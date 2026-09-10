@@ -3,9 +3,25 @@ import { ArrowUpRight, EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import { ContactPhone } from "@/components/contact-phone";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = { title: "聯絡我們", description: "聯絡北斗 kai 未來算力中心，申請機構接入。" };
+export function generateMetadata(): Promise<Metadata> {
+  return localizedPageMetadata({
+    "zh-Hant": {
+      title: "聯絡我們 | 北斗 kai",
+      description: "聯絡北斗 kai 未來算力中心，申請機構接入。",
+    },
+    "zh-Hans": {
+      title: "联系我们 | 北斗 kai",
+      description: "联系北斗 kai 未来算力中心，申请机构接入。",
+    },
+    en: {
+      title: "Contact Us | KAI",
+      description: "Contact the KAI Future Compute Center about institutional access.",
+    },
+  });
+}
 
 export default function ContactPage() {
   return <div className="site-page public-v2 kai-company-page"><SiteHeader/><main>

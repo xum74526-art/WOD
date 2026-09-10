@@ -29,7 +29,6 @@ import {
   contiguousValueSegments,
   defaultCandleZoomLimit,
   expectedCandleCount,
-  marketCandleBucketLabel,
   marketChartQuarantineNotice,
   marketChartSummary,
   matchesMarketCandleSelection,
@@ -45,6 +44,7 @@ import {
   type MarketChartRange,
   type MarketChartSnapshot,
 } from "@/lib/market-candlestick-chart";
+import { useI18n } from "./locale-root";
 import styles from "./market-candlestick-chart.module.css";
 
 type ScopedValue<T> = { key: string; value: T };
@@ -65,10 +65,10 @@ type ChartPoint = MarketChartCandle & {
 };
 
 const MOBILE_WIDTH = 360;
-const RANGE_OPTIONS: Array<{ value: MarketChartRange; label: string }> = [
-  { value: "7d", label: "7天" },
-  { value: "30d", label: "30天" },
-  { value: "90d", label: "90天" },
+const RANGE_OPTIONS: Array<{ value: MarketChartRange }> = [
+  { value: "7d" },
+  { value: "30d" },
+  { value: "90d" },
 ];
 const LATEST_REFRESH_MS = 10_000;
 const HISTORY_REFRESH_MS: Record<MarketChartRange, number> = {
@@ -83,24 +83,35 @@ const MA_SERIES = [
   { period: 20, color: "var(--kline-ma-20)" },
 ] as const;
 
+type Translate = (key: string, fallback: string, values?: Record<string, string | number>) => string;
+
 function modelIdentity(model: MobileMarketModel | null) {
   return model ? `${model.gpu_model}|${model.gpu_variant}` : "";
 }
 
-function formatPrice(value: number | null | undefined) {
+function formatPrice(value: number | null | undefined, dateLocale: string) {
   if (value == null || !Number.isFinite(value)) return "--";
-  return value >= 100 ? value.toFixed(2) : value.toFixed(3);
+  const digits = value >= 100 ? 2 : 3;
+  return value.toLocaleString(dateLocale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
 }
 
-function formatAxis(value: number, span = 1) {
+function formatAxis(value: number, span: number, dateLocale: string) {
   const digits = Math.abs(span) < 0.01 ? 4 : Math.abs(span) < 1 ? 3 : 2;
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: digits, useGrouping: false });
+  return value.toLocaleString(dateLocale, { maximumFractionDigits: digits, useGrouping: false });
 }
 
-function formatDateTime(value: number | string | null | undefined) {
+function formatInteger(value: number, dateLocale: string) {
+  return value.toLocaleString(dateLocale, { maximumFractionDigits: 0 });
+}
+
+function formatDateTime(value: number | string | null | undefined, dateLocale: string, currentQuoteLabel: string) {
   const timestamp = typeof value === "number" ? value : value ? Date.parse(value) : Number.NaN;
-  if (!Number.isFinite(timestamp)) return "当前报价";
-  return new Date(timestamp).toLocaleString("zh-CN", {
+  if (!Number.isFinite(timestamp)) return currentQuoteLabel;
+  return new Date(timestamp).toLocaleString(dateLocale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -110,12 +121,12 @@ function formatDateTime(value: number | string | null | undefined) {
   });
 }
 
-function formatTimeLabel(time: number, range: MarketChartRange) {
-  const value = new Date(time);
-  const pad = (part: number) => String(part).padStart(2, "0");
-  const monthDay = `${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
-  const clock = `${pad(value.getHours())}:${pad(value.getMinutes())}`;
-  return range === "24h" ? `${monthDay} ${clock}` : monthDay;
+function formatTimeLabel(time: number, range: MarketChartRange, dateLocale: string) {
+  return new Date(time).toLocaleString(dateLocale, {
+    month: "2-digit",
+    day: "2-digit",
+    ...(range === "24h" ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+  });
 }
 
 function latestObservationAt(value: MobileLatestMarket | null) {
@@ -131,9 +142,45 @@ function candleChange(candle: MarketChartCandle | undefined) {
   return ((candle.close - candle.open) / candle.open) * 100;
 }
 
-function signedPercent(value: number | null) {
+function signedPercent(value: number | null, dateLocale: string) {
   if (value == null || !Number.isFinite(value)) return "--";
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+  return `${value > 0 ? "+" : ""}${value.toLocaleString(dateLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  })}%`;
+}
+
+function rangeLabel(range: MarketChartRange, t: Translate) {
+  if (range === "24h") return t("trends.chartRange.24Hours", "24小时");
+  if (range === "7d") return t("trends.chartRange.7Days", "7天");
+  if (range === "30d") return t("trends.chartRange.30Days", "30天");
+  return t("trends.chartRange.90Days", "90天");
+}
+
+function bucketPeriodLabel(bucketSeconds: number, t: Translate, dateLocale: string) {
+  if (!Number.isFinite(bucketSeconds) || bucketSeconds <= 0) {
+    return t("trends.candles.bucket.raw", "原始周期");
+  }
+  if (bucketSeconds % (24 * 60 * 60) === 0) {
+    const days = bucketSeconds / (24 * 60 * 60);
+    return days === 1
+      ? t("trends.candles.bucket.daily", "日 K")
+      : t("trends.candles.bucket.days", "{count} 日 K", { count: formatInteger(days, dateLocale) });
+  }
+  if (bucketSeconds % (60 * 60) === 0) {
+    return t("trends.candles.bucket.hours", "{count} 小时 K", {
+      count: formatInteger(bucketSeconds / (60 * 60), dateLocale),
+    });
+  }
+  if (bucketSeconds % 60 === 0) {
+    return t("trends.candles.bucket.minutes", "{count} 分钟 K", {
+      count: formatInteger(bucketSeconds / 60, dateLocale),
+    });
+  }
+  return t("trends.candles.bucket.seconds", "{count} 秒 K", {
+    count: formatInteger(Math.round(bucketSeconds), dateLocale),
+  });
 }
 
 function linePath(points: Array<{ x: number; y: number }>) {
@@ -141,6 +188,7 @@ function linePath(points: Array<{ x: number; y: number }>) {
 }
 
 export function MarketCandlestickChart({ model, initialLatest = null, onLatest, onSnapshot }: MarketCandlestickChartProps) {
+  const { t, dateLocale } = useI18n();
   const chartStatusId = useId();
   const identity = modelIdentity(model);
   const [range, setRange] = useState<MarketChartRange>("30d");
@@ -353,17 +401,25 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
     ),
     [bucketSeconds, normalized, payload, range],
   );
-  const bucketLabel = marketCandleBucketLabel(bucketSeconds);
+  const bucketLabel = bucketPeriodLabel(bucketSeconds, t, dateLocale);
   const observedRangeLabel = coverage.observedHours >= 48
-    ? `${Math.max(1, Math.round(coverage.observedHours / 24))} 天`
-    : `${Math.max(1, Math.round(coverage.observedHours))} 小时`;
+    ? t("trends.candles.observedDays", "{count} 天", {
+      count: formatInteger(Math.max(1, Math.round(coverage.observedHours / 24)), dateLocale),
+    })
+    : t("trends.candles.observedHours", "{count} 小时", {
+      count: formatInteger(Math.max(1, Math.round(coverage.observedHours)), dateLocale),
+    });
   const historyLabel = normalized.length <= 1
-    ? "当前报价基线"
+    ? t("trends.candles.history.baseline", "当前报价基线")
     : coverage.full
-      ? `完整区间 · ${bucketLabel}`
+      ? t("trends.candles.history.complete", "完整区间 · {bucket}", { bucket: bucketLabel })
       : coverage.expectedBucketCount > 0
-        ? `已覆盖 ${normalized.length}/${coverage.expectedBucketCount} 根 · ${bucketLabel}`
-        : `已观测 ${observedRangeLabel}`;
+        ? t("trends.candles.history.coverage", "已覆盖 {current}/{expected} 根 · {bucket}", {
+          current: formatInteger(normalized.length, dateLocale),
+          expected: formatInteger(coverage.expectedBucketCount, dateLocale),
+          bucket: bucketLabel,
+        })
+        : t("trends.candles.history.observed", "已观测 {range}", { range: observedRangeLabel });
   const quarantineNotice = useMemo(() => marketChartQuarantineNotice(payload), [payload]);
   const hasRenderableData = normalized.length > 0 || reference.price != null;
   const historyPending = Boolean(model && !payload && !historyError);
@@ -488,9 +544,23 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
     return value == null ? [] : [{ period: item.period, color: item.color, value }];
   });
   const maximumVisibleCount = coverage.expectedBucketCount || expectedCandleCount(range, bucketSeconds);
+  const currentQuoteLabel = t("trends.candles.currentQuote", "当前报价");
+  const latestReadoutLabel = latestReadout.label === "当前价"
+    ? t("trends.candles.currentPrice", "当前价")
+    : t("trends.candles.latestClose", "最新收盘");
   const accessibleReadout = cursorVisible && focused
-    ? `${formatDateTime(focused.time)}，开 ${formatPrice(focused.open)}，高 ${formatPrice(focused.high)}，低 ${formatPrice(focused.low)}，收 ${formatPrice(focused.close)}`
-    : `${latestReadout.label} ${formatPrice(latestReadout.price)}，${historyLabel}`;
+    ? t("trends.candles.accessibility.ohlc", "{date}，开 {open}，高 {high}，低 {low}，收 {close}", {
+      date: formatDateTime(focused.time, dateLocale, currentQuoteLabel),
+      open: formatPrice(focused.open, dateLocale),
+      high: formatPrice(focused.high, dateLocale),
+      low: formatPrice(focused.low, dateLocale),
+      close: formatPrice(focused.close, dateLocale),
+    })
+    : t("trends.candles.accessibility.summary", "{label} {price}，{history}", {
+      label: latestReadoutLabel,
+      price: formatPrice(latestReadout.price, dateLocale),
+      history: historyLabel,
+    });
 
   const selectPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!visible.length) return;
@@ -548,13 +618,24 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
     return <g className={styles.extremeMark} key={`${high ? "high" : "low"}-${index}`}>
       <line x1={center} y1={vertical} x2={lineEnd} y2={vertical}/>
       <text x={lineEnd + (toRight ? 2 : -2)} y={vertical + (high ? -2.5 : 8)} textAnchor={toRight ? "start" : "end"}>
-        {formatAxis(value, valueRange)}
+        {formatAxis(value, valueRange, dateLocale)}
       </text>
     </g>;
   };
 
-  return <section className={styles.shell} aria-label={`${model?.gpu_model ?? "GPU"} 算力 K 线`} aria-busy={viewState === "loading"}>
-    <nav className={styles.rangeTabs} aria-label="K 线周期">
+  const historyErrorMessage = t("trends.candles.state.errorDescription", "暂时无法读取真实 K 线，请稍后重试。");
+  const quarantineLabel = quarantineNotice
+    ? t("trends.candles.quarantine.label", quarantineNotice.label, {
+      count: formatInteger(quarantineNotice.count, dateLocale),
+    })
+    : null;
+  const quarantineReason = quarantineNotice?.reason
+    ? t("trends.candles.quarantine.reason", quarantineNotice.reason)
+    : undefined;
+  const selectedRangeLabel = rangeLabel(range, t);
+
+  return <section className={styles.shell} aria-label={t("trends.candles.sectionAria", "{model} 算力 K 线", { model: model?.gpu_model ?? "GPU" })} aria-busy={viewState === "loading"}>
+    <nav className={styles.rangeTabs} aria-label={t("trends.candles.rangeAria", "K 线周期")}>
       {RANGE_OPTIONS.map((option) => <button
         className={range === option.value ? styles.rangeActive : ""}
         type="button"
@@ -573,64 +654,81 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
           setRange(option.value);
         }}
         key={option.value}
-      >{option.label}</button>)}
+      >{rangeLabel(option.value, t)}</button>)}
     </nav>
 
     {viewState === "loading" && <div className={styles.loading} role="status" aria-live="polite">
       <span className={styles.loadingShort}/><span/><i/>
-      <b className={styles.srOnly}>正在读取真实 K 线</b>
+      <b className={styles.srOnly}>{t("trends.candles.state.loading", "正在读取真实 K 线")}</b>
     </div>}
 
     {viewState === "empty" && <div className={styles.empty} role="status">
-      <strong>{!model ? "请选择 GPU 型号" : historyError ? "K 线读取失败" : "暂无已核验行情"}</strong>
-      <p>{!model ? "选择型号后即可读取对应的真实 OHLC 数据。" : historyError || "该型号当前没有可展示的真实 OHLC 数据。"}</p>
-      {model && <button type="button" onClick={() => void refreshHistory(true)}>重新读取</button>}
+      <strong>{!model
+        ? t("trends.candles.state.selectModel", "请选择 GPU 型号")
+        : historyError
+          ? t("trends.candles.state.error", "K 线读取失败")
+          : t("trends.candles.state.empty", "暂无已核验行情")}</strong>
+      <p>{!model
+        ? t("trends.candles.state.selectModelDescription", "选择型号后即可读取对应的真实 OHLC 数据。")
+        : historyError
+          ? historyErrorMessage
+          : t("trends.candles.state.emptyDescription", "该型号当前没有可展示的真实 OHLC 数据。")}</p>
+      {model && <button type="button" onClick={() => void refreshHistory(true)}>{t("trends.candles.state.retry", "重新读取")}</button>}
     </div>}
 
     {viewState === "chart" && <>
       <p className={styles.srOnly} id={chartStatusId} aria-live="polite" aria-atomic="true">{accessibleReadout}</p>
       <div className={styles.toolbar}>
         <div>
-          <p><strong>K线</strong><em>{historyLabel}</em></p>
-          <small>卡时 / GPU·小时</small>
+          <p><strong>{t("trends.candles.title", "K线")}</strong><em>{historyLabel}</em></p>
+          <small>{t("trends.candles.unit", "卡时 / GPU·小时")}</small>
         </div>
         <div className={styles.latestReadout}>
-          <small>{cursorVisible ? "收" : displayedLatestIsCurrent ? "当前价" : "最新收盘"}</small>
+          <small>{cursorVisible
+            ? t("trends.candles.ohlc.close", "收")
+            : displayedLatestIsCurrent
+              ? t("trends.candles.currentPrice", "当前价")
+              : t("trends.candles.latestClose", "最新收盘")}</small>
           <strong className={focusedChange == null ? styles.neutral : focusedChange > 0 ? styles.riseText : focusedChange < 0 ? styles.fallText : styles.neutral}>
-            {formatPrice(cursorVisible ? focused?.close : displayedLatestValue)}
+            {formatPrice(cursorVisible ? focused?.close : displayedLatestValue, dateLocale)}
           </strong>
         </div>
       </div>
 
       <div className={styles.readout}>
         <div className={styles.readoutHead}>
-          <strong>{formatDateTime(focused?.time ?? latestReadout.observedAt)}</strong>
+          <strong>{formatDateTime(focused?.time ?? latestReadout.observedAt, dateLocale, currentQuoteLabel)}</strong>
           <span className={focusedChange == null ? styles.neutral : focusedChange > 0 ? styles.riseText : focusedChange < 0 ? styles.fallText : styles.neutral}>
-            涨跌幅 {signedPercent(focusedChange)}
+            {t("trends.candles.change", "涨跌幅 {value}", { value: signedPercent(focusedChange, dateLocale) })}
           </span>
         </div>
         <div className={styles.ohlcGrid}>
           {focused ? [
-            ["开", focused.open, styles.neutral],
-            ["高", focused.high, styles.riseText],
-            ["低", focused.low, styles.fallText],
-            ["收", focused.close, focused.close > focused.open ? styles.riseText : focused.close < focused.open ? styles.fallText : styles.neutral],
-          ].map(([label, value, tone]) => <span key={String(label)}><small>{label}</small><strong className={String(tone)}>{formatPrice(Number(value))}</strong></span>)
-            : <span><small>{latestReadout.label}</small><strong>{formatPrice(latestReadout.price)}</strong></span>}
+            [t("trends.candles.ohlc.open", "开"), focused.open, styles.neutral],
+            [t("trends.candles.ohlc.high", "高"), focused.high, styles.riseText],
+            [t("trends.candles.ohlc.low", "低"), focused.low, styles.fallText],
+            [t("trends.candles.ohlc.close", "收"), focused.close, focused.close > focused.open ? styles.riseText : focused.close < focused.open ? styles.fallText : styles.neutral],
+          ].map(([label, value, tone]) => <span key={String(label)}><small>{label}</small><strong className={String(tone)}>{formatPrice(Number(value), dateLocale)}</strong></span>)
+            : <span><small>{latestReadoutLabel}</small><strong>{formatPrice(latestReadout.price, dateLocale)}</strong></span>}
         </div>
       </div>
 
-      {activeMaReadout.length > 0 && <div className={styles.maRow} aria-label="移动平均线">
-        {activeMaReadout.map((item) => <span style={{ color: item.color }} key={item.period}><strong>MA{item.period}</strong>{formatPrice(item.value)}</span>)}
+      {activeMaReadout.length > 0 && <div className={styles.maRow} aria-label={t("trends.candles.maAria", "移动平均线")}>
+        {activeMaReadout.map((item) => <span style={{ color: item.color }} key={item.period}><strong>MA{item.period}</strong>{formatPrice(item.value, dateLocale)}</span>)}
       </div>}
 
       {normalized.length > 1 && <div className={styles.viewportToolbar}>
         <div className={styles.viewportControls}>
-          <button type="button" disabled={nextCandleZoomLimit(range, requestedVisibleCount, maximumVisibleCount, "out", bucketSeconds) === requestedVisibleCount} onClick={() => zoom("out")} aria-label="缩小 K 线">
+          <button type="button" disabled={nextCandleZoomLimit(range, requestedVisibleCount, maximumVisibleCount, "out", bucketSeconds) === requestedVisibleCount} onClick={() => zoom("out")} aria-label={t("trends.candles.zoomOut", "缩小 K 线")}>
             <Minus size={15}/>
           </button>
-          <span>视窗 {requestedVisibleCount} 根 · 已有 {visible.length}/{maximumVisibleCount} · {bucketLabel}</span>
-          <button type="button" disabled={nextCandleZoomLimit(range, requestedVisibleCount, maximumVisibleCount, "in", bucketSeconds) === requestedVisibleCount} onClick={() => zoom("in")} aria-label="放大 K 线">
+          <span>{t("trends.candles.viewport", "视窗 {visible} 根 · 已有 {current}/{total} · {bucket}", {
+            visible: formatInteger(requestedVisibleCount, dateLocale),
+            current: formatInteger(visible.length, dateLocale),
+            total: formatInteger(maximumVisibleCount, dateLocale),
+            bucket: bucketLabel,
+          })}</span>
+          <button type="button" disabled={nextCandleZoomLimit(range, requestedVisibleCount, maximumVisibleCount, "in", bucketSeconds) === requestedVisibleCount} onClick={() => zoom("in")} aria-label={t("trends.candles.zoomIn", "放大 K 线")}>
             <Plus size={15}/>
           </button>
         </div>
@@ -643,7 +741,10 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
         role="region"
         tabIndex={0}
         aria-describedby={chartStatusId}
-        aria-label={`${model?.gpu_model ?? "GPU"} ${RANGE_OPTIONS.find((item) => item.value === range)?.label}真实 K 线，可使用左右方向键查看，加号和减号缩放`}
+        aria-label={t("trends.candles.chartAria", "{model} {range}真实 K 线，可使用左右方向键查看，加号和减号缩放", {
+          model: model?.gpu_model ?? "GPU",
+          range: selectedRangeLabel,
+        })}
         onPointerDown={selectPoint}
         onPointerMove={(event) => { if (event.pointerType === "mouse") selectPoint(event); }}
         onPointerLeave={() => setCursorVisible(false)}
@@ -656,7 +757,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               const gridY = layout.plot.top + ratio * plotHeight;
               return <g key={`grid-${index}`}>
                 <line x1={layout.plot.left} y1={gridY} x2={layout.plot.left + plotWidth} y2={gridY}/>
-                {(latestY == null || Math.abs(gridY - latestY) >= 16) && <text x={layout.plot.left + plotWidth + 4} y={gridY + 3}>{formatAxis(domain.max - ratio * valueRange, valueRange)}</text>}
+                {(latestY == null || Math.abs(gridY - latestY) >= 16) && <text x={layout.plot.left + plotWidth + 4} y={gridY + 3}>{formatAxis(domain.max - ratio * valueRange, valueRange, dateLocale)}</text>}
               </g>;
             })}
             {[1 / 3, 2 / 3].map((ratio) => {
@@ -668,7 +769,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
           {latestY != null && latestChipY != null && latestValue != null && <g className={styles.latestLine} style={{ color: latestColor }}>
             <line x1={layout.plot.left} y1={latestY} x2={layout.plot.left + plotWidth} y2={latestY}/>
             <rect x={layout.plot.left + plotWidth + 2} y={latestChipY} width={layout.plot.right - 4} height="14" rx="2.5"/>
-            <text x={layout.plot.left + plotWidth + 5} y={latestChipY + 10}>{formatAxis(latestValue, valueRange)}</text>
+            <text x={layout.plot.left + plotWidth + 5} y={latestChipY + 10}>{formatAxis(latestValue, valueRange, dateLocale)}</text>
           </g>}
 
           {baselineOnly && referenceValue != null
@@ -682,7 +783,13 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               const renderedBodyTop = bodyTop - (renderedBodyHeight - bodyHeight) / 2;
               const tone = rising ? styles.candleRise : falling ? styles.candleFall : styles.candleFlat;
               return <g className={tone} key={point.startTime}>
-                <title>{`${formatDateTime(point.time)} 开 ${formatPrice(point.open)} 高 ${formatPrice(point.high)} 低 ${formatPrice(point.low)} 收 ${formatPrice(point.close)}`}</title>
+                <title>{t("trends.candles.accessibility.ohlc", "{date}，开 {open}，高 {high}，低 {low}，收 {close}", {
+                  date: formatDateTime(point.time, dateLocale, currentQuoteLabel),
+                  open: formatPrice(point.open, dateLocale),
+                  high: formatPrice(point.high, dateLocale),
+                  low: formatPrice(point.low, dateLocale),
+                  close: formatPrice(point.close, dateLocale),
+                })}</title>
                 <line x1={point.x} y1={point.highY} x2={point.x} y2={point.lowY}/>
                 {rising || falling
                   ? <rect x={point.x - bodyWidth / 2} y={renderedBodyTop} width={bodyWidth} height={renderedBodyHeight} rx=".4"/>
@@ -714,27 +821,29 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               y={layout.height - 6}
               textAnchor={labelIndex === 0 ? "start" : labelIndex === timeTicks.length - 1 ? "end" : "middle"}
               key={tick}
-            >{formatTimeLabel(tick, range)}</text>)}
+            >{formatTimeLabel(tick, range, dateLocale)}</text>)}
           </g>
         </svg>
       </div>
 
       <footer className={styles.sourceNote}>
-        <span>KAI 算力价格历史数据</span>
-        <span title={quarantineNotice?.reason ?? undefined}>{quarantineNotice
-          ? quarantineNotice.label
+        <span>{t("trends.candles.source", "KAI 算力价格历史数据")}</span>
+        <span title={quarantineReason}>{quarantineNotice
+          ? quarantineLabel
           : !coverage.full && coverage.latestEndTime
-          ? `历史截至 ${formatDateTime(coverage.latestEndTime)}`
+          ? t("trends.candles.historyUntil", "历史截至 {date}", {
+            date: formatDateTime(coverage.latestEndTime, dateLocale, currentQuoteLabel),
+          })
           : !coverage.full
-            ? "真实历史仍在积累，缺失时段保留为空白"
-            : "按原始报价绘制"}</span>
+            ? t("trends.candles.historyAccumulating", "真实历史仍在积累，缺失时段保留为空白")
+            : t("trends.candles.rawQuotes", "按原始报价绘制")}</span>
         <span>{historyLoading
-          ? "正在同步"
+          ? t("trends.candles.syncing", "正在同步")
           : normalized.length > 0 && !comparableLiveMerged
-            ? "图内显示最新历史收盘"
-            : "当前价每 10 秒检查"}</span>
+            ? t("trends.candles.latestHistoricalClose", "图内显示最新历史收盘")
+            : t("trends.candles.liveRefresh", "当前价每 {seconds} 秒检查", { seconds: formatInteger(10, dateLocale) })}</span>
       </footer>
-      {historyError && <p className={styles.staleNotice} role="status">{historyError}，已保留上次成功数据。</p>}
+      {historyError && <p className={styles.staleNotice} role="status">{t("trends.candles.stale", "{error} 已保留上次成功数据。", { error: historyErrorMessage })}</p>}
     </>}
   </section>;
 }

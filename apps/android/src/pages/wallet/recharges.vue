@@ -34,7 +34,7 @@
     </view>
 
     <scroll-view scroll-y class="body" @scrolltolower="loadMore">
-      <view v-if="loading && !orders.length" class="skeleton-list" aria-label="loading">
+      <view v-if="loading && !orders.length" class="skeleton-list" :aria-label="t('loading')">
         <view v-for="index in 3" :key="index" class="skeleton-card">
           <view class="skeleton-line wide" />
           <view class="skeleton-line short" />
@@ -58,7 +58,7 @@
         <view class="order-head">
           <view class="order-heading">
             <text class="order-number-label">{{ t('rechargeOrderNumber') }}</text>
-            <text class="order-number">{{ order.order_no }}</text>
+            <text class="order-number">{{ displayBusinessReference(order.order_no) }}</text>
           </view>
           <text class="status" :class="statusTone(order)">{{ t(statusLabel(order)) }}</text>
         </view>
@@ -143,6 +143,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { rechargeHistoryPresentation } from '@/utils/recharge-payment'
+import { displayBusinessReference } from '@/utils/display-reference'
 
 type RechargeStatusFilter = '' | 'pending' | 'paid' | 'review' | 'canceled' | 'expired' | 'failed'
 
