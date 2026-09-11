@@ -9,7 +9,8 @@ test("workspace authentication failures stop loading and offer a forced retry", 
   const loadFlow = shell.slice(loadStart, loadEnd);
 
   assert.ok(loadStart >= 0);
-  assert.match(loadFlow, /reason instanceof ApiError && reason\.status === 401[\s\S]*window\.location\.replace\(loginHref\(pathname\)\)[\s\S]*return/);
+  assert.match(loadFlow, /reason instanceof ApiError && reason\.status === 401[\s\S]*window\.location\.replace\(loginHref\(locationReturnPath\(window\.location\)\)\)[\s\S]*return/);
+  assert.doesNotMatch(loadFlow, /loginHref\(pathname\)/);
   assert.match(loadFlow, /setGateFailed\(true\)[\s\S]*setReady\(true\)/);
   const errorStart = shell.indexOf("if (gateFailed)");
   const errorEnd = shell.indexOf("if (!ready || !user)", errorStart);

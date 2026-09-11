@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { loginHref, safeReturnPath } from "../lib/auth-navigation.ts";
+import { locationReturnPath, loginHref, safeReturnPath } from "../lib/auth-navigation.ts";
 
 test("Web login return paths preserve valid same-origin destinations", () => {
   assert.equal(safeReturnPath("/"), "/");
@@ -11,6 +11,23 @@ test("Web login return paths preserve valid same-origin destinations", () => {
   assert.equal(
     loginHref("/account/settings?tab=security#sessions"),
     "/login?return_to=%2Faccount%2Fsettings%3Ftab%3Dsecurity%23sessions",
+  );
+});
+
+test("workspace login preserves the current query", () => {
+  assert.equal(
+    locationReturnPath({
+      pathname: "/account/requests",
+      search: "?create=1&gpu_model=H100&supplier_id=7",
+    }),
+    "/account/requests?create=1&gpu_model=H100&supplier_id=7",
+  );
+  assert.equal(
+    loginHref(locationReturnPath({
+      pathname: "/account/requests",
+      search: "?create=1&gpu_model=H100&supplier_id=7",
+    })),
+    "/login?return_to=%2Faccount%2Frequests%3Fcreate%3D1%26gpu_model%3DH100%26supplier_id%3D7",
   );
 });
 

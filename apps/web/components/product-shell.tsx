@@ -34,7 +34,7 @@ import {
 import { Brand } from "@/components/brand";
 import { UiSettings } from "@/components/ui-settings";
 import { ApiError, getCurrentUser, logoutCurrentUser, type AuthUser } from "@/lib/api";
-import { loginHref } from "@/lib/auth-navigation";
+import { locationReturnPath, loginHref } from "@/lib/auth-navigation";
 import { useI18n } from "@/components/locale-root";
 
 type WorkspaceVariant = "account" | "supplier" | "admin";
@@ -136,7 +136,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
       if (!active) return;
       setUser(null);
       if (reason instanceof ApiError && reason.status === 401) {
-        window.location.replace(loginHref(pathname));
+        window.location.replace(loginHref(locationReturnPath(window.location)));
         return;
       }
       setGateFailed(true);
