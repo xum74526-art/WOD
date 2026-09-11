@@ -23,6 +23,7 @@ import {
   type MobileBuyRequestDetail,
   type MobileBuyRequestEvent,
 } from "@/lib/mobile-buy-request-api";
+import { ApiError } from "@/lib/api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import {
@@ -111,6 +112,25 @@ const emptyQuote: QuoteDraft = { unit_price: "", total_price: "", available_at: 
 
 function latestQuote(item: MobileBuyQuote) {
   return item.latest_revision || item.revisions?.at(-1) || item;
+}
+
+function quoteSelectionSnapshot(item: MobileBuyQuote) {
+  const revision = item.latest_revision ?? item.revisions?.at(-1);
+  const revisionId = Number(revision?.id);
+  const revisionNo = Number(revision?.revision_no);
+  const totalPrice = Number(revision?.total_price);
+  if (
+    !Number.isInteger(revisionId)
+    || revisionId <= 0
+    || (revision?.quote_id != null && Number(revision.quote_id) !== item.id)
+    || !Number.isFinite(totalPrice)
+  ) return null;
+  return {
+    revisionId,
+    revisionNo: Number.isInteger(revisionNo) && revisionNo > 0 ? revisionNo : 1,
+    totalPrice,
+    currency: revision?.currency || item.currency,
+  };
 }
 
 function dateTimeInput(value?: string) {
@@ -286,16 +306,29 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
 
   async function selectQuote(item: MobileBuyQuote) {
     if (!detail) return;
+    const requestId = detail.request.id;
+    const snapshot = quoteSelectionSnapshot(item);
+    if (!snapshot) {
+      setError("报价资料已更新，请刷新后重新确认。");
+      try { await loadDetail(requestId); } catch { /* the existing quote remains visible */ }
+      return;
+    }
+    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${snapshot.currency} ${snapshot.totalPrice.toFixed(2)}`;
     const prompt = directTradeEnabled
-      ? `确认选择 ${item.supplier_name} 的报价 ¥${latestQuote(item).total_price}？`
-      : `确认选择 ${item.supplier_name} 的方案？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
+      ? `确认选择 ${item.supplier_name} 的报价（${confirmedTerms}）？`
+      : `确认选择 ${item.supplier_name} 的方案（${confirmedTerms}）？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
     if (!window.confirm(prompt)) return;
     setBusy(`select-${item.id}`); setError(""); setMessage("");
     try {
-      const result = await selectMobileBuyQuote(detail.request.id, item.id);
+      const result = await selectMobileBuyQuote(requestId, item.id, snapshot.revisionId);
       setMessage(result.commerce_mode === "matchmaking" ? "方案已选定，正在等待商家确认资源；当前未创建资金订单，也未扣除卡时。请等待工作人员联系确认平台审核进度。" : "报价已选择，请按订单流程继续处理。");
-      await load(detail.request.id);
-    } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
+      await load(requestId);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      if (reason instanceof ApiError && reason.status === 409) {
+        try { await loadDetail(requestId); } catch { /* keep the actionable 409 message */ }
+      }
+    } finally { setBusy(""); }
   }
 
   async function withdrawQuote(item: MobileBuyQuote) {

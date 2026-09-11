@@ -3032,6 +3032,20 @@
         "title": "QuoteRevisionIn",
         "type": "object"
       },
+      "QuoteSelectionIn": {
+        "properties": {
+          "expected_revision_id": {
+            "minimum": 1.0,
+            "title": "Expected Revision Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision_id"
+        ],
+        "title": "QuoteSelectionIn",
+        "type": "object"
+      },
       "RechargeIn": {
         "properties": {
           "amount": {
@@ -6494,6 +6508,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/QuoteSelectionIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

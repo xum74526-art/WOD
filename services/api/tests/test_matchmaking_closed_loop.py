@@ -255,6 +255,70 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
         retry = self._post(f"/api/buy-requests/{request.id}/quotes/{quote['id']}/withdraw")
         self.assertEqual(retry["status"], "withdrawn")
 
+    def test_selection_rejects_a_revision_changed_after_the_buyer_viewed_it(self):
+        request = self._request()
+        quote = self._quote(request, self.supplier_user, 100)
+
+        self._set_user(self.buyer)
+        buyer_revision = self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/counter",
+            {
+                "total_price": 90,
+                "currency": "CNY",
+                "message": "买家看到并确认的方案",
+                "expires_in_hours": 24,
+            },
+        )["latest_revision"]
+
+        self._set_user(self.supplier_user)
+        supplier_revision = self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/counter",
+            {
+                "total_price": 95,
+                "currency": "CNY",
+                "message": "商家随后更新的方案",
+                "expires_in_hours": 24,
+            },
+        )["latest_revision"]
+
+        self._set_user(self.buyer)
+        self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/select",
+            expected=409,
+        )
+        self.db.rollback()
+        self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/select",
+            {"expected_revision_id": buyer_revision["id"]},
+            expected=409,
+        )
+        self.db.rollback()
+        self.assertEqual(self.db.query(BuyRequestDeal).count(), 0)
+        stored_request = self.db.get(BuyRequest, request.id)
+        stored_quote = self.db.get(BuyRequestQuote, quote["id"])
+        latest = matchmaking.latest_revision(self.db, quote["id"])
+        self.assertEqual(stored_request.status, "quoting")
+        self.assertEqual(stored_quote.status, "active")
+        self.assertEqual(latest.id, supplier_revision["id"])
+        self.assertEqual(latest.status, "active")
+
+        selected = self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/select",
+            {"expected_revision_id": supplier_revision["id"]},
+        )
+        retry = self._post(
+            f"/api/buy-requests/{request.id}/quotes/{quote['id']}/select",
+            {"expected_revision_id": supplier_revision["id"]},
+        )
+        self.assertEqual(selected["deal"]["selected_revision_id"], supplier_revision["id"])
+        self.assertEqual(retry["deal"]["id"], selected["deal"]["id"])
+        self.assertEqual(
+            self.db.query(BuyRequestEvent).filter(
+                BuyRequestEvent.event_type == "buyer_selected_quote",
+            ).count(),
+            1,
+        )
+
     def test_full_lifecycle_is_idempotent_encrypted_and_non_financial(self):
         request = self._request()
         quote = self._quote(request, self.supplier_user, 100)
@@ -533,7 +597,7 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
         )
         seed.add(quote)
         seed.flush()
-        seed.add(BuyRequestQuoteRevision(
+        initial_revision = BuyRequestQuoteRevision(
             quote_id=quote.id,
             buy_request_id=request.id,
             supplier_id=supplier.id,
@@ -546,11 +610,14 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
             message=quote.message,
             expires_at=quote.expires_at,
             status="active",
-        ))
+        )
+        seed.add(initial_revision)
+        seed.flush()
         seed.commit()
         ids = {
             "request": request.id,
             "quote": quote.id,
+            "revision": initial_revision.id,
             "buyer": buyer.id,
             "supplier_user": supplier_user.id,
         }
@@ -595,7 +662,13 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                     buyer = db.get(User, ids["buyer"])
                     barrier.wait(timeout=5)
                     buy_request_router.select_quote(
-                        ids["request"], ids["quote"], buyer, db
+                        ids["request"],
+                        ids["quote"],
+                        buyer,
+                        db,
+                        buy_request_router.QuoteSelectionIn(
+                            expected_revision_id=ids["revision"],
+                        ),
                     )
                     return "selected"
                 except BizError:
@@ -611,17 +684,28 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
 
             check = Session()
             try:
-                deal = check.query(BuyRequestDeal).one()
-                selected_revision = check.get(
-                    BuyRequestQuoteRevision, deal.selected_revision_id
-                )
+                deals = check.query(BuyRequestDeal).all()
                 latest_revision = matchmaking.latest_revision(check, ids["quote"])
                 quote = check.get(BuyRequestQuote, ids["quote"])
-                self.assertIn("selected", results)
-                self.assertEqual(selected_revision.id, latest_revision.id)
-                self.assertEqual(selected_revision.status, "selected")
-                self.assertEqual(quote.total_price, selected_revision.total_price)
-                self.assertEqual(quote.status, "coordination_requested")
+                self.assertIn(
+                    results,
+                    (["countered", "conflict"], ["conflict", "selected"]),
+                )
+                if deals:
+                    self.assertEqual(len(deals), 1)
+                    selected_revision = check.get(
+                        BuyRequestQuoteRevision, deals[0].selected_revision_id
+                    )
+                    self.assertEqual(selected_revision.id, ids["revision"])
+                    self.assertEqual(selected_revision.id, latest_revision.id)
+                    self.assertEqual(selected_revision.status, "selected")
+                    self.assertEqual(quote.total_price, selected_revision.total_price)
+                    self.assertEqual(quote.status, "coordination_requested")
+                else:
+                    self.assertEqual(latest_revision.revision_number, 2)
+                    self.assertEqual(latest_revision.status, "active")
+                    self.assertEqual(quote.total_price, latest_revision.total_price)
+                    self.assertEqual(quote.status, "active")
             finally:
                 check.close()
                 engine.dispose()

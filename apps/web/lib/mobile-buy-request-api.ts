@@ -160,8 +160,11 @@ export function withdrawMobileBuyQuote(requestId: number, quoteId: number) {
   return apiRequest<{ request_id: number; quote_id: number; status: string }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/withdraw`), { method: "POST" });
 }
 
-export function selectMobileBuyQuote(requestId: number, quoteId: number) {
-  return apiRequest<{ request_id: number; quote_id: number; deal_id?: number; deal?: MobileBuyRequestDeal; status: string; quote_status: string; commerce_mode: "direct_trade" | "matchmaking" | "history_only" }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/select`), { method: "POST" });
+export function selectMobileBuyQuote(requestId: number, quoteId: number, expectedRevisionId: number) {
+  return apiRequest<{ request_id: number; quote_id: number; deal_id?: number; deal?: MobileBuyRequestDeal; status: string; quote_status: string; commerce_mode: "direct_trade" | "matchmaking" | "history_only" }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/select`), {
+    method: "POST",
+    body: JSON.stringify({ expected_revision_id: expectedRevisionId }),
+  });
 }
 
 export function confirmMobileBuyRequestDeal(requestId: number, dealId: number) {

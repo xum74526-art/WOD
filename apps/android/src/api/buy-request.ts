@@ -54,7 +54,7 @@ export interface BuyRequestQuote {
 }
 
 export interface BuyRequestQuoteRevision {
-  id?: number
+  id: number
   quote_id?: number
   revision_no?: number
   actor_role?: 'buyer' | 'supplier' | string
@@ -174,8 +174,12 @@ export function withdrawBuyRequestQuote(requestId: number, quoteId: number) {
   return request<{ request_id: number; quote_id: number; status: string }>({ url: `/buy-requests/${requestId}/quotes/${quoteId}/withdraw`, method: 'POST' })
 }
 
-export function selectBuyRequestQuote(requestId: number, quoteId: number) {
-  return request<{ request_id: number; quote_id: number; status: string }>({ url: `/buy-requests/${requestId}/quotes/${quoteId}/select`, method: 'POST' })
+export function selectBuyRequestQuote(requestId: number, quoteId: number, expectedRevisionId: number) {
+  return request<{ request_id: number; quote_id: number; status: string }>({
+    url: `/buy-requests/${requestId}/quotes/${quoteId}/select`,
+    method: 'POST',
+    data: { expected_revision_id: expectedRevisionId },
+  })
 }
 
 export function confirmBuyRequestDealBySupplier(requestId: number, dealId: number) {

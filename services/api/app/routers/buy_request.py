@@ -24,6 +24,7 @@ from app.schemas.buy_request import (
     DeliveryIssueIn,
     MatchmakingCredentialIn,
     QuoteRevisionIn,
+    QuoteSelectionIn,
 )
 from app.services import buy_request_matchmaking as matchmaking
 from app.services.gpu_catalog import canonicalize_gpu
@@ -931,6 +932,7 @@ def select_quote(
     quote_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    data: QuoteSelectionIn | None = None,
 ):
     # In matchmaking mode this records only a cooperation intention for
     # platform coordination. It must never create an Order, freeze a Wallet or
@@ -952,6 +954,21 @@ def select_quote(
     ).with_for_update().first()
     if not quote:
         raise BizError("报价不存在或已失效", status_code=404)
+    current_revision = matchmaking.latest_revision(db, quote.id)
+    # Legacy app builds sent no body. Keep their first-revision flow working,
+    # but fail closed once negotiation has produced terms they cannot identify.
+    if (
+        data is None
+        and quote.status == "active"
+        and current_revision
+        and current_revision.revision_number > 1
+    ):
+        raise BizError("报价已多次更新，请更新应用后重新确认", status_code=409)
+    if data and (
+        current_revision is None
+        or current_revision.id != data.expected_revision_id
+    ):
+        raise BizError("报价方案已更新，请刷新后重新确认", status_code=409)
     if direct_trade_enabled():
         if item.status not in OPEN_STATUSES:
             raise BizError("该求购当前不能确认合作意向", status_code=409)

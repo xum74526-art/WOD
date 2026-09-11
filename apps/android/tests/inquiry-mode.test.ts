@@ -36,7 +36,7 @@ test('request form is contact-first and contains product attribution without pri
   assert.match(buyRequest, /!form\.contact\.trim\(\) \|\| !form\.phone\.trim\(\)/)
   assert.match(buyRequest, /clearInquiryRequestPrefill\(\)/)
   assert.doesNotMatch(buyRequest, /max_unit_price:|budget:/)
-  assert.match(buyRequest, /selectBuyRequestQuote\(requestId, quote\.id\)/)
+  assert.match(buyRequest, /selectBuyRequestQuote\(requestId, quoteId, expectedRevisionId\)/)
   assert.match(buyRequest, /canBuyerSelectQuote\(\{/)
   assert.match(buyRequest, /matchmakingEnabled: commerce\.matchmakingEnabled/)
   assert.match(buyRequest, /directTradeEnabled: commerce\.directTradeEnabled/)

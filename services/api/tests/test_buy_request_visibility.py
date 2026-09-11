@@ -372,9 +372,28 @@ class BuyRequestVisibilityTests(unittest.TestCase):
         quote = self.db.query(BuyRequestQuote).filter(
             BuyRequestQuote.buy_request_id == self.targeted_to_me.id,
         ).one()
+        revision = buy_request_router.matchmaking.ensure_initial_revision(
+            self.db,
+            self.targeted_to_me,
+            quote,
+            self.supplier_user.id,
+        )
+        self.db.commit()
+
+        stale = self.client.post(
+            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select",
+            json={"expected_revision_id": revision.id + 1},
+        )
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.db.rollback()
+        self.db.refresh(self.targeted_to_me)
+        self.db.refresh(quote)
+        self.assertEqual(self.targeted_to_me.status, "published")
+        self.assertEqual(quote.status, "active")
 
         response = self.client.post(
-            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select"
+            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select",
+            json={"expected_revision_id": revision.id},
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["status"], "quote_selected")

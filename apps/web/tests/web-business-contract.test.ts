@@ -439,6 +439,7 @@ test("Web wallet keeps safe history actions and capability-gates future money mo
 
 test("Web matchmaking selection requests platform coordination without creating a financial order", () => {
   const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const buyRequestApi = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
   const requestPage = fs.readFileSync(new URL("../app/account/requests/page.tsx", import.meta.url), "utf8");
   const paymentPage = fs.readFileSync(new URL("../app/payment/[paymentNo]/page.tsx", import.meta.url), "utf8");
   const paymentGate = fs.readFileSync(new URL("../components/capability-payment-checkout.tsx", import.meta.url), "utf8");
@@ -450,6 +451,11 @@ test("Web matchmaking selection requests platform coordination without creating 
   assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);
   assert.match(workspace, /请等待工作人员联系确认/);
   assert.match(workspace, /selectMobileBuyQuote/);
+  assert.match(workspace, /const snapshot = quoteSelectionSnapshot\(item\)/);
+  assert.match(workspace, /selectMobileBuyQuote\(requestId, item\.id, snapshot\.revisionId\)/);
+  assert.doesNotMatch(workspace, /latestQuote\(item\)\.id/);
+  assert.match(buyRequestApi, /expected_revision_id: expectedRevisionId/);
+  assert.match(buyRequestApi, /body: JSON\.stringify/);
   assert.match(workspace, /result\.commerce_mode === "matchmaking"/);
   assert.match(workspace, /当前未创建资金订单/);
   assert.match(requestPage, /positiveNumber\(query\.product_id\)/);

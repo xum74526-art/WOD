@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-type Operation = { parameters?: Array<{ name: string }>; requestBody?: { content?: { "application/json"?: { schema?: { $ref?: string } } } } };
+type SchemaReference = { $ref?: string; anyOf?: SchemaReference[] };
+type Operation = { parameters?: Array<{ name: string }>; requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: SchemaReference } } } };
 type PropertySchema = { type?: string; minLength?: number; maxLength?: number; pattern?: string; anyOf?: PropertySchema[] };
 type OpenApi = { paths: Record<string, Record<string, Operation>>; components: { schemas: Record<string, { properties?: Record<string, PropertySchema>; required?: string[] }> } };
 const contractPath = fileURLToPath(new URL("../../../packages/api-contracts/openapi.json", import.meta.url));
@@ -16,7 +17,8 @@ function operation(path: string, method: "get" | "post" | "put" | "delete") {
 }
 
 function bodySchema(path: string, method: "post" | "put") {
-  const ref = operation(path, method).requestBody?.content?.["application/json"]?.schema?.$ref;
+  const requestSchema = operation(path, method).requestBody?.content?.["application/json"]?.schema;
+  const ref = requestSchema?.$ref ?? requestSchema?.anyOf?.find((item) => item.$ref)?.$ref;
   assert.ok(ref, `${method.toUpperCase()} ${path} must declare a JSON request schema`);
   const schema = contract.components.schemas[ref.split("/").at(-1)!];
   assert.ok(schema, `${ref} must resolve`);
@@ -58,6 +60,12 @@ test("buy-request creation exposes a backwards-compatible retry key", () => {
     { minLength: phone?.minLength, maxLength: phone?.maxLength, pattern: phone?.pattern },
     { minLength: 6, maxLength: 20, pattern: "^(?:[0-9]{6,20}|\\+[1-9][0-9]{5,14})$" },
   );
+
+  const selectOperation = operation("/api/buy-requests/{request_id}/quotes/{quote_id}/select", "post");
+  assert.equal(selectOperation.requestBody?.required ?? false, false);
+  const selection = bodySchema("/api/buy-requests/{request_id}/quotes/{quote_id}/select", "post");
+  assert.deepEqual(selection.required, ["expected_revision_id"]);
+  assert.ok(selection.properties?.expected_revision_id);
 });
 
 test("supplier resource edits expose a backwards-compatible version precondition", () => {

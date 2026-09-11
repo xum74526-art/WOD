@@ -332,6 +332,7 @@ import {
   type BuyRequestQuoteRevision,
   type BuyRequestView,
 } from '@/api/buy-request'
+import { ApiRequestError } from '@/api/request'
 import { getMarketModels, type MarketModel } from '@/api/market'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
@@ -482,6 +483,24 @@ function latestQuoteRevision(quote: BuyRequestQuote): BuyRequestQuote | BuyReque
 
 function quoteRevisionCount(quote: BuyRequestQuote) {
   return Math.max(1, Number(quote.revision_count || quote.revisions?.length || quote.latest_revision?.revision_no || 1))
+}
+
+function quoteSelectionSnapshot(quote: BuyRequestQuote) {
+  const revisions = quote.revisions || []
+  const revision = quote.latest_revision ?? revisions[revisions.length - 1]
+  const revisionId = Number(revision?.id)
+  if (
+    !revision
+    || !Number.isInteger(revisionId)
+    || revisionId <= 0
+    || (revision.quote_id != null && Number(revision.quote_id) !== quote.id)
+  ) return null
+  return {
+    quoteId: quote.id,
+    revisionId,
+    revisionNo: Math.max(1, Number(revision.revision_no || quoteRevisionCount(quote))),
+    amount: formatQuoteAmount(revision.total_price, revision.currency, t('cardHour')),
+  }
 }
 
 function quoteDeliveryText(quote: BuyRequestQuote) {
@@ -706,26 +725,36 @@ function canBuyerCounter(quote: BuyRequestQuote) {
 }
 function confirmQuoteSelection(quote: BuyRequestQuote) {
   if (!canSelectQuote(quote) || selectingQuoteId.value !== null || !detail.value) return
+  const snapshot = quoteSelectionSnapshot(quote)
+  if (!snapshot) {
+    uni.showToast({ title: t('quoteSelectionStale'), icon: 'none' })
+    void refreshDetail(detail.value.request.id).catch(() => {})
+    return
+  }
   const matchmaking = commerce.matchmakingEnabled
   uni.showModal({
     title: t(matchmaking ? 'requestPlatformCoordinationTitle' : 'confirmQuoteSelection'),
-    content: t(matchmaking ? 'requestPlatformCoordinationHint' : 'quoteSelectionHint'),
+    content: `${t('quoteRevision', { count: snapshot.revisionNo })} · ${snapshot.amount}\n${t(matchmaking ? 'requestPlatformCoordinationHint' : 'quoteSelectionHint')}`,
     confirmText: t(matchmaking ? 'requestPlatformCoordination' : 'selectQuote'),
     success: (result) => {
-      if (result.confirm) void selectQuote(quote, matchmaking)
+      if (result.confirm) void selectQuote(snapshot.quoteId, snapshot.revisionId, matchmaking)
     },
   })
 }
-async function selectQuote(quote: BuyRequestQuote, matchmaking: boolean) {
+async function selectQuote(quoteId: number, expectedRevisionId: number, matchmaking: boolean) {
   const requestId = detail.value?.request.id
-  if (!requestId || !canSelectQuote(quote) || selectingQuoteId.value !== null) return
-  selectingQuoteId.value = quote.id
+  if (!requestId || selectingQuoteId.value !== null) return
+  selectingQuoteId.value = quoteId
   try {
-    await selectBuyRequestQuote(requestId, quote.id)
+    await selectBuyRequestQuote(requestId, quoteId, expectedRevisionId)
     const refreshedDetail = await getBuyRequestDetail(requestId)
     detail.value = refreshedDetail
     await load()
     uni.showToast({ title: t(matchmaking ? 'platformCoordinationRequested' : 'quoteSelected'), icon: 'success' })
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.statusCode === 409) {
+      try { await refreshDetail(requestId) } catch {}
+    }
   } finally {
     selectingQuoteId.value = null
   }

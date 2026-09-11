@@ -38,7 +38,7 @@ test('request form requires contact details, carries listing identity, and suppo
   assert.match(requestPage, /clearInquiryRequestPrefill\(\)/)
   assert.match(requestPage, /String\(options\?\.compose \|\| ''\) === '1'/)
   assert.doesNotMatch(requestPage, /getLatestMarket|max_unit_price|budget:/)
-  assert.match(requestPage, /selectBuyRequestQuote\(requestId, quote\.id\)/)
+  assert.match(requestPage, /selectBuyRequestQuote\(requestId, quoteId, expectedRevisionId\)/)
   assert.match(requestPage, /canBuyerSelectQuote\(\{/)
   assert.match(requestPage, /matchmakingEnabled: commerce\.matchmakingEnabled/)
   assert.match(requestPage, /directTradeEnabled: commerce\.directTradeEnabled/)
