@@ -31,6 +31,7 @@ export interface SupplierDeviceItem {
 }
 
 export interface SupplierDeviceCreateInput {
+  client_request_id: string
   name: string
   gpu_model: string
   memory: string

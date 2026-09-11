@@ -39,6 +39,7 @@ _ENSURE = {
         "source_max_configurable_quantity", "platform_stock_cap",
         "source_price", "source_currency", "exchange_rate", "price_updated_at",
         "stock", "version", "reliability", "supplier_id",
+        "client_request_id", "create_request_hash",
     ],
     "posts": [
         "content_en", "topic_en", "origin", "content_type", "source_key",
@@ -128,7 +129,7 @@ def _ensure_columns(db_engine=None):
                     col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif table == "products" and col == "version":
                     col_type = "INTEGER NOT NULL DEFAULT 1"
-                elif col == "client_request_id":
+                elif col in {"client_request_id", "create_request_hash"}:
                     col_type = "VARCHAR(64)"
                 elif col in _DATETIME_COLS:
                     col_type = (
@@ -403,6 +404,63 @@ def _migrate_product_market_sources(db_engine=None):
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_products_market_external "
             "ON products (market_source, external_product_id) "
             "WHERE external_product_id IS NOT NULL"
+        ))
+
+
+def _migrate_product_create_idempotency(db_engine=None) -> None:
+    """Add durable per-supplier idempotency for manually listed products."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "products" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("products")}
+    missing_columns = {
+        "client_request_id": "VARCHAR(64)",
+        "create_request_hash": "VARCHAR(64)",
+    }
+    for column, column_type in missing_columns.items():
+        if column in columns:
+            continue
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                f"ALTER TABLE products ADD COLUMN {column} {column_type}"
+            ))
+        print(f"[init_db] 补列: products.{column}")
+
+    with target_engine.connect() as conn:
+        duplicate = conn.execute(text(
+            "SELECT supplier_id, client_request_id FROM products "
+            "WHERE supplier_id IS NOT NULL AND client_request_id IS NOT NULL "
+            "GROUP BY supplier_id, client_request_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+    if duplicate:
+        raise RuntimeError(
+            "duplicate per-supplier product request ids detected; resolve before startup"
+        )
+
+    inspector = inspect(target_engine)
+    indexes = inspector.get_indexes("products")
+    constraints = inspector.get_unique_constraints("products")
+    expected_columns = ["supplier_id", "client_request_id"]
+    has_scoped_unique = any(
+        item.get("unique") and item.get("column_names") == expected_columns
+        for item in indexes
+    ) or any(
+        item.get("column_names") == expected_columns
+        for item in constraints
+    )
+    if has_scoped_unique:
+        return
+
+    index_name = "uq_products_supplier_client_request"
+    if any(item.get("name") == index_name for item in indexes + constraints):
+        raise RuntimeError(f"{index_name} exists with an incompatible definition")
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_products_supplier_client_request "
+            "ON products (supplier_id, client_request_id) "
+            "WHERE client_request_id IS NOT NULL"
         ))
 
 
@@ -1322,6 +1380,7 @@ def init():
     _migrate_market_candle_resolutions()
     _migrate_order_request_scope()
     _migrate_product_market_sources()
+    _migrate_product_create_idempotency()
     _reconcile_supplier_completed_order_counts()
     _ensure_auth_identity_constraints()
     _migrate_unverified_phone_flags()

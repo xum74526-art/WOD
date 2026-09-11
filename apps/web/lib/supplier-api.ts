@@ -23,6 +23,21 @@ export type MobileSupplierDeviceUpdate = {
   status?: "on" | "off";
 };
 
+export type MobileSupplierDeviceCreate = {
+  client_request_id: string;
+  name: string;
+  gpu_model: string;
+  memory: string;
+  cuda?: string | null;
+  price: number;
+  stock: number;
+  desc?: string | null;
+  image_url?: string | null;
+  region_code: string;
+  region_name: string;
+  city: string;
+};
+
 export type MobileSupplierDeviceMutation = {
   id: number;
   name?: string;
@@ -54,7 +69,7 @@ export function listMobileSupplierDevices(statusFilter: "all" | "on" | "off" = "
   return apiRequest<MobileSupplierDevice[]>(`/api/v1/canonical/supplier/devices?status_filter=${statusFilter}`);
 }
 
-export function createMobileSupplierDevice(input: Record<string, unknown>) {
+export function createMobileSupplierDevice(input: MobileSupplierDeviceCreate) {
   return apiRequest<MobileSupplierDeviceMutation>("/api/v1/canonical/supplier/devices", { method: "POST", body: JSON.stringify(input) });
 }
 

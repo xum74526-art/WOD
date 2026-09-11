@@ -7,9 +7,11 @@ import {
   directOrderIntentSignature,
   ensureBuyRequestIntent,
   ensureDirectOrderIntent,
+  ensureSupplierDeviceIntent,
   hourlyOrderBody,
   kaiPricingQuery,
   normalizeBuyRequestContactPhone,
+  supplierDeviceIntentSignature,
   webRequestId,
 } from "../lib/web-business-contract.ts";
 import { communityDisplayText } from "../lib/community-ui.ts";
@@ -155,6 +157,34 @@ test("Web buy-request submission has a synchronous lock and sends the stable id 
   assert.match(api, /createMobileBuyRequest\(input: MobileBuyRequestInput\)/);
   assert.match(api, /body: JSON\.stringify\(input\)/);
   assert.doesNotMatch(api, /randomUUID/);
+});
+
+test("supplier resource retries reuse one request id until the create payload changes", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    name: "H100 80GB",
+    gpu_model: "H100",
+    memory: "80GB",
+    price: 24.8,
+    stock: 4,
+    region_code: "east_china",
+    region_name: "华东",
+    city: "上海",
+  };
+  const signature = supplierDeviceIntentSignature(input);
+  const first = ensureSupplierDeviceIntent(null, signature, createUuid);
+  const retry = ensureSupplierDeviceIntent(first, signature, createUuid);
+  const changed = ensureSupplierDeviceIntent(
+    retry,
+    supplierDeviceIntentSignature({ ...input, stock: 5 }),
+    createUuid,
+  );
+
+  assert.equal(retry.requestId, first.requestId);
+  assert.notEqual(changed.requestId, first.requestId);
+  assert.match(first.requestId, /^web-supplier-device-/);
+  assert.equal(sequence, 2);
 });
 
 test("released Web account copy does not expose retired test-only wording", () => {
@@ -358,6 +388,13 @@ test("seller resource workspace uses the backend card-hour price contract", () =
   assert.match(resource, /reason\.status !== 409/);
   assert.match(resource, /商品信息已发生变化，请确认最新库存后重新编辑/);
   assert.match(resource, /if \(stock !== selected\.stock\) changes\.stock = stock/);
+  assert.match(resource, /if \(submissionInFlight\.current\) return/);
+  assert.match(resource, /type="button" disabled=\{busy\} onClick=\{\(\) => \{/);
+  assert.match(resource, /supplierDeviceIntentSignature\(input\)/);
+  assert.match(resource, /client_request_id: intent\.requestId/);
+  assert.match(resource, /pendingCreateIntent\.current = null/);
+  assert.match(supplierApi, /MobileSupplierDeviceCreate[\s\S]*client_request_id: string/);
+  assert.match(supplierApi, /createMobileSupplierDevice\(input: MobileSupplierDeviceCreate\)/);
 });
 
 test("Web wallet keeps safe history actions and capability-gates future money movement", () => {

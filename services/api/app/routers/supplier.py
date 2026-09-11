@@ -1,9 +1,11 @@
-from decimal import Decimal
+import hashlib
+import json
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -32,6 +34,8 @@ router = APIRouter(prefix="/api/supplier", tags=["supplier"])
 
 
 _DEVICE_CONFLICT_MESSAGE = "商品信息已发生变化，请刷新后重新编辑"
+_DEVICE_CREATE_CONFLICT_MESSAGE = "重复上架请求参数不一致，请重新提交"
+_DEVICE_PRICE_QUANTUM = Decimal("0.0001")
 
 
 class SupplierReviewIn(BaseModel):
@@ -80,6 +84,53 @@ def _commit_device_write(db: Session) -> None:
         if db.get_bind().dialect.name == "sqlite" and ("locked" in message or "busy" in message):
             raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409) from exc
         raise
+
+
+def _device_create_hash(data: SupplierDeviceCreateIn) -> str:
+    payload = data.model_dump(
+        exclude={"client_request_id"},
+        mode="json",
+    )
+    payload["price"] = format(
+        data.price.quantize(_DEVICE_PRICE_QUANTUM, rounding=ROUND_HALF_UP),
+        ".4f",
+    )
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _find_device_by_client_request(
+    db: Session,
+    supplier_id: int,
+    client_request_id: str,
+) -> Product | None:
+    return db.query(Product).filter(
+        Product.supplier_id == supplier_id,
+        Product.client_request_id == client_request_id,
+    ).first()
+
+
+def _device_create_result(product: Product) -> dict:
+    return {
+        "id": product.id,
+        "name": product.name,
+        "status": product.status,
+        "version": product.version,
+    }
+
+
+def _replay_device_create(
+    product: Product,
+    request_hash: str,
+) -> dict:
+    if product.create_request_hash != request_hash:
+        raise BizError(_DEVICE_CREATE_CONFLICT_MESSAGE, status_code=409)
+    return _device_create_result(product)
 
 
 def _admin_application_out(
@@ -236,24 +287,60 @@ def device_list(status_filter: str = "on", user: User = Depends(get_current_user
 @router.post("/devices")
 def add_device(data: SupplierDeviceCreateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = _get_supplier(user, db)
-    from decimal import Decimal
+    supplier_id = int(s.id)
+    client_request_id = data.client_request_id
+    request_hash = _device_create_hash(data)
+    if client_request_id:
+        _begin_device_write_transaction(db)
+        existing = _find_device_by_client_request(
+            db,
+            supplier_id,
+            client_request_id,
+        )
+        if existing:
+            try:
+                result = _replay_device_create(existing, request_hash)
+            except BizError:
+                db.rollback()
+                raise
+            db.commit()
+            return success(result)
     p = Product(
         name=data.name, gpu_model=data.gpu_model,
         memory=data.memory, cuda=data.cuda,
-        price=Decimal(str(data.price)), cycle=[],
+        price=data.price.quantize(_DEVICE_PRICE_QUANTUM, rounding=ROUND_HALF_UP), cycle=[],
         desc=data.desc, image_url=data.image_url,
         region_code=data.region_code,
         region_name=data.region_name,
         country_code="CN", city=data.city,
         stock=data.stock, reliability=98.0,
-        supplier_id=s.id, status="on",
+        supplier_id=supplier_id, status="on",
+        client_request_id=client_request_id,
+        create_request_hash=request_hash if client_request_id else None,
         market_source="wod",
         stock_semantics="supplier_reported_inventory",
     )
     db.add(p)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            _find_device_by_client_request(db, supplier_id, client_request_id)
+            if client_request_id
+            else None
+        )
+        if existing:
+            try:
+                result = _replay_device_create(existing, request_hash)
+            except BizError:
+                db.rollback()
+                raise
+            db.commit()
+            return success(result)
+        raise BizError("新增商品冲突，请重试", status_code=409) from None
     db.refresh(p)
-    return success({"id": p.id, "name": p.name, "status": "on", "version": p.version})
+    return success(_device_create_result(p))
 
 
 @router.put("/devices/{did}")

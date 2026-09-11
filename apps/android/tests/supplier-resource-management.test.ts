@@ -66,6 +66,12 @@ test('resource creation submits card hours without applying the RMB conversion h
   assert.match(createPage, /slice\(0, 4\)/)
   assert.match(createPage, /if \(submitting\.value\) return/)
   assert.match(createPage, /if \(!listed\) submitting\.value = false/)
+  assert.match(createPage, /ensureClientRequestIntent/)
+  assert.match(createPage, /client_request_id:\s*ensureCreateRequestId\(payload\)/)
+  assert.match(createPage, /pendingCreateIntent\.value = null/)
+  assert.match(createPage, /onBackPress\(\(\) => submitting\.value\)/)
+  assert.match(createPage, /:show-back="!submitting"/)
+  assert.match(supplierApi, /interface SupplierDeviceCreateInput[\s\S]*client_request_id:\s*string/)
 })
 
 test('resource editing preserves four-decimal prices and submits only changed fields', () => {

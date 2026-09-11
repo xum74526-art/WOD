@@ -61,6 +61,9 @@ test("buy-request creation exposes a backwards-compatible retry key", () => {
 });
 
 test("supplier resource edits expose a backwards-compatible version precondition", () => {
+  const create = bodySchema("/api/supplier/devices", "post");
+  assert.ok(create.properties?.client_request_id);
+  assert.equal(create.required?.includes("client_request_id") ?? false, false);
   const update = bodySchema("/api/supplier/devices/{did}", "put");
   assert.ok(update.properties?.expected_version);
   assert.equal(update.required?.includes("expected_version") ?? false, false);

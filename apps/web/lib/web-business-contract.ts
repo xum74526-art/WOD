@@ -13,7 +13,7 @@ export function hourlyOrderBody(hours: number, clientRequestId: string) {
   return { hours, client_request_id: clientRequestId };
 }
 
-export function webRequestId(kind: "order" | "renew" | "buy-request", uuid: string) {
+export function webRequestId(kind: "order" | "renew" | "buy-request" | "supplier-device", uuid: string) {
   return `web-${kind}-${uuid}`.slice(0, 64);
 }
 
@@ -63,6 +63,24 @@ export function ensureBuyRequestIntent(
 ): BuyRequestIntent {
   if (current?.signature === signature) return current;
   return { signature, requestId: webRequestId("buy-request", createUuid()) };
+}
+
+export type SupplierDeviceIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function supplierDeviceIntentSignature(input: Readonly<Record<string, unknown>>) {
+  return JSON.stringify(input);
+}
+
+export function ensureSupplierDeviceIntent(
+  current: SupplierDeviceIntent | null,
+  signature: string,
+  createUuid: () => string,
+): SupplierDeviceIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("supplier-device", createUuid()) };
 }
 
 export function normalizeBuyRequestContactPhone(value: string): string | null {
