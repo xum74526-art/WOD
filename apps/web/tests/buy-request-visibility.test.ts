@@ -51,3 +51,36 @@ test("supplier, buyer, and admin workspaces expose the closed matchmaking flow w
   assert.doesNotMatch(admin, /event\.label \|\| statusLabels/);
   assert.match(admin, /SSH 明文仅在凭据审核时按需读取/);
 });
+
+test("administrator request filters cover every persisted workflow stage", () => {
+  const admin = fs.readFileSync(new URL("../components/admin-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const adminApi = fs.readFileSync(new URL("../lib/admin-audit-api.ts", import.meta.url), "utf8");
+  const filterSource = admin.match(/const statusFilterGroups = \[([\s\S]*?)\] as const;/)?.[1];
+
+  assert.ok(filterSource, "status filter configuration must remain explicit and testable");
+  assert.deepEqual(
+    [...filterSource.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]),
+    [
+      "platform_review",
+      "credential_submitted",
+      "delivery_disputed",
+      "published",
+      "quoting",
+      "buyer_selected",
+      "credential_pending",
+      "credential_rejected",
+      "credential_released",
+      "quote_selected",
+      "processing",
+      "completed",
+      "expired",
+      "closed",
+      "rejected",
+    ],
+  );
+  assert.match(filterSource, /需要平台处理/);
+  assert.match(filterSource, /撮合进行中/);
+  assert.match(filterSource, /已结束/);
+  assert.match(admin, /group\.values\.map\(\(value\) => <option key=\{value\} value=\{value\}>\{statusLabel\(value\)\}<\/option>/);
+  assert.match(adminApi, /params\.set\("status", input\.status\.trim\(\)\)/);
+});

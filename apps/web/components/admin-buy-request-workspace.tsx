@@ -46,6 +46,30 @@ const statusLabels: Record<string, string> = {
   pending_payment: "待付款",
 };
 
+const statusFilterGroups = [
+  {
+    label: "需要平台处理",
+    values: ["platform_review", "credential_submitted", "delivery_disputed"],
+  },
+  {
+    label: "撮合进行中",
+    values: [
+      "published",
+      "quoting",
+      "buyer_selected",
+      "credential_pending",
+      "credential_rejected",
+      "credential_released",
+      "quote_selected",
+      "processing",
+    ],
+  },
+  {
+    label: "已结束",
+    values: ["completed", "expired", "closed", "rejected"],
+  },
+] as const;
+
 const eventLabels: Record<string, string> = {
   quote_history_initialized: "报价记录已建立",
   quote_submitted: "商家已提交方案",
@@ -147,7 +171,12 @@ export function AdminBuyRequestWorkspace() {
     <div className="workspace-page__head"><p>ADMIN / SERVICE REQUESTS</p><h1>撮合交易管理</h1><span>核验双方方案和加密托管的 SSH 凭据；资金交易、充值与提现开关保持关闭。</span></div>
     <form className="refund-toolbar" onSubmit={submit}>
       <select aria-label="需求类型" value={requestType} onChange={(event) => setRequestType(event.target.value as "" | "online" | "offline")}><option value="">全部类型</option><option value="online">在线算力</option><option value="offline">线下设备</option></select>
-      <select aria-label="需求状态" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option><option value="published">待报价</option><option value="quoting">方案协商中</option><option value="quote_selected">已选定方案</option><option value="completed">已完成</option><option value="expired">已过期</option></select>
+      <select aria-label="需求状态" value={status} onChange={(event) => setStatus(event.target.value)}>
+        <option value="">全部状态</option>
+        {statusFilterGroups.map((group) => <optgroup key={group.label} label={group.label}>
+          {group.values.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}
+        </optgroup>)}
+      </select>
       <input aria-label="搜索需求" placeholder="GPU、买家、联系人或手机号" value={keyword} onChange={(event) => setKeyword(event.target.value)}/>
       <button disabled={loading}><ArrowClockwise size={15}/>{loading ? "加载中" : "查询"}</button>
     </form>
