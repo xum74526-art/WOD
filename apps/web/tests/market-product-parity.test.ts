@@ -54,13 +54,40 @@ test("hour purchases estimate expiry rebates from the authenticated personal tie
   assert.equal(localizeRebateHint("再销售 200 卡时可升至 8% 返佣", "en"), "Confirm 200 more card hours in sales to reach the 8% supplier sales rebate tier.");
 });
 
-test("Web trend normal state auto-refreshes and renders canonical KAI regional spreads", () => {
+test("Web trend separates live quote polling from the heavier market catalogue", () => {
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
+  const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
   const api = fs.readFileSync(new URL("../lib/mobile-market-api.ts", import.meta.url), "utf8");
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
-  assert.match(panel, /MARKET_AUTO_REFRESH_MS = 10_000/);
-  assert.match(panel, /window\.setInterval\(\(\) => \{ void load\(true, false\); \}, MARKET_AUTO_REFRESH_MS\)/);
+  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 60_000/);
+  assert.match(panel, /if \(!initialData\) void load\(false, true\)/);
+  assert.match(panel, /if \(!document\.hidden\) void load\(true, false\);[\s\S]*MARKET_CATALOG_REFRESH_MS/);
+  assert.match(panel, /if \(inFlight\) return/);
+  assert.match(panel, /void refreshRegionalQuotes\(true\)/);
+  assert.match(panel, /if \(!document\.hidden\) void refreshRegionalQuotes\(false\);[\s\S]*MARKET_CATALOG_REFRESH_MS/);
+  assert.doesNotMatch(panel, /getMobileLatestMarket\(model\)/);
+  assert.match(chart, /LATEST_REFRESH_MS = 10_000/);
+  assert.match(chart, /if \(!document\.hidden\) void refreshLatest\(\)/);
+  assert.match(chart, /onLatestRef\.current\?\.\(value\)/);
+  assert.match(adapter, /PUBLIC_MARKET_LATEST_TTL_MS = 0/);
+  assert.match(adapter, /PUBLIC_MARKET_LATEST_STALE_MS = 20_000/);
+  assert.match(adapter, /createStaleTtlCache<\s*\[NextRequest, string, string, string\]/);
+  assert.match(adapter, /JSON\.stringify\(\[apiOrigin, locale, queryString\]\)/);
+  assert.match(adapter, /searchParams\.getAll\("model"\)/);
+  assert.match(adapter, /searchParams\.getAll\("variant"\)/);
+  assert.match(adapter, /searchParams\.getAll\("sources"\)/);
+  assert.match(adapter, /new URLSearchParams\(\{ model, sources: "kai" \}\)/);
+  assert.match(adapter, /publicMarketLatestQuery\(request\.nextUrl\.searchParams\)/);
+  assert.match(adapter, /result\.body\.code !== 0/);
+  assert.match(adapter, /isValidMarketLatestPayload\(result\.body\.data/);
+  assert.match(adapter, /PublicMarketLatestPayloadError/);
+  assert.match(adapter, /invalid_market_payload/);
+  assert.match(adapter, /refreshMode: "blocking"/);
+  assert.match(adapter, /canonicalPath === "market\/prices\/latest"\) return publicMarketLatest\(request\)/);
+  assert.match(adapter, /publicRealtimeApiSuccess\(payload\.data, \{ source: "canonical-api" \}\)/);
+  assert.match(adapter, /"Cache-Control": "private, no-store"/);
+  assert.doesNotMatch(panel, /MARKET_AUTO_REFRESH_MS/);
   assert.match(panel, /getMobileRegionalQuotes\(model\)/);
   assert.match(panel, /区域价差/);
   assert.match(panel, /card_hour_rmb_rate/);

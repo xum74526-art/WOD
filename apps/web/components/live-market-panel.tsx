@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ArrowClockwise, ArrowDown, ArrowUp, CaretDown, CaretUp, ChartLine, Database, MagnifyingGlass, MapPin } from "@phosphor-icons/react";
 import { publicApiEnvelopeRequest } from "@/lib/api";
-import { getMobileLatestMarket, getMobileMarketModels, getMobileMarketSources, getMobileRegionalQuotes, type MobileLatestMarket, type MobileMarketModel, type MobileMarketSource, type MobileRegionalQuotes } from "@/lib/mobile-market-api";
+import { getMobileMarketModels, getMobileMarketSources, getMobileRegionalQuotes, type MobileLatestMarket, type MobileMarketModel, type MobileMarketSource, type MobileRegionalQuotes } from "@/lib/mobile-market-api";
 import { KAI_REALTIME_SOURCE } from "@/lib/web-business-contract";
 import { MarketCandlestickChart } from "@/components/market-candlestick-chart";
 import { useI18n } from "@/components/locale-root";
+import { expandMarketHistory } from "@/lib/compact-market-history";
 import type { MarketChartSnapshot } from "@/lib/market-candlestick-chart";
 
 export type PricePoint = { date: string; median: number };
@@ -23,7 +24,13 @@ export type MarketSummary = {
 };
 export type MarketMeta = { observed_at: string; history_updated_at?: string };
 export type MarketResponse = { data: MarketSummary[]; meta: MarketMeta };
-export type InitialMarketDashboard = MarketResponse & {
+export type InitialMarketSummary = Omit<MarketSummary, "history"> & {
+  history_values: Array<number | null>;
+};
+export type InitialMarketDashboard = {
+  data: InitialMarketSummary[];
+  history_dates: string[];
+  meta: MarketMeta;
   models: MobileMarketModel[];
   sources: MobileMarketSource[];
 };
@@ -37,7 +44,7 @@ const ranges: { value: RangeDays; key: string; label: string }[] = [
   { value: 90, key: "trends.range.3Months", label: "3个月" },
 ];
 const PAGE_SIZE = 15;
-const MARKET_AUTO_REFRESH_MS = 10_000;
+const MARKET_CATALOG_REFRESH_MS = 60_000;
 
 function validHistory(item: MarketSummary) {
   return item.history.filter((point) => point.median > 0);
@@ -231,7 +238,12 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     const date = new Date(value ?? "");
     return Number.isFinite(date.getTime()) ? timeFormatter.format(date) : "—";
   }, [timeFormatter]);
-  const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price > 0 || validHistory(item).length > 0);
+  const initialMarkets = useMemo(() => (initialData?.data ?? [])
+    .map(({ history_values: historyValues, ...item }): MarketSummary => ({
+      ...item,
+      history: expandMarketHistory(initialData?.history_dates ?? [], historyValues),
+    }))
+    .filter((item) => item.median_price > 0 || validHistory(item).length > 0), [initialData]);
   const initialModel = preferredMarketModel(initialMarkets, initialData?.models);
   const [markets, setMarkets] = useState<MarketSummary[]>(initialMarkets);
   const [meta, setMeta] = useState<MarketMeta | null>(initialData?.meta ?? null);
@@ -305,9 +317,13 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
       setStatus((current) => showLoading || current === "loading" ? "error" : current);
     }
   }, []);
-  useEffect(() => { void load(false, !initialData); }, [initialData, load]);
   useEffect(() => {
-    const timer = window.setInterval(() => { void load(true, false); }, MARKET_AUTO_REFRESH_MS);
+    if (!initialData) void load(false, true);
+  }, [initialData, load]);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load(true, false);
+    }, MARKET_CATALOG_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [load]);
 
@@ -315,17 +331,32 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     const model = findMobileModel(mobileModels, selectedModel);
     if (!model) { setLatest(null); setRegionalQuotes(null); return; }
     let active = true;
-    setLiveLoading(true);
+    let inFlight = false;
+    const refreshRegionalQuotes = async (showLoading = false) => {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) setLiveLoading(true);
+      try {
+        const regionalResult = await getMobileRegionalQuotes(model);
+        if (!active) return;
+        setRegionalQuotes(regionalResult);
+      } catch {
+        // Keep the last verified regional spread when a refresh fails.
+      } finally {
+        inFlight = false;
+        if (active && showLoading) setLiveLoading(false);
+      }
+    };
     setLatest((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
     setRegionalQuotes((current) => current?.gpu_model === model.gpu_model && current.gpu_variant === model.gpu_variant ? current : null);
-    Promise.allSettled([getMobileLatestMarket(model), getMobileRegionalQuotes(model)])
-      .then(([latestResult, regionalResult]) => {
-        if (!active) return;
-        if (latestResult.status === "fulfilled") setLatest(latestResult.value);
-        if (regionalResult.status === "fulfilled") setRegionalQuotes(regionalResult.value);
-      })
-      .finally(() => { if (active) setLiveLoading(false); });
-    return () => { active = false; };
+    void refreshRegionalQuotes(true);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshRegionalQuotes(false);
+    }, MARKET_CATALOG_REFRESH_MS);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [mobileModels, selectedModel]);
 
   const memories = useMemo(() => [...new Set(markets.map((item) => item.vram_gb).filter((value): value is number => Boolean(value)))].sort((a, b) => a - b), [markets]);

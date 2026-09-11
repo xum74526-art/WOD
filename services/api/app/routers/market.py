@@ -5,8 +5,6 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from math import ceil
 from statistics import median
-from threading import Condition
-import time
 from typing import Callable, Iterable, TypeVar
 
 from fastapi import APIRouter, Depends
@@ -23,6 +21,7 @@ from app.services.market_freshness import CURRENT_SOURCE_STATES, HOT_SOURCE_STAT
 from app.services.market_sync import _without_outliers, utcnow
 from app.services.market_history_sync import HistorySelection, select_market_history, select_market_history_bulk
 from app.services.region_mapper import map_region
+from app.services.sync_ttl_cache import SyncTtlCache, SyncTtlCacheOverloadedError
 from app.utils.response import BizError, success
 
 
@@ -154,59 +153,8 @@ def _with_card_hour_candles(payload: dict) -> dict:
     return payload
 
 
-class _MarketResponseCache:
-    """Small process-local TTL cache with per-key request coalescing.
-
-    FastAPI creates a DB session before entering a route, but SQLAlchemy does
-    not check out a connection until the first query. Waiting duplicate calls
-    therefore consume no SQLite pool connections while one request computes
-    the shared real-data result.
-    """
-
-    def __init__(self, max_entries: int = 256):
-        self.max_entries = max_entries
-        self._condition = Condition()
-        self._entries: dict[tuple, tuple[float, object]] = {}
-        self._inflight: set[tuple] = set()
-
-    def get_or_load(self, key: tuple, ttl_seconds: float, loader: Callable[[], _Payload]) -> _Payload:
-        while True:
-            now = time.monotonic()
-            with self._condition:
-                cached = self._entries.get(key)
-                if cached and cached[0] > now:
-                    return cached[1]  # type: ignore[return-value]
-                if key not in self._inflight:
-                    self._inflight.add(key)
-                    break
-                self._condition.wait(timeout=1.0)
-        try:
-            value = loader()
-        except Exception:
-            with self._condition:
-                self._inflight.discard(key)
-                self._condition.notify_all()
-            raise
-        with self._condition:
-            if len(self._entries) >= self.max_entries:
-                expired = [entry_key for entry_key, entry in self._entries.items() if entry[0] <= time.monotonic()]
-                for entry_key in expired:
-                    self._entries.pop(entry_key, None)
-                if len(self._entries) >= self.max_entries:
-                    oldest = min(self._entries, key=lambda entry_key: self._entries[entry_key][0])
-                    self._entries.pop(oldest, None)
-            self._entries[key] = (time.monotonic() + max(ttl_seconds, 0.1), value)
-            self._inflight.discard(key)
-            self._condition.notify_all()
-        return value
-
-    def clear(self) -> None:
-        with self._condition:
-            self._entries.clear()
-            self._condition.notify_all()
-
-
-_MARKET_RESPONSE_CACHE = _MarketResponseCache()
+_MARKET_RESPONSE_CACHE: SyncTtlCache[tuple, object] = SyncTtlCache(max_entries=256)
+MARKET_LATEST_CACHE_SECONDS = 8
 
 
 def _source_refresh_seconds(source: str) -> int | None:
@@ -241,7 +189,12 @@ def _cached_payload(
     ttl_seconds: float,
     loader: Callable[[], _Payload],
 ) -> _Payload:
-    return _MARKET_RESPONSE_CACHE.get_or_load(key, ttl_seconds, loader) if _cache_allowed(db) else loader()
+    if not _cache_allowed(db):
+        return loader()
+    try:
+        return _MARKET_RESPONSE_CACHE.get_or_load(key, ttl_seconds, loader)
+    except SyncTtlCacheOverloadedError as error:
+        raise BizError("行情请求繁忙，请稍后重试", status_code=503) from error
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -1257,15 +1210,42 @@ def latest_prices(
     sources: str = "kai",
     db: Session = Depends(get_db),
 ):
-    now = utcnow()
     allowed_sources = _kai_sources(sources)
+    canonical_model = canonicalize_gpu(model) or model
+    normalized_variant = (
+        None if variant is None else normalize_gpu_variant(canonical_model, variant)
+    )
+    cache_key = (
+        "market_latest_v1",
+        canonical_model,
+        "auto" if variant is None else "explicit",
+        normalized_variant or "",
+        tuple(sorted(allowed_sources)),
+    )
+    payload = _cached_payload(
+        db,
+        cache_key,
+        MARKET_LATEST_CACHE_SECONDS,
+        lambda: _latest_prices_payload(
+            canonical_model, normalized_variant, allowed_sources, db,
+        ),
+    )
+    return success(payload)
+
+
+def _latest_prices_payload(
+    canonical_model: str,
+    requested_variant: str | None,
+    allowed_sources: set[str],
+    db: Session,
+) -> dict:
+    now = utcnow()
     source_states = _source_states(db, now)
     current_sources = {source for source in allowed_sources if source_states.get(source) in CURRENT_SOURCE_STATES}
     all_latest = _latest_rows(db)
-    canonical_model = canonicalize_gpu(model) or model
     selected_variant = normalize_gpu_variant(
         canonical_model,
-        variant if variant is not None else _pick_variant(all_latest, canonical_model),
+        requested_variant if requested_variant is not None else _pick_variant(all_latest, canonical_model),
     )
     rows = [
         row for row_model, row_variant, row in _latest_normalized_rows(all_latest)
@@ -1280,7 +1260,7 @@ def latest_prices(
     # quote exists yet, fall back to the valid requested set, then to the
     # requested set itself so retry guidance remains source-specific.
     refresh_sources = {row.source for row in rows} or current_sources or allowed_sources
-    return success({
+    return {
         "server_time": _iso(now),
         "next_refresh_in": _next_market_refresh_seconds(refresh_sources),
         "gpu_model": canonical_model,
@@ -1305,7 +1285,7 @@ def latest_prices(
         "items": items,
         "requested_source_states": {source: source_states.get(source, "pending") for source in sorted(allowed_sources)},
         "excluded_sources": sorted(allowed_sources - current_sources),
-    })
+    }
 
 
 @router.get("/prices/history")

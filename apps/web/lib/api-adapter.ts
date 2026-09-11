@@ -1,6 +1,9 @@
 import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeStoredLocale } from "@/lib/language";
+import { isValidMarketLatestPayload } from "@/lib/market-latest-payload";
+import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
 import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
@@ -17,6 +20,46 @@ import {
 const RETURN_TO_COOKIE = "wod_web_return_to";
 
 type JsonObject = Record<string, unknown>;
+
+type PublicMarketSummaryPayload = {
+  data: JsonObject[];
+  meta: JsonObject;
+  complete: boolean;
+};
+
+type PublicMarketLatestPayload = {
+  data: JsonObject;
+};
+
+const PUBLIC_MARKET_SUMMARY_TTL_MS = 60_000;
+const PUBLIC_MARKET_SUMMARY_STALE_MS = 120_000;
+const PUBLIC_MARKET_SUMMARY_RETRY_DELAY_MS = 5_000;
+const PUBLIC_MARKET_SUMMARY_CACHE_LIMIT = 8;
+const PUBLIC_MARKET_LATEST_TTL_MS = 0;
+const PUBLIC_MARKET_LATEST_STALE_MS = 20_000;
+const PUBLIC_MARKET_LATEST_RETRY_DELAY_MS = 2_000;
+const PUBLIC_MARKET_LATEST_CACHE_LIMIT = 256;
+
+class PublicMarketSummaryUpstreamError extends Error {
+  constructor(readonly result: CanonicalApiResult) {
+    super(canonicalErrorMessage(result));
+    this.name = "PublicMarketSummaryUpstreamError";
+  }
+}
+
+class PublicMarketLatestUpstreamError extends Error {
+  constructor(readonly result: CanonicalApiResult) {
+    super(canonicalErrorMessage(result));
+    this.name = "PublicMarketLatestUpstreamError";
+  }
+}
+
+class PublicMarketLatestPayloadError extends Error {
+  constructor() {
+    super("实时行情返回数据异常");
+    this.name = "PublicMarketLatestPayloadError";
+  }
+}
 
 function object(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
@@ -67,6 +110,12 @@ function publicApiSuccess(data: unknown, meta: JsonObject = {}, maxAge = 10) {
     headers: {
       "Cache-Control": `public, max-age=${maxAge}, s-maxage=${Math.max(maxAge, 30)}, stale-while-revalidate=120`,
     },
+  });
+}
+
+function publicRealtimeApiSuccess(data: unknown, meta: JsonObject = {}) {
+  return NextResponse.json({ data, meta }, {
+    headers: { "Cache-Control": "private, no-store" },
   });
 }
 
@@ -474,6 +523,26 @@ function modelMemory(model: string, variant: string) {
   return matched ? number(matched[1]) : undefined;
 }
 
+function publicMarketLocale(request: NextRequest) {
+  return normalizeStoredLocale(request.cookies.get("kai.locale")?.value);
+}
+
+function publicMarketLatestQuery(searchParams: URLSearchParams) {
+  const models = searchParams.getAll("model");
+  const variants = searchParams.getAll("variant");
+  const sources = searchParams.getAll("sources");
+  if (models.length !== 1 || variants.length > 1 || sources.length > 1) return null;
+
+  const model = models[0].trim();
+  const variant = variants[0]?.trim() ?? "";
+  const source = sources[0]?.trim().toLowerCase() || "kai";
+  if (!model || source !== "kai") return null;
+
+  const query = new URLSearchParams({ model, sources: "kai" });
+  if (variant) query.set("variant", variant);
+  return query;
+}
+
 async function marketRanking(request: NextRequest) {
   const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
   if (!ranking.ok) return upstreamFailure(ranking);
@@ -498,25 +567,35 @@ async function marketRanking(request: NextRequest) {
   });
 }
 
-async function marketSummary(request: NextRequest) {
-  const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
-  if (!ranking.ok) return upstreamFailure(ranking);
+async function buildMarketSummary(request: NextRequest): Promise<PublicMarketSummaryPayload> {
+  const ranking = await upstream(request, "/api/market/ranking", { auth: false });
+  if (!ranking.ok) throw new PublicMarketSummaryUpstreamError(ranking);
   const rankingData = object(ranking.body.data);
   const entries = array(rankingData.items);
+  let complete = entries.length > 0;
   const withHistory = await mapWithConcurrency(entries, 8, async (entry) => {
     const model = text(entry.gpu_model);
     const variant = text(entry.gpu_variant);
     const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
     if (variant) query.set("variant", variant);
-    const candleResult = await upstream(request, "/api/market/prices/candles", { query, auth: false, revalidate: 120 });
+    const candleResult = await upstream(request, "/api/market/prices/candles", { query, auth: false });
     const candleData = candleResult.ok ? object(candleResult.body.data) : {};
-    const history = array(candleData.candles)
+    const candleRows = array(candleData.candles);
+    if (
+      !candleResult.ok
+      || !Array.isArray(candleData.candles)
+      || text(candleData.gpu_model) !== model
+      || text(candleData.gpu_variant) !== variant
+      || text(candleData.range) !== "90d"
+    ) complete = false;
+    const history = candleRows
       .map((candle) => ({
         date: text(candle.start_time).slice(0, 10),
         median: number(candle.close_price_card_hours, NaN),
       }))
       .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
       .sort((a, b) => b.date.localeCompare(a.date));
+    if (history.length !== candleRows.length) complete = false;
     const current = number(entry.median_price_card_hours);
     return {
       gpu_model: variant ? `${model} ${variant}`.trim() : model,
@@ -536,12 +615,89 @@ async function marketSummary(request: NextRequest) {
       reliability: text(entry.market_status) === "live" ? 100 : 0,
     };
   });
-  return publicApiSuccess(withHistory, {
-    observed_at: text(rankingData.server_time),
-    history_updated_at: text(rankingData.server_time),
-    count: withHistory.length,
-    source: "canonical-api",
+  return {
+    data: withHistory,
+    meta: {
+      observed_at: text(rankingData.server_time),
+      history_updated_at: text(rankingData.server_time),
+      count: withHistory.length,
+      source: "canonical-api",
+    },
+    complete,
+  };
+}
+
+const readPublicMarketSummary = createStaleTtlCache<
+  [NextRequest, string, string],
+  PublicMarketSummaryPayload
+>({
+  key: (_request, apiOrigin, locale) => JSON.stringify([apiOrigin, locale]),
+  load: (request) => buildMarketSummary(request),
+  ttlMs: PUBLIC_MARKET_SUMMARY_TTL_MS,
+  maxEntries: PUBLIC_MARKET_SUMMARY_CACHE_LIMIT,
+  staleMs: PUBLIC_MARKET_SUMMARY_STALE_MS,
+  retryDelayMs: PUBLIC_MARKET_SUMMARY_RETRY_DELAY_MS,
+  shouldStore: (payload) => payload.complete,
+});
+
+async function marketSummary(request: NextRequest) {
+  try {
+    const payload = await readPublicMarketSummary(request, resolveApiOrigin(), publicMarketLocale(request));
+    return publicApiSuccess(payload.data, payload.meta);
+  } catch (error) {
+    if (error instanceof PublicMarketSummaryUpstreamError) return upstreamFailure(error.result);
+    return apiError("市场行情暂时不可用，请稍后重试", 503);
+  }
+}
+
+async function buildPublicMarketLatest(request: NextRequest, queryString: string): Promise<PublicMarketLatestPayload> {
+  const query = new URLSearchParams(queryString);
+  const result = await upstream(request, "/api/market/prices/latest", {
+    query,
+    auth: false,
   });
+  if (!result.ok) throw new PublicMarketLatestUpstreamError(result);
+  if (
+    result.body.code !== 0
+    || !isValidMarketLatestPayload(result.body.data, {
+      model: query.get("model") ?? "",
+      variant: query.has("variant") ? query.get("variant") : null,
+    })
+  ) throw new PublicMarketLatestPayloadError();
+  return { data: result.body.data };
+}
+
+const readPublicMarketLatest = createStaleTtlCache<
+  [NextRequest, string, string, string],
+  PublicMarketLatestPayload
+>({
+  key: (_request, apiOrigin, locale, queryString) => JSON.stringify([apiOrigin, locale, queryString]),
+  load: (request, _apiOrigin, _locale, queryString) => buildPublicMarketLatest(request, queryString),
+  ttlMs: PUBLIC_MARKET_LATEST_TTL_MS,
+  maxEntries: PUBLIC_MARKET_LATEST_CACHE_LIMIT,
+  staleMs: PUBLIC_MARKET_LATEST_STALE_MS,
+  retryDelayMs: PUBLIC_MARKET_LATEST_RETRY_DELAY_MS,
+  refreshMode: "blocking",
+});
+
+async function publicMarketLatest(request: NextRequest) {
+  const query = publicMarketLatestQuery(request.nextUrl.searchParams);
+  if (!query) return apiError("无效的实时行情查询参数", 400, "invalid_market_query");
+  try {
+    const payload = await readPublicMarketLatest(
+      request,
+      resolveApiOrigin(),
+      publicMarketLocale(request),
+      query.toString(),
+    );
+    return publicRealtimeApiSuccess(payload.data, { source: "canonical-api" });
+  } catch (error) {
+    if (error instanceof PublicMarketLatestUpstreamError) return upstreamFailure(error.result);
+    if (error instanceof PublicMarketLatestPayloadError) {
+      return apiError("实时行情返回数据异常，请稍后重试", 502, "invalid_market_payload");
+    }
+    return apiError("实时行情暂时不可用，请稍后重试", 503);
+  }
 }
 
 async function accountSummary(request: NextRequest) {
@@ -1037,14 +1193,20 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
-    const publicMarketRead = request.method === "GET" && /^(?:market\/(?:models|ranking|sources\/status|prices\/(?:latest|candles|history))|products\/quote\/regional)$/.test(canonicalPath);
+    if (request.method === "GET" && canonicalPath === "market/prices/latest") return publicMarketLatest(request);
+    const publicMarketRead = request.method === "GET" && /^(?:market\/(?:models|ranking|sources\/status|prices\/(?:candles|history))|products\/quote\/regional)$/.test(canonicalPath);
     const result = await upstream(request, `/api/${canonicalPath}`, {
       body: isMutation(request.method) ? body : undefined,
       query: request.nextUrl.searchParams,
-      ...(publicMarketRead ? { auth: false, revalidate: canonicalPath.includes("history") || canonicalPath.includes("candles") ? 120 : 30 } : {}),
+      ...(publicMarketRead ? {
+        auth: false,
+        revalidate: canonicalPath.includes("history") || canonicalPath.includes("candles") ? 120 : 30,
+      } : {}),
     });
     return result.ok
-      ? publicMarketRead ? publicApiSuccess(result.body.data, { source: "canonical-api" }, 10) : apiSuccess(result.body.data, { source: "canonical-api" })
+      ? publicMarketRead
+        ? publicApiSuccess(result.body.data, { source: "canonical-api" }, 10)
+        : apiSuccess(result.body.data, { source: "canonical-api" })
       : upstreamFailure(result);
   }
 

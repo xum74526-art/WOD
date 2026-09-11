@@ -1,9 +1,12 @@
 import "server-only";
 
-import type { InitialMarketDashboard, MarketSummary } from "@/components/live-market-panel";
+import { unstable_cache } from "next/cache";
+import type { InitialMarketDashboard, InitialMarketSummary, MarketSummary } from "@/components/live-market-panel";
+import { compactMarketHistories, type MarketHistoryPoint } from "@/lib/compact-market-history";
 import type { PublicProduct } from "@/lib/commerce-api";
 import type { InitialGpuTrend, PublicMarketRanking, PublicMarketRankingItem } from "@/lib/public-data";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
+import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
 
 type JsonObject = Record<string, unknown>;
 type CanonicalEnvelope = { code?: number; msg?: string; data?: unknown };
@@ -38,16 +41,29 @@ function number(value: unknown, fallback = 0) {
   return Number.isFinite(result) ? result : fallback;
 }
 
-async function cachedCanonicalData(path: string, revalidate: number) {
-  const response = await fetch(`${resolveApiOrigin()}${path}`, {
+async function canonicalResponseData(response: Response) {
+  const payload = await response.json() as CanonicalEnvelope;
+  if (!response.ok || payload.code === 1) throw new Error(payload.msg || `业务服务请求失败 (${response.status})`);
+  return payload.data;
+}
+
+async function cachedCanonicalData(path: string, revalidate: number, apiOrigin = resolveApiOrigin()) {
+  const response = await fetch(`${apiOrigin}${path}`, {
     headers: { Accept: "application/json" },
     cache: "force-cache",
     next: { revalidate },
     signal: AbortSignal.timeout(15_000),
   });
-  const payload = await response.json() as CanonicalEnvelope;
-  if (!response.ok || payload.code === 1) throw new Error(payload.msg || `业务服务请求失败 (${response.status})`);
-  return payload.data;
+  return canonicalResponseData(response);
+}
+
+async function uncachedCanonicalData(path: string, apiOrigin: string) {
+  const response = await fetch(`${apiOrigin}${path}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  return canonicalResponseData(response);
 }
 
 function rankingItem(value: unknown): PublicMarketRankingItem {
@@ -233,50 +249,117 @@ export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): P
   }
 }
 
+async function loadInitialMarketHistory(
+  apiOrigin: string,
+  model: string,
+  variant: string,
+): Promise<MarketHistoryPoint[]> {
+  const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
+  if (variant) query.set("variant", variant);
+  const candleValue = await uncachedCanonicalData(`/api/market/prices/candles?${query}`, apiOrigin);
+  const candleData = object(candleValue);
+  if (
+    text(candleData.gpu_model) !== model
+    || text(candleData.gpu_variant) !== variant
+    || text(candleData.range) !== "90d"
+  ) {
+    throw new Error("market_dashboard_history_identity_mismatch");
+  }
+  if (!Array.isArray(candleData.candles)) throw new Error("market_dashboard_history_candles_invalid");
+  const candleRows = array(candleData.candles);
+  const history = candleRows
+    .map((candle) => ({
+      date: text(candle.start_time).slice(0, 10),
+      median: number(candle.close_price_card_hours, NaN),
+    }))
+    .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  if (history.length !== candleRows.length) throw new Error("market_dashboard_history_candles_invalid");
+  return history;
+}
+
+const INITIAL_MARKET_HISTORY_TTL_MS = 120_000;
+const INITIAL_MARKET_HISTORY_STALE_MS = 300_000;
+const INITIAL_MARKET_HISTORY_RETRY_DELAY_MS = 5_000;
+const INITIAL_MARKET_HISTORY_CACHE_LIMIT = 256;
+const readInitialMarketHistory = createStaleTtlCache<[string, string, string], MarketHistoryPoint[]>({
+  key: (apiOrigin, model, variant) => JSON.stringify([apiOrigin, "90d", "kai", "ondemand", model, variant]),
+  load: loadInitialMarketHistory,
+  ttlMs: INITIAL_MARKET_HISTORY_TTL_MS,
+  staleMs: INITIAL_MARKET_HISTORY_STALE_MS,
+  retryDelayMs: INITIAL_MARKET_HISTORY_RETRY_DELAY_MS,
+  maxEntries: INITIAL_MARKET_HISTORY_CACHE_LIMIT,
+});
+
+async function buildInitialMarketDashboard(apiOrigin: string): Promise<InitialMarketDashboard> {
+  const [rankingValue, modelsValue, sourcesValue] = await Promise.all([
+    cachedCanonicalData("/api/market/ranking", 30, apiOrigin),
+    cachedCanonicalData("/api/market/models", 30, apiOrigin),
+    cachedCanonicalData("/api/market/sources/status", 30, apiOrigin).catch(() => ({ items: [] })),
+  ]);
+  const ranking = object(rankingValue);
+  const entries = array(ranking.items);
+  const models = array(object(modelsValue).items).map(dashboardModel);
+  if (!models.length) throw new Error("market_dashboard_models_empty");
+  const data = (await mapWithConcurrency(entries, 8, async (entry): Promise<MarketSummary> => {
+    const model = text(entry.gpu_model);
+    const variant = text(entry.gpu_variant);
+    const history = await readInitialMarketHistory(apiOrigin, model, variant);
+    const current = number(entry.median_price_card_hours);
+    return {
+      gpu_model: variant ? `${model} ${variant}`.trim() : model,
+      tier: text(entry.market_status),
+      vram_gb: dashboardModelMemory(model, variant),
+      min_price: current,
+      median_price: current,
+      official_min_price: current,
+      official_median_price: current,
+      history,
+    };
+  })).filter((item) => item.median_price > 0 || item.history.length > 0);
+  if (!data.length) throw new Error("market_dashboard_empty");
+  const compactHistories = compactMarketHistories(data.map((item) => item.history));
+  const compactData = data.map(({ history: _history, ...item }, index): InitialMarketSummary => ({
+    ...item,
+    history_values: compactHistories.historyValues[index],
+  }));
+  return {
+    data: compactData,
+    history_dates: compactHistories.historyDates,
+    meta: {
+      observed_at: text(ranking.server_time),
+      history_updated_at: text(ranking.server_time),
+    },
+    models,
+    sources: array(object(sourcesValue).items).map(dashboardSource),
+  };
+}
+
+const initialMarketDashboardBuildsInFlight = new Map<string, Promise<InitialMarketDashboard>>();
+
+async function buildInitialMarketDashboardSingleFlight(apiOrigin: string): Promise<InitialMarketDashboard> {
+  const activeBuild = initialMarketDashboardBuildsInFlight.get(apiOrigin);
+  if (activeBuild) return activeBuild;
+  const pendingBuild = buildInitialMarketDashboard(apiOrigin);
+  initialMarketDashboardBuildsInFlight.set(apiOrigin, pendingBuild);
+  try {
+    return await pendingBuild;
+  } finally {
+    if (initialMarketDashboardBuildsInFlight.get(apiOrigin) === pendingBuild) {
+      initialMarketDashboardBuildsInFlight.delete(apiOrigin);
+    }
+  }
+}
+
+const readCachedInitialMarketDashboard = unstable_cache(
+  buildInitialMarketDashboardSingleFlight,
+  ["ztw-public-market-dashboard-v3"],
+  { revalidate: 30, tags: ["public-market-dashboard"] },
+);
+
 export async function getInitialMarketDashboard(): Promise<InitialMarketDashboard | null> {
   try {
-    const [rankingValue, modelsValue, sourcesValue] = await Promise.all([
-      cachedCanonicalData("/api/market/ranking", 30),
-      cachedCanonicalData("/api/market/models", 30).catch(() => ({ items: [] })),
-      cachedCanonicalData("/api/market/sources/status", 30).catch(() => ({ items: [] })),
-    ]);
-    const ranking = object(rankingValue);
-    const entries = array(ranking.items);
-    const data = (await mapWithConcurrency(entries, 8, async (entry): Promise<MarketSummary> => {
-      const model = text(entry.gpu_model);
-      const variant = text(entry.gpu_variant);
-      const query = new URLSearchParams({ model, range: "90d", sources: "kai", billing_mode: "ondemand" });
-      if (variant) query.set("variant", variant);
-      const candleValue = await cachedCanonicalData(`/api/market/prices/candles?${query}`, 120).catch(() => ({}));
-      const history = array(object(candleValue).candles)
-        .map((candle) => ({
-          date: text(candle.start_time).slice(0, 10),
-          median: number(candle.close_price_card_hours, NaN),
-        }))
-        .filter((point) => point.date && Number.isFinite(point.median) && point.median > 0)
-        .sort((a, b) => b.date.localeCompare(a.date));
-      const current = number(entry.median_price_card_hours);
-      return {
-        gpu_model: variant ? `${model} ${variant}`.trim() : model,
-        tier: text(entry.market_status),
-        vram_gb: dashboardModelMemory(model, variant),
-        min_price: current,
-        median_price: current,
-        official_min_price: current,
-        official_median_price: current,
-        history,
-      };
-    })).filter((item) => item.median_price > 0 || item.history.length > 0);
-    if (!data.length) return null;
-    return {
-      data,
-      meta: {
-        observed_at: text(ranking.server_time),
-        history_updated_at: text(ranking.server_time),
-      },
-      models: array(object(modelsValue).items).map(dashboardModel),
-      sources: array(object(sourcesValue).items).map(dashboardSource),
-    };
+    return await readCachedInitialMarketDashboard(resolveApiOrigin());
   } catch {
     return null;
   }

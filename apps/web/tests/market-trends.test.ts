@@ -16,26 +16,82 @@ test("compute trends use /trend as the canonical route", () => {
   assert.match(footer, /href="\/trend"/);
 });
 
-test("trend dashboard renders server data before refreshing in the background", () => {
+test("trend dashboard renders server data without an immediate duplicate catalogue request", () => {
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
 
   assert.match(panel, /initialData \? "ready" : "loading"/);
-  assert.match(panel, /void load\(false, !initialData\)/);
+  assert.match(panel, /if \(!initialData\) void load\(false, true\)/);
+  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 60_000/);
   assert.match(panel, /if \(showLoading\) setStatus\("loading"\)/);
   assert.match(serverData, /export async function getInitialMarketDashboard/);
-  assert.match(serverData, /cachedCanonicalData\("\/api\/market\/ranking", 30\)/);
-  assert.match(serverData, /cachedCanonicalData\(`\/api\/market\/prices\/candles\?\$\{query\}`, 120\)/);
+  assert.match(serverData, /unstable_cache\(/);
+  assert.match(serverData, /"ztw-public-market-dashboard-v3"/);
+  assert.match(serverData, /revalidate: 30/);
+  assert.match(serverData, /tags: \["public-market-dashboard"\]/);
+  assert.match(serverData, /initialMarketDashboardBuildsInFlight/);
+  assert.match(serverData, /buildInitialMarketDashboardSingleFlight/);
+  assert.match(serverData, /if \(activeBuild\) return activeBuild/);
+  assert.match(serverData, /initialMarketDashboardBuildsInFlight\.delete\(apiOrigin\)/);
+  assert.match(serverData, /unstable_cache\(\s*buildInitialMarketDashboardSingleFlight/);
+  assert.match(serverData, /readCachedInitialMarketDashboard\(resolveApiOrigin\(\)\)/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_TTL_MS = 120_000/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_STALE_MS = 300_000/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_RETRY_DELAY_MS = 5_000/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_CACHE_LIMIT = 256/);
+  assert.match(serverData, /createStaleTtlCache<\[string, string, string\], MarketHistoryPoint\[]>/);
+  assert.match(serverData, /JSON\.stringify\(\[apiOrigin, "90d", "kai", "ondemand", model, variant\]\)/);
+  assert.match(serverData, /staleMs: INITIAL_MARKET_HISTORY_STALE_MS/);
+  assert.match(serverData, /retryDelayMs: INITIAL_MARKET_HISTORY_RETRY_DELAY_MS/);
+  assert.match(serverData, /const history = await readInitialMarketHistory\(apiOrigin, model, variant\)/);
+  assert.doesNotMatch(serverData, /readInitialMarketHistory\(apiOrigin, model, variant\)\.catch\(\(\) => \[\]\)/);
+  assert.match(serverData, /cache: "no-store"/);
+  assert.doesNotMatch(serverData, /ztw-public-market-history-v/);
+  assert.match(serverData, /text\(candleData\.gpu_model\) !== model/);
+  assert.match(serverData, /text\(candleData\.gpu_variant\) !== variant/);
+  assert.match(serverData, /text\(candleData\.range\) !== "90d"/);
+  assert.match(serverData, /Array\.isArray\(candleData\.candles\)/);
+  assert.match(serverData, /if \(history\.length !== candleRows\.length\) throw new Error\("market_dashboard_history_candles_invalid"\)/);
+  assert.match(serverData, /if \(!data\.length\) throw new Error\("market_dashboard_empty"\)/);
+  assert.match(serverData, /if \(!models\.length\) throw new Error\("market_dashboard_models_empty"\)/);
+  assert.match(serverData, /compactMarketHistories\(data\.map\(\(item\) => item\.history\)\)/);
+  assert.match(serverData, /history_dates: compactHistories\.historyDates/);
+  assert.match(panel, /expandMarketHistory\(initialData\?\.history_dates \?\? \[\], historyValues\)/);
+  assert.match(serverData, /cachedCanonicalData\("\/api\/market\/ranking", 30, apiOrigin\)/);
+  assert.match(serverData, /uncachedCanonicalData\(`\/api\/market\/prices\/candles\?\$\{query\}`, apiOrigin\)/);
 });
 
 test("market summary is built from official OHLC candles", () => {
   const source = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
-  const summary = source.slice(source.indexOf("async function marketSummary"), source.indexOf("function orderStatus"));
+  const summary = source.slice(source.indexOf("async function buildMarketSummary"), source.indexOf("function orderStatus"));
 
   assert.match(summary, /\/api\/market\/prices\/candles/);
   assert.match(summary, /close_price_card_hours/);
   assert.match(summary, /median_price_card_hours/);
   assert.doesNotMatch(summary, /\/api\/market\/prices\/history/);
+});
+
+test("public market summary coalesces refreshes without caching incomplete history", () => {
+  const source = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+  const summaryBuilder = source.slice(source.indexOf("async function buildMarketSummary"), source.indexOf("const readPublicMarketSummary"));
+
+  assert.match(source, /PUBLIC_MARKET_SUMMARY_TTL_MS = 60_000/);
+  assert.match(source, /PUBLIC_MARKET_SUMMARY_STALE_MS = 120_000/);
+  assert.match(source, /PUBLIC_MARKET_SUMMARY_RETRY_DELAY_MS = 5_000/);
+  assert.match(source, /createStaleTtlCache<\s*\[NextRequest, string, string\]/);
+  assert.match(source, /JSON\.stringify\(\[apiOrigin, locale\]\)/);
+  assert.match(source, /normalizeStoredLocale\(request\.cookies\.get\("kai\.locale"\)\?\.value\)/);
+  assert.match(source, /!candleResult\.ok/);
+  assert.match(source, /!Array\.isArray\(candleData\.candles\)/);
+  assert.match(source, /text\(candleData\.gpu_model\) !== model/);
+  assert.match(source, /text\(candleData\.gpu_variant\) !== variant/);
+  assert.match(source, /text\(candleData\.range\) !== "90d"/);
+  assert.match(source, /if \(history\.length !== candleRows\.length\) complete = false/);
+  assert.match(source, /shouldStore: \(payload\) => payload\.complete/);
+  assert.match(source, /return publicApiSuccess\(payload\.data, payload\.meta\)/);
+  assert.match(summaryBuilder, /upstream\(request, "\/api\/market\/ranking", \{ auth: false \}\)/);
+  assert.match(summaryBuilder, /upstream\(request, "\/api\/market\/prices\/candles", \{ query, auth: false \}\)/);
+  assert.doesNotMatch(summaryBuilder, /revalidate:/);
 });
 
 test("market ranking and trend dashboard keep the complete KAI catalogue", () => {

@@ -81,7 +81,7 @@ test("Web market summary and chart use the canonical KAI candle contract", () =>
   const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
   const chartMath = fs.readFileSync(new URL("../lib/market-candlestick-chart.ts", import.meta.url), "utf8");
   const summary = adapter.slice(
-    adapter.indexOf("async function marketSummary"),
+    adapter.indexOf("async function buildMarketSummary"),
     adapter.indexOf("async function accountSummary"),
   );
 
