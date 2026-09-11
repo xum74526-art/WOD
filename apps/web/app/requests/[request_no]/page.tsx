@@ -1,7 +1,6 @@
-import { SiteHeader } from "@/components/site-header";
-import { PublicRequestDetail } from "@/components/public-request-detail";
+import { redirect } from "next/navigation";
 
-export default async function PublicRequestPage({ params }: { params: Promise<{ request_no: string }> }) {
-  const { request_no } = await params;
-  return <div className="site-page public-v2"><SiteHeader /><main className="public-data-page"><PublicRequestDetail requestNo={request_no} /></main></div>;
+export default function PublicRequestPage() {
+  // Legacy request numbers cannot be mapped safely to the current numeric request IDs.
+  redirect("/account/requests");
 }
