@@ -5,6 +5,8 @@ import test from "node:test";
 test("supplier, buyer, and admin workspaces expose the closed matchmaking flow without leaking buyer identity", () => {
   const shell = fs.readFileSync(new URL("../components/product-shell.tsx", import.meta.url), "utf8");
   const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const requestApi = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
+  const supplierPage = fs.readFileSync(new URL("../app/supplier/requests/page.tsx", import.meta.url), "utf8");
   const adminApi = fs.readFileSync(new URL("../lib/admin-audit-api.ts", import.meta.url), "utf8");
   const admin = fs.readFileSync(new URL("../components/admin-buy-request-workspace.tsx", import.meta.url), "utf8");
 
@@ -19,6 +21,15 @@ test("supplier, buyer, and admin workspaces expose the closed matchmaking flow w
   assert.match(workspace, /confirmMobileBuyRequestDeal/);
   assert.match(workspace, /submitMobileBuyRequestCredential/);
   assert.match(workspace, /confirmMobileBuyRequestDelivery/);
+  assert.match(workspace, /全部需求/);
+  assert.match(workspace, /我的报价需求/);
+  assert.match(workspace, /sellerScope === "quoted"/);
+  assert.match(workspace, /coordination_requested: "平台协调中"/);
+  assert.match(workspace, /quote_submitted: "商家已提交方案"/);
+  assert.match(workspace, /timelineEventLabel\(event\)/);
+  assert.match(workspace, /view === "seller" && !detail\?\.request\.is_own/);
+  assert.match(requestApi, /quoted_only=true/);
+  assert.match(supplierPage, /scope === "quoted" \? "quoted" : "all"/);
   assert.match(workspace, /当前未创建资金订单，也未扣除卡时/);
   assert.match(adminApi, /\/admin\/buy-requests/);
   assert.match(adminApi, /\/credential\/release/);

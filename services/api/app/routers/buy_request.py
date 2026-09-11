@@ -564,6 +564,7 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
 def list_requests(
     request_type: str | None = None,
     view: str = "buyer",
+    quoted_only: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -574,7 +575,16 @@ def list_requests(
     supplier = None
     if view == "seller":
         supplier = _approved_supplier(user, db)
+        if quoted_only:
+            query = query.filter(
+                db.query(BuyRequestQuote.id).filter(
+                    BuyRequestQuote.buy_request_id == BuyRequest.id,
+                    BuyRequestQuote.supplier_id == supplier.id,
+                ).exists()
+            )
     else:
+        if quoted_only:
+            raise BizError("我的报价筛选仅适用于商家视图", status_code=422)
         query = query.filter(BuyRequest.user_id == user.id)
     items = query.order_by(BuyRequest.created_at.desc()).all()
     for item in items:

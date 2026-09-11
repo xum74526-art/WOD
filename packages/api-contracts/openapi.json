@@ -5779,6 +5779,16 @@
               "title": "View",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "quoted_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Quoted Only",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

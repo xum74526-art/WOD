@@ -42,7 +42,7 @@ test("legacy supplier quote ledger opens the canonical supplier request workspac
   const quotePage = readFileSync(new URL("../app/supplier/quotes/page.tsx", import.meta.url), "utf8");
   const commerceApi = readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
 
-  assert.match(quotePage, /redirect\("\/supplier\/requests"\)/);
+  assert.match(quotePage, /redirect\("\/supplier\/requests\?scope=quoted"\)/);
   assert.doesNotMatch(quotePage, /components\/supplier-quotes|<SupplierQuotes/);
   assert.doesNotMatch(commerceApi, /export function listSupplierQuotes/);
 });

@@ -21,6 +21,7 @@ import {
   type MobileBuyRequest,
   type MobileBuyRequestCredential,
   type MobileBuyRequestDetail,
+  type MobileBuyRequestEvent,
 } from "@/lib/mobile-buy-request-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
@@ -36,8 +37,11 @@ const statuses: Record<string, string> = {
   quoting: "方案协商中",
   active: "待回应",
   countered: "待回应",
+  revised: "待回应",
   withdrawn: "已撤回",
   selected: "已选定",
+  coordination_requested: "平台协调中",
+  declined: "未选中",
   quote_selected: "已选定方案",
   buyer_selected: "等待商家确认",
   supplier_confirmed: "商家已确认",
@@ -52,9 +56,41 @@ const statuses: Record<string, string> = {
   completed: "已完成",
   expired: "已过期",
   cancelled: "已取消",
+  processing: "处理中",
+  rejected: "未通过",
+  pending_payment: "待付款",
+  closed: "已关闭",
+  superseded: "已被新方案替代",
+  submitted: "已提交",
+  released: "已放行",
+};
+const eventLabels: Record<string, string> = {
+  quote_history_initialized: "报价记录已建立",
+  quote_submitted: "商家已提交方案",
+  quote_countered: "方案已更新",
+  quote_withdrawn: "商家已撤回方案",
+  buyer_selected_quote: "买家已选择方案",
+  supplier_confirmed: "商家已确认资源",
+  supplier_declined: "商家无法承接",
+  platform_approved: "平台审核已通过",
+  platform_rejected: "平台审核未通过",
+  credential_submitted: "商家已提交交付凭据",
+  credential_released: "平台已放行交付凭据",
+  credential_rejected: "交付凭据需重新提交",
+  delivery_confirmed: "买家已确认交付",
+  delivery_reported: "买家已报告交付问题",
 };
 const openRequestStatuses = new Set(["published", "quoting", "active"]);
 const activeQuoteStatuses = new Set(["active", "countered", "revised"]);
+
+function statusLabel(status?: string | null) {
+  return (status && statuses[status]) || "状态更新中";
+}
+
+function timelineEventLabel(event: MobileBuyRequestEvent) {
+  const eventType = event.event_type || event.label || "";
+  return eventLabels[eventType] || statusLabel(event.status);
+}
 
 type RequestPrefill = {
   create?: boolean;
@@ -93,12 +129,15 @@ function canCounterQuote(view: "buyer" | "seller", request: MobileBuyRequest, it
   return request.is_own !== true && lastActor !== "supplier" && lastActor !== "seller";
 }
 
-export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: { view: "buyer" | "seller"; initialId?: number; initialPrefill?: RequestPrefill }) {
+type SellerRequestScope = "all" | "quoted";
+
+export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, initialSellerScope = "all" }: { view: "buyer" | "seller"; initialId?: number; initialPrefill?: RequestPrefill; initialSellerScope?: SellerRequestScope }) {
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const matchmakingEnabled = capabilities.matchmaking_enabled === true;
   const requestFlowEnabled = matchmakingEnabled;
   const [type, setType] = useState<"online" | "offline">("online");
+  const [sellerScope, setSellerScope] = useState<SellerRequestScope>(initialSellerScope);
   const [rows, setRows] = useState<MobileBuyRequest[]>([]);
   const [selected, setSelected] = useState<number | null>(initialId || null);
   const [detail, setDetail] = useState<MobileBuyRequestDetail | null>(null);
@@ -135,7 +174,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
   const load = useCallback(async (preferredId?: number) => {
     setError("");
     try {
-      const result = await listMobileBuyRequests(type, view);
+      const result = await listMobileBuyRequests(type, view, view === "seller" && sellerScope === "quoted");
       setRows(result);
       const id = preferredId || initialId || selected || result[0]?.id;
       if (id && result.some((row) => row.id === id)) await loadDetail(id);
@@ -144,11 +183,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     } catch (reason) {
       setError(errorMessage(reason));
     }
-  }, [initialId, loadDetail, selected, type, view]);
+  }, [initialId, loadDetail, selected, sellerScope, type, view]);
 
-  useEffect(() => { void load(); }, [type, view]);
+  useEffect(() => { void load(); }, [type, view, sellerScope]);
 
-  const sellerQuote = useMemo(() => view === "seller" ? detail?.quotes[0] || null : null, [detail, view]);
+  const sellerQuote = useMemo(() => view === "seller" && !detail?.request.is_own ? detail?.quotes[0] || null : null, [detail, view]);
   const canCreateSellerQuote = Boolean(
     view === "seller" && detail && !detail.request.is_own && !detail.deal && requestFlowEnabled &&
     openRequestStatuses.has(detail.request.status) && !sellerQuote,
@@ -321,6 +360,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     <div className="commerce-tabs">
       <button className={type === "online" ? "active" : ""} onClick={() => setType("online")}>在线算力</button>
       <button className={type === "offline" ? "active" : ""} onClick={() => setType("offline")}>线下设备</button>
+      {view === "seller" && <div className="mobile-request-scope" role="group" aria-label="需求显示范围">
+        <span>显示范围</span>
+        <button aria-pressed={sellerScope === "all"} className={sellerScope === "all" ? "active" : ""} onClick={() => setSellerScope("all")}>全部需求</button>
+        <button aria-pressed={sellerScope === "quoted"} className={sellerScope === "quoted" ? "active" : ""} onClick={() => setSellerScope("quoted")}>我的报价</button>
+      </div>}
       {view === "buyer" && requestFlowEnabled && <button className="request-create-trigger" onClick={toggleCreateForm}><Plus size={14}/>提交需求</button>}
     </div>
     {error && <div className="commerce-error">{error}</div>}
@@ -339,25 +383,25 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     </form>}
     <div className="mobile-request-console">
       <aside>
-        <header><strong>{view === "buyer" ? "我的需求" : "可接需求"}</strong><b>{rows.length}</b></header>
+        <header><strong>{view === "buyer" ? "我的需求" : sellerScope === "quoted" ? "我的报价需求" : "可接需求"}</strong><b>{rows.length}</b></header>
         {rows.length ? rows.map((row) => <button className={selected === row.id ? "active" : ""} key={row.id} onClick={() => void loadDetail(row.id)}>
           <span><strong>{row.gpu_model} × {row.quantity}</strong><small>{view === "seller" ? `匿名需求 #${row.id}` : `我的需求 #${row.id}`} · {formatDate(row.created_at)}</small></span>
-          <b>{view === "seller" && row.is_own ? "我的需求 · 仅查看" : view === "seller" && row.targeted_to_me ? "定向需求" : statuses[row.status] || row.status}</b>
-        </button>) : <div className="mobile-inline-empty">暂无需求</div>}
+          <b>{view === "seller" && row.is_own ? "我的需求 · 仅查看" : view === "seller" && row.targeted_to_me ? "定向需求" : statusLabel(row.status)}</b>
+        </button>) : <div className="mobile-inline-empty">{view === "seller" && sellerScope === "quoted" ? "暂无报价记录" : "暂无需求"}</div>}
       </aside>
       <main>{detail ? <>
-        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statuses[detail.deal?.status || detail.request.status] || detail.deal?.status || detail.request.status}</b></header>
+        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts">
           <span><small>服务价格</small><strong>询价</strong></span><span><small>交易方式</small><strong>平台撮合</strong></span><span><small>报价数</small><strong>{detail.request.quote_count}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span>
         </div>
         {view === "seller" && <div className="workspace-service-note"><LockKey size={16}/>购买人身份、联系人和手机号已隐藏；您只能查看和修改自己的报价。</div>}
         <section className="mobile-quote-list">
-          <h3><Receipt size={17}/>{view === "buyer" ? "报价记录" : "我的报价"}</h3>
+          <h3><Receipt size={17}/>{view === "buyer" ? "报价记录" : detail.request.is_own ? "收到的报价" : "我的报价"}</h3>
           {detail.quotes.length ? detail.quotes.map((item) => {
             const latest = latestQuote(item);
             return <article key={item.id} className="matchmaking-quote-card">
-              <span><strong>{view === "seller" ? "我的方案" : item.supplier_name || "认证商家"}</strong><small>{latest.message || "无补充说明"}</small><small>第 {item.revision_count || item.revisions?.length || 1} 轮 · {latest.available_at ? `${formatDate(latest.available_at)} 可交付` : "交付时间待确认"}</small></span>
-              <b>¥{latest.total_price}</b><em>{statuses[item.status] || item.status}</em>
+              <span><strong>{view === "seller" && !detail.request.is_own ? "我的方案" : item.supplier_name || "认证商家"}</strong><small>{latest.message || "无补充说明"}</small><small>第 {item.revision_count || item.revisions?.length || 1} 轮 · {latest.available_at ? `${formatDate(latest.available_at)} 可交付` : "交付时间待确认"}</small></span>
+              <b>¥{latest.total_price}</b><em>{statusLabel(item.status)}</em>
               <div className="matchmaking-actions">
                 {canCounterQuote(view, detail.request, item, Boolean(detail.deal), matchmakingEnabled) && <button type="button" disabled={Boolean(busy)} onClick={() => beginCounter(item)}>{view === "buyer" ? "还价" : "修改方案"}</button>}
                 {view === "seller" && item.can_withdraw !== false && !detail.deal && matchmakingEnabled && openRequestStatuses.has(detail.request.status) && activeQuoteStatuses.has(item.status) && <button className="danger" type="button" disabled={Boolean(busy)} onClick={() => void withdrawQuote(item)}>撤回</button>}
@@ -384,7 +428,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
         {detail.deal && <section className="matchmaking-deal">
           <header><div><small>PLATFORM ESCROW</small><h3>撮合与交付</h3></div><b>#{detail.deal.id}</b></header>
           <ol className="matchmaking-timeline">
-            {(detail.events || []).length ? detail.events!.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{event.label || statuses[event.status || ""] || event.event_type || "状态更新"}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>) : <li><span><CheckCircle size={16}/></span><div><strong>{statuses[detail.deal.status] || detail.deal.status}</strong><small>{formatDate(detail.deal.updated_at)}</small></div></li>}
+            {(detail.events || []).length ? detail.events!.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{timelineEventLabel(event)}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>) : <li><span><CheckCircle size={16}/></span><div><strong>{statusLabel(detail.deal.status)}</strong><small>{formatDate(detail.deal.updated_at)}</small></div></li>}
           </ol>
           {view === "seller" && (detail.deal.can_supplier_confirm || detail.deal.can_supplier_decline) && <div className="matchmaking-action-panel"><h4>确认资源</h4><p>确认后由平台审核方案；无法提供时请及时拒绝。</p><div className="matchmaking-actions">{detail.deal.can_supplier_decline && <button className="danger" disabled={Boolean(busy)} onClick={() => void dealAction("decline")}>无法承接</button>}{detail.deal.can_supplier_confirm && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void dealAction("confirm")}>确认可提供</button>}</div></div>}
           {view === "seller" && detail.deal.can_submit_credential && <form className="matchmaking-credential-form" onSubmit={submitCredential}><h4><Key size={17}/>提交 SSH 凭据</h4><p>凭据会加密托管，平台审核放行前购买人不可见。</p><label>主机地址<input required value={credentialForm.host} onChange={(event) => setCredentialForm({ ...credentialForm, host: event.target.value })}/></label><label>端口<input required min="1" max="65535" type="number" value={credentialForm.port} onChange={(event) => setCredentialForm({ ...credentialForm, port: event.target.value })}/></label><label>用户名<input required value={credentialForm.username} onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value })}/></label><label>认证方式<select value={credentialForm.auth_type} onChange={(event) => setCredentialForm({ ...credentialForm, auth_type: event.target.value as "password" | "private_key" })}><option value="password">密码</option><option value="private_key">私钥</option></select></label><label className="wide">{credentialForm.auth_type === "password" ? "密码" : "私钥"}<textarea required rows={credentialForm.auth_type === "password" ? 2 : 6} value={credentialForm.secret} onChange={(event) => setCredentialForm({ ...credentialForm, secret: event.target.value })}/></label><label className="wide">交付说明<textarea rows={2} value={credentialForm.note} onChange={(event) => setCredentialForm({ ...credentialForm, note: event.target.value })}/></label><button className="commerce-primary" disabled={Boolean(busy)}>{busy === "credential" ? "加密提交中…" : "提交平台审核"}</button></form>}

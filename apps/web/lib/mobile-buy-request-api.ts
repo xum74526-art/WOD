@@ -135,8 +135,9 @@ export function getMobileBuyRequestSummary() {
   return apiRequest<MobileBuyRequestSummary>(path("/buy-requests/summary"));
 }
 
-export function listMobileBuyRequests(type: "online" | "offline", view: "buyer" | "seller") {
-  return apiRequest<MobileBuyRequest[]>(path(`/buy-requests?request_type=${type}&view=${view}`));
+export function listMobileBuyRequests(type: "online" | "offline", view: "buyer" | "seller", quotedOnly = false) {
+  const quotedQuery = view === "seller" && quotedOnly ? "&quoted_only=true" : "";
+  return apiRequest<MobileBuyRequest[]>(path(`/buy-requests?request_type=${type}&view=${view}${quotedQuery}`));
 }
 
 export function getMobileBuyRequest(id: number) {

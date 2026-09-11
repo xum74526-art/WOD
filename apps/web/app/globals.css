@@ -4741,6 +4741,12 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .community-page-nav button { min-height: 33px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; }
 .community-page-nav span { color: var(--text-soft); font-size: 9px; }
 .commerce-tabs .request-create-trigger { margin-left: auto; color: var(--brand-strong); display: flex; align-items: center; gap: 5px; }
+.mobile-request-scope { margin-left: auto; display: flex; align-items: center; flex: 0 0 auto; }
+.mobile-request-scope > span { margin-right: 9px; color: var(--text-soft); font-size: 8px; }
+.commerce-tabs .mobile-request-scope button { min-height: 32px; padding: 0 11px; border: 1px solid var(--line-strong); border-bottom-color: var(--line-strong); background: var(--surface); }
+.commerce-tabs .mobile-request-scope button:first-of-type { border-radius: 7px 0 0 7px; }
+.commerce-tabs .mobile-request-scope button:last-child { margin-left: -1px; border-radius: 0 7px 7px 0; }
+.commerce-tabs .mobile-request-scope button.active { position: relative; border-color: var(--brand); color: var(--brand-strong); background: var(--brand-soft); }
 .mobile-request-form { margin-bottom: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface); display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
 .mobile-request-form label,
 .mobile-quote-form label { color: var(--text-muted); display: grid; gap: 5px; font-size: 8px; }
