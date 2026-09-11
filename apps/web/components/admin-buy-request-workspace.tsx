@@ -19,6 +19,13 @@ import { errorMessage, formatDate } from "@/lib/commerce-ui";
 const statusLabels: Record<string, string> = {
   published: "待报价",
   quoting: "方案协商中",
+  active: "待回应",
+  countered: "待回应",
+  revised: "待回应",
+  withdrawn: "已撤回",
+  selected: "已选定",
+  coordination_requested: "平台协调中",
+  declined: "未选中",
   quote_selected: "已选定方案",
   buyer_selected: "等待商家确认",
   supplier_confirmed: "商家已确认",
@@ -34,7 +41,36 @@ const statusLabels: Record<string, string> = {
   expired: "已过期",
   closed: "已关闭",
   cancelled: "已取消",
+  processing: "处理中",
+  rejected: "未通过",
+  pending_payment: "待付款",
 };
+
+const eventLabels: Record<string, string> = {
+  quote_history_initialized: "报价记录已建立",
+  quote_submitted: "商家已提交方案",
+  quote_countered: "方案已更新",
+  quote_withdrawn: "商家已撤回方案",
+  buyer_selected_quote: "买家已选择方案",
+  supplier_confirmed: "商家已确认资源",
+  supplier_declined: "商家无法承接",
+  platform_approved: "平台审核已通过",
+  platform_rejected: "平台审核未通过",
+  credential_submitted: "商家已提交交付凭据",
+  credential_released: "平台已放行交付凭据",
+  credential_rejected: "交付凭据需重新提交",
+  delivery_confirmed: "买家已确认交付",
+  delivery_reported: "买家已报告交付问题",
+};
+
+function statusLabel(status?: string | null) {
+  return (status && statusLabels[status]) || "状态待确认";
+}
+
+function timelineEventLabel(event: { event_type?: string; label?: string; status?: string }) {
+  const eventType = event.event_type || event.label || "";
+  return eventLabels[eventType] || statusLabel(event.status);
+}
 
 function metadata(row: AdminBuyRequestItem, key: string) {
   const value = row.requirements?.[key];
@@ -122,16 +158,16 @@ export function AdminBuyRequestWorkspace() {
           const productName = metadata(row, "product_name"); const source = metadata(row, "source");
           return <button type="button" className={selectedId === row.id ? "active" : ""} key={row.id} onClick={() => void loadDetail(row.id)}>
             <span><small>需求 #{row.id} · {row.request_type === "online" ? "在线算力" : "线下设备"}{source ? ` · ${source}` : ""}</small><strong>{productName || row.gpu_model} × {row.quantity}</strong><em>{row.buyer_name || `用户 #${row.user_id}`} · {formatDate(row.created_at)}</em></span>
-            <b>{statusLabels[row.deal?.status || row.status] || row.deal?.status || row.status}</b>
+            <b>{statusLabel(row.deal?.status || row.status)}</b>
           </button>;
         }) : !loading && <div className="commerce-empty"><ClipboardText size={25}/><strong>没有符合条件的需求</strong><span>用户提交成功后会在这里显示。</span></div>}
       </div>
       <main className="admin-request-detail">{detail ? <>
-        <header><div><small>REQUEST #{detail.request.id}</small><h2>{metadata(detail.request, "product_name") || detail.request.gpu_model} × {detail.request.quantity}</h2><span>{formatDate(detail.request.created_at)}</span></div><b>{statusLabels[detail.deal?.status || detail.request.status] || detail.deal?.status || detail.request.status}</b></header>
+        <header><div><small>REQUEST #{detail.request.id}</small><h2>{metadata(detail.request, "product_name") || detail.request.gpu_model} × {detail.request.quantity}</h2><span>{formatDate(detail.request.created_at)}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts"><span><small>需求人</small><strong><User size={14}/>{detail.request.contact || "未填写"}</strong></span><span><small>联系电话</small><strong>{detail.request.phone || "未填写"}</strong></span><span><small>分发对象</small><strong><Storefront size={14}/>{targetLabel(detail.request)}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span></div>
-        <section className="admin-request-quotes"><h3>报价与协商记录</h3>{detail.quotes.length ? detail.quotes.map((quote) => <article key={quote.id}><div><strong>{quote.supplier_name || `商家 #${quote.supplier_id}`}</strong><small>报价 #{quote.id} · {quote.revision_count || quote.revisions?.length || 1} 轮</small></div><b>¥{quote.latest_revision?.total_price ?? quote.total_price}</b><em>{statusLabels[quote.status] || quote.status}</em></article>) : <div className="mobile-inline-empty">暂无报价</div>}</section>
-        {detail.deal ? <section className="admin-deal-review"><header><div><small>DEAL #{detail.deal.id}</small><h3>撮合审核与凭据托管</h3></div><b>{statusLabels[detail.deal.status] || detail.deal.status}</b></header>
-          {detail.events?.length ? <ol className="matchmaking-timeline">{detail.events.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{event.label || statusLabels[event.status || ""] || event.event_type || "状态更新"}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>)}</ol> : null}
+        <section className="admin-request-quotes"><h3>报价与协商记录</h3>{detail.quotes.length ? detail.quotes.map((quote) => <article key={quote.id}><div><strong>{quote.supplier_name || `商家 #${quote.supplier_id}`}</strong><small>报价 #{quote.id} · {quote.revision_count || quote.revisions?.length || 1} 轮</small></div><b>¥{quote.latest_revision?.total_price ?? quote.total_price}</b><em>{statusLabel(quote.status)}</em></article>) : <div className="mobile-inline-empty">暂无报价</div>}</section>
+        {detail.deal ? <section className="admin-deal-review"><header><div><small>DEAL #{detail.deal.id}</small><h3>撮合审核与凭据托管</h3></div><b>{statusLabel(detail.deal.status)}</b></header>
+          {detail.events?.length ? <ol className="matchmaking-timeline">{detail.events.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{timelineEventLabel(event)}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>)}</ol> : null}
           {["supplier_confirmed", "platform_review"].includes(detail.deal.status) && <div className="admin-review-actions"><button className="danger" disabled={Boolean(busy)} onClick={() => void dealAction("reject")}><WarningCircle size={15}/>退回方案</button><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void dealAction("approve")}><ShieldCheck size={15}/>审核通过</button></div>}
           {["credential_submitted", "credential_released", "delivery_disputed", "completed"].includes(detail.deal.status) && <div className="admin-credential-review"><div><Key size={19}/><span><strong>SSH 凭据审核</strong><small>指纹 {detail.deal.credential?.fingerprint || detail.deal.credential_fingerprint || "待读取"} · 版本 {detail.deal.credential?.credential_version || detail.deal.credential_version || "-"}</small></span><button disabled={Boolean(busy)} onClick={() => void inspectCredential()}>{busy === "inspect" ? "读取中…" : credential ? "重新读取" : "安全查看"}</button></div>{credential && <section><dl><div><dt>连接地址</dt><dd>{credential.username}@{credential.host}:{credential.port}</dd></div><div><dt>认证方式</dt><dd>{credential.auth_type === "private_key" ? "SSH 私钥" : "密码"}</dd></div></dl><pre>{credential.secret}</pre>{credential.note && <p>{credential.note}</p>}{detail.deal.status === "credential_submitted" && <div className="admin-review-actions"><button className="danger" disabled={Boolean(busy)} onClick={() => void dealAction("reject-credential")}>退回重交</button><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void dealAction("release")}><LockKey size={15}/>核验并放行</button></div>}</section>}</div>}
         </section> : <div className="workspace-service-note"><LockKey size={16}/>买家尚未选定方案，暂未生成撮合记录。</div>}
