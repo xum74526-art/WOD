@@ -354,22 +354,6 @@ function queryString(values: Record<string, string | number | undefined>) {
   return text ? `?${text}` : "";
 }
 
-export function listPublicRequests(filters: { gpu_model?: string; region?: string; sort?: string } = {}) {
-  return apiEnvelopeRequest<BuyRequest[], PageMeta>(`/api/v1/public/buy-requests${queryString(filters)}`);
-}
-export function getPublicRequest(requestNo: string) { return apiRequest<BuyRequest>(`/api/v1/public/buy-requests/${encodeURIComponent(requestNo)}`); }
-export function listBuyerRequests(status?: string) { return apiEnvelopeRequest<BuyRequest[], PageMeta>(`/api/v1/account/buy-requests${queryString({ status })}`); }
-export function getBuyerRequest(id: number) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}`); }
-export function createBuyRequest(input: Record<string, unknown>) { return apiRequest<BuyRequest>("/api/v1/buy-requests", { method: "POST", body: JSON.stringify(input) }); }
-export function updateBuyRequest(id: number, input: Record<string, unknown>) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function deleteBuyRequest(id: number, version: number) { return apiRequest<{ deleted: boolean }>(`/api/v1/account/buy-requests/${id}?version=${version}`, { method: "DELETE" }); }
-export function publishBuyRequest(id: number, version: number) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/publish`, { method: "POST", body: JSON.stringify({ version }) }); }
-export function closeBuyRequest(id: number, version: number, reason: string) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/close`, { method: "POST", body: JSON.stringify({ version, reason }) }); }
-export function extendBuyRequest(id: number, version: number, quoteDeadlineAt: string) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/extend`, { method: "POST", body: JSON.stringify({ version, quote_deadline_at: quoteDeadlineAt }) }); }
-export function listBuyerQuotes(id: number) { return apiEnvelopeRequest<{ request: Pick<BuyRequest, "request_no" | "title" | "status" | "gpu_model" | "gpu_quantity" | "quote_deadline_at"> & { id: number }; quotes: Quote[] }, PageMeta>(`/api/v1/account/buy-requests/${id}/quotes`); }
-export function decideQuote(requestId: number, quoteId: number, action: "shortlist" | "reject", quoteVersion: number, note?: string) { return apiRequest<Quote>(`/api/v1/account/buy-requests/${requestId}/quotes/${quoteId}/${action}`, { method: "POST", body: JSON.stringify({ quote_version: quoteVersion, note: note || null }) }); }
-export function acceptQuote(requestId: number, quoteId: number, requestVersion: number, quoteVersion: number, note?: string) { return apiRequest<{ id: number; order_no: string; status: string }>(`/api/v1/account/buy-requests/${requestId}/quotes/${quoteId}/accept`, { method: "POST", body: JSON.stringify({ request_version: requestVersion, quote_version: quoteVersion, note: note || null }) }); }
-
 export function listSupplierRequests(filters: { gpu_model?: string; region?: string; sort?: string } = {}) { return apiEnvelopeRequest<(BuyRequest & { id: number })[], PageMeta>(`/api/v1/supplier/buy-requests${queryString(filters)}`); }
 export function getSupplierRequest(id: number) { return apiRequest<{ request: BuyRequest; own_quotes: Quote[] }>(`/api/v1/supplier/buy-requests/${id}`); }
 export function createSupplierQuote(requestId: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/buy-requests/${requestId}/quotes`, { method: "POST", body: JSON.stringify(input) }); }

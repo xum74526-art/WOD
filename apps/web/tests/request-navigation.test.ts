@@ -28,10 +28,12 @@ test("legacy request pages no longer render clients backed by removed public API
   const listPage = readFileSync(new URL("../app/requests/page.tsx", import.meta.url), "utf8");
   const detailPage = readFileSync(new URL("../app/requests/[request_no]/page.tsx", import.meta.url), "utf8");
   const createPage = readFileSync(new URL("../app/requests/new/page.tsx", import.meta.url), "utf8");
+  const commerceApi = readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
 
   assert.match(listPage, /redirect\("\/account\/requests"\)/);
   assert.match(detailPage, /redirect\("\/account\/requests"\)/);
   assert.match(createPage, /legacyRequestCreateHref\(await searchParams\)/);
   assert.doesNotMatch(listPage, /RequestMarketplace/);
   assert.doesNotMatch(detailPage, /PublicRequestDetail/);
+  assert.doesNotMatch(commerceApi, /\/api\/v1\/(?:public|account)\/buy-requests/);
 });
