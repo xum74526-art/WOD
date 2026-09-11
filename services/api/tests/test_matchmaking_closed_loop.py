@@ -479,6 +479,215 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
             0,
         )
 
+    @staticmethod
+    def _seed_concurrent_negotiation_database(database: Path):
+        engine = create_engine(
+            f"sqlite:///{database}",
+            connect_args={"check_same_thread": False, "timeout": 10},
+        )
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine, expire_on_commit=False)
+        seed = Session()
+        buyer = User(username="并发议价买家", phone="13922000001", password="!")
+        supplier_user = User(
+            username="并发议价商家",
+            phone="13922000002",
+            password="!",
+            role="supplier",
+            supplier_status="approved",
+        )
+        seed.add_all([buyer, supplier_user])
+        seed.flush()
+        supplier = Supplier(
+            user_id=supplier_user.id,
+            company_name="并发议价商家",
+            contact="议价联系人",
+            phone=supplier_user.phone,
+            status="approved",
+        )
+        seed.add(supplier)
+        seed.flush()
+        request = BuyRequest(
+            user_id=buyer.id,
+            request_type="online",
+            gpu_model="H100 80GB",
+            quantity=1,
+            gpu_hours=24,
+            currency="CNY",
+            requirements={},
+            status="quoting",
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
+        )
+        seed.add(request)
+        seed.flush()
+        quote = BuyRequestQuote(
+            buy_request_id=request.id,
+            supplier_id=supplier.id,
+            unit_price=Decimal("4.166667"),
+            total_price=Decimal("100.00"),
+            currency="CNY",
+            message="初始方案",
+            status="active",
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
+        )
+        seed.add(quote)
+        seed.flush()
+        seed.add(BuyRequestQuoteRevision(
+            quote_id=quote.id,
+            buy_request_id=request.id,
+            supplier_id=supplier.id,
+            revision_number=1,
+            proposer_role="supplier",
+            proposer_user_id=supplier_user.id,
+            unit_price=quote.unit_price,
+            total_price=quote.total_price,
+            currency=quote.currency,
+            message=quote.message,
+            expires_at=quote.expires_at,
+            status="active",
+        ))
+        seed.commit()
+        ids = {
+            "request": request.id,
+            "quote": quote.id,
+            "buyer": buyer.id,
+            "supplier_user": supplier_user.id,
+        }
+        seed.close()
+        return engine, Session, ids
+
+    def test_counter_and_selection_never_commit_different_quote_revisions(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            engine, Session, ids = self._seed_concurrent_negotiation_database(
+                Path(tempdir) / "counter-select.db"
+            )
+            barrier = threading.Barrier(2)
+
+            def counter() -> str:
+                db = Session()
+                try:
+                    buyer = db.get(User, ids["buyer"])
+                    barrier.wait(timeout=5)
+                    buy_request_router.counter_quote(
+                        ids["request"],
+                        ids["quote"],
+                        buy_request_router.QuoteRevisionIn(
+                            unit_price=3.75,
+                            total_price=90,
+                            currency="CNY",
+                            message="并发还价",
+                            expires_in_hours=24,
+                        ),
+                        buyer,
+                        db,
+                    )
+                    return "countered"
+                except BizError:
+                    db.rollback()
+                    return "conflict"
+                finally:
+                    db.close()
+
+            def select() -> str:
+                db = Session()
+                try:
+                    buyer = db.get(User, ids["buyer"])
+                    barrier.wait(timeout=5)
+                    buy_request_router.select_quote(
+                        ids["request"], ids["quote"], buyer, db
+                    )
+                    return "selected"
+                except BizError:
+                    db.rollback()
+                    return "conflict"
+                finally:
+                    db.close()
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                counter_future = pool.submit(counter)
+                select_future = pool.submit(select)
+                results = [counter_future.result(), select_future.result()]
+
+            check = Session()
+            try:
+                deal = check.query(BuyRequestDeal).one()
+                selected_revision = check.get(
+                    BuyRequestQuoteRevision, deal.selected_revision_id
+                )
+                latest_revision = matchmaking.latest_revision(check, ids["quote"])
+                quote = check.get(BuyRequestQuote, ids["quote"])
+                self.assertIn("selected", results)
+                self.assertEqual(selected_revision.id, latest_revision.id)
+                self.assertEqual(selected_revision.status, "selected")
+                self.assertEqual(quote.total_price, selected_revision.total_price)
+                self.assertEqual(quote.status, "coordination_requested")
+            finally:
+                check.close()
+                engine.dispose()
+
+    def test_withdraw_and_selection_cannot_both_succeed(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            engine, Session, ids = self._seed_concurrent_negotiation_database(
+                Path(tempdir) / "withdraw-select.db"
+            )
+            barrier = threading.Barrier(2)
+
+            def withdraw() -> str:
+                db = Session()
+                try:
+                    supplier_user = db.get(User, ids["supplier_user"])
+                    barrier.wait(timeout=5)
+                    buy_request_router.withdraw_quote(
+                        ids["request"], ids["quote"], supplier_user, db
+                    )
+                    return "withdrawn"
+                except BizError:
+                    db.rollback()
+                    return "conflict"
+                finally:
+                    db.close()
+
+            def select() -> str:
+                db = Session()
+                try:
+                    buyer = db.get(User, ids["buyer"])
+                    barrier.wait(timeout=5)
+                    buy_request_router.select_quote(
+                        ids["request"], ids["quote"], buyer, db
+                    )
+                    return "selected"
+                except BizError:
+                    db.rollback()
+                    return "conflict"
+                finally:
+                    db.close()
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                withdraw_future = pool.submit(withdraw)
+                select_future = pool.submit(select)
+                results = [withdraw_future.result(), select_future.result()]
+
+            self.assertEqual(sum(
+                result in ("selected", "withdrawn") for result in results
+            ), 1)
+            check = Session()
+            try:
+                quote = check.get(BuyRequestQuote, ids["quote"])
+                revision = matchmaking.latest_revision(check, ids["quote"])
+                deals = check.query(BuyRequestDeal).all()
+                if "selected" in results:
+                    self.assertEqual(len(deals), 1)
+                    self.assertEqual(quote.status, "coordination_requested")
+                    self.assertEqual(revision.status, "selected")
+                    self.assertEqual(deals[0].selected_revision_id, revision.id)
+                else:
+                    self.assertEqual(deals, [])
+                    self.assertEqual(quote.status, "withdrawn")
+                    self.assertEqual(revision.status, "withdrawn")
+            finally:
+                check.close()
+                engine.dispose()
+
     def test_concurrent_quote_creation_keeps_one_active_supplier_quote(self):
         with tempfile.TemporaryDirectory() as tempdir:
             database = Path(tempdir) / "concurrent-quotes.db"

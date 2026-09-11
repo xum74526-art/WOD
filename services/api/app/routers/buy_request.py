@@ -813,6 +813,7 @@ def counter_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     quote = db.query(BuyRequestQuote).filter(
         BuyRequestQuote.id == quote_id,
@@ -855,6 +856,7 @@ def withdraw_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     quote = db.query(BuyRequestQuote).filter(
@@ -886,6 +888,7 @@ def select_quote(
     # quote-selected semantics for compatibility.
     if not direct_trade_enabled():
         require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(
         BuyRequest.id == request_id,
         BuyRequest.user_id == user.id,
