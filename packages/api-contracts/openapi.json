@@ -513,6 +513,9 @@
           "phone": {
             "anyOf": [
               {
+                "maxLength": 20,
+                "minLength": 6,
+                "pattern": "^(?:[0-9]{6,20}|\\+[1-9][0-9]{5,14})$",
                 "type": "string"
               },
               {

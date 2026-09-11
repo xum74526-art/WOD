@@ -9,6 +9,7 @@ import {
   ensureDirectOrderIntent,
   hourlyOrderBody,
   kaiPricingQuery,
+  normalizeBuyRequestContactPhone,
   webRequestId,
 } from "../lib/web-business-contract.ts";
 import { communityDisplayText } from "../lib/community-ui.ts";
@@ -29,6 +30,24 @@ test("all live market requests force KAI Pricing as the only source", () => {
   const query = new URLSearchParams(kaiPricingQuery({ model: "H100", variant: "80GB", sources: "vast,autodl" }));
   assert.equal(query.get("sources"), "kai");
   assert.equal(query.get("model"), "H100");
+});
+
+test("buy-request contact phone matches the API storage contract", () => {
+  assert.equal(normalizeBuyRequestContactPhone(" +86 (139) 1000-0001 "), "+8613910000001");
+  assert.equal(normalizeBuyRequestContactPhone("1".repeat(20)), "1".repeat(20));
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(15)}`), `+${"1".repeat(15)}`);
+  assert.equal(normalizeBuyRequestContactPhone("12345"), null);
+  assert.equal(normalizeBuyRequestContactPhone("86+13910000001"), null);
+  assert.equal(normalizeBuyRequestContactPhone("+0123456789"), null);
+  assert.equal(normalizeBuyRequestContactPhone("139.1000.0001"), null);
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(20)}`), null);
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(16)}`), null);
+  assert.equal(normalizeBuyRequestContactPhone("1".repeat(21)), null);
+
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
+  assert.match(workspace, /type="tel" inputMode="tel" maxLength=\{32\}/);
+  assert.match(workspace, /phone: event\.target\.value\.slice\(0, 32\)/);
 });
 
 test("new and renewal orders use integer hours plus a Web request id", () => {
@@ -378,7 +397,7 @@ test("Web matchmaking selection requests platform coordination without creating 
   const paymentGate = fs.readFileSync(new URL("../components/capability-payment-checkout.tsx", import.meta.url), "utf8");
 
   assert.match(workspace, /contact: form\.contact\.trim\(\)/);
-  assert.match(workspace, /phone: form\.phone\.trim\(\)/);
+  assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
   assert.match(workspace, /product_id: initialPrefill\?\.product_id/);
   assert.match(workspace, /supplier_id: initialPrefill\?\.supplier_id/);
   assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);

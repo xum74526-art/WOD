@@ -148,7 +148,7 @@
             </view>
             <view class="half">
               <text class="field-label">{{ t('contactPhone') }}</text>
-              <input v-model="form.phone" type="number" class="field-input" :placeholder="t('enterContactPhone')" placeholder-class="placeholder" />
+              <input v-model="form.phone" type="tel" maxlength="32" class="field-input" :placeholder="t('enterContactPhone')" placeholder-class="placeholder" />
             </view>
           </view>
 
@@ -343,6 +343,7 @@ import { useCommerceStore } from '@/store/commerce'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatQuoteAmount } from '@/utils/quote-currency'
 import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
+import { normalizeBuyRequestContactPhone } from '@/utils/buy-request-contact'
 import {
   canBuyerConfirmDelivery as buyerCanConfirmDelivery,
   canBuyerReportDelivery as buyerCanReportDelivery,
@@ -653,9 +654,10 @@ async function submitRequest() {
   if (!form.gpu_model || Number(form.quantity) <= 0) { uni.showToast({ title: t('completeRequiredFields'), icon: 'none' }); return }
   if (requestType.value === 'online' && Number(form.gpu_hours) <= 0) { uni.showToast({ title: t('enterGpuHours'), icon: 'none' }); return }
   const contact = form.contact.trim()
-  const phone = form.phone.trim()
-  if (!contact || !phone) { uni.showToast({ title: t('completeContactInfo'), icon: 'none' }); return }
-  if (!/^\d{6,20}$/.test(phone)) { uni.showToast({ title: t('enterValidContactPhone'), icon: 'none' }); return }
+  if (!contact || !form.phone.trim()) { uni.showToast({ title: t('completeContactInfo'), icon: 'none' }); return }
+  const phone = normalizeBuyRequestContactPhone(form.phone)
+  if (!phone) { uni.showToast({ title: t('enterValidContactPhone'), icon: 'none' }); return }
+  form.phone = phone
   submitting.value = true
   try {
     const payload = buildRequestPayload()

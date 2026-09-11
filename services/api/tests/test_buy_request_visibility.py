@@ -162,6 +162,21 @@ class BuyRequestVisibilityTests(unittest.TestCase):
         self.assertEqual(buy_request_router._mask_phone("12345"), "****")
         self.assertIsNone(buy_request_router._mask_phone(None))
 
+    def test_invalid_contact_phone_returns_422_without_creating_a_request(self):
+        self.current_user = self.buyer
+        before = self.db.query(BuyRequest).count()
+        response = self.client.post("/api/buy-requests", json={
+            "request_type": "online",
+            "gpu_model": "H100",
+            "quantity": 1,
+            "gpu_hours": 24,
+            "contact": "采购联系人",
+            "phone": "+86-invalid",
+        })
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.db.query(BuyRequest).count(), before)
+
     def test_supplier_list_shows_open_targeted_and_own_but_not_other_target(self):
         rows = self._get("/api/buy-requests?request_type=online&view=seller")
         by_id = {row["id"]: row for row in rows}

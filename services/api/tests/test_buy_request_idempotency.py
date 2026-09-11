@@ -184,6 +184,71 @@ class BuyRequestIdempotencyTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 self._payload(client_request_id=invalid)
 
+    def test_contact_phone_is_normalized_and_limited_to_database_safe_length(self):
+        self.assertEqual(
+            self._payload(phone=" +86 (139) 1000-0001 ").phone,
+            "+8613910000001",
+        )
+        self.assertEqual(self._payload(phone="1" * 20).phone, "1" * 20)
+        self.assertEqual(self._payload(phone="+" + "1" * 15).phone, "+" + "1" * 15)
+        self.assertIsNone(self._payload(phone="  ").phone)
+        for invalid in (
+            "12345",
+            "86+13910000001",
+            "+0123456789",
+            "139.1000.0001",
+            "+" + "1" * 20,
+            "+" + "1" * 16,
+            "1" * 21,
+            "1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                self._payload(phone=invalid)
+
+    def test_internal_kai_phone_is_not_saved_as_a_request_contact(self):
+        with self.Session() as db:
+            kai_user = User(
+                username="Kai 临时用户",
+                phone="__kai_pending_42",
+                password="!",
+                role="personal",
+            )
+            db.add(kai_user)
+            db.commit()
+            kai_user_id = kai_user.id
+
+        created = self._create(
+            kai_user_id,
+            self._payload(client_request_id="kai-contact-fallback-0001"),
+        )
+        self.assertIsNone(created["data"]["phone"])
+        with self.Session() as db:
+            self.assertIsNone(db.get(BuyRequest, created["data"]["id"]).phone)
+
+        with self.assertRaises(BizError) as raised:
+            self._create(
+                kai_user_id,
+                self._payload(
+                    client_request_id="kai-contact-fallback-0002",
+                    request_type="offline",
+                ),
+            )
+        self.assertEqual(raised.exception.msg, "线下求购需要联系人和联系电话")
+
+    def test_retry_matches_a_legacy_formatted_contact_phone(self):
+        payload = self._payload(
+            client_request_id="formatted-phone-retry-0001",
+            phone="13910000001",
+        )
+        first = self._create(self.first_user_id, payload)
+        with self.Session() as db:
+            stored = db.get(BuyRequest, first["data"]["id"])
+            stored.phone = "139 1000-0001"
+            db.commit()
+
+        retried = self._create(self.first_user_id, payload)
+        self.assertEqual(retried["data"]["id"], first["data"]["id"])
+
 
 class BuyRequestIdempotencyMigrationTests(unittest.TestCase):
     def test_legacy_table_migration_is_additive_and_idempotent(self):

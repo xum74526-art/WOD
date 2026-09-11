@@ -27,6 +27,7 @@ import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import {
   buyRequestIntentSignature,
   ensureBuyRequestIntent,
+  normalizeBuyRequestContactPhone,
   type BuyRequestIntent,
 } from "@/lib/web-business-contract";
 
@@ -184,6 +185,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
   async function create(event: FormEvent) {
     event.preventDefault();
     if (requestSubmissionInFlight.current) return;
+    const phone = normalizeBuyRequestContactPhone(form.phone);
+    if (!phone) {
+      setError("请输入有效联系电话（可使用 +国家区号）。");
+      return;
+    }
     const input = {
       request_type: type,
       gpu_model: form.gpu_model,
@@ -201,7 +207,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
         gpu_variant: initialPrefill?.gpu_variant,
         note: form.requirements_text.trim() || undefined,
       },
-      contact: form.contact.trim(), phone: form.phone.trim(), expires_in_hours: Number(form.expires_in_hours),
+      contact: form.contact.trim(), phone, expires_in_hours: Number(form.expires_in_hours),
     };
     const intent = ensureBuyRequestIntent(
       pendingBuyRequestIntent.current,
@@ -324,7 +330,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
       <label>数量<input required min="1" type="number" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })}/></label>
       {type === "online" && <label>预计使用时长（小时）<input required min="1" type="number" value={form.gpu_hours} onChange={(event) => setForm({ ...form, gpu_hours: event.target.value })}/></label>}
       <label>联系人<input required maxLength={50} value={form.contact} onChange={(event) => setForm({ ...form, contact: event.target.value })} placeholder="仅平台管理员可见"/></label>
-      <label>联系电话<input required inputMode="tel" maxLength={30} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="仅平台管理员可见"/></label>
+      <label>联系电话<input required type="tel" inputMode="tel" maxLength={32} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.slice(0, 32) })} placeholder="可填写国家区号，仅平台管理员可见"/></label>
       <label>地区<input value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}/></label>
       <label>有效小时<input min="1" max="720" type="number" value={form.expires_in_hours} onChange={(event) => setForm({ ...form, expires_in_hours: event.target.value })}/></label>
       <label className="mobile-request-form__wide">补充需求<textarea rows={3} maxLength={1000} value={form.requirements_text} onChange={(event) => setForm({ ...form, requirements_text: event.target.value })} placeholder="网络、CUDA、镜像、交付时间等，可留空"/></label>

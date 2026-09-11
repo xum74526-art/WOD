@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import re
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -44,6 +44,18 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _normalize_contact_phone(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > 32 or not re.fullmatch(r"[+0-9 ()-]+", cleaned):
+        return None
+    normalized = re.sub(r"[ ()-]", "", cleaned)
+    if not re.fullmatch(r"(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})", normalized):
+        return None
+    return normalized
+
+
 class BuyRequestIn(BaseModel):
     client_request_id: str | None = Field(
         default=None,
@@ -63,8 +75,25 @@ class BuyRequestIn(BaseModel):
     billing_mode: str | None = None
     requirements: dict | None = None
     contact: str | None = None
-    phone: str | None = None
+    phone: str | None = Field(
+        default=None,
+        min_length=6,
+        max_length=20,
+        pattern=r"^(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})$",
+    )
     expires_in_hours: int = Field(default=24, ge=1, le=24 * 30)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def clean_contact_phone(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        if isinstance(value, str):
+            normalized = _normalize_contact_phone(value)
+            if normalized is None:
+                raise ValueError("invalid contact phone")
+            return normalized
+        return value
 
 
 class QuoteIn(BaseModel):
@@ -367,7 +396,7 @@ def _same_create_request(
     gpu_model: str,
     requirements: dict,
     contact: str,
-    phone: str,
+    phone: str | None,
 ) -> bool:
     if item.created_at is None or item.expires_at is None:
         expiry_hours_match = False
@@ -396,7 +425,10 @@ def _same_create_request(
         and item.billing_mode == data.billing_mode
         and (item.requirements or {}) == requirements
         and (not data.contact or (item.contact or "") == contact)
-        and (not data.phone or (item.phone or "") == phone)
+        and (
+            not data.phone
+            or (_normalize_contact_phone(item.phone) or item.phone or "") == (phone or "")
+        )
         and expiry_hours_match
     )
 
@@ -582,7 +614,7 @@ def create_request(
         raise BizError("请输入总卡时")
     user_id = int(user.id)
     contact = (data.contact or user.username or "").strip()
-    phone = (data.phone or user.phone or "").strip()
+    phone = _normalize_contact_phone(data.phone) or _normalize_contact_phone(user.phone)
     if data.request_type == "offline" and (not contact or not phone):
         raise BizError("线下求购需要联系人和联系电话")
     requirements = data.requirements or {}

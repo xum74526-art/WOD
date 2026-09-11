@@ -17,7 +17,7 @@ export type MobileBuyRequest = {
   billing_mode?: string;
   requirements: Record<string, unknown>;
   contact?: string;
-  phone?: string;
+  phone?: string | null;
   status: string;
   quote_count: number;
   is_own?: boolean;

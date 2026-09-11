@@ -4,7 +4,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 type Operation = { parameters?: Array<{ name: string }>; requestBody?: { content?: { "application/json"?: { schema?: { $ref?: string } } } } };
-type OpenApi = { paths: Record<string, Record<string, Operation>>; components: { schemas: Record<string, { properties?: Record<string, unknown>; required?: string[] }> } };
+type PropertySchema = { type?: string; minLength?: number; maxLength?: number; pattern?: string; anyOf?: PropertySchema[] };
+type OpenApi = { paths: Record<string, Record<string, Operation>>; components: { schemas: Record<string, { properties?: Record<string, PropertySchema>; required?: string[] }> } };
 const contractPath = fileURLToPath(new URL("../../../packages/api-contracts/openapi.json", import.meta.url));
 const contract = JSON.parse(readFileSync(contractPath, "utf8")) as OpenApi;
 
@@ -52,6 +53,11 @@ test("buy-request creation exposes a backwards-compatible retry key", () => {
   const create = bodySchema("/api/buy-requests", "post");
   assert.ok(create.properties?.client_request_id);
   assert.equal(create.required?.includes("client_request_id") ?? false, false);
+  const phone = create.properties?.phone?.anyOf?.find((item) => item.type === "string");
+  assert.deepEqual(
+    { minLength: phone?.minLength, maxLength: phone?.maxLength, pattern: phone?.pattern },
+    { minLength: 6, maxLength: 20, pattern: "^(?:[0-9]{6,20}|\\+[1-9][0-9]{5,14})$" },
+  );
 });
 
 test("administrator and finance lists expose the platform filter", () => {
