@@ -9,13 +9,13 @@ type OpenApi = { paths: Record<string, Record<string, Operation>>; components: {
 const contractPath = fileURLToPath(new URL("../../../packages/api-contracts/openapi.json", import.meta.url));
 const contract = JSON.parse(readFileSync(contractPath, "utf8")) as OpenApi;
 
-function operation(path: string, method: "get" | "post") {
+function operation(path: string, method: "get" | "post" | "put" | "delete") {
   const value = contract.paths[path]?.[method];
   assert.ok(value, `${method.toUpperCase()} ${path} must exist in the exported OpenAPI contract`);
   return value;
 }
 
-function bodySchema(path: string, method: "post") {
+function bodySchema(path: string, method: "post" | "put") {
   const ref = operation(path, method).requestBody?.content?.["application/json"]?.schema?.$ref;
   assert.ok(ref, `${method.toUpperCase()} ${path} must declare a JSON request schema`);
   const schema = contract.components.schemas[ref.split("/").at(-1)!];
@@ -58,6 +58,14 @@ test("buy-request creation exposes a backwards-compatible retry key", () => {
     { minLength: phone?.minLength, maxLength: phone?.maxLength, pattern: phone?.pattern },
     { minLength: 6, maxLength: 20, pattern: "^(?:[0-9]{6,20}|\\+[1-9][0-9]{5,14})$" },
   );
+});
+
+test("supplier resource edits expose a backwards-compatible version precondition", () => {
+  const update = bodySchema("/api/supplier/devices/{did}", "put");
+  assert.ok(update.properties?.expected_version);
+  assert.equal(update.required?.includes("expected_version") ?? false, false);
+  const deleteParameters = operation("/api/supplier/devices/{did}", "delete").parameters ?? [];
+  assert.ok(deleteParameters.some((parameter) => parameter.name === "expected_version"));
 });
 
 test("administrator and finance lists expose the platform filter", () => {

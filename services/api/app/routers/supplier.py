@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.deps import get_current_user, require_admin
 from app.db.session import get_db
@@ -29,6 +31,9 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/supplier", tags=["supplier"])
 
 
+_DEVICE_CONFLICT_MESSAGE = "商品信息已发生变化，请刷新后重新编辑"
+
+
 class SupplierReviewIn(BaseModel):
     version: int = Field(default=1, ge=1)
     note: str | None = Field(default=None, max_length=1000)
@@ -39,6 +44,42 @@ def _identity_verified(user_id: int, db: Session) -> bool:
         Verification.user_id == user_id,
         Verification.status == "verified",
     ).first() is not None
+
+
+def _begin_device_write_transaction(db: Session) -> None:
+    """Serialize the read/check/write sequence on SQLite.
+
+    PostgreSQL uses the row-level ``FOR UPDATE`` lock in the endpoints below.
+    Authentication and supplier checks issue reads before this helper runs, so
+    SQLite's read transaction must be closed before requesting a write lock.
+    """
+
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    try:
+        if db.in_transaction():
+            db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    except OperationalError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if "locked" in message or "busy" in message:
+            raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
+
+
+def _commit_device_write(db: Session) -> None:
+    try:
+        db.commit()
+    except StaleDataError as exc:
+        db.rollback()
+        raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409) from exc
+    except OperationalError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if db.get_bind().dialect.name == "sqlite" and ("locked" in message or "busy" in message):
+            raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
 
 
 def _admin_application_out(
@@ -187,6 +228,7 @@ def device_list(status_filter: str = "on", user: User = Depends(get_current_user
             "status": "online" if stock_val > 0 else "offline",
             "list_status": p.status,
             "image_url": p.image_url,
+            "version": p.version,
         })
     return success(items)
 
@@ -211,17 +253,24 @@ def add_device(data: SupplierDeviceCreateIn, user: User = Depends(get_current_us
     db.add(p)
     db.commit()
     db.refresh(p)
-    return success({"id": p.id, "name": p.name, "status": "on"})
+    return success({"id": p.id, "name": p.name, "status": "on", "version": p.version})
 
 
 @router.put("/devices/{did}")
 def update_device(did: int, data: SupplierDeviceUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = _get_supplier(user, db)
-    p = db.query(Product).filter(Product.id == did, Product.supplier_id == s.id).first()
+    supplier_id = int(s.id)
+    _begin_device_write_transaction(db)
+    p = db.query(Product).filter(
+        Product.id == did,
+        Product.supplier_id == supplier_id,
+    ).with_for_update().first()
     if not p:
         raise BizError("设备不存在", status_code=404)
+    if data.expected_version is not None and p.version != data.expected_version:
+        db.rollback()
+        raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409)
     if data.price is not None:
-        from decimal import Decimal
         p.price = Decimal(str(data.price))
     if data.stock is not None:
         p.stock = data.stock
@@ -229,19 +278,34 @@ def update_device(did: int, data: SupplierDeviceUpdateIn, user: User = Depends(g
         p.name = data.name
     if data.status is not None:
         p.status = data.status
-    db.commit()
-    return success({"id": did, "updated": True})
+    _commit_device_write(db)
+    db.refresh(p)
+    return success({"id": did, "updated": True, "version": p.version})
 
 
 @router.delete("/devices/{did}")
-def delete_device(did: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_device(
+    did: int,
+    expected_version: int | None = Query(default=None, ge=1),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     s = _get_supplier(user, db)
-    p = db.query(Product).filter(Product.id == did, Product.supplier_id == s.id).first()
+    supplier_id = int(s.id)
+    _begin_device_write_transaction(db)
+    p = db.query(Product).filter(
+        Product.id == did,
+        Product.supplier_id == supplier_id,
+    ).with_for_update().first()
     if not p:
         raise BizError("设备不存在", status_code=404)
+    if expected_version is not None and p.version != expected_version:
+        db.rollback()
+        raise BizError(_DEVICE_CONFLICT_MESSAGE, status_code=409)
     p.status = "off"
-    db.commit()
-    return success({"id": did, "deleted": True})
+    _commit_device_write(db)
+    db.refresh(p)
+    return success({"id": did, "deleted": True, "version": p.version})
 
 
 @router.get("/revenue/detail")

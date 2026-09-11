@@ -1339,6 +1339,7 @@ const ZH: Record<string, string> = {
   deliverySubmitted: '已提交交付，等待买家验收',
   disputeReasonLabel: '争议原因',
   operationFailed: '操作失败',
+  resourceChangedRefresh: '商品信息已发生变化，请确认最新库存后重新编辑',
 
   // Product Detail
   gpuDetail: 'GPU 详情',
@@ -3041,6 +3042,7 @@ const EN: Record<string, string> = {
   deliverySubmitted: 'Delivery submitted; awaiting buyer acceptance',
   disputeReasonLabel: 'Dispute reason',
   operationFailed: 'Operation failed',
+  resourceChangedRefresh: 'Product information changed. Review the latest inventory and edit again.',
 
   // Product Detail
   gpuDetail: 'GPU Details',

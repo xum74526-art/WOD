@@ -117,6 +117,11 @@ class SupplierDeviceCrudTests(unittest.TestCase):
         self.assertEqual(product.stock_semantics, "supplier_reported_inventory")
         self.assertEqual(product.cycle, [])
         self.assertEqual(product.region_code, "east_china")
+        self.assertEqual(product.version, 1)
+
+        response = self.client.get("/api/supplier/devices", params={"status_filter": "all"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"][0]["version"], 1)
 
     def test_supplier_cannot_update_another_suppliers_resource(self):
         product = self._create_owned_device()
@@ -197,14 +202,57 @@ class SupplierDeviceCrudTests(unittest.TestCase):
 
         for expected_status in ("off", "on"):
             with self.subTest(status=expected_status):
+                previous_version = product.version
                 response = self.client.put(
                     f"/api/supplier/devices/{product.id}",
-                    json={"status": expected_status},
+                    json={"status": expected_status, "expected_version": previous_version},
                 )
                 self.assertEqual(response.status_code, 200, response.text)
                 self.assertTrue(response.json()["data"]["updated"])
                 self.db.refresh(product)
                 self.assertEqual(product.status, expected_status)
+                self.assertEqual(product.version, previous_version + 1)
+                self.assertEqual(response.json()["data"]["version"], product.version)
+
+    def test_stale_supplier_edit_cannot_restore_reserved_inventory(self):
+        product = self._create_owned_device()
+        edit_version = product.version
+
+        # Simulate an order reserving one unit after the merchant opened the
+        # edit form. Product's mapper increments the row version automatically.
+        product.stock = 7
+        self.db.commit()
+        self.db.refresh(product)
+        self.assertEqual(product.version, edit_version + 1)
+
+        response = self.client.put(
+            f"/api/supplier/devices/{product.id}",
+            json={
+                "name": "旧页面名称",
+                "stock": 8,
+                "expected_version": edit_version,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("刷新后重新编辑", response.json()["msg"])
+        self.db.refresh(product)
+        self.assertEqual(product.name, "RTX 5090 32GB")
+        self.assertEqual(product.stock, 7)
+        self.assertEqual(product.version, edit_version + 1)
+
+    def test_legacy_supplier_update_without_version_remains_compatible(self):
+        product = self._create_owned_device()
+
+        response = self.client.put(
+            f"/api/supplier/devices/{product.id}",
+            json={"stock": 9},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.db.refresh(product)
+        self.assertEqual(product.stock, 9)
+        self.assertEqual(product.version, 2)
 
 
 if __name__ == "__main__":

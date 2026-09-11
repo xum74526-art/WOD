@@ -27,9 +27,14 @@ class ProductMarketSourceMigrationTests(unittest.TestCase):
                 "(id, name, gpu_model, memory, price, source_price, source_currency, stock, status) "
                 "VALUES (1, 'Legacy Vast', 'RTX4090', '24GB', 2, 0.2, 'USD', 5, 'on')"
             ))
-        for _ in range(2):
-            _ensure_columns(engine)
-            _migrate_product_market_sources(engine)
+        _ensure_columns(engine)
+        _migrate_product_market_sources(engine)
+        with engine.connect() as conn:
+            first_version = conn.execute(text(
+                "SELECT version FROM products WHERE id = 1"
+            )).scalar_one()
+        _ensure_columns(engine)
+        _migrate_product_market_sources(engine)
 
         columns = {item["name"] for item in inspect(engine).get_columns("products")}
         self.assertTrue({
@@ -38,12 +43,15 @@ class ProductMarketSourceMigrationTests(unittest.TestCase):
             "stock_semantics",
             "source_max_configurable_quantity",
             "platform_stock_cap",
+            "version",
         }.issubset(columns))
         with engine.connect() as conn:
             row = conn.execute(text(
-                "SELECT market_source, stock_semantics, status, stock FROM products WHERE id = 1"
+                "SELECT market_source, stock_semantics, status, stock, version FROM products WHERE id = 1"
             )).one()
-        self.assertEqual(tuple(row), ("vast", "reported_available_units", "off", 0))
+        self.assertEqual(tuple(row[:4]), ("vast", "reported_available_units", "off", 0))
+        self.assertGreater(first_version, 1)
+        self.assertEqual(row.version, first_version)
         indexes = {item["name"] for item in inspect(engine).get_indexes("products")}
         self.assertIn("ix_products_market_external", indexes)
 

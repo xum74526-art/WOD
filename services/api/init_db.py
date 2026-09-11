@@ -38,7 +38,7 @@ _ENSURE = {
         "market_source", "external_product_id", "stock_semantics",
         "source_max_configurable_quantity", "platform_stock_cap",
         "source_price", "source_currency", "exchange_rate", "price_updated_at",
-        "stock", "reliability", "supplier_id",
+        "stock", "version", "reliability", "supplier_id",
     ],
     "posts": [
         "content_en", "topic_en", "origin", "content_type", "source_key",
@@ -126,6 +126,8 @@ def _ensure_columns(db_engine=None):
                     col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
                 elif col == "auth_version":
                     col_type = "INTEGER NOT NULL DEFAULT 0"
+                elif table == "products" and col == "version":
+                    col_type = "INTEGER NOT NULL DEFAULT 1"
                 elif col == "client_request_id":
                     col_type = "VARCHAR(64)"
                 elif col in _DATETIME_COLS:
@@ -333,26 +335,27 @@ def _migrate_product_market_sources(db_engine=None):
             "UPDATE products SET market_source = CASE "
             "WHEN source_price IS NULL THEN 'wod' "
             "WHEN UPPER(COALESCE(source_currency, '')) = 'USD' THEN 'vast' "
-            "ELSE 'autodl' END "
+            "ELSE 'autodl' END, version = version + 1 "
             "WHERE market_source IS NULL OR TRIM(market_source) = ''"
         ))
         conn.execute(text(
             "UPDATE products SET stock_semantics = CASE "
             "WHEN market_source = 'kai' THEN 'platform_closed_test_manual_fulfillment_allocation' "
             "WHEN market_source IN ('autodl', 'vast') THEN 'reported_available_units' "
-            "ELSE 'supplier_reported_inventory' END "
+            "ELSE 'supplier_reported_inventory' END, version = version + 1 "
             "WHERE stock_semantics IS NULL OR TRIM(stock_semantics) = ''"
         ))
         initial_kai_cap = max(int(settings.KAI_CLOSED_TEST_INITIAL_STOCK), 0)
         conn.execute(text(
             "UPDATE products SET source_max_configurable_quantity = "
-            "CASE WHEN stock > 0 THEN stock ELSE 0 END "
+            "CASE WHEN stock > 0 THEN stock ELSE 0 END, version = version + 1 "
             "WHERE market_source = 'kai' AND source_max_configurable_quantity IS NULL"
         ))
         conn.execute(text(
             "UPDATE products SET platform_stock_cap = "
             "CASE WHEN source_max_configurable_quantity < :initial_cap "
-            "THEN source_max_configurable_quantity ELSE :initial_cap END "
+            "THEN source_max_configurable_quantity ELSE :initial_cap END, "
+            "version = version + 1 "
             "WHERE market_source = 'kai' AND platform_stock_cap IS NULL"
         ), {"initial_cap": initial_kai_cap})
         conn.execute(text(
@@ -360,14 +363,22 @@ def _migrate_product_market_sources(db_engine=None):
             "WHEN stock < 0 THEN 0 "
             "WHEN platform_stock_cap IS NOT NULL AND stock > platform_stock_cap "
             "THEN platform_stock_cap ELSE stock END, "
-            "stock_semantics = 'platform_closed_test_manual_fulfillment_allocation' "
-            "WHERE market_source = 'kai'"
+            "stock_semantics = 'platform_closed_test_manual_fulfillment_allocation', "
+            "version = version + 1 "
+            "WHERE market_source = 'kai' AND ("
+            "stock < 0 OR (platform_stock_cap IS NOT NULL AND stock > platform_stock_cap) OR "
+            "stock_semantics IS NULL OR "
+            "stock_semantics <> 'platform_closed_test_manual_fulfillment_allocation')"
         ))
         if "cycle" in product_columns:
-            conn.execute(text("UPDATE products SET cycle = '[]' WHERE market_source = 'kai'"))
+            conn.execute(text(
+                "UPDATE products SET cycle = '[]', version = version + 1 "
+                "WHERE market_source = 'kai' AND (cycle IS NULL OR CAST(cycle AS TEXT) <> '[]')"
+            ))
         conn.execute(text(
-            "UPDATE products SET status = 'off', stock = 0 "
-            "WHERE market_source IN ('autodl', 'vast')"
+            "UPDATE products SET status = 'off', stock = 0, version = version + 1 "
+            "WHERE market_source IN ('autodl', 'vast') AND ("
+            "status IS NULL OR status <> 'off' OR stock IS NULL OR stock <> 0)"
         ))
         if "market_source_status" in tables:
             conn.execute(text(

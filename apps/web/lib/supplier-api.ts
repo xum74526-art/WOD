@@ -13,6 +13,23 @@ export type MobileSupplierDevice = {
   status: "online" | "offline";
   list_status: "on" | "off";
   image_url: string | null;
+  version: number;
+};
+
+export type MobileSupplierDeviceUpdate = {
+  name?: string;
+  price?: number;
+  stock?: number;
+  status?: "on" | "off";
+};
+
+export type MobileSupplierDeviceMutation = {
+  id: number;
+  name?: string;
+  status?: "on" | "off";
+  updated?: boolean;
+  deleted?: boolean;
+  version: number;
 };
 
 export type MobileSupplierDashboard = {
@@ -38,13 +55,19 @@ export function listMobileSupplierDevices(statusFilter: "all" | "on" | "off" = "
 }
 
 export function createMobileSupplierDevice(input: Record<string, unknown>) {
-  return apiRequest<MobileSupplierDevice>("/api/v1/canonical/supplier/devices", { method: "POST", body: JSON.stringify(input) });
+  return apiRequest<MobileSupplierDeviceMutation>("/api/v1/canonical/supplier/devices", { method: "POST", body: JSON.stringify(input) });
 }
 
-export function updateMobileSupplierDevice(id: number, input: Record<string, unknown>) {
-  return apiRequest<MobileSupplierDevice>(`/api/v1/canonical/supplier/devices/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export function updateMobileSupplierDevice(id: number, expectedVersion: number, input: MobileSupplierDeviceUpdate) {
+  return apiRequest<MobileSupplierDeviceMutation>(`/api/v1/canonical/supplier/devices/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ ...input, expected_version: expectedVersion }),
+  });
 }
 
-export function deleteMobileSupplierDevice(id: number) {
-  return apiRequest<{ id: number; deleted: boolean }>(`/api/v1/canonical/supplier/devices/${id}`, { method: "DELETE" });
+export function deleteMobileSupplierDevice(id: number, expectedVersion: number) {
+  return apiRequest<MobileSupplierDeviceMutation>(
+    `/api/v1/canonical/supplier/devices/${id}?expected_version=${expectedVersion}`,
+    { method: "DELETE" },
+  );
 }

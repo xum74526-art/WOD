@@ -3315,6 +3315,18 @@
       },
       "SupplierDeviceUpdateIn": {
         "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
           "name": {
             "anyOf": [
               {
@@ -10972,6 +10984,23 @@
             "schema": {
               "title": "Did",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Version"
             }
           }
         ],

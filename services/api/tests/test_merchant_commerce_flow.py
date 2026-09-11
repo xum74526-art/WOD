@@ -135,6 +135,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
             self.db,
         )["data"]
         product = self.db.get(Product, created["id"])
+        initial_product_version = product.version
         self.assertEqual(product.market_source, "wod")
         self.assertEqual(product.stock_semantics, "supplier_reported_inventory")
 
@@ -179,8 +180,10 @@ class MerchantCommerceFlowTests(unittest.TestCase):
             "android",
         )["data"]
         order = self.db.get(Order, created_order["id"])
+        self.db.refresh(product)
         self.assertEqual(order.status, "paid")
         self.assertEqual(product.stock, 1)
+        self.assertEqual(product.version, initial_product_version + 1)
         self.assertEqual(created_order["seller_type"], "merchant")
         self.assertEqual(created_order["supplier_id"], self.supplier.id)
         self.assertEqual(created_order["supplier_name"], "真实算力商家")

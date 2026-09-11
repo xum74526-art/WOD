@@ -2,7 +2,8 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Cube, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
-import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice } from "@/lib/supplier-api";
+import { ApiError } from "@/lib/api";
+import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice, type MobileSupplierDeviceUpdate } from "@/lib/supplier-api";
 import { errorMessage } from "@/lib/commerce-ui";
 import { displayBusinessReference } from "@/lib/display-reference";
 
@@ -69,11 +70,17 @@ export function ResourceWorkspace() {
     try {
       let id: number;
       if (selected) {
-        const updated = await updateMobileSupplierDevice(selected.id, {
-          name: form.name,
-          price: Number(form.price),
-          stock: Number(form.stock),
-        });
+        const changes: MobileSupplierDeviceUpdate = {};
+        const price = Number(form.price);
+        const stock = Number(form.stock);
+        if (form.name !== selected.name) changes.name = form.name;
+        if (price !== selected.price) changes.price = price;
+        if (stock !== selected.stock) changes.stock = stock;
+        if (!Object.keys(changes).length) {
+          setEditing(false);
+          return;
+        }
+        const updated = await updateMobileSupplierDevice(selected.id, selected.version, changes);
         id = updated.id;
       } else {
         const created = await createMobileSupplierDevice({
@@ -92,7 +99,7 @@ export function ResourceWorkspace() {
       setEditing(false);
       await load(id);
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(selected && await refreshAfterConflict(reason, selected.id))) setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -100,23 +107,31 @@ export function ResourceWorkspace() {
 
   async function toggle(item: MobileSupplierDevice) {
     try {
-      await updateMobileSupplierDevice(item.id, {
+      await updateMobileSupplierDevice(item.id, item.version, {
         status: item.list_status === "on" ? "off" : "on",
       });
       await load(item.id);
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(await refreshAfterConflict(reason, item.id))) setError(errorMessage(reason));
     }
   }
 
   async function remove(item: MobileSupplierDevice) {
     if (!window.confirm(`确定删除“${item.name}”吗？`)) return;
     try {
-      await deleteMobileSupplierDevice(item.id);
+      await deleteMobileSupplierDevice(item.id, item.version);
       await load();
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(await refreshAfterConflict(reason, item.id))) setError(errorMessage(reason));
     }
+  }
+
+  async function refreshAfterConflict(reason: unknown, preferredId?: number) {
+    if (!(reason instanceof ApiError) || reason.status !== 409) return false;
+    setEditing(false);
+    await load(preferredId);
+    setError("商品信息已发生变化，请确认最新库存后重新编辑");
+    return true;
   }
 
   return (

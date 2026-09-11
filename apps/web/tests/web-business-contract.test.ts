@@ -344,10 +344,20 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
 
 test("seller resource workspace uses the backend card-hour price contract", () => {
   const resource = fs.readFileSync(new URL("../components/resource-workspace.tsx", import.meta.url), "utf8");
+  const supplierApi = fs.readFileSync(new URL("../lib/supplier-api.ts", import.meta.url), "utf8");
 
   assert.match(resource, /每 GPU 小时价格（卡时）/);
   assert.match(resource, /selected\.price\.toFixed\(4\).*卡时 \/ GPU·小时/);
   assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|selected\.price\.toFixed\(4\).*CNY/);
+  assert.match(supplierApi, /MobileSupplierDevice[\s\S]*version: number/);
+  assert.match(supplierApi, /expected_version: expectedVersion/);
+  assert.match(resource, /updateMobileSupplierDevice\(selected\.id, selected\.version, changes\)/);
+  assert.match(resource, /updateMobileSupplierDevice\(item\.id, item\.version/);
+  assert.match(resource, /deleteMobileSupplierDevice\(item\.id, item\.version\)/);
+  assert.match(resource, /reason instanceof ApiError/);
+  assert.match(resource, /reason\.status !== 409/);
+  assert.match(resource, /商品信息已发生变化，请确认最新库存后重新编辑/);
+  assert.match(resource, /if \(stock !== selected\.stock\) changes\.stock = stock/);
 });
 
 test("Web wallet keeps safe history actions and capability-gates future money movement", () => {

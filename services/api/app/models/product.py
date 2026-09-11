@@ -49,7 +49,13 @@ class Product(Base):
     exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     price_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stock: Mapped[int] = mapped_column(default=0)  # 可租数量
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     reliability: Mapped[float] = mapped_column(default=99.5)  # 稳定性
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="on")  # on/off
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Protect supplier edits from overwriting inventory or product changes made
+    # after the edit screen was opened. SQLAlchemy adds the version predicate
+    # and increments this value for every ORM update of a Product row.
+    __mapper_args__ = {"version_id_col": version}

@@ -140,6 +140,8 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
 
     def test_dispute_refund_preserves_frozen_funds_until_resolution(self):
         order = self._deliver(self._order())
+        self.db.refresh(self.product)
+        reserved_version = self.product.version
         dispute_delivery(
             order.id,
             OrderDisputeIn(reason="交付的 SSH 无法建立连接"),
@@ -164,6 +166,7 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
         self.assertEqual(self.buyer_wallet.balance, Decimal("100.0000"))
         self.assertEqual(self.buyer_wallet.frozen, Decimal("0.0000"))
         self.assertEqual(self.product.stock, 1)
+        self.assertEqual(self.product.version, reserved_version + 1)
         self.assertEqual(self.db.query(Ledger).filter(Ledger.type == "refund").count(), 1)
         self.assertEqual(self.db.query(MerchantSettlement).count(), 0)
 
