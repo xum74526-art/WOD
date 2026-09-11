@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -684,6 +685,98 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                     self.assertEqual(deals, [])
                     self.assertEqual(quote.status, "withdrawn")
                     self.assertEqual(revision.status, "withdrawn")
+            finally:
+                check.close()
+                engine.dispose()
+
+    def test_concurrent_supplier_confirm_and_decline_leave_one_coherent_state(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            engine, Session, ids = self._seed_concurrent_negotiation_database(
+                Path(tempdir) / "supplier-decision.db"
+            )
+            seed = Session()
+            try:
+                request = seed.get(BuyRequest, ids["request"])
+                quote = seed.get(BuyRequestQuote, ids["quote"])
+                buyer = seed.get(User, ids["buyer"])
+                deal = matchmaking.select_quote(seed, request, quote, buyer)
+                seed.commit()
+                deal_id = deal.id
+            finally:
+                seed.close()
+
+            start = threading.Barrier(2)
+            decision_lock = threading.Lock()
+            both_decisions_loaded = threading.Event()
+            decision_count = 0
+            original_decision = matchmaking.supplier_decision
+
+            def synchronized_decision(*args, **kwargs):
+                nonlocal decision_count
+                with decision_lock:
+                    decision_count += 1
+                    if decision_count == 2:
+                        both_decisions_loaded.set()
+                # Before the fix both requests can load buyer_selected and enter
+                # here together. After BEGIN IMMEDIATE, the first request owns
+                # the write transaction and the second reaches this point only
+                # after the first one commits.
+                both_decisions_loaded.wait(timeout=0.25)
+                return original_decision(*args, **kwargs)
+
+            def decide(confirm: bool) -> str:
+                db = Session()
+                try:
+                    supplier_user = db.get(User, ids["supplier_user"])
+                    start.wait(timeout=5)
+                    endpoint = (
+                        buy_request_router.supplier_confirm_deal
+                        if confirm
+                        else buy_request_router.supplier_decline_deal
+                    )
+                    endpoint(ids["request"], deal_id, None, supplier_user, db)
+                    return "success"
+                except BizError:
+                    db.rollback()
+                    return "conflict"
+                except OperationalError:
+                    db.rollback()
+                    return "database-error"
+                finally:
+                    db.close()
+
+            with patch.object(
+                matchmaking,
+                "supplier_decision",
+                side_effect=synchronized_decision,
+            ):
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    confirm_future = pool.submit(decide, True)
+                    decline_future = pool.submit(decide, False)
+                    results = [confirm_future.result(), decline_future.result()]
+
+            self.assertCountEqual(results, ["success", "conflict"])
+            check = Session()
+            try:
+                deal = check.get(BuyRequestDeal, deal_id)
+                request = check.get(BuyRequest, ids["request"])
+                quote = check.get(BuyRequestQuote, ids["quote"])
+                decision_events = check.query(BuyRequestEvent).filter(
+                    BuyRequestEvent.deal_id == deal_id,
+                    BuyRequestEvent.event_type.in_(("supplier_confirmed", "supplier_declined")),
+                ).all()
+                self.assertEqual(len(decision_events), 1)
+                if deal.status == "platform_review":
+                    self.assertEqual(deal.active_slot, f"request:{ids['request']}")
+                    self.assertEqual(request.status, "platform_review")
+                    self.assertEqual(quote.status, "coordination_requested")
+                    self.assertEqual(decision_events[0].event_type, "supplier_confirmed")
+                else:
+                    self.assertEqual(deal.status, "supplier_declined")
+                    self.assertIsNone(deal.active_slot)
+                    self.assertEqual(request.status, "published")
+                    self.assertEqual(quote.status, "withdrawn")
+                    self.assertEqual(decision_events[0].event_type, "supplier_declined")
             finally:
                 check.close()
                 engine.dispose()

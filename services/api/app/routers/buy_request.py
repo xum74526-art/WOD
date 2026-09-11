@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_admin
@@ -38,6 +38,7 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/buy-requests", tags=["buy-request"])
 admin_router = APIRouter(prefix="/api/admin/buy-requests", tags=["admin", "buy-request"])
 OPEN_STATUSES = ("published", "quoting")
+_MATCHMAKING_WRITE_CONFLICT_MESSAGE = "撮合状态正在更新，请刷新后重试"
 
 
 def _now() -> datetime:
@@ -351,9 +352,16 @@ def _begin_serialized_matchmaking_transaction(db: Session) -> None:
     # Authentication opens a read transaction before the endpoint. Restart it
     # as IMMEDIATE before any admission read so concurrent processes cannot both
     # observe the same idempotency key or supplier/request pair as available.
-    if db.in_transaction():
+    try:
+        if db.in_transaction():
+            db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    except OperationalError as exc:
         db.rollback()
-    db.execute(text("BEGIN IMMEDIATE"))
+        message = str(exc).lower()
+        if "locked" in message or "busy" in message:
+            raise BizError(_MATCHMAKING_WRITE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
 
 
 def _find_request_by_client_id(
@@ -990,6 +998,7 @@ def supplier_confirm_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -1017,6 +1026,7 @@ def supplier_decline_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -1045,6 +1055,7 @@ def supplier_submit_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -1078,6 +1089,7 @@ def buyer_confirm_delivery(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1103,6 +1115,7 @@ def buyer_report_delivery(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1129,6 +1142,7 @@ def admin_approve_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1154,6 +1168,7 @@ def admin_reject_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1194,6 +1209,7 @@ def admin_release_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1219,6 +1235,7 @@ def admin_reject_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
