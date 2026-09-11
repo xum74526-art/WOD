@@ -127,6 +127,10 @@ export type MobileBuyQuoteInput = {
 
 export type MobileBuyRequestSummary = { active: number; new_quotes: number; pending_confirmation: number };
 
+export type MobileBuyRequestInput = Record<string, unknown> & {
+  client_request_id: string;
+};
+
 export function getMobileBuyRequestSummary() {
   return apiRequest<MobileBuyRequestSummary>(path("/buy-requests/summary"));
 }
@@ -139,7 +143,7 @@ export function getMobileBuyRequest(id: number) {
   return apiRequest<MobileBuyRequestDetail>(path(`/buy-requests/${id}`));
 }
 
-export function createMobileBuyRequest(input: Record<string, unknown>) {
+export function createMobileBuyRequest(input: MobileBuyRequestInput) {
   return apiRequest<MobileBuyRequest>(path("/buy-requests"), { method: "POST", body: JSON.stringify(input) });
 }
 

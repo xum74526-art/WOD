@@ -394,8 +394,7 @@ export function renewOrder(id: number, hours: number) {
     body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
   });
 }
-export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }) {
-  const clientRequestId = webRequestId("order", crypto.randomUUID());
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }, clientRequestId: string) {
   return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },

@@ -327,6 +327,7 @@ import {
   type BuyRequestDetail,
   type BuyRequestItem,
   type BuyRequestQuote,
+  type BuyRequestPayload,
   type BuyRequestQuotePayload,
   type BuyRequestQuoteRevision,
   type BuyRequestView,
@@ -341,6 +342,7 @@ import { useUserStore } from '@/store/user'
 import { useCommerceStore } from '@/store/commerce'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatQuoteAmount } from '@/utils/quote-currency'
+import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 import {
   canBuyerConfirmDelivery as buyerCanConfirmDelivery,
   canBuyerReportDelivery as buyerCanReportDelivery,
@@ -373,6 +375,7 @@ const loading = ref(false)
 const loadError = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
+const pendingRequestIntent = ref<ClientRequestIntent | null>(null)
 const selectingQuoteId = ref<number | null>(null)
 const actionBusy = ref(false)
 const detailLoading = ref(false)
@@ -588,6 +591,39 @@ function resetForm() {
   billingIndex.value = 0
   expiryIndex.value = 2
 }
+function resetRequestIntent() { pendingRequestIntent.value = null }
+function buildRequestPayload(): Omit<BuyRequestPayload, 'client_request_id'> {
+  return {
+    request_type: requestType.value,
+    gpu_model: form.gpu_model,
+    gpu_variant: form.gpu_variant || undefined,
+    quantity: Number(form.quantity),
+    gpu_hours: requestType.value === 'online' ? Number(form.gpu_hours) : undefined,
+    currency: 'CNY',
+    region: form.region || undefined,
+    billing_mode: requestType.value === 'online' ? billingValues[billingIndex.value] : undefined,
+    requirements: {
+      product_id: inquiryContext.value?.product_id ?? null,
+      supplier_id: inquiryContext.value?.supplier_id ?? null,
+      source: inquiryContext.value?.source || 'direct_request',
+      product_name: inquiryContext.value?.product_name || `${form.gpu_model}${form.gpu_variant ? ` ${form.gpu_variant}` : ''}`,
+      remark: form.remark,
+      need_hosting: form.need_hosting,
+      invoice_required: form.invoice_required,
+    },
+    contact: form.contact.trim(),
+    phone: form.phone.trim(),
+    expires_in_hours: requestType.value === 'online' ? expiryValues[expiryIndex.value] : 24 * 7,
+  }
+}
+function ensureRequestId(payload: Omit<BuyRequestPayload, 'client_request_id'>): string {
+  pendingRequestIntent.value = ensureClientRequestIntent(
+    pendingRequestIntent.value,
+    payload,
+    () => `buy-request-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+  )
+  return pendingRequestIntent.value.requestId
+}
 function applyInquiryPrefill(prefill: InquiryRequestPrefill) {
   form.gpu_model = prefill.gpu_model
   form.gpu_variant = prefill.gpu_variant || ''
@@ -600,6 +636,7 @@ async function openForm() {
     if (!commerce.matchmakingEnabled) uni.showToast({ title: t('dataUnavailable'), icon: 'none' })
     return
   }
+  resetRequestIntent()
   resetForm()
   inquiryContext.value = readInquiryRequestPrefill()
   if (inquiryContext.value) {
@@ -610,7 +647,7 @@ async function openForm() {
   }
   showForm.value = true
 }
-function closeForm() { showForm.value = false }
+function closeForm() { resetRequestIntent(); showForm.value = false }
 async function submitRequest() {
   if (submitting.value || viewMode.value !== 'buyer' || !commerce.matchmakingEnabled) return
   if (!form.gpu_model || Number(form.quantity) <= 0) { uni.showToast({ title: t('completeRequiredFields'), icon: 'none' }); return }
@@ -621,28 +658,9 @@ async function submitRequest() {
   if (!/^\d{6,20}$/.test(phone)) { uni.showToast({ title: t('enterValidContactPhone'), icon: 'none' }); return }
   submitting.value = true
   try {
-    await createBuyRequest({
-      request_type: requestType.value,
-      gpu_model: form.gpu_model,
-      gpu_variant: form.gpu_variant || undefined,
-      quantity: Number(form.quantity),
-      gpu_hours: requestType.value === 'online' ? Number(form.gpu_hours) : undefined,
-      currency: 'CNY',
-      region: form.region || undefined,
-      billing_mode: requestType.value === 'online' ? billingValues[billingIndex.value] : undefined,
-      requirements: {
-        product_id: inquiryContext.value?.product_id ?? null,
-        supplier_id: inquiryContext.value?.supplier_id ?? null,
-        source: inquiryContext.value?.source || 'direct_request',
-        product_name: inquiryContext.value?.product_name || `${form.gpu_model}${form.gpu_variant ? ` ${form.gpu_variant}` : ''}`,
-        remark: form.remark,
-        need_hosting: form.need_hosting,
-        invoice_required: form.invoice_required,
-      },
-      contact,
-      phone,
-      expires_in_hours: requestType.value === 'online' ? expiryValues[expiryIndex.value] : 24 * 7,
-    })
+    const payload = buildRequestPayload()
+    await createBuyRequest({ ...payload, client_request_id: ensureRequestId(payload) })
+    resetRequestIntent()
     uni.showToast({ title: t('requestPublished'), icon: 'success' })
     clearInquiryRequestPrefill()
     inquiryContext.value = null

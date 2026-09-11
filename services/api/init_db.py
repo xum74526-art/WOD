@@ -31,6 +31,7 @@ _ENSURE = {
         "dispute_resolution", "dispute_resolution_note", "dispute_resolved_at",
         "dispute_resolved_by", "product_snapshot",
     ],
+    "buy_requests": ["client_request_id"],
     "order_renewals": ["created_platform"],
     "products": [
         "image_url", "region_code", "region_name", "country_code", "city",
@@ -125,6 +126,8 @@ def _ensure_columns(db_engine=None):
                     col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
                 elif col == "auth_version":
                     col_type = "INTEGER NOT NULL DEFAULT 0"
+                elif col == "client_request_id":
+                    col_type = "VARCHAR(64)"
                 elif col in _DATETIME_COLS:
                     col_type = (
                         "TIMESTAMP WITHOUT TIME ZONE"
@@ -411,6 +414,63 @@ def _reconcile_supplier_completed_order_counts(db_engine=None):
             "AND merchant_settlements.source_type = 'order' "
             "AND merchant_settlements.status = 'settled'"
             ")"
+        ))
+
+
+def _migrate_buy_request_idempotency(db_engine=None) -> None:
+    """Add durable per-user request idempotency without rewriting legacy rows."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "buy_requests" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("buy_requests")}
+    if "client_request_id" not in columns:
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE buy_requests ADD COLUMN client_request_id VARCHAR(64)"
+            ))
+        print("[init_db] 补列: buy_requests.client_request_id")
+
+    with target_engine.connect() as conn:
+        duplicate = conn.execute(text(
+            "SELECT user_id, client_request_id FROM buy_requests "
+            "WHERE client_request_id IS NOT NULL "
+            "GROUP BY user_id, client_request_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+    if duplicate:
+        raise RuntimeError(
+            "duplicate per-user buy request ids detected; resolve before startup"
+        )
+
+    inspector = inspect(target_engine)
+    indexes = inspector.get_indexes("buy_requests")
+    constraints = inspector.get_unique_constraints("buy_requests")
+    expected_columns = ["user_id", "client_request_id"]
+    has_scoped_unique = any(
+        item.get("unique") and item.get("column_names") == expected_columns
+        for item in indexes
+    ) or any(
+        item.get("column_names") == expected_columns
+        for item in constraints
+    )
+    if has_scoped_unique:
+        return
+
+    index_name = "uq_buy_requests_user_client_request"
+    name_collision = any(
+        item.get("name") == index_name
+        for item in indexes + constraints
+    )
+    if name_collision:
+        raise RuntimeError(
+            f"{index_name} exists with an incompatible definition"
+        )
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_buy_requests_user_client_request "
+            "ON buy_requests (user_id, client_request_id) "
+            "WHERE client_request_id IS NOT NULL"
         ))
 
 
@@ -1247,6 +1307,7 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_buy_request_idempotency()
     _migrate_market_candle_resolutions()
     _migrate_order_request_scope()
     _migrate_product_market_sources()

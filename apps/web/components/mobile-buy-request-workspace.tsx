@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, CheckCircle, Handshake, Key, LockKey, Plus, Receipt, Storefront, WarningCircle } from "@phosphor-icons/react";
 import {
   confirmMobileBuyRequestDeal,
@@ -24,6 +24,11 @@ import {
 } from "@/lib/mobile-buy-request-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import {
+  buyRequestIntentSignature,
+  ensureBuyRequestIntent,
+  type BuyRequestIntent,
+} from "@/lib/web-business-contract";
 
 const statuses: Record<string, string> = {
   published: "已提交",
@@ -105,6 +110,8 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
   const [credential, setCredential] = useState<MobileBuyRequestCredential | null>(null);
   const [credentialForm, setCredentialForm] = useState({ host: "", port: "22", username: "", auth_type: "password" as "password" | "private_key", secret: "", note: "" });
   const [issueReason, setIssueReason] = useState("");
+  const requestSubmissionInFlight = useRef(false);
+  const pendingBuyRequestIntent = useRef<BuyRequestIntent | null>(null);
   const [form, setForm] = useState({
     gpu_model: initialPrefill?.gpu_model || "",
     quantity: String(initialPrefill?.quantity || 1),
@@ -169,33 +176,54 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     });
   }
 
+  function toggleCreateForm() {
+    if (creating) pendingBuyRequestIntent.current = null;
+    setCreating((value) => !value);
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (requestSubmissionInFlight.current) return;
+    const input = {
+      request_type: type,
+      gpu_model: form.gpu_model,
+      quantity: Number(form.quantity),
+      gpu_hours: type === "online" ? Number(form.gpu_hours) : undefined,
+      currency: "CNY",
+      region: form.region || undefined,
+      billing_mode: type === "online" ? "card_hour" : "device",
+      requirements: {
+        product_id: initialPrefill?.product_id,
+        supplier_id: initialPrefill?.supplier_id,
+        source: initialPrefill?.source,
+        product_name: initialPrefill?.product_name,
+        seller_name: initialPrefill?.seller_name,
+        gpu_variant: initialPrefill?.gpu_variant,
+        note: form.requirements_text.trim() || undefined,
+      },
+      contact: form.contact.trim(), phone: form.phone.trim(), expires_in_hours: Number(form.expires_in_hours),
+    };
+    const intent = ensureBuyRequestIntent(
+      pendingBuyRequestIntent.current,
+      buyRequestIntentSignature(input),
+      () => crypto.randomUUID(),
+    );
+    pendingBuyRequestIntent.current = intent;
+    requestSubmissionInFlight.current = true;
     setBusy("request"); setError(""); setMessage("");
     try {
       const row = await createMobileBuyRequest({
-        request_type: type,
-        gpu_model: form.gpu_model,
-        quantity: Number(form.quantity),
-        gpu_hours: type === "online" ? Number(form.gpu_hours) : undefined,
-        currency: "CNY",
-        region: form.region || undefined,
-        billing_mode: type === "online" ? "card_hour" : "device",
-        requirements: {
-          product_id: initialPrefill?.product_id,
-          supplier_id: initialPrefill?.supplier_id,
-          source: initialPrefill?.source,
-          product_name: initialPrefill?.product_name,
-          seller_name: initialPrefill?.seller_name,
-          gpu_variant: initialPrefill?.gpu_variant,
-          note: form.requirements_text.trim() || undefined,
-        },
-        contact: form.contact.trim(), phone: form.phone.trim(), expires_in_hours: Number(form.expires_in_hours),
+        ...input,
+        client_request_id: intent.requestId,
       });
+      pendingBuyRequestIntent.current = null;
       setCreating(false);
       setMessage("需求已提交，联系方式仅平台管理员可见。");
       await load(row.id);
-    } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
+    } catch (reason) { setError(errorMessage(reason)); } finally {
+      requestSubmissionInFlight.current = false;
+      setBusy("");
+    }
   }
 
   async function submitQuote(event: FormEvent) {
@@ -287,7 +315,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     <div className="commerce-tabs">
       <button className={type === "online" ? "active" : ""} onClick={() => setType("online")}>在线算力</button>
       <button className={type === "offline" ? "active" : ""} onClick={() => setType("offline")}>线下设备</button>
-      {view === "buyer" && requestFlowEnabled && <button className="request-create-trigger" onClick={() => setCreating((value) => !value)}><Plus size={14}/>提交需求</button>}
+      {view === "buyer" && requestFlowEnabled && <button className="request-create-trigger" onClick={toggleCreateForm}><Plus size={14}/>提交需求</button>}
     </div>
     {error && <div className="commerce-error">{error}</div>}
     {message && <div className="commerce-success">{message}</div>}

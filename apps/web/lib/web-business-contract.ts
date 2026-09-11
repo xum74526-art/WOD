@@ -13,6 +13,54 @@ export function hourlyOrderBody(hours: number, clientRequestId: string) {
   return { hours, client_request_id: clientRequestId };
 }
 
-export function webRequestId(kind: "order" | "renew", uuid: string) {
+export function webRequestId(kind: "order" | "renew" | "buy-request", uuid: string) {
   return `web-${kind}-${uuid}`.slice(0, 64);
+}
+
+export type DirectOrderIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function directOrderIntentSignature(input: {
+  product_id: number;
+  quantity: number;
+  hours: number;
+  purchase_type: "usage";
+  expected_unit_price_card_hours: number;
+}) {
+  return JSON.stringify([
+    input.product_id,
+    input.quantity,
+    input.hours,
+    input.purchase_type,
+    input.expected_unit_price_card_hours,
+  ]);
+}
+
+export function ensureDirectOrderIntent(
+  current: DirectOrderIntent | null,
+  signature: string,
+  createUuid: () => string,
+): DirectOrderIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("order", createUuid()) };
+}
+
+export type BuyRequestIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function buyRequestIntentSignature(input: Readonly<Record<string, unknown>>) {
+  return JSON.stringify(input);
+}
+
+export function ensureBuyRequestIntent(
+  current: BuyRequestIntent | null,
+  signature: string,
+  createUuid: () => string,
+): BuyRequestIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("buy-request", createUuid()) };
 }

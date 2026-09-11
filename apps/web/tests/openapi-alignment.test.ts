@@ -48,6 +48,12 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
   ] as const) operation(path, method);
 });
 
+test("buy-request creation exposes a backwards-compatible retry key", () => {
+  const create = bodySchema("/api/buy-requests", "post");
+  assert.ok(create.properties?.client_request_id);
+  assert.equal(create.required?.includes("client_request_id") ?? false, false);
+});
+
 test("administrator and finance lists expose the platform filter", () => {
   for (const path of ["/api/admin/overview", "/api/admin/users", "/api/admin/orders", "/api/admin/recharge-orders", "/api/finance/verifications", "/api/finance/bank-cards", "/api/finance/withdrawals"]) {
     const names = operation(path, "get").parameters?.map((parameter) => parameter.name) ?? [];

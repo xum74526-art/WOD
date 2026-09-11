@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { hourlyOrderBody, kaiPricingQuery, webRequestId } from "../lib/web-business-contract.ts";
+import {
+  buyRequestIntentSignature,
+  directOrderIntentSignature,
+  ensureBuyRequestIntent,
+  ensureDirectOrderIntent,
+  hourlyOrderBody,
+  kaiPricingQuery,
+  webRequestId,
+} from "../lib/web-business-contract.ts";
 import { communityDisplayText } from "../lib/community-ui.ts";
 
 test("legacy community brand values are renamed for display without changing backend identifiers", () => {
@@ -29,6 +37,105 @@ test("new and renewal orders use integer hours plus a Web request id", () => {
   assert.equal("cycle_days" in hourlyOrderBody(24, requestId), false);
   assert.throws(() => hourlyOrderBody(1.5, requestId), /整数小时/);
   assert.throws(() => hourlyOrderBody(721, requestId), /1 至 720/);
+});
+
+test("direct-order retries reuse one request id until the intent changes or is cancelled", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    product_id: 17,
+    quantity: 2,
+    hours: 24,
+    purchase_type: "usage" as const,
+    expected_unit_price_card_hours: 3.25,
+  };
+  const signature = directOrderIntentSignature(input);
+  const first = ensureDirectOrderIntent(null, signature, createUuid);
+  const retry = ensureDirectOrderIntent(first, signature, createUuid);
+
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changed = ensureDirectOrderIntent(
+    retry,
+    directOrderIntentSignature({ ...input, hours: 48 }),
+    createUuid,
+  );
+  assert.notEqual(changed.requestId, first.requestId);
+
+  const afterCancel = ensureDirectOrderIntent(null, signature, createUuid);
+  assert.notEqual(afterCancel.requestId, first.requestId);
+  assert.equal(sequence, 3);
+});
+
+test("Web direct-order submission keeps the same explicit id in its body and header", () => {
+  const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+  const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
+  const directOrder = api.slice(api.indexOf("export function createDirectOrder"), api.indexOf("export function listSshKeys"));
+
+  assert.match(directOrder, /createDirectOrder\([^)]*clientRequestId: string\)/);
+  assert.match(directOrder, /"Idempotency-Key": clientRequestId/);
+  assert.match(directOrder, /hourlyOrderBody\(input\.hours, clientRequestId\)/);
+  assert.doesNotMatch(directOrder, /randomUUID/);
+  assert.match(detail, /if \(orderSubmissionInFlight\.current\) return;/);
+  assert.match(detail, /createDirectOrder\(pending\.input, pending\.requestId\)/);
+  assert.match(detail, /pendingOrderIntent\.current = null;/);
+});
+
+test("buy-request retries reuse one request id until the payload changes or the form closes", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    request_type: "online",
+    gpu_model: "H100",
+    quantity: 2,
+    gpu_hours: 24,
+    currency: "CNY",
+    requirements: { source: "kai", note: "CUDA 12" },
+    contact: "采购人",
+    phone: "13800138000",
+    expires_in_hours: 72,
+  };
+  const signature = buyRequestIntentSignature(input);
+  const first = ensureBuyRequestIntent(null, signature, createUuid);
+  const retry = ensureBuyRequestIntent(first, signature, createUuid);
+
+  assert.equal(signature, JSON.stringify(input));
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changed = ensureBuyRequestIntent(
+    retry,
+    buyRequestIntentSignature({ ...input, gpu_hours: 48 }),
+    createUuid,
+  );
+  assert.notEqual(changed.requestId, first.requestId);
+
+  const afterClose = ensureBuyRequestIntent(null, signature, createUuid);
+  assert.notEqual(afterClose.requestId, first.requestId);
+  assert.match(first.requestId, /^web-buy-request-/);
+  assert.equal(sequence, 3);
+});
+
+test("Web buy-request submission has a synchronous lock and sends the stable id in JSON", () => {
+  const api = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const createRequest = workspace.slice(workspace.indexOf("async function create("), workspace.indexOf("async function submitQuote"));
+  const toggleForm = workspace.slice(workspace.indexOf("function toggleCreateForm"), workspace.indexOf("async function create("));
+
+  assert.match(createRequest, /if \(requestSubmissionInFlight\.current\) return;/);
+  assert.ok(createRequest.indexOf("requestSubmissionInFlight.current = true") < createRequest.indexOf("await createMobileBuyRequest"));
+  assert.match(createRequest, /buyRequestIntentSignature\(input\)/);
+  assert.match(createRequest, /client_request_id: intent\.requestId/);
+  assert.match(createRequest, /pendingBuyRequestIntent\.current = null;[\s\S]*?setCreating\(false\)/);
+  assert.match(createRequest, /finally \{[\s\S]*?requestSubmissionInFlight\.current = false;/);
+  const failedRequest = createRequest.slice(createRequest.indexOf("catch (reason)"), createRequest.indexOf("finally"));
+  assert.doesNotMatch(failedRequest, /pendingBuyRequestIntent\.current = null/);
+  assert.match(toggleForm, /if \(creating\) pendingBuyRequestIntent\.current = null;/);
+  assert.match(api, /MobileBuyRequestInput[\s\S]*?client_request_id: string/);
+  assert.match(api, /createMobileBuyRequest\(input: MobileBuyRequestInput\)/);
+  assert.match(api, /body: JSON\.stringify\(input\)/);
+  assert.doesNotMatch(api, /randomUUID/);
 });
 
 test("released Web account copy does not expose retired test-only wording", () => {

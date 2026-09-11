@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_admin
@@ -44,6 +45,12 @@ def _now() -> datetime:
 
 
 class BuyRequestIn(BaseModel):
+    client_request_id: str | None = Field(
+        default=None,
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
     request_type: str
     gpu_model: str
     gpu_variant: str | None = None
@@ -307,6 +314,93 @@ def _approved_supplier(user: User, db: Session) -> Supplier:
     return supplier
 
 
+def _begin_serialized_matchmaking_transaction(db: Session) -> None:
+    """Serialize matchmaking writes on SQLite; constraints cover other databases."""
+
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    # Authentication opens a read transaction before the endpoint. Restart it
+    # as IMMEDIATE before any admission read so concurrent processes cannot both
+    # observe the same idempotency key or supplier/request pair as available.
+    if db.in_transaction():
+        db.rollback()
+    db.execute(text("BEGIN IMMEDIATE"))
+
+
+def _find_request_by_client_id(
+    db: Session,
+    user_id: int,
+    client_request_id: str,
+) -> BuyRequest | None:
+    return db.query(BuyRequest).filter(
+        BuyRequest.user_id == user_id,
+        BuyRequest.client_request_id == client_request_id,
+    ).first()
+
+
+def _decimal_request_value_matches(
+    stored: Decimal | None,
+    submitted: float | None,
+    quantum: Decimal,
+) -> bool:
+    if stored is None or submitted is None:
+        return stored is None and submitted is None
+    return Decimal(str(stored)).quantize(
+        quantum,
+        rounding=ROUND_HALF_UP,
+    ) == Decimal(str(submitted)).quantize(
+        quantum,
+        rounding=ROUND_HALF_UP,
+    )
+
+
+def _quantized_request_decimal(value: float | None, quantum: Decimal) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
+
+
+def _same_create_request(
+    item: BuyRequest,
+    data: BuyRequestIn,
+    *,
+    gpu_model: str,
+    requirements: dict,
+    contact: str,
+    phone: str,
+) -> bool:
+    if item.created_at is None or item.expires_at is None:
+        expiry_hours_match = False
+    else:
+        expiry_hours_match = round(
+            (item.expires_at - item.created_at).total_seconds() / 3600
+        ) == data.expires_in_hours
+    return (
+        item.request_type == data.request_type
+        and item.gpu_model == gpu_model
+        and item.gpu_variant == data.gpu_variant
+        and int(item.quantity) == data.quantity
+        and item.gpu_hours == data.gpu_hours
+        and _decimal_request_value_matches(
+            item.max_unit_price,
+            data.max_unit_price,
+            Decimal("0.000001"),
+        )
+        and _decimal_request_value_matches(
+            item.budget,
+            data.budget,
+            Decimal("0.01"),
+        )
+        and item.currency == data.currency.upper()
+        and item.region == data.region
+        and item.billing_mode == data.billing_mode
+        and (item.requirements or {}) == requirements
+        and (not data.contact or (item.contact or "") == contact)
+        and (not data.phone or (item.phone or "") == phone)
+        and expiry_hours_match
+    )
+
+
 @admin_router.get("")
 def admin_list_requests(
     status: str | None = Query(default=None, max_length=24),
@@ -486,11 +580,34 @@ def create_request(
         raise BizError("请输入 GPU 型号")
     if data.request_type == "online" and not data.gpu_hours:
         raise BizError("请输入总卡时")
+    user_id = int(user.id)
     contact = (data.contact or user.username or "").strip()
     phone = (data.phone or user.phone or "").strip()
     if data.request_type == "offline" and (not contact or not phone):
         raise BizError("线下求购需要联系人和联系电话")
     requirements = data.requirements or {}
+    client_request_id = str(data.client_request_id or "").strip() or None
+    if client_request_id:
+        _begin_serialized_matchmaking_transaction(db)
+        existing = _find_request_by_client_id(db, user_id, client_request_id)
+        if existing:
+            if not _same_create_request(
+                existing,
+                data,
+                gpu_model=model,
+                requirements=requirements,
+                contact=contact,
+                phone=phone,
+            ):
+                db.rollback()
+                raise BizError("重复请求参数不一致，请重新提交", status_code=409)
+            db.commit()
+            return success(_request_out(
+                existing,
+                db,
+                reveal_contact=True,
+                viewer_user_id=user_id,
+            ))
     has_target, targeted_supplier_id = _target_supplier_scope(requirements)
     if has_target:
         target_supplier = (
@@ -504,14 +621,18 @@ def create_request(
         if not target_supplier:
             raise BizError("指定商家不存在或尚未通过认证")
     item = BuyRequest(
-        user_id=user.id,
+        user_id=user_id,
+        client_request_id=client_request_id,
         request_type=data.request_type,
         gpu_model=model,
         gpu_variant=data.gpu_variant,
         quantity=data.quantity,
         gpu_hours=data.gpu_hours,
-        max_unit_price=Decimal(str(data.max_unit_price)) if data.max_unit_price is not None else None,
-        budget=Decimal(str(data.budget)) if data.budget is not None else None,
+        max_unit_price=_quantized_request_decimal(
+            data.max_unit_price,
+            Decimal("0.000001"),
+        ),
+        budget=_quantized_request_decimal(data.budget, Decimal("0.01")),
         currency=data.currency.upper(),
         region=data.region,
         billing_mode=data.billing_mode,
@@ -522,9 +643,36 @@ def create_request(
         expires_at=_now() + timedelta(hours=data.expires_in_hours),
     )
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            _find_request_by_client_id(db, user_id, client_request_id)
+            if client_request_id
+            else None
+        )
+        if existing:
+            if not _same_create_request(
+                existing,
+                data,
+                gpu_model=model,
+                requirements=requirements,
+                contact=contact,
+                phone=phone,
+            ):
+                db.rollback()
+                raise BizError("重复请求参数不一致，请重新提交", status_code=409) from None
+            db.commit()
+            return success(_request_out(
+                existing,
+                db,
+                reveal_contact=True,
+                viewer_user_id=user_id,
+            ))
+        raise BizError("提交需求冲突，请重试", status_code=409) from None
     db.refresh(item)
-    return success(_request_out(item, db, reveal_contact=True, viewer_user_id=user.id))
+    return success(_request_out(item, db, reveal_contact=True, viewer_user_id=user_id))
 
 
 @router.get("/{request_id}")
@@ -599,8 +747,11 @@ def create_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
-    item = db.query(BuyRequest).filter(BuyRequest.id == request_id).first()
+    item = db.query(BuyRequest).filter(
+        BuyRequest.id == request_id,
+    ).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
     _expire_if_needed(item, _now())

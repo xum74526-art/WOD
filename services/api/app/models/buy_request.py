@@ -1,7 +1,19 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,9 +21,20 @@ from app.db.base import Base
 
 class BuyRequest(Base):
     __tablename__ = "buy_requests"
+    __table_args__ = (
+        Index(
+            "uq_buy_requests_user_client_request",
+            "user_id",
+            "client_request_id",
+            unique=True,
+            sqlite_where=text("client_request_id IS NOT NULL"),
+            postgresql_where=text("client_request_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    client_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_type: Mapped[str] = mapped_column(String(16), index=True)  # online/offline
     gpu_model: Mapped[str] = mapped_column(String(64), index=True)
     gpu_variant: Mapped[str | None] = mapped_column(String(64), nullable=True)

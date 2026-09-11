@@ -129,6 +129,7 @@ export interface BuyRequestCredentialPayload {
 }
 
 export interface BuyRequestPayload {
+  client_request_id?: string
   request_type: 'online' | 'offline'
   gpu_model: string
   gpu_variant?: string

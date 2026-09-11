@@ -479,6 +479,90 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
             0,
         )
 
+    def test_concurrent_quote_creation_keeps_one_active_supplier_quote(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            database = Path(tempdir) / "concurrent-quotes.db"
+            engine = create_engine(
+                f"sqlite:///{database}",
+                connect_args={"check_same_thread": False, "timeout": 10},
+            )
+            Base.metadata.create_all(engine)
+            Session = sessionmaker(bind=engine, expire_on_commit=False)
+            seed = Session()
+            buyer = User(username="并发采购方", phone="13921000001", password="!")
+            supplier_user = User(
+                username="并发报价商家",
+                phone="13921000002",
+                password="!",
+                role="supplier",
+                supplier_status="approved",
+            )
+            seed.add_all([buyer, supplier_user])
+            seed.flush()
+            supplier = Supplier(
+                user_id=supplier_user.id,
+                company_name="并发报价商家",
+                contact="报价联系人",
+                phone=supplier_user.phone,
+                status="approved",
+            )
+            seed.add(supplier)
+            seed.flush()
+            request = BuyRequest(
+                user_id=buyer.id,
+                request_type="online",
+                gpu_model="H100 80GB",
+                quantity=1,
+                gpu_hours=24,
+                currency="CNY",
+                requirements={},
+                status="published",
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
+            )
+            seed.add(request)
+            seed.commit()
+            request_id = request.id
+            supplier_user_id = supplier_user.id
+            seed.close()
+            barrier = threading.Barrier(2)
+
+            def quote(total_price: float) -> str:
+                db = Session()
+                try:
+                    local_user = db.get(User, supplier_user_id)
+                    barrier.wait(timeout=5)
+                    buy_request_router.create_quote(
+                        request_id,
+                        buy_request_router.QuoteIn(
+                            unit_price=4.2,
+                            total_price=total_price,
+                            currency="CNY",
+                            message="并发报价",
+                            expires_in_hours=24,
+                        ),
+                        local_user,
+                        db,
+                    )
+                    return "created"
+                except BizError as exc:
+                    db.rollback()
+                    return exc.msg
+                finally:
+                    db.close()
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = sorted(pool.map(quote, (100.0, 101.0)))
+
+            check = Session()
+            self.assertEqual(results, ["created", "已经提交过有效报价"])
+            self.assertEqual(check.query(BuyRequestQuote).count(), 1)
+            self.assertEqual(check.query(BuyRequestQuoteRevision).count(), 1)
+            self.assertEqual(check.query(BuyRequestEvent).filter(
+                BuyRequestEvent.event_type == "quote_submitted",
+            ).count(), 1)
+            check.close()
+            engine.dispose()
+
     def test_concurrent_selection_creates_only_one_active_deal(self):
         with tempfile.TemporaryDirectory() as tempdir:
             database = Path(tempdir) / "matchmaking.db"
