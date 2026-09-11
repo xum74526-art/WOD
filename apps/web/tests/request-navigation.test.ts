@@ -37,3 +37,12 @@ test("legacy request pages no longer render clients backed by removed public API
   assert.doesNotMatch(detailPage, /PublicRequestDetail/);
   assert.doesNotMatch(commerceApi, /\/api\/v1\/(?:public|account)\/buy-requests/);
 });
+
+test("legacy supplier quote ledger opens the canonical supplier request workspace", () => {
+  const quotePage = readFileSync(new URL("../app/supplier/quotes/page.tsx", import.meta.url), "utf8");
+  const commerceApi = readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+
+  assert.match(quotePage, /redirect\("\/supplier\/requests"\)/);
+  assert.doesNotMatch(quotePage, /components\/supplier-quotes|<SupplierQuotes/);
+  assert.doesNotMatch(commerceApi, /export function listSupplierQuotes/);
+});

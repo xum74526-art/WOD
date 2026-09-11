@@ -358,7 +358,6 @@ export function listSupplierRequests(filters: { gpu_model?: string; region?: str
 export function getSupplierRequest(id: number) { return apiRequest<{ request: BuyRequest; own_quotes: Quote[] }>(`/api/v1/supplier/buy-requests/${id}`); }
 export function createSupplierQuote(requestId: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/buy-requests/${requestId}/quotes`, { method: "POST", body: JSON.stringify(input) }); }
 export function updateSupplierQuote(id: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function listSupplierQuotes(status?: string) { return apiEnvelopeRequest<Quote[], PageMeta>(`/api/v1/supplier/quotes${queryString({ status })}`); }
 export function submitSupplierQuote(id: number, version: number) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/submit`, { method: "POST", body: JSON.stringify({ version }) }); }
 export function withdrawSupplierQuote(id: number, version: number, reason?: string) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/withdraw`, { method: "POST", body: JSON.stringify({ version, reason: reason || null }) }); }
 
