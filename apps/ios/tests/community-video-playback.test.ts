@@ -5,11 +5,13 @@ import test from 'node:test'
 import {
   BILIBILI_REFERER,
   BLOCK_UNTRUSTED_PLAYER_NAVIGATION,
+  COMMUNITY_VIDEO_PLAYBACK_RATES,
   buildCommunityVideoDesktopUserAgent,
   buildCommunityVideoPlayerUrl,
   buildCommunityVideoSourceUrl,
   openNativeCommunityVideo,
   requiresCommunityVideoDesktopUserAgent,
+  resolveCommunityVideoStreamUrl,
   type CommunityVideoFailure,
   type NativeCommunityVideoRuntime,
 } from '../src/utils/community-video.ts'
@@ -32,6 +34,7 @@ function fakeNativeRuntime(autoLoad = true) {
     closeListener?: (event: unknown) => void
     loadedUrl: string
     loadHeaders: Record<string, string>
+    loadUserAgent: string
     animation: string
     closeAnimation: string
     createCount: number
@@ -40,12 +43,22 @@ function fakeNativeRuntime(autoLoad = true) {
     currentUserAgent: string
     userAgentCalls: Array<{ userAgent: string; checkplus?: boolean }>
     throwOnShow: boolean
+    appendedCount: number
+    videoStyles: Record<string, any>
+    videoPlayCount: number
+    videoCloseCount: number
+    videoPlaybackRates: number[]
+    videoListeners: Record<string, ((event: unknown) => void) | undefined>
+    titleButtonStyles: Record<string, any>
+    actionSheetStyles: Record<string, any>
+    actionSheetCallback?: (result: { index?: number }) => void
   } = {
     id: '',
     styles: {},
     overrideOptions: {},
     loadedUrl: '',
     loadHeaders: {},
+    loadUserAgent: '',
     animation: '',
     closeAnimation: '',
     createCount: 0,
@@ -54,6 +67,14 @@ function fakeNativeRuntime(autoLoad = true) {
     currentUserAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Html5Plus/1.0',
     userAgentCalls: [],
     throwOnShow: false,
+    appendedCount: 0,
+    videoStyles: {},
+    videoPlayCount: 0,
+    videoCloseCount: 0,
+    videoPlaybackRates: [],
+    videoListeners: {},
+    titleButtonStyles: {},
+    actionSheetStyles: {},
   }
   const runtime: NativeCommunityVideoRuntime = {
     navigator: {
@@ -81,6 +102,7 @@ function fakeNativeRuntime(autoLoad = true) {
           loadURL(url, headers = {}) {
             capture.loadedUrl = url
             capture.loadHeaders = headers
+            capture.loadUserAgent = capture.currentUserAgent
             if (autoLoad) capture.loadedListener?.({})
           },
           show(animation = '') {
@@ -92,7 +114,30 @@ function fakeNativeRuntime(autoLoad = true) {
             capture.showCount += 1
           },
           close(animation = '') { capture.closeAnimation = animation },
+          append() { capture.appendedCount += 1 },
+          setTitleNViewButtonStyle(_index, styles) { capture.titleButtonStyles = styles },
         }
+      },
+    },
+    video: {
+      createVideoPlayer(_id, styles) {
+        capture.videoStyles = styles
+        return {
+          addEventListener(event, callback) { capture.videoListeners[event] = callback },
+          play() {
+            capture.videoPlayCount += 1
+            capture.videoListeners.play?.({})
+          },
+          playbackRate(rate) { capture.videoPlaybackRates.push(rate) },
+          close() { capture.videoCloseCount += 1 },
+        }
+      },
+    },
+    nativeUI: {
+      actionSheet(styles, callback) {
+        capture.actionSheetStyles = styles
+        capture.actionSheetCallback = callback
+        return {}
       },
     },
   }
@@ -122,6 +167,47 @@ test('player URL rejects untrusted providers, post types, origins and malformed 
   }
 })
 
+test('iOS resolves the trusted Bilibili page to a progressive HTTPS stream', async () => {
+  const requests: string[] = []
+  const resolved = await resolveCommunityVideoStreamUrl(validSource, async (url) => {
+    requests.push(url)
+    if (url.includes('/pagelist?')) return { code: 0, data: [{ cid: 987654321 }] }
+    return { code: 0, data: { durl: [{ url: 'https://upos-hz-mirrorakam.akamaized.net/video.mp4?token=ok' }] } }
+  })
+  assert.equal(resolved, 'https://upos-hz-mirrorakam.akamaized.net/video.mp4?token=ok')
+  assert.equal(requests.length, 2)
+  assert.match(requests[0], /bvid=BV1Ab411C7De/)
+  assert.match(requests[1], /cid=987654321/)
+  assert.match(requests[1], /platform=html5/)
+})
+
+test('stream resolution rejects an invalid API response or an insecure stream', async () => {
+  assert.equal(
+    await resolveCommunityVideoStreamUrl(validSource, async () => ({ code: 0, data: [] })),
+    '',
+  )
+  let call = 0
+  assert.equal(
+    await resolveCommunityVideoStreamUrl(validSource, async () => {
+      call += 1
+      return call === 1
+        ? { code: 0, data: [{ cid: 42 }] }
+        : { code: 0, data: { durl: [{ url: 'https://evil.example/video.mp4' }] } }
+    }),
+    '',
+  )
+  call = 0
+  assert.equal(
+    await resolveCommunityVideoStreamUrl(validSource, async () => {
+      call += 1
+      return call === 1
+        ? { code: 0, data: [{ cid: 42 }] }
+        : { code: 0, data: { durl: [{ url: 'http://cdn.example/video.mp4' }] } }
+    }),
+    '',
+  )
+})
+
 test('desktop player identity removes mobile WebView markers and has a stable fallback version', () => {
   const userAgent = buildCommunityVideoDesktopUserAgent(
     'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
@@ -133,6 +219,18 @@ test('desktop player identity removes mobile WebView markers and has a stable fa
   assert.equal(
     requiresCommunityVideoDesktopUserAgent(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Html5Plus/1.0',
+    ),
+    true,
+  )
+  assert.equal(
+    requiresCommunityVideoDesktopUserAgent(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+    ),
+    true,
+  )
+  assert.equal(
+    requiresCommunityVideoDesktopUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15',
     ),
     false,
   )
@@ -154,8 +252,19 @@ test('native playback uses an isolated in-app WebView and the official Referer',
   assert.equal(capture.styles.popGesture, 'close')
   assert.equal(capture.styles.titleNView.autoBackButton, true)
   assert.equal(capture.styles.titleNView.titleText, '视频')
-  assert.deepEqual(capture.userAgentCalls, [])
-  assert.deepEqual(capture.styles.additionalHttpHeaders, { Referer: BILIBILI_REFERER })
+  assert.deepEqual(capture.userAgentCalls[0], {
+    userAgent: buildCommunityVideoDesktopUserAgent(capture.originalUserAgent),
+    checkplus: false,
+  })
+  assert.deepEqual(capture.userAgentCalls[1], {
+    userAgent: capture.originalUserAgent,
+    checkplus: false,
+  })
+  assert.equal(capture.currentUserAgent, capture.originalUserAgent)
+  assert.deepEqual(capture.styles.additionalHttpHeaders, {
+    Referer: BILIBILI_REFERER,
+    'User-Agent': buildCommunityVideoDesktopUserAgent(''),
+  })
   assert.deepEqual(capture.overrideOptions, {
     effect: 'instant',
     mode: 'reject',
@@ -163,8 +272,57 @@ test('native playback uses an isolated in-app WebView and the official Referer',
     exclude: 'none',
   })
   assert.equal(capture.loadedUrl, buildCommunityVideoPlayerUrl(validSource))
-  assert.deepEqual(capture.loadHeaders, { Referer: BILIBILI_REFERER })
+  assert.deepEqual(capture.loadHeaders, {
+    Referer: BILIBILI_REFERER,
+    'User-Agent': buildCommunityVideoDesktopUserAgent(''),
+  })
+  assert.equal(
+    capture.loadUserAgent,
+    buildCommunityVideoDesktopUserAgent(capture.originalUserAgent),
+  )
   assert.equal(capture.animation, 'pop-in')
+})
+
+test('resolved MP4 uses the native video control with headers instead of the web player', () => {
+  const { runtime, capture } = fakeNativeRuntime()
+  const streamUrl = 'https://upos-hz-mirrorakam.akamaized.net/video.mp4?token=ok'
+  assert.equal(
+    openNativeCommunityVideo(runtime, validSource, '视频', undefined, 15000, streamUrl),
+    true,
+  )
+  assert.equal(capture.videoStyles.src, streamUrl)
+  assert.deepEqual(capture.videoStyles.header, {
+    Referer: BILIBILI_REFERER,
+    'User-Agent': buildCommunityVideoDesktopUserAgent(''),
+  })
+  assert.equal(capture.videoStyles.autoplay, true)
+  assert.equal(capture.appendedCount, 1)
+  assert.equal(capture.videoPlayCount, 1)
+  assert.equal(capture.styles.titleNView.buttons[0].text, '1.0x')
+  assert.equal(capture.loadedUrl, '')
+  assert.deepEqual(capture.overrideOptions, {})
+})
+
+test('native playback exposes all supported speed choices and applies the selection', () => {
+  const { runtime, capture } = fakeNativeRuntime()
+  const streamUrl = 'https://upos-hz-mirrorakam.akamaized.net/video.mp4?token=ok'
+  assert.equal(
+    openNativeCommunityVideo(runtime, validSource, '视频', undefined, 15000, streamUrl),
+    true,
+  )
+
+  capture.styles.titleNView.buttons[0].onclick()
+  assert.equal(capture.actionSheetStyles.title, '播放速度（当前 1.0x）')
+  assert.equal(capture.actionSheetStyles.cancel, '取消')
+  assert.deepEqual(
+    capture.actionSheetStyles.buttons.map((button: { title: string }) => button.title),
+    ['0.5x', '0.8x', '1.0x', '1.25x', '1.5x', '2x'],
+  )
+  assert.deepEqual(COMMUNITY_VIDEO_PLAYBACK_RATES, [0.5, 0.8, 1, 1.25, 1.5, 2])
+
+  capture.actionSheetCallback?.({ index: 5 })
+  assert.deepEqual(capture.videoPlaybackRates, [1.5])
+  assert.equal(capture.titleButtonStyles.text, '1.5x')
 })
 
 test('navigation policy permits only the documented player and its official mobile redirect', () => {
@@ -186,7 +344,7 @@ test('native playback closes the player and reports a load failure', () => {
   assert.equal(capture.closeAnimation, 'none')
   assert.equal(failures[0]?.code, 'player-load-failed')
   assert.equal(failures[0]?.message, 'network unavailable')
-  assert.deepEqual(capture.userAgentCalls, [])
+  assert.equal(capture.currentUserAgent, capture.originalUserAgent)
 })
 
 test('native playback stops an endless player shell and reports a recoverable timeout', async () => {
@@ -220,12 +378,18 @@ test('repeated taps reuse one active player and closing permits a fresh player',
   assert.equal(capture.createCount, 2)
 })
 
-test('iOS keeps its native UA when an active player has to be reopened', () => {
+test('a failed attempt to reshow an active player restores the old UA before reopening', () => {
   const { runtime, capture } = fakeNativeRuntime()
+  const desktopUserAgent = buildCommunityVideoDesktopUserAgent(capture.originalUserAgent)
   assert.equal(openNativeCommunityVideo(runtime, validSource, '视频'), true)
   capture.throwOnShow = true
   assert.equal(openNativeCommunityVideo(runtime, validSource, '视频'), true)
-  assert.deepEqual(capture.userAgentCalls, [])
+  assert.deepEqual(capture.userAgentCalls.slice(-4), [
+    { userAgent: desktopUserAgent, checkplus: false },
+    { userAgent: capture.originalUserAgent, checkplus: false },
+    { userAgent: desktopUserAgent, checkplus: false },
+    { userAgent: capture.originalUserAgent, checkplus: false },
+  ])
 })
 
 test('invalid video data never creates a native WebView', () => {
@@ -250,7 +414,7 @@ test('community list opens video details before playback and preserves comments'
   assert.match(indexPage, /d\.source_url && d\.content_type !== 'video'/)
   assert.match(detailPage, /v-if="userVideoUrl\(post\)"/)
   assert.match(detailPage, /v-if="playerUrl\(post\)"/)
-  assert.match(detailPage, /openCommunityVideo\(value, t\('video'\)/)
+  assert.match(detailPage, /await openCommunityVideo\(value, t\('video'\)/)
   assert.match(detailPage, /v-for="c in comments"/)
   assert.match(detailPage, /v-model="commentText"/)
   assert.match(detailPage, /videoOpenExternalHint/)
@@ -271,4 +435,9 @@ test('legacy internal market sources always display the current ZTW brand', () =
   }
   assert.match(locale, /ztwMarketName: 'ZTW 算力行情'/)
   assert.match(locale, /ztwMarketName: 'ZTW Compute Market'/)
+})
+
+test('the iOS app manifest enables the native VideoPlayer module', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../src/manifest.json', import.meta.url), 'utf8'))
+  assert.deepEqual(manifest['app-plus']?.modules?.VideoPlayer, {})
 })
