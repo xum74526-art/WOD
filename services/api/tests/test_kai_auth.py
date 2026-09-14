@@ -1,19 +1,32 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Barrier, current_thread, local, main_thread
 import time
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import ExternalAuthBindTicket, ExternalAuthFlow, ExternalIdentity, User  # noqa: F401
+from app.models import (  # noqa: F401
+    AuthSession,
+    ExternalAuthBindTicket,
+    ExternalAuthFlow,
+    ExternalAuthTicket,
+    ExternalIdentity,
+    User,
+)
+from app.schemas.auth import KaiTicketIn
 from app.services import kai_auth
 from app.routers import auth as auth_router
 from app.utils.response import BizError
@@ -201,6 +214,124 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((platform, client_id), ("ios", "ios"))
         with self.assertRaisesRegex(BizError, "无效或已过期"):
             kai_auth.consume_handoff_ticket(self.db, ticket)
+
+    def test_handoff_ticket_remains_retryable_if_session_creation_fails(self):
+        self.configure()
+        user = self._user()
+        ticket = kai_auth.issue_handoff_ticket(
+            self.db,
+            user.id,
+            platform="android",
+            client_id="android",
+        )
+
+        with (
+            patch(
+                "app.services.auth_session.create_access_token",
+                side_effect=RuntimeError("signing failed"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "signing failed"),
+        ):
+            auth_router.kai_exchange(KaiTicketIn(ticket=ticket), self.db)
+
+        row = self.db.query(ExternalAuthTicket).one()
+        self.assertIsNone(row.consumed_at)
+        self.assertEqual(self.db.query(AuthSession).count(), 0)
+
+        result = auth_router.kai_exchange(KaiTicketIn(ticket=ticket), self.db)
+        self.assertTrue(result["data"]["token"])
+        self.db.refresh(row)
+        self.assertIsNotNone(row.consumed_at)
+        session = self.db.query(AuthSession).one()
+        self.assertEqual(session.user_id, user.id)
+        self.assertEqual(session.platform, "android")
+        with self.assertRaisesRegex(BizError, "无效或已过期"):
+            auth_router.kai_exchange(KaiTicketIn(ticket=ticket), self.db)
+
+    def test_concurrent_handoff_exchange_creates_exactly_one_session(self):
+        with TemporaryDirectory() as directory:
+            database_path = Path(directory) / "kai-exchange.db"
+            engine = create_engine(
+                f"sqlite:///{database_path.as_posix()}",
+                connect_args={"check_same_thread": False, "timeout": 10},
+                poolclass=NullPool,
+            )
+
+            @event.listens_for(engine, "connect")
+            def set_busy_timeout(connection, _record):
+                cursor = connection.cursor()
+                try:
+                    cursor.execute("PRAGMA busy_timeout=10000")
+                finally:
+                    cursor.close()
+
+            claim_barrier = Barrier(2)
+            claim_seen = local()
+
+            def synchronize_claims(_connection, _cursor, statement, _params, _context, _many):
+                normalized = statement.strip().lower()
+                if (
+                    current_thread() is not main_thread()
+                    and normalized.startswith("update external_auth_tickets")
+                    and not getattr(claim_seen, "hit", False)
+                ):
+                    claim_seen.hit = True
+                    claim_barrier.wait(timeout=10)
+
+            try:
+                Base.metadata.create_all(engine)
+                with engine.connect() as connection:
+                    connection.exec_driver_sql("PRAGMA journal_mode=WAL")
+                Session = sessionmaker(bind=engine, expire_on_commit=False)
+                with Session() as setup:
+                    user = User(
+                        phone="13900000077",
+                        username="并发兑换用户",
+                        password="!",
+                    )
+                    setup.add(user)
+                    setup.commit()
+                    user_id = user.id
+                    ticket = kai_auth.issue_handoff_ticket(
+                        setup,
+                        user_id,
+                        platform="ios",
+                        client_id="ios",
+                    )
+
+                event.listen(engine, "before_cursor_execute", synchronize_claims)
+
+                def redeem(_index):
+                    with Session() as worker:
+                        try:
+                            result = auth_router.kai_exchange(
+                                KaiTicketIn(ticket=ticket),
+                                worker,
+                            )
+                            return "success", result["data"]["token"]
+                        except BizError as exc:
+                            return "rejected", exc.msg
+
+                try:
+                    with ThreadPoolExecutor(max_workers=2) as executor:
+                        outcomes = list(executor.map(redeem, range(2)))
+                finally:
+                    event.remove(engine, "before_cursor_execute", synchronize_claims)
+
+                self.assertEqual(
+                    sorted(item[0] for item in outcomes),
+                    ["rejected", "success"],
+                )
+                rejected = next(item[1] for item in outcomes if item[0] == "rejected")
+                self.assertIn("无效或已过期", rejected)
+                with Session() as check:
+                    row = check.query(ExternalAuthTicket).one()
+                    self.assertIsNotNone(row.consumed_at)
+                    sessions = check.query(AuthSession).all()
+                    self.assertEqual(len(sessions), 1)
+                    self.assertEqual(sessions[0].user_id, user_id)
+            finally:
+                engine.dispose()
 
     def test_bind_flow_is_tied_to_authenticated_user_and_session_source(self):
         self.configure()

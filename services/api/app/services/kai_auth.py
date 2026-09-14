@@ -319,25 +319,38 @@ def issue_handoff_ticket(
     return ticket
 
 
-def consume_handoff_ticket(db: Session, ticket: str) -> tuple[User, str, str | None]:
+def consume_handoff_ticket(
+    db: Session,
+    ticket: str,
+    *,
+    commit: bool = True,
+) -> tuple[User, str, str | None]:
+    """Consume a single-use ticket, optionally leaving commit to the caller."""
     if not ticket:
         raise BizError("统一认证登录凭证无效")
-    row = db.query(ExternalAuthTicket).filter(ExternalAuthTicket.ticket_hash == _sha256(ticket)).first()
-    if not row or row.consumed_at is not None or row.expires_at < _utcnow():
-        raise BizError("统一认证登录凭证无效或已过期")
+    ticket_hash = _sha256(ticket)
     now = _utcnow()
     updated = db.query(ExternalAuthTicket).filter(
-        ExternalAuthTicket.id == row.id,
+        ExternalAuthTicket.ticket_hash == ticket_hash,
         ExternalAuthTicket.consumed_at.is_(None),
         ExternalAuthTicket.expires_at >= now,
     ).update({ExternalAuthTicket.consumed_at: now}, synchronize_session=False)
     if updated != 1:
         db.rollback()
         raise BizError("统一认证登录凭证无效或已过期")
+    # Claim first, then load the immutable ticket metadata. Starting with the
+    # conditional UPDATE lets SQLite serialize concurrent redeemers without a
+    # read-to-write upgrade window; PostgreSQL keeps the same row-lock semantics.
+    row = db.query(ExternalAuthTicket).filter(
+        ExternalAuthTicket.ticket_hash == ticket_hash,
+    ).one()
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user:
         raise BizError("统一认证关联用户不存在")
-    db.commit()
+    if commit:
+        db.commit()
+    # Keep the returned account fresh even when the caller owns the final
+    # commit; auth_version and lifecycle state feed the session token.
     db.refresh(user)
     return user, row.platform or "legacy", row.client_id
 

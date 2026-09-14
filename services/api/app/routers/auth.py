@@ -266,15 +266,26 @@ async def kai_callback(
 
 @router.post("/kai/exchange")
 def kai_exchange(data: KaiTicketIn, db: Session = Depends(get_db)):
-    user, platform, client_id = kai_auth.consume_handoff_ticket(db, data.ticket)
-    issued = create_authenticated_session(
-        db,
-        user,
-        platform=platform,
-        client_id=client_id,
-        auth_method="kai_oidc",
-    )
-    return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+    try:
+        user, platform, client_id = kai_auth.consume_handoff_ticket(
+            db,
+            data.ticket,
+            commit=False,
+        )
+        # Serialize before the final commit so a response-shaping failure does
+        # not consume the one-time ticket without returning a usable session.
+        user_payload = UserOut.model_validate(user).model_dump()
+        issued = create_authenticated_session(
+            db,
+            user,
+            platform=platform,
+            client_id=client_id,
+            auth_method="kai_oidc",
+        )
+    except Exception:
+        db.rollback()
+        raise
+    return success({"token": issued.token, "user": user_payload})
 
 
 @router.post("/kai/bind/exchange")
