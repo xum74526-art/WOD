@@ -58,6 +58,7 @@ class CaptchaTests(unittest.TestCase):
             self.assertFalse(rendered.info)
             self.assertFalse(rendered.text)
 
+        self.assertEqual(captcha.CAPTCHA_STORE[challenge["key"]]["failures"], 0)
         self.assertTrue(captcha.verify_captcha(challenge["key"], "a2bc"))
         self.assertFalse(captcha.verify_captcha(challenge["key"], "A2BC"))
 
@@ -111,16 +112,57 @@ class CaptchaTests(unittest.TestCase):
         self.assertEqual(barrier_lock.entries, 2)
         self.assertNotIn(key, captcha.CAPTCHA_STORE)
 
-    def test_wrong_code_does_not_consume_captcha(self):
+    def test_wrong_codes_allow_a_correct_retry_before_the_limit(self):
         key = "retry-key"
         captcha.CAPTCHA_STORE[key] = {
             "code": "B3CD",
             "expire": time.time() + 60,
         }
 
-        self.assertFalse(captcha.verify_captcha(key, "WRONG"))
+        for _ in range(captcha.CAPTCHA_MAX_FAILURES - 1):
+            self.assertFalse(captcha.verify_captcha(key, "WRONG"))
+
+        self.assertEqual(
+            captcha.CAPTCHA_STORE[key]["failures"],
+            captcha.CAPTCHA_MAX_FAILURES - 1,
+        )
         self.assertTrue(captcha.verify_captcha(key, " b3cd "))
         self.assertNotIn(key, captcha.CAPTCHA_STORE)
+
+    def test_too_many_wrong_codes_invalidate_the_captcha(self):
+        key = "guess-limited-key"
+        captcha.CAPTCHA_STORE[key] = {
+            "code": "D5EF",
+            "expire": time.time() + 60,
+        }
+
+        for _ in range(captcha.CAPTCHA_MAX_FAILURES):
+            self.assertFalse(captcha.verify_captcha(key, "WRONG"))
+
+        self.assertNotIn(key, captcha.CAPTCHA_STORE)
+        self.assertFalse(captcha.verify_captcha(key, "D5EF"))
+
+    def test_wrong_attempt_limit_is_atomic_under_concurrency(self):
+        key = "concurrent-guess-key"
+        captcha.CAPTCHA_STORE[key] = {
+            "code": "E6FG",
+            "expire": time.time() + 60,
+            "failures": 0,
+        }
+        attempts = captcha.CAPTCHA_MAX_FAILURES + 3
+        barrier_lock = _BarrierLock(parties=attempts)
+
+        with patch.object(captcha, "_CAPTCHA_LOCK", barrier_lock):
+            with ThreadPoolExecutor(max_workers=attempts) as executor:
+                results = list(executor.map(
+                    lambda _: captcha.verify_captcha(key, "WRONG"),
+                    range(attempts),
+                ))
+
+        self.assertEqual(results, [False] * attempts)
+        self.assertEqual(barrier_lock.entries, attempts)
+        self.assertNotIn(key, captcha.CAPTCHA_STORE)
+        self.assertFalse(captcha.verify_captcha(key, "E6FG"))
 
     def test_expired_captcha_is_removed(self):
         key = "expired-key"

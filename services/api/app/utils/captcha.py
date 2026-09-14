@@ -7,8 +7,9 @@ from threading import Lock
 
 from PIL import Image, ImageDraw, ImageFont
 
-CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire}
+CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire, failures}
 CAPTCHA_EXPIRE = 300  # 5分钟过期
+CAPTCHA_MAX_FAILURES = 5
 _CAPTCHA_LOCK = Lock()
 _RNG = secrets.SystemRandom()
 _CAPTCHA_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -127,12 +128,16 @@ def create_captcha() -> dict:
     now = time.time()
     with _CAPTCHA_LOCK:
         _cleanup_locked(now)
-        CAPTCHA_STORE[key] = {"code": code, "expire": now + CAPTCHA_EXPIRE}
+        CAPTCHA_STORE[key] = {
+            "code": code,
+            "expire": now + CAPTCHA_EXPIRE,
+            "failures": 0,
+        }
     return {"key": key, "image": f"data:image/png;base64,{image_b64}"}
 
 
 def verify_captcha(key: str, code: str) -> bool:
-    """验证验证码"""
+    """验证验证码，并限制同一个挑战可承受的错误次数。"""
     normalized_code = code.upper().strip()
     with _CAPTCHA_LOCK:
         _cleanup_locked(time.time())
@@ -141,6 +146,9 @@ def verify_captcha(key: str, code: str) -> bool:
             return False
         # 不区分大小写；正确验证码仅允许被消费一次。
         if item["code"].upper() != normalized_code:
+            item["failures"] = int(item.get("failures", 0)) + 1
+            if item["failures"] >= CAPTCHA_MAX_FAILURES:
+                CAPTCHA_STORE.pop(key, None)
             return False
         del CAPTCHA_STORE[key]
         return True
