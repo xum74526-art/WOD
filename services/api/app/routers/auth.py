@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password, verify_password
 from app.core.config import settings
 from app.core.deps import AuthContext, get_current_auth_context, get_current_user
-from app.core.rate_limit import limit_captcha, limit_login, limit_register
+from app.core.rate_limit import (
+    ensure_register_account_available,
+    limit_captcha,
+    limit_login,
+    limit_register_account,
+    limit_register_request,
+)
 from app.db.session import get_db
 from app.models.external_identity import ExternalIdentity
 from app.models.ledger import Ledger
@@ -53,11 +59,15 @@ def _ensure_invite_code(user_id: int, db: Session) -> str:
 
 @router.post("/register")
 def register(data: RegisterIn, db: Session = Depends(get_db)):
-    limit_register(data.phone)
+    limit_register_request()
+    # Reject an already-full phone bucket before consuming a one-time captcha,
+    # but do not let invalid captcha guesses spend another person's quota.
+    ensure_register_account_available(data.phone)
     platform, client_id = resolve_client(data.client_id)
     # 图形验证码校验
     if not verify_captcha(data.captcha_key, data.captcha_code):
         raise BizError("验证码错误或已过期")
+    limit_register_account(data.phone)
     if db.query(User).filter(User.phone == data.phone).first():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "该手机号已注册")
     # 解析邀请码

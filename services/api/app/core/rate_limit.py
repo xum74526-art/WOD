@@ -39,6 +39,26 @@ class SlidingWindowRateLimiter:
                     if not self._events[stale_key] or self._events[stale_key][-1] <= cutoff:
                         self._events.pop(stale_key, None)
 
+    def ensure_available(self, key: str) -> None:
+        """Reject a full bucket without recording a new event."""
+        now = monotonic()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            events = self._events.get(key)
+            if not events:
+                return
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if not events:
+                self._events.pop(key, None)
+                return
+            if len(events) >= self.limit:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="请求过于频繁，请稍后再试",
+                    headers={"Retry-After": str(self.window_seconds)},
+                )
+
 
 captcha_global_rate_limit = SlidingWindowRateLimiter(limit=600, window_seconds=60)
 register_global_rate_limit = SlidingWindowRateLimiter(limit=300, window_seconds=600)
@@ -67,9 +87,22 @@ def limit_captcha() -> None:
     captcha_global_rate_limit.check("captcha:global")
 
 
-def limit_register(identity: str) -> None:
+def limit_register_request() -> None:
     register_global_rate_limit.check("register:global")
+
+
+def ensure_register_account_available(identity: str) -> None:
+    register_account_rate_limit.ensure_available(f"register:{_identity_key(identity)}")
+
+
+def limit_register_account(identity: str) -> None:
     register_account_rate_limit.check(f"register:{_identity_key(identity)}")
+
+
+def limit_register(identity: str) -> None:
+    """Compatibility wrapper for callers that need both registration guards."""
+    limit_register_request()
+    limit_register_account(identity)
 
 
 def limit_login(identity: str) -> None:

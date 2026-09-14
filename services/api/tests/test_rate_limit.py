@@ -31,6 +31,17 @@ class RateLimitTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 429)
         limiter.check("support-message:102")
 
+    def test_availability_check_does_not_record_an_event(self):
+        limiter = SlidingWindowRateLimiter(limit=2, window_seconds=60)
+        limiter.check("register:13900000001")
+        limiter.ensure_available("register:13900000001")
+        limiter.check("register:13900000001")
+
+        with self.assertRaises(HTTPException) as caught:
+            limiter.ensure_available("register:13900000001")
+
+        self.assertEqual(caught.exception.status_code, 429)
+
 
 if __name__ == "__main__":
     unittest.main()
