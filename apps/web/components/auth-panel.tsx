@@ -26,6 +26,7 @@ function localizedAuthError(error: unknown, t: Translate) {
     "该手机号已注册": ["auth.error.phoneRegistered", "该手机号已注册"],
     "手机号或密码错误": ["auth.error.credentialsInvalid", "手机号或密码错误"],
     "注册信息过长，请缩短后重试": ["auth.error.registrationTooLong", "注册信息过长，请缩短后重试"],
+    "邀请码无效，请检查后重试": ["auth.error.inviteInvalid", "邀请码无效，请检查后重试"],
   };
   const match = known[raw.replace(/[。.]+$/u, "")];
   return match ? t(match[0], match[1]) : raw;

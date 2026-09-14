@@ -597,6 +597,7 @@ const english: Record<string, string> = {
   "auth.error.phoneRegistered": "This phone number is already registered.",
   "auth.error.credentialsInvalid": "The phone number or password is incorrect.",
   "auth.error.registrationTooLong": "The registration details are too long. Shorten them and try again.",
+  "auth.error.inviteInvalid": "The invitation code is invalid. Check it and try again.",
   "auth.kaiError.accessDenied": "KAI authorization was canceled",
   "auth.kaiError.identityNotBound": "This KAI identity is not linked. Sign in by phone first, then link it in Account Settings.",
   "auth.kaiError.identityConflict": "This KAI identity conflicts with an existing account. Contact support.",

@@ -87,3 +87,8 @@ test('registration length guidance is available in Chinese and English', () => {
     assert.equal((localeSource.match(new RegExp(`${key}:`, 'g')) || []).length, 2)
   }
 })
+
+test('an invalid invite code has localized guidance', () => {
+  assert.match(localeSource, /registrationInviteCodeInvalid: '邀请码无效，请检查后重试'/)
+  assert.match(localeSource, /registrationInviteCodeInvalid: 'The invitation code is invalid\. Check it and try again\.'/)
+})

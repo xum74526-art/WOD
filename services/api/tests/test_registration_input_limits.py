@@ -28,7 +28,7 @@ class RegistrationInputLimitTests(unittest.TestCase):
         maximums = RegisterIn(**self.registration_data(
             username="u" * 64,
             password="p" * 64,
-            invite_code="I" * 16,
+            invite_code=f"  {'i' * 16}  ",
         ))
 
         self.assertEqual(len(minimums.username), 2)
@@ -36,6 +36,7 @@ class RegistrationInputLimitTests(unittest.TestCase):
         self.assertEqual(len(maximums.username), 64)
         self.assertEqual(len(maximums.password), 64)
         self.assertEqual(len(maximums.invite_code or ""), 16)
+        self.assertEqual(maximums.invite_code, "I" * 16)
 
     def test_registration_rejects_values_outside_field_boundaries(self):
         invalid_values = (
@@ -50,9 +51,14 @@ class RegistrationInputLimitTests(unittest.TestCase):
             with self.subTest(overrides=overrides), self.assertRaises(ValidationError):
                 RegisterIn(**self.registration_data(**overrides))
 
-    def test_registration_keeps_optional_invite_code_backwards_compatible(self):
+    def test_registration_normalizes_optional_invite_code(self):
         self.assertIsNone(RegisterIn(**self.registration_data(invite_code=None)).invite_code)
-        self.assertEqual(RegisterIn(**self.registration_data(invite_code="")).invite_code, "")
+        self.assertIsNone(RegisterIn(**self.registration_data(invite_code="")).invite_code)
+        self.assertIsNone(RegisterIn(**self.registration_data(invite_code="   ")).invite_code)
+        self.assertEqual(
+            RegisterIn(**self.registration_data(invite_code="  wodtest01  ")).invite_code,
+            "WODTEST01",
+        )
 
 
 if __name__ == "__main__":

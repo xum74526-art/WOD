@@ -74,12 +74,11 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
     if db.query(User).filter(User.phone == data.phone).first():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "该手机号已注册")
     # 解析邀请码
-    invite_code = data.invite_code if hasattr(data, 'invite_code') else None
     inviter = None
-    if invite_code:
-        inviter_code = db.query(InviteCode).filter(InviteCode.code == invite_code).first()
-        if inviter_code:
-            inviter = inviter_code
+    if data.invite_code:
+        inviter = db.query(InviteCode).filter(InviteCode.code == data.invite_code).first()
+        if inviter is None:
+            raise BizError("邀请码无效，请检查后重试")
     # Password registration currently has only an image captcha. The phone remains a
     # login identifier and must not be represented as SMS-verified/bound.
     try:

@@ -12,6 +12,7 @@ from app.models import AuthSession, User, Wallet  # noqa: F401
 from app.models.invite import InviteCode, InviteRecord
 from app.routers.auth import register
 from app.schemas.user import RegisterIn
+from app.utils.response import BizError
 
 
 class RegistrationTruthTests(unittest.TestCase):
@@ -35,12 +36,12 @@ class RegistrationTruthTests(unittest.TestCase):
         self.db.close()
 
     @staticmethod
-    def registration_data(phone: str) -> RegisterIn:
+    def registration_data(phone: str, invite_code: str | None = "WODTEST01") -> RegisterIn:
         return RegisterIn(
             username="未短信验证用户",
             phone=phone,
             password="test-password",
-            invite_code="WODTEST01",
+            invite_code=invite_code,
             captcha_key="test-key",
             captcha_code="1234",
         )
@@ -76,6 +77,31 @@ class RegistrationTruthTests(unittest.TestCase):
         self.assertEqual(relation.reward_amount, 0)
         self.assertEqual(self.db.query(InviteCode).filter(InviteCode.user_id == created.id).count(), 1)
         self.assertEqual(self.db.query(AuthSession).filter(AuthSession.user_id == created.id).count(), 1)
+
+    def test_registration_normalizes_invite_code_before_lookup(self):
+        phone = "13900000046"
+        data = self.registration_data(phone, "  wodtest01  ")
+        self.assertEqual(data.invite_code, "WODTEST01")
+
+        with patch("app.routers.auth.verify_captcha", return_value=True):
+            register(data, self.db)
+
+        created = self.db.query(User).filter(User.phone == phone).one()
+        relation = self.db.query(InviteRecord).filter(InviteRecord.invitee_id == created.id).one()
+        self.assertEqual(relation.inviter_id, self.inviter.id)
+
+    def test_invalid_invite_code_stops_registration_instead_of_being_ignored(self):
+        phone = "13900000047"
+        with (
+            patch("app.routers.auth.verify_captcha", return_value=True),
+            self.assertRaises(BizError) as caught,
+        ):
+            register(self.registration_data(phone, "missing-code"), self.db)
+
+        self.assertEqual(caught.exception.msg, "邀请码无效，请检查后重试")
+        self.assertEqual(caught.exception.status_code, 400)
+        self.assertEqual(caught.exception.code, 1)
+        self.assert_no_partial_registration(phone)
 
     def test_registration_rolls_back_user_wallet_and_relation_if_invite_code_fails(self):
         phone = "13900000043"

@@ -46,6 +46,15 @@ class ApiLocaleTests(unittest.IsolatedAsyncioTestCase):
         source = "未纳入第一批的业务错误"
         self.assertEqual(localize_api_message(source, "en"), source)
 
+    def test_invalid_invite_code_is_localized_for_all_clients(self):
+        source = "邀请码无效，请检查后重试"
+        self.assertEqual(localize_api_message(source, "zh-Hant"), "邀請碼無效，請檢查後重試")
+        self.assertEqual(localize_api_message(source, "zh-Hans"), source)
+        self.assertEqual(
+            localize_api_message(source, "en"),
+            "The invitation code is invalid. Check it and try again.",
+        )
+
     async def test_global_biz_error_translation_preserves_status_and_code(self):
         response = await biz_handler(
             request_with_language("en-US"),

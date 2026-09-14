@@ -35,6 +35,7 @@ test("Web authentication actions localize validation, KAI and success states", (
     "auth.kai.registrationComplete",
     "auth.kai.sessionCreating",
     "auth.error.credentialsInvalid",
+    "auth.error.inviteInvalid",
     "auth.successMessage",
     "auth.captcha.imageAlt",
     "auth.security.session",
