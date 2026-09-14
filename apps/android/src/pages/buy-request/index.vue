@@ -7,6 +7,10 @@
           <SegmentedControl :items="viewTabs" :model-value="viewTab" @update:model-value="setViewTab" />
         </view>
 
+        <view v-if="viewMode === 'seller'" class="seller-scope-switch">
+          <SegmentedControl :items="sellerScopeTabs" :model-value="sellerScopeTab" @update:model-value="setSellerScopeTab" />
+        </view>
+
         <view v-if="viewMode === 'buyer'" class="summary-strip">
           <view class="summary-item">
             <text class="summary-value">{{ summary.active }}</text>
@@ -34,8 +38,8 @@
         </view>
         <view v-else-if="!requests.length" class="empty-card">
           <AppIcon name="order" :size="52" />
-          <text class="empty-title">{{ t(viewMode === 'seller' ? 'noAvailableRequests' : 'noBuyRequests') }}</text>
-          <text class="empty-copy">{{ t(viewMode === 'seller' ? 'sellerAvailableRequestHint' : requestType === 'online' ? 'onlineRequestHint' : 'offlineRequestHint') }}</text>
+          <text class="empty-title">{{ t(emptyTitleKey) }}</text>
+          <text class="empty-copy">{{ t(emptyHintKey) }}</text>
           <view v-if="viewMode === 'buyer'" class="empty-action" @tap="openForm">{{ t('postBuyRequest') }}</view>
         </view>
 
@@ -370,6 +374,8 @@ const commerce = useCommerceStore()
 const requestTab = ref(0)
 const viewMode = ref<BuyRequestView>('buyer')
 const requestedInitialView = ref<BuyRequestView>('buyer')
+const sellerScope = ref<'all' | 'quoted'>('all')
+const requestedInitialSellerScope = ref<'all' | 'quoted'>('all')
 const viewInitialized = ref(false)
 const requests = ref<BuyRequestItem[]>([])
 const summary = reactive({ active: 0, new_quotes: 0, pending_confirmation: 0 })
@@ -407,6 +413,14 @@ const requestTabs = computed(() => [t('onlineRequest'), t('offlineRequest')])
 const sellerViewAvailable = computed(() => userStore.userInfo?.supplier_status === 'approved')
 const viewTabs = computed(() => [t('availableRequests'), t('myBuyRequests')])
 const viewTab = computed(() => viewMode.value === 'seller' ? 0 : 1)
+const sellerScopeTabs = computed(() => [t('allRequests'), t('myQuotes')])
+const sellerScopeTab = computed(() => sellerScope.value === 'quoted' ? 1 : 0)
+const emptyTitleKey = computed(() => viewMode.value === 'seller'
+  ? sellerScope.value === 'quoted' ? 'noQuotedRequests' : 'noAvailableRequests'
+  : 'noBuyRequests')
+const emptyHintKey = computed(() => viewMode.value === 'seller'
+  ? sellerScope.value === 'quoted' ? 'sellerQuotedRequestHint' : 'sellerAvailableRequestHint'
+  : requestType.value === 'online' ? 'onlineRequestHint' : 'offlineRequestHint')
 const modelLabels = computed(() => marketModels.value.map((item) => `${item.gpu_model}${item.gpu_variant ? ` ${item.gpu_variant}` : ''}`))
 const billingLabels = computed(() => [t('onDemand'), t('interruptible'), t('reserved')])
 const billingValues = ['ondemand', 'bid', 'reserved']
@@ -575,7 +589,7 @@ async function load() {
   loadError.value = false
   try {
     if (viewMode.value === 'seller') {
-      requests.value = await getBuyRequests(requestType.value, 'seller')
+      requests.value = await getBuyRequests(requestType.value, 'seller', sellerScope.value === 'quoted')
       Object.assign(summary, { active: 0, new_quotes: 0, pending_confirmation: 0 })
     } else {
       const [items, counts] = await Promise.all([getBuyRequests(requestType.value, 'buyer'), getBuyRequestSummary()])
@@ -695,6 +709,14 @@ async function setViewTab(value: number) {
   if (viewMode.value === next) return
   viewMode.value = next
   showForm.value = false
+  detail.value = null
+  requests.value = []
+  await load()
+}
+async function setSellerScopeTab(value: number) {
+  const next = value === 1 ? 'quoted' : 'all'
+  if (sellerScope.value === next) return
+  sellerScope.value = next
   detail.value = null
   requests.value = []
   await load()
@@ -959,6 +981,8 @@ function closeDetail() {
 onLoad(async (options) => {
   composeRequested.value = String(options?.compose || '') === '1'
   requestedInitialView.value = String(options?.view || '') === 'seller' ? 'seller' : 'buyer'
+  requestedInitialSellerScope.value = requestedInitialView.value === 'seller' && String(options?.scope || '') === 'quoted' ? 'quoted' : 'all'
+  sellerScope.value = requestedInitialSellerScope.value
   if (requestedInitialView.value === 'seller' && !composeRequested.value) {
     if (userStore.isLogin && !userStore.userInfo) {
       try { await userStore.fetchProfile() } catch {}
@@ -999,6 +1023,7 @@ onShow(async () => {
 .page { min-height: 100vh; background: var(--bg); }
 .shell { padding: 0 32rpx calc(80rpx + var(--safe-bottom)); }
 .view-switch { margin-bottom: 18rpx; }
+.seller-scope-switch { margin-bottom: 18rpx; }
 .summary-strip { display: flex; padding: 26rpx 0; margin-bottom: 18rpx; border-bottom: 1rpx solid var(--divider); }
 .summary-item { flex: 1; text-align: center; }
 .summary-item + .summary-item { border-left: 1rpx solid var(--divider); }

@@ -6,6 +6,7 @@ test("supplier, buyer, and admin workspaces expose the closed matchmaking flow w
   const shell = fs.readFileSync(new URL("../components/product-shell.tsx", import.meta.url), "utf8");
   const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
   const requestApi = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
+  const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
   const supplierPage = fs.readFileSync(new URL("../app/supplier/requests/page.tsx", import.meta.url), "utf8");
   const adminApi = fs.readFileSync(new URL("../lib/admin-audit-api.ts", import.meta.url), "utf8");
   const admin = fs.readFileSync(new URL("../components/admin-buy-request-workspace.tsx", import.meta.url), "utf8");
@@ -29,6 +30,16 @@ test("supplier, buyer, and admin workspaces expose the closed matchmaking flow w
   assert.match(workspace, /timelineEventLabel\(event\)/);
   assert.match(workspace, /view === "seller" && !detail\?\.request\.is_own/);
   assert.match(requestApi, /quoted_only=true/);
+  for (const [source, translated] of [
+    ["需求显示范围", "Request display scope"],
+    ["显示范围", "Display scope"],
+    ["全部需求", "All requests"],
+    ["我的报价", "My quotes"],
+    ["我的报价需求", "My quoted requests"],
+    ["暂无报价记录", "No quote history"],
+  ]) {
+    assert.match(localeRoot, new RegExp(`"${source}": "${translated}"`));
+  }
   assert.match(supplierPage, /scope === "quoted" \? "quoted" : "all"/);
   assert.match(workspace, /当前未创建资金订单，也未扣除卡时/);
   assert.match(adminApi, /\/admin\/buy-requests/);

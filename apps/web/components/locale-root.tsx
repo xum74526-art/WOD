@@ -837,6 +837,7 @@ const legacyEnglish: Record<string, string> = {
   "收益与返佣": "Earnings & Rebates", "收益走势": "Earnings trend", "收益记录": "Earnings history", "返佣进度": "Rebate progress", "累计收益": "Total earnings",
   "银行卡": "Bank cards", "实名认证": "Identity verification", "通知中心": "Notifications", "在线客服": "Support", "地址管理": "Addresses", "账户设置": "Account settings",
   "求购与报价": "Requests & Quotes", "需求与方案": "Requests & Plans", "求购市场": "Request Market", "需求市场": "Request Market", "在线算力": "Online compute", "线下设备": "Offline devices", "发布求购": "Create request", "我的需求": "My requests", "可报价需求": "Open requests", "报价记录": "Quotes", "选择报价": "Select quote", "确认方案": "Confirm plan",
+  "需求显示范围": "Request display scope", "显示范围": "Display scope", "全部需求": "All requests", "我的报价": "My quotes", "我的报价需求": "My quoted requests", "可接需求": "Available requests", "暂无报价记录": "No quote history",
   "账户与安全": "Account & Security", "修改密码": "Change password", "退出登录": "Sign out", "深色模式": "Dark mode", "浅色模式": "Light mode",
   "商家后台": "Supplier Console", "经营总览": "Operations Overview", "算力商品": "Compute Products", "交付订单": "Delivery Orders", "经营统计": "Analytics", "商家资料": "Supplier Profile",
   "管理控制台": "Admin Console", "运营总览": "Admin Overview", "银行卡复核": "Bank Card Review", "提现结算": "Withdrawal Settlement",

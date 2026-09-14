@@ -79,3 +79,4 @@ jobs:
       - run: npm run build:android:app
       - run: node packages/api-contracts/check-mobile-api.mjs
       - run: node packages/api-contracts/check-client-boundaries.mjs
+      - run: node packages/api-contracts/check-client-experience-parity.mjs

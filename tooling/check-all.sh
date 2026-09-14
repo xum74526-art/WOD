@@ -42,5 +42,6 @@ for client in ios android; do
 done
 node "$repo_root/packages/api-contracts/check-mobile-api.mjs"
 node "$repo_root/packages/api-contracts/check-client-boundaries.mjs"
+node "$repo_root/packages/api-contracts/check-client-experience-parity.mjs"
 
 echo "All available project checks passed."

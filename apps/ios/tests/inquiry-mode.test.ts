@@ -29,7 +29,7 @@ test('product inquiry preserves configuration and market context without checkou
 })
 
 test('request form requires contact details, carries listing identity, and supports closed-loop proposals', () => {
-  assert.match(requestPage, /const contact = form\.contact\.trim\(\)/)
+  assert.match(requestPage, /!form\.contact\.trim\(\) \|\| !form\.phone\.trim\(\)/)
   assert.match(requestPage, /const phone = normalizeBuyRequestContactPhone\(form\.phone\)/)
   assert.match(requestPage, /product_id: inquiryContext\.value\?\.product_id/)
   assert.match(requestPage, /supplier_id: inquiryContext\.value\?\.supplier_id/)

@@ -150,8 +150,15 @@ export function getBuyRequestSummary() {
   return request<{ active: number; new_quotes: number; pending_confirmation: number }>({ url: '/buy-requests/summary' })
 }
 
-export function getBuyRequests(requestType: 'online' | 'offline', view: BuyRequestView = 'buyer') {
-  return request<BuyRequestItem[]>({ url: '/buy-requests', data: { request_type: requestType, view } })
+export function getBuyRequests(requestType: 'online' | 'offline', view: BuyRequestView = 'buyer', quotedOnly = false) {
+  return request<BuyRequestItem[]>({
+    url: '/buy-requests',
+    data: {
+      request_type: requestType,
+      view,
+      ...(view === 'seller' && quotedOnly ? { quoted_only: true } : {}),
+    },
+  })
 }
 
 export function createBuyRequest(data: BuyRequestPayload) {
