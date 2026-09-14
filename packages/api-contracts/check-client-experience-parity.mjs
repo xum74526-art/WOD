@@ -253,6 +253,36 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'homepage matchmaking wording',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/home-page-content.tsx',
+        patterns: ['提交需求后由人工联系确认资源、价格和交付安排', '提交预计数量和时长', '人工确认'],
+      },
+      {
+        client: 'Android',
+        file: 'apps/android/src/store/i18n.ts',
+        patterns: [
+          "homePromoHourlyTitle: '按小时询价算力'",
+          "homePromoHourlyDescription: '填写数量与时长，提交需求后沟通方案'",
+          "homePromoHourlyTitle: 'Request Hourly Compute'",
+          "homeNoticeHourly: 'Hourly compute requests are available'",
+        ],
+      },
+      {
+        client: 'iOS',
+        file: 'apps/ios/src/store/i18n.ts',
+        patterns: [
+          "homePromoHourlyTitle: '按小时询价算力'",
+          "homePromoHourlyDescription: '填写数量与时长，提交需求后沟通方案'",
+          "homePromoHourlyTitle: 'Request Hourly Compute'",
+          "homeNoticeHourly: 'Hourly compute requests are available'",
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []
@@ -282,6 +312,8 @@ const mirroredMobileFiles = [
   'tests/recovery-email-binding.test.ts',
   'src/config/profile-widgets.ts',
   'tests/profile-widgets.test.ts',
+  'src/config/home-promotions.ts',
+  'src/components/HomePromoCarousel.vue',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')
