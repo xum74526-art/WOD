@@ -6,6 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
+INVITE_CODE_PREFIX = "ZTW"
+
+
 class InviteCode(Base):
     __tablename__ = "invite_codes"
 

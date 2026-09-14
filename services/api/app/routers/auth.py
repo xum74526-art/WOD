@@ -23,7 +23,7 @@ from app.models.external_identity import ExternalIdentity
 from app.models.ledger import Ledger
 from app.models.user import User
 from app.models.wallet import Wallet
-from app.models.invite import InviteCode, InviteRecord
+from app.models.invite import INVITE_CODE_PREFIX, InviteCode, InviteRecord
 from app.schemas.auth import KaiBindStartIn, KaiStartIn, KaiTicketIn
 from app.schemas.user import LoginIn, RegisterIn, UserOut
 from app.services.auth_session import (
@@ -55,7 +55,9 @@ def _ensure_invite_code(user_id: int, db: Session) -> str:
     existing = db.query(InviteCode).filter(InviteCode.user_id == user_id).first()
     if existing:
         return existing.code
-    code = "WOD" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    code = INVITE_CODE_PREFIX + "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=6)
+    )
     db.add(InviteCode(user_id=user_id, code=code, invited_count=0))
     db.flush()
     return code

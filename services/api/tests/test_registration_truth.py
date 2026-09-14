@@ -75,7 +75,8 @@ class RegistrationTruthTests(unittest.TestCase):
         self.assertEqual(relation.inviter_id, self.inviter.id)
         self.assertEqual(relation.status, "unverified")
         self.assertEqual(relation.reward_amount, 0)
-        self.assertEqual(self.db.query(InviteCode).filter(InviteCode.user_id == created.id).count(), 1)
+        created_code = self.db.query(InviteCode).filter(InviteCode.user_id == created.id).one()
+        self.assertRegex(created_code.code, r"^ZTW[A-Z0-9]{6}$")
         self.assertEqual(self.db.query(AuthSession).filter(AuthSession.user_id == created.id).count(), 1)
 
     def test_registration_normalizes_invite_code_before_lookup(self):
