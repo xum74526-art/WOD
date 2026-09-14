@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
@@ -40,13 +41,13 @@ def get_captcha():
 
 
 def _ensure_invite_code(user_id: int, db: Session) -> str:
-    """自动生成邀请码"""
+    """Stage the user's invite code in the caller-owned transaction."""
     existing = db.query(InviteCode).filter(InviteCode.user_id == user_id).first()
     if existing:
         return existing.code
     code = "WOD" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     db.add(InviteCode(user_id=user_id, code=code, invited_count=0))
-    db.commit()
+    db.flush()
     return code
 
 
@@ -68,39 +69,50 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
             inviter = inviter_code
     # Password registration currently has only an image captcha. The phone remains a
     # login identifier and must not be represented as SMS-verified/bound.
-    user = User(
-        username=data.username,
-        phone=data.phone,
-        phone_bound=False,
-        password=hash_password(data.password),
-        created_platform=platform,
-    )
-    if inviter:
-        user.invited_by = inviter.user_id
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    # Persist the relationship for the inviter's records, but keep it
-    # unverified and grant no reward until phone ownership is verified and a
-    # real test order has completed delivery.
-    total = Decimal("0")
-    wallet = Wallet(user_id=user.id, balance=total, frozen=Decimal("0"))
-    db.add(wallet)
-    if inviter:
-        from app.routers.invite import create_invite_relationship
-        create_invite_relationship(user, inviter.user_id, db, platform=platform)
-    db.commit()
-    db.refresh(wallet)
-    # 自动生成自己的邀请码
-    _ensure_invite_code(user.id, db)
-    issued = create_authenticated_session(
-        db,
-        user,
-        platform=platform,
-        client_id=client_id,
-        auth_method="password_register",
-    )
-    return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+    try:
+        user = User(
+            username=data.username,
+            phone=data.phone,
+            phone_bound=False,
+            password=hash_password(data.password),
+            created_platform=platform,
+        )
+        if inviter:
+            user.invited_by = inviter.user_id
+        db.add(user)
+        db.flush()
+
+        # Persist the relationship for the inviter's records, but keep it
+        # unverified and grant no reward until phone ownership is verified and
+        # a real test order has completed delivery.
+        wallet = Wallet(user_id=user.id, balance=INIT_BALANCE, frozen=Decimal("0"))
+        db.add(wallet)
+        if inviter:
+            from app.routers.invite import create_invite_relationship
+            create_invite_relationship(user, inviter.user_id, db, platform=platform)
+        db.flush()
+
+        # The invite code and authentication session belong to the same
+        # registration transaction. The session service performs the single
+        # final commit after the JWT has been generated successfully.
+        _ensure_invite_code(user.id, db)
+        user_payload = UserOut.model_validate(user).model_dump()
+        issued = create_authenticated_session(
+            db,
+            user,
+            platform=platform,
+            client_id=client_id,
+            auth_method="password_register",
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        if db.query(User).filter(User.phone == data.phone).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "该手机号已注册") from exc
+        raise BizError("注册信息冲突，请重试", status_code=409) from exc
+    except Exception:
+        db.rollback()
+        raise
+    return success({"token": issued.token, "user": user_payload})
 
 
 @router.post("/login")

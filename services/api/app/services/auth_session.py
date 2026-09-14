@@ -95,18 +95,19 @@ def create_authenticated_session(
         expires_at=expires_at,
     )
     db.add(row)
-    db.commit()
     token_expiry = expires_at.replace(tzinfo=timezone.utc)
-    return IssuedSession(
-        token=create_access_token(
-            user.id,
-            session_id=row.id,
-            platform=row.platform,
-            auth_version=int(user.auth_version or 0),
-            expires_at=token_expiry,
-        ),
-        session=row,
+    token = create_access_token(
+        user.id,
+        session_id=row.id,
+        platform=row.platform,
+        auth_version=int(user.auth_version or 0),
+        expires_at=token_expiry,
     )
+    # Generate the bearer before committing. If signing/configuration fails,
+    # callers can roll the pending AuthSession back with the rest of their
+    # transaction instead of persisting a session they can never return.
+    db.commit()
+    return IssuedSession(token=token, session=row)
 
 
 def revoke_current_session(
