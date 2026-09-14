@@ -160,9 +160,9 @@ function submitFollowUpRequirement() {
     product_id: current.product_id,
     source: 'existing_asset',
     gpu_model: current.gpu_model || current.product_name || 'GPU',
-    quantity: Math.max(1, current.quantity || 1),
-    gpu_hours: Math.max(1, Number(current.remaining_days || 1) * 24),
-    product_name: current.product_name,
+    quantity: Math.max(1, Number(current.quantity) || 1),
+    gpu_hours: 24,
+    product_name: current.product_name || undefined,
   })
   nav('/pages/buy-request/index?compose=1')
 }

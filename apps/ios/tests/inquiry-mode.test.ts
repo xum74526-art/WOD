@@ -72,3 +72,18 @@ test('renewal uses inquiry while sell and supplier withdrawal writes stay unavai
   assert.doesNotMatch(assetDetail, /sellAsset\(/)
   assert.doesNotMatch(supplierRevenue, /onWithdraw|\/pages\/wallet\/index/)
 })
+
+test('asset and order follow-up requests preserve attribution and safe duration defaults', () => {
+  assert.match(assetDetail, /source: 'existing_asset'/)
+  assert.match(assetDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
+  assert.match(assetDetail, /quantity: Math\.max\(1, Number\(current\.quantity\) \|\| 1\)/)
+  assert.match(assetDetail, /gpu_hours: 24/)
+  assert.doesNotMatch(assetDetail, /remaining_days[^\n]*\* 24/)
+
+  assert.match(orderDetail, /const originalHours = Number\(current\.duration_hours \?\? current\.purchase_hours\)/)
+  assert.match(orderDetail, /supplier_id: current\.supplier_id/)
+  assert.match(orderDetail, /seller_name: current\.seller_name \|\| current\.supplier_name \|\| undefined/)
+  assert.match(orderDetail, /source: current\.market_source \|\| current\.seller_type \|\| 'existing_order'/)
+  assert.match(orderDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
+  assert.match(orderDetail, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/)
+})

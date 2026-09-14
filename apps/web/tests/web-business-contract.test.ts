@@ -60,6 +60,22 @@ test("new and renewal orders use integer hours plus a Web request id", () => {
   assert.throws(() => hourlyOrderBody(721, requestId), /1 至 720/);
 });
 
+test("Web asset and order follow-up links preserve shared request context", () => {
+  const assets = fs.readFileSync(new URL("../components/mobile-assets-workspace.tsx", import.meta.url), "utf8");
+  const orders = fs.readFileSync(new URL("../components/order-workspace.tsx", import.meta.url), "utf8");
+  const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+
+  assert.match(assets, /requestCreateHref\(\{ product_id: item\.product_id, source: "existing_asset"[\s\S]*?gpu_hours: 24 \}\)/);
+  assert.match(orders, /supplier_id: order\.supplier_id/);
+  assert.match(orders, /source: order\.market_source \|\| order\.seller_type \|\| "existing_order"/);
+  assert.match(orders, /seller_name: sellerCopy\(order\)/);
+  assert.match(orders, /const originalHours = Number\(order\.duration_hours \?\? order\.purchase_hours\)/);
+  assert.match(orders, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/);
+  assert.match(orders, /href=\{renewalRequestHref\(detail\)\}/);
+  assert.match(adapter, /market_source: text\(item\.market_source\) === "kai"/);
+  assert.doesNotMatch(orders, /gpu_hours=24`/);
+});
+
 test("direct-order retries reuse one request id until the intent changes or is cancelled", () => {
   let sequence = 0;
   const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;

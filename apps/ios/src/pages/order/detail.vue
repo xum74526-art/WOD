@@ -255,15 +255,16 @@ async function onDispute() {
 function submitRenewalRequirement() {
   const current = order.value
   if (!current?.product_id) return
+  const originalHours = Number(current.duration_hours ?? current.purchase_hours)
   saveInquiryRequestPrefill({
     product_id: current.product_id,
     supplier_id: current.supplier_id,
-    seller_name: current.seller_name || current.supplier_name || '',
-    source: current.market_source || current.seller_type || '',
-    gpu_model: current.gpu_model || current.product_name || '',
+    seller_name: current.seller_name || current.supplier_name || undefined,
+    source: current.market_source || current.seller_type || 'existing_order',
+    gpu_model: current.gpu_model || current.product_name || 'GPU',
     quantity: Math.max(1, Number(current.quantity) || 1),
-    gpu_hours: Math.max(1, Number(current.duration_hours ?? current.purchase_hours) || 24),
-    product_name: current.product_name || '',
+    gpu_hours: Number.isFinite(originalHours) && originalHours >= 1 ? originalHours : 24,
+    product_name: current.product_name || undefined,
   })
   nav('/pages/buy-request/index?compose=1')
 }

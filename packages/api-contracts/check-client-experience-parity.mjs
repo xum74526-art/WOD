@@ -143,6 +143,54 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'follow-up request prefill',
+    evidence: [
+      {
+        client: 'Web asset',
+        file: 'apps/web/components/mobile-assets-workspace.tsx',
+        patterns: ['requestCreateHref({ product_id: item.product_id', 'source: "existing_asset"', 'gpu_hours: 24'],
+      },
+      {
+        client: 'Web order',
+        file: 'apps/web/components/order-workspace.tsx',
+        patterns: [
+          'supplier_id: order.supplier_id',
+          'seller_name: sellerCopy(order)',
+          'source: order.market_source || order.seller_type || "existing_order"',
+          'Number.isFinite(originalHours) && originalHours >= 1 ? originalHours : 24',
+        ],
+      },
+      {
+        client: 'Android asset',
+        file: 'apps/android/src/pages/asset/detail.vue',
+        patterns: ["source: 'existing_asset'", "current.gpu_model || current.product_name || 'GPU'", 'gpu_hours: 24'],
+      },
+      {
+        client: 'Android order',
+        file: 'apps/android/src/pages/order/detail.vue',
+        patterns: [
+          'supplier_id: current.supplier_id',
+          "source: current.market_source || current.seller_type || 'existing_order'",
+          'Number.isFinite(originalHours) && originalHours >= 1 ? originalHours : 24',
+        ],
+      },
+      {
+        client: 'iOS asset',
+        file: 'apps/ios/src/pages/asset/detail.vue',
+        patterns: ["source: 'existing_asset'", "current.gpu_model || current.product_name || 'GPU'", 'gpu_hours: 24'],
+      },
+      {
+        client: 'iOS order',
+        file: 'apps/ios/src/pages/order/detail.vue',
+        patterns: [
+          'supplier_id: current.supplier_id',
+          "source: current.market_source || current.seller_type || 'existing_order'",
+          'Number.isFinite(originalHours) && originalHours >= 1 ? originalHours : 24',
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []

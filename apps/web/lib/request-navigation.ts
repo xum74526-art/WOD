@@ -18,14 +18,18 @@ const REQUEST_PREFILL_KEYS = [
 
 const POSITIVE_NUMBER_PREFILL_KEYS = new Set<string>(["product_id", "supplier_id", "quantity", "gpu_hours"]);
 
+export type RequestCreatePrefill = Partial<Record<(typeof REQUEST_PREFILL_KEYS)[number], string | number | null>>;
+
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export function legacyRequestCreateHref(searchParams: RequestSearchParams = {}) {
+export function requestCreateHref(prefill: RequestCreatePrefill = {}) {
   const query = new URLSearchParams({ create: "1" });
   for (const key of REQUEST_PREFILL_KEYS) {
-    const value = first(searchParams[key]);
+    const rawValue = prefill[key];
+    if (rawValue == null) continue;
+    const value = String(rawValue).trim();
     if (!value) continue;
     if (POSITIVE_NUMBER_PREFILL_KEYS.has(key)) {
       const number = Number(value);
@@ -34,4 +38,13 @@ export function legacyRequestCreateHref(searchParams: RequestSearchParams = {}) 
     query.set(key, value);
   }
   return `/account/requests?${query.toString()}`;
+}
+
+export function legacyRequestCreateHref(searchParams: RequestSearchParams = {}) {
+  const prefill: RequestCreatePrefill = {};
+  for (const key of REQUEST_PREFILL_KEYS) {
+    const value = first(searchParams[key]);
+    if (value) prefill[key] = value;
+  }
+  return requestCreateHref(prefill);
 }

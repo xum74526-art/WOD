@@ -158,10 +158,11 @@ function submitRenewalRequirement() {
   if (!current?.product_id) return
   saveInquiryRequestPrefill({
     product_id: current.product_id,
-    gpu_model: current.gpu_model || current.product_name || '',
+    source: 'existing_asset',
+    gpu_model: current.gpu_model || current.product_name || 'GPU',
     quantity: Math.max(1, Number(current.quantity) || 1),
     gpu_hours: 24,
-    product_name: current.product_name || '',
+    product_name: current.product_name || undefined,
   })
   nav('/pages/buy-request/index?compose=1')
 }

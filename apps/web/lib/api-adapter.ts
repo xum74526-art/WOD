@@ -480,6 +480,7 @@ function order(value: unknown, supplierView = false) {
     price_unit: "order_total",
     quantity: number(item.quantity, 1),
     purchase_type: text(item.purchase_type, "usage"),
+    market_source: text(item.market_source) === "kai" ? "kai" : text(item.market_source) === "wod" ? "wod" : null,
     cycle_days: cycleDays,
     end_at: text(item.end_at) || null,
     remaining_days: number(item.remaining_days),

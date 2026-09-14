@@ -115,6 +115,7 @@ export type Order = {
   quantity: number;
   purchase_type?: "usage" | "holding";
   purchase_hours?: number | null;
+  market_source?: "kai" | "wod" | null;
   cycle_days?: number | null;
   end_at?: string | null;
   remaining_days?: number;
