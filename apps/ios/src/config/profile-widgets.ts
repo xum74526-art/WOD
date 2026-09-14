@@ -40,6 +40,7 @@ const PERSONAL_ACCOUNT_ITEMS: ProfileWidget[] = [
 
 const SUPPLIER_OPERATION_ITEMS: ProfileWidget[] = [
   { key: 'orders', label: 'merchantOrders', icon: 'order', route: '/pages/supplier/orders' },
+  { key: 'request-market', label: 'requestMarket', icon: 'procurement', route: '/pages/buy-request/index?view=seller' },
   { key: 'overview', label: 'merchantOverview', icon: 'gpu', route: '/pages/supplier/dashboard' },
   { key: 'revenue', label: 'revenueSettle', icon: 'revenue', route: '/pages/supplier/revenue' },
   { key: 'rebate', label: 'rebateSummary', icon: 'refresh', route: '/pages/supplier/rebate' },
@@ -54,7 +55,6 @@ const SUPPLIER_ACCOUNT_ITEMS: ProfileWidget[] = [
   { key: 'verified', label: '实名认证', icon: 'verified', route: '/pages/verification/index' },
   { key: 'coupon', label: 'coupons', icon: 'coupon', route: '/pages/coupons/index' },
   { key: 'address', label: 'addressManage', icon: 'address', route: '/pages/addresses/index' },
-  { key: 'request-market', label: 'requestMarket', icon: 'procurement', route: '/pages/buy-request/index?view=seller' },
   { key: 'account-settings', label: 'accountSettings', icon: 'user', route: '/pages/settings/index' },
   { key: 'online', label: '在线客服', icon: 'online-service', route: '/pages/kefu/index' },
 ]

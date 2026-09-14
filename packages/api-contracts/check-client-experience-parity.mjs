@@ -191,6 +191,40 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'role-aware request navigation',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/product-shell.tsx',
+        patterns: [
+          '{ label: "求购与报价", href: "/account/requests"',
+          '{ label: "需求市场", href: "/supplier/requests"',
+          'variant === "supplier" && <Link href="/account"',
+        ],
+      },
+      {
+        client: 'Android',
+        file: 'apps/android/src/config/profile-widgets.ts',
+        patterns: [
+          "key: 'request-market'",
+          "route: '/pages/buy-request/index?view=seller'",
+          "key: 'procurement'",
+          "route: '/pages/buy-request/index'",
+        ],
+      },
+      {
+        client: 'iOS',
+        file: 'apps/ios/src/config/profile-widgets.ts',
+        patterns: [
+          "key: 'request-market'",
+          "route: '/pages/buy-request/index?view=seller'",
+          "key: 'procurement'",
+          "route: '/pages/buy-request/index'",
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []
@@ -218,6 +252,8 @@ const mirroredMobileFiles = [
   'src/api/account-recovery.ts',
   'src/pages/recovery-email/index.vue',
   'tests/recovery-email-binding.test.ts',
+  'src/config/profile-widgets.ts',
+  'tests/profile-widgets.test.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')
