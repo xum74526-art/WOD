@@ -217,7 +217,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
             {isRegister && <>
               <label className="form-field">
                 <span>{t("auth.invite", "邀请码（选填）")}</span>
-                <TextField.Root type="text" autoComplete="off" value={inviteCode} onChange={(event) => setInviteCode(event.target.value.toUpperCase())} maxLength={32} />
+                <TextField.Root type="text" autoComplete="off" value={inviteCode} onChange={(event) => setInviteCode(event.target.value.toUpperCase())} maxLength={16} />
               </label>
               <label className="form-field">
                 <span>{t("auth.captcha", "图形验证码")}</span>

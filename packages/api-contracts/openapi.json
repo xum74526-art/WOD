@@ -3169,6 +3169,7 @@
           "invite_code": {
             "anyOf": [
               {
+                "maxLength": 16,
                 "type": "string"
               },
               {

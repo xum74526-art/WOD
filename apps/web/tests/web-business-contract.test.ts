@@ -198,6 +198,9 @@ test("released Web account copy does not expose retired test-only wording", () =
 test("Web registration offers phone and Kai registration through the existing authorization route", () => {
   const panel = fs.readFileSync(new URL("../components/auth-panel.tsx", import.meta.url), "utf8");
 
+  assert.match(panel, /value=\{name\}[^\r\n]*minLength=\{2\} maxLength=\{64\}/);
+  assert.match(panel, /value=\{password\}[^\r\n]*minLength=\{isRegister \? 6 : 1\} maxLength=\{64\}/);
+  assert.match(panel, /value=\{inviteCode\}[^\r\n]*maxLength=\{16\}/);
   assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
   assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
   assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);

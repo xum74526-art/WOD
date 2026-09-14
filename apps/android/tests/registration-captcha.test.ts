@@ -54,3 +54,36 @@ test('captcha replacement guidance is translated without claiming every refresh 
   assert.match(localeSource, /registrationCaptchaRefreshed: '验证码已更新，请重新输入。'/)
   assert.match(localeSource, /registrationCaptchaRefreshed: 'The verification code was refreshed\. Please enter the new code\.'/)
 })
+
+test('registration fields enforce the canonical input lengths', () => {
+  assert.match(loginSource, /v-model="form\.username"[^>]+maxlength="64"/)
+  assert.match(loginSource, /v-model="form\.invite_code"[^>]+maxlength="16"/)
+  assert.match(loginSource, /v-model="form\.password"[^>]+maxlength="64"/)
+})
+
+test('registration validates and normalizes fields before captcha and network work', () => {
+  const handler = loginSource.match(/async function submit\(\) \{([\s\S]*?)\n\}/)?.[1] || ''
+  const usernameGuard = handler.indexOf("t('registrationUsernameLength')")
+  const passwordGuard = handler.indexOf("t('registrationPasswordLength')")
+  const inviteGuard = handler.indexOf("t('registrationInviteCodeLength')")
+  const captchaGuard = handler.indexOf('!hasFreshCaptcha()')
+  const registerCall = handler.indexOf('userStore.register(')
+
+  assert.match(handler, /const registrationUsername = form\.username\.trim\(\)/)
+  assert.match(handler, /const registrationInviteCode = form\.invite_code\.trim\(\)\.toUpperCase\(\)/)
+  assert.ok(usernameGuard >= 0)
+  assert.ok(passwordGuard > usernameGuard)
+  assert.ok(inviteGuard > passwordGuard)
+  assert.ok(captchaGuard > inviteGuard)
+  assert.ok(registerCall > captchaGuard)
+  assert.match(handler, /registrationUsername\.length < 2 \|\| registrationUsername\.length > 64/)
+  assert.match(handler, /form\.password\.length < 6 \|\| form\.password\.length > 64/)
+  assert.match(handler, /registrationInviteCode\.length > 16/)
+  assert.match(handler, /userStore\.register\(registrationUsername, form\.phone, form\.password, registrationInviteCode \|\| undefined/)
+})
+
+test('registration length guidance is available in Chinese and English', () => {
+  for (const key of ['registrationUsernameLength', 'registrationPasswordLength', 'registrationInviteCodeLength']) {
+    assert.equal((localeSource.match(new RegExp(`${key}:`, 'g')) || []).length, 2)
+  }
+})

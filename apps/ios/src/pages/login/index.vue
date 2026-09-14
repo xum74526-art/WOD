@@ -30,11 +30,11 @@
         <view v-if="authMethod === 'phone'" class="phone-form">
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_819767ad') }}</text>
-            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" />
+            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" maxlength="64" />
           </view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_1dfb714c') }}</text>
-            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" />
+            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" maxlength="16" />
           </view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_b19c3a24') }}</text>
@@ -50,7 +50,7 @@
           </view>
           <view class="field">
             <text class="flabel">{{ t('k_a8105204') }}</text>
-            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" />
+            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" maxlength="64" />
             <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
           </view>
           <view v-if="mode === 'login'" class="account-recovery-row">
@@ -427,8 +427,12 @@ async function submit() {
   if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
   if (authMethod.value === 'kai') { await submitKai(); return }
   const isRegistration = mode.value === 'register'
+  const registrationUsername = form.username.trim()
+  const registrationInviteCode = form.invite_code.trim().toUpperCase()
   if (!form.phone || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
-  if (isRegistration && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
+  if (isRegistration && (registrationUsername.length < 2 || registrationUsername.length > 64)) { uni.showToast({ title: t('registrationUsernameLength'), icon: 'none' }); return }
+  if (isRegistration && (form.password.length < 6 || form.password.length > 64)) { uni.showToast({ title: t('registrationPasswordLength'), icon: 'none' }); return }
+  if (isRegistration && registrationInviteCode.length > 16) { uni.showToast({ title: t('registrationInviteCodeLength'), icon: 'none' }); return }
   if (isRegistration && !hasFreshCaptcha()) {
     submitting.value = true
     await refreshCaptchaWithNotice(true)
@@ -439,7 +443,7 @@ async function submit() {
   submitting.value = true
   try {
     if (!isRegistration) await userStore.login(form.phone, form.password)
-    else await userStore.register(form.username, form.phone, form.password, form.invite_code || undefined, captchaKey.value, form.captcha_code)
+    else await userStore.register(registrationUsername, form.phone, form.password, registrationInviteCode || undefined, captchaKey.value, form.captcha_code)
     uni.showToast({ title: t('success'), icon: 'success' })
     setTimeout(enterAuthenticatedApp, 500)
   } catch {

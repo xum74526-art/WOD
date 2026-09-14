@@ -29,13 +29,28 @@ test("authentication contract records Web origin and supports explicit Kai bindi
   assert.ok(bodySchema("/api/auth/login", "post").properties?.client_id);
   const registration = bodySchema("/api/auth/register", "post");
   assert.ok(registration.properties?.client_id);
+  const inviteCode = registration.properties?.invite_code?.anyOf?.find((item) => item.type === "string");
   assert.deepEqual(
     {
+      usernameMin: registration.properties?.username?.minLength,
+      usernameMax: registration.properties?.username?.maxLength,
+      passwordMin: registration.properties?.password?.minLength,
+      passwordMax: registration.properties?.password?.maxLength,
+      inviteCodeMax: inviteCode?.maxLength,
       captchaKey: registration.properties?.captcha_key?.maxLength,
       captchaCode: registration.properties?.captcha_code?.maxLength,
     },
-    { captchaKey: 64, captchaCode: 6 },
+    {
+      usernameMin: 2,
+      usernameMax: 64,
+      passwordMin: 6,
+      passwordMax: 64,
+      inviteCodeMax: 16,
+      captchaKey: 64,
+      captchaCode: 6,
+    },
   );
+  assert.equal(registration.required?.includes("invite_code") ?? false, false);
   assert.ok(operation("/api/auth/register", "post").responses?.["413"]);
   operation("/api/auth/kai/status", "get");
   assert.ok(bodySchema("/api/auth/kai/bind/start", "post").properties?.return_url);
