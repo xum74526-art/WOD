@@ -225,6 +225,34 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'withdrawal unavailable feedback',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/mobile-supplier-operations.tsx',
+        patterns: ['!wallet?.payment_service_enabled', '商家结算服务当前未启用', '不会创建模拟提现记录'],
+      },
+      {
+        client: 'Android',
+        file: 'apps/android/src/pages/supplier/revenue.vue',
+        patterns: [
+          '<DirectTradeSupplierWithdrawalAction v-if="commerce.withdrawEnabled" />',
+          '<view v-else class="q-btn disabled">',
+          "t('withdrawalUnavailableShort')",
+        ],
+      },
+      {
+        client: 'iOS',
+        file: 'apps/ios/src/pages/supplier/revenue.vue',
+        patterns: [
+          '<DirectTradeSupplierWithdrawalAction v-if="commerce.withdrawEnabled" />',
+          '<view v-else class="q-btn disabled">',
+          "t('withdrawalUnavailableShort')",
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []

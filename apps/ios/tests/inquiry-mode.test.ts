@@ -87,3 +87,10 @@ test('asset and order follow-up requests preserve attribution and safe duration 
   assert.match(orderDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
   assert.match(orderDetail, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/)
 })
+
+test('supplier withdrawal is capability-gated with an explicit disabled state', () => {
+  assert.match(supplierRevenue, /<DirectTradeSupplierWithdrawalAction v-if="commerce\.withdrawEnabled" \/>/)
+  assert.match(supplierRevenue, /<view v-else class="q-btn disabled">\{\{ t\('withdrawalUnavailableShort'\) \}\}<\/view>/)
+  const disabledState = supplierRevenue.match(/<view v-else class="q-btn disabled">[^<]+<\/view>/)?.[0] || ''
+  assert.doesNotMatch(disabledState, /@tap|onWithdraw/)
+})

@@ -18,6 +18,7 @@
 
       <view class="quick-row">
         <DirectTradeSupplierWithdrawalAction v-if="commerce.withdrawEnabled" />
+        <view v-else class="q-btn disabled">{{ t('withdrawalUnavailableShort') }}</view>
         <view class="q-btn ghost" @tap="goDevices">{{ t('k_53ac00e9') }}</view>
       </view>
 
