@@ -30,6 +30,7 @@ test("Web authentication actions localize validation, KAI and success states", (
 
   for (const key of [
     "auth.captcha.loadFailed",
+    "auth.captcha.refreshed",
     "auth.termsRequired",
     "auth.kaiError.identityNotBound",
     "auth.kai.registrationComplete",

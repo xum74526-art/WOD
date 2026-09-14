@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowClockwise, CheckCircle, Eye, EyeSlash, Key, LockKey, Phone, ShieldCheck, User } from "@phosphor-icons/react";
 import { Button, Callout, Checkbox, TextField } from "@radix-ui/themes";
@@ -12,6 +12,8 @@ import { ContactPhone } from "@/components/contact-phone";
 type AuthPanelProps = { mode: "login" | "register" };
 const PENDING_KAI_INTENT_KEY = "wod_kai_auth_intent";
 const KAI_REGISTRATION_NOTICE_KEY = "wod_kai_registration_notice";
+// The server keeps challenges for 300 seconds; expire locally 30 seconds early.
+const CAPTCHA_FRESHNESS_MS = 270_000;
 
 type Translate = (key: string, fallback: string, values?: Record<string, string | number>) => string;
 
@@ -48,6 +50,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   const [inviteCode, setInviteCode] = useState("");
   const [captchaCode, setCaptchaCode] = useState("");
   const [captcha, setCaptcha] = useState<{ key: string; image: string } | null>(null);
+  const [captchaExpiresAt, setCaptchaExpiresAt] = useState(0);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -56,16 +59,84 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   const [switchHref, setSwitchHref] = useState(isRegister ? "/login" : "/register");
   const [kaiConfigured, setKaiConfigured] = useState<boolean | null>(null);
   const kaiExchangeStarted = useRef(false);
+  const captchaRefreshPromise = useRef<Promise<boolean> | null>(null);
+  const captchaReplacementNoticeRequested = useRef(false);
+  const captchaMounted = useRef(false);
+  const captchaContextActive = useRef(isRegister && method === "password");
+  const translate = useRef(t);
+  captchaContextActive.current = isRegister && method === "password";
+  translate.current = t;
 
-  function refreshCaptcha() {
+  const refreshCaptcha = useCallback((showReplacementNotice = false): Promise<boolean> => {
+    captchaReplacementNoticeRequested.current ||= showReplacementNotice;
+    if (captchaRefreshPromise.current) return captchaRefreshPromise.current;
     setCaptcha(null);
-    getAuthCaptcha()
-      .then(setCaptcha)
+    setCaptchaCode("");
+    setCaptchaExpiresAt(0);
+    captchaRefreshPromise.current = getAuthCaptcha()
+      .then((nextCaptcha) => {
+        if (!captchaMounted.current || !captchaContextActive.current) return false;
+        setCaptcha(nextCaptcha);
+        setCaptchaExpiresAt(Date.now() + CAPTCHA_FRESHNESS_MS);
+        if (captchaReplacementNoticeRequested.current) {
+          setMessageTone("info");
+          setMessage(translate.current("auth.captcha.refreshed", "验证码已更新，请重新输入。"));
+        }
+        return true;
+      })
       .catch(() => {
-        setMessageTone("error");
-        setMessage(t("auth.captcha.loadFailed", "验证码读取失败，请稍后重试"));
+        if (captchaMounted.current && captchaContextActive.current) {
+          setMessageTone("error");
+          setMessage(translate.current("auth.captcha.loadFailed", "验证码读取失败，请稍后重试"));
+        }
+        return false;
+      })
+      .finally(() => {
+        captchaRefreshPromise.current = null;
+        captchaReplacementNoticeRequested.current = false;
       });
+    return captchaRefreshPromise.current;
+  }, []);
+
+  function hasFreshCaptcha(now = Date.now()) {
+    const remaining = captchaExpiresAt - now;
+    return Boolean(captcha && remaining > 0 && remaining <= CAPTCHA_FRESHNESS_MS);
   }
+
+  useEffect(() => {
+    captchaMounted.current = true;
+    return () => { captchaMounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isRegister || method !== "password") return;
+    let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearExpiryTimer = () => {
+      if (expiryTimer) clearTimeout(expiryTimer);
+      expiryTimer = null;
+    };
+    const synchronizeCaptcha = () => {
+      clearExpiryTimer();
+      if (document.visibilityState !== "visible") return;
+      if (!captcha || !captchaExpiresAt) {
+        if (!captchaRefreshPromise.current) void refreshCaptcha();
+        return;
+      }
+      const remaining = captchaExpiresAt - Date.now();
+      if (remaining <= 0 || remaining > CAPTCHA_FRESHNESS_MS) {
+        void refreshCaptcha(Boolean(captchaCode.trim()));
+        return;
+      }
+      expiryTimer = setTimeout(synchronizeCaptcha, remaining);
+    };
+    const handleVisibilityChange = () => synchronizeCaptcha();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    synchronizeCaptcha();
+    return () => {
+      clearExpiryTimer();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [captcha, captchaCode, captchaExpiresAt, isRegister, method, refreshCaptcha]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -122,7 +193,6 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     getKaiAuthConfig()
       .then((config) => setKaiConfigured(config.configured))
       .catch(() => setKaiConfigured(false));
-    if (isRegister) refreshCaptcha();
   }, [isRegister]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -131,6 +201,10 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     if (isRegister && !acceptedTerms) {
       setMessageTone("error");
       setMessage(t("auth.termsRequired", "请先阅读并同意用户协议和隐私说明"));
+      return;
+    }
+    if (isRegister && method === "password" && !hasFreshCaptcha()) {
+      await refreshCaptcha(true);
       return;
     }
     setSubmitting(true);
@@ -224,7 +298,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
                 <span>{t("auth.captcha", "图形验证码")}</span>
                 <div className="auth-captcha-row">
                   <TextField.Root type="text" autoComplete="off" value={captchaCode} onChange={(event) => setCaptchaCode(event.target.value.toUpperCase().slice(0, 4))} minLength={4} maxLength={4} required />
-                  <button type="button" className="auth-captcha-image" onClick={refreshCaptcha} aria-label={t("auth.refreshCaptcha", "刷新图形验证码")}>
+                  <button type="button" className="auth-captcha-image" onClick={() => { void refreshCaptcha(Boolean(captchaCode.trim())); }} aria-label={t("auth.refreshCaptcha", "刷新图形验证码")}>
                     {captcha ? <img src={captcha.image} alt={t("auth.captcha.imageAlt", "图形验证码")} /> : <ArrowClockwise size={19} />}
                   </button>
                 </div>

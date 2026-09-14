@@ -582,6 +582,7 @@ const english: Record<string, string> = {
   "auth.password.hide": "Hide password",
   "auth.captcha.imageAlt": "Captcha image",
   "auth.captcha.loadFailed": "Could not load the captcha. Please try again later.",
+  "auth.captcha.refreshed": "The captcha was refreshed. Please enter the new code.",
   "auth.captcha.refreshFirst": "Refresh the captcha and try again",
   "auth.termsRequired": "Read and accept the Terms of Service and Privacy Notice first",
   "auth.phoneRule": "Use an 11-digit mainland China phone number and a password of at least 6 characters.",
