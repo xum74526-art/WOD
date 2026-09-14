@@ -41,8 +41,9 @@ function errorMessage(
   body: Partial<ApiResponse<unknown>>,
   fallback: string,
 ) {
-  const detail = typeof body.detail === 'string' ? body.detail : ''
-  return i18n.tr(body.msg || detail || i18n.t(fallback))
+  const message = typeof body.msg === 'string' ? body.msg.trim() : ''
+  const detail = typeof body.detail === 'string' ? body.detail.trim() : ''
+  return i18n.tr(message || detail || i18n.t(fallback))
 }
 
 export function request<T = unknown>(options: {
@@ -57,7 +58,6 @@ export function request<T = unknown>(options: {
 }): Promise<T> {
   const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
-  const localize = (message: unknown, fallback = '请求失败') => i18n.tr(message || i18n.t(fallback))
   return new Promise((resolve, reject) => {
     uni.request({
       url: API_BASE + options.url,
@@ -81,14 +81,14 @@ export function request<T = unknown>(options: {
           return
         }
         if (res.statusCode >= 400) {
-          const msg = localize(body.msg || body.detail, '请求失败')
-            || `${i18n.t('请求失败')} (${res.statusCode})`
+          const fallback = res.statusCode === 422 ? 'requestValidationFailed' : '请求失败'
+          const msg = errorMessage(i18n, body, fallback)
           if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
           reject(new ApiRequestError(msg, res.statusCode))
           return
         }
         if (body.code !== 0 || !('data' in body)) {
-          const msg = localize(body.msg)
+          const msg = errorMessage(i18n, body, '请求失败')
           if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
           reject(new Error(msg))
           return
