@@ -3142,11 +3142,13 @@
       "RegisterIn": {
         "properties": {
           "captcha_code": {
+            "maxLength": 6,
             "minLength": 1,
             "title": "Captcha Code",
             "type": "string"
           },
           "captcha_key": {
+            "maxLength": 64,
             "minLength": 1,
             "title": "Captcha Key",
             "type": "string"

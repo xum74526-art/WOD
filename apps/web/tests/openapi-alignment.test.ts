@@ -27,7 +27,15 @@ function bodySchema(path: string, method: "post" | "put") {
 
 test("authentication contract records Web origin and supports explicit Kai binding", () => {
   assert.ok(bodySchema("/api/auth/login", "post").properties?.client_id);
-  assert.ok(bodySchema("/api/auth/register", "post").properties?.client_id);
+  const registration = bodySchema("/api/auth/register", "post");
+  assert.ok(registration.properties?.client_id);
+  assert.deepEqual(
+    {
+      captchaKey: registration.properties?.captcha_key?.maxLength,
+      captchaCode: registration.properties?.captcha_code?.maxLength,
+    },
+    { captchaKey: 64, captchaCode: 6 },
+  );
   operation("/api/auth/kai/status", "get");
   assert.ok(bodySchema("/api/auth/kai/bind/start", "post").properties?.return_url);
   assert.deepEqual(bodySchema("/api/auth/kai/bind/exchange", "post").required, ["ticket"]);

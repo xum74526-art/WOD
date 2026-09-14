@@ -7,10 +7,12 @@ from threading import Barrier, Lock
 from unittest.mock import patch
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.core.rate_limit import limit_captcha
+from app.main import request_validation_handler
 from app.routers.auth import router as auth_router
 from app.utils import captcha
 
@@ -163,6 +165,49 @@ class CaptchaTests(unittest.TestCase):
         self.assertEqual(barrier_lock.entries, attempts)
         self.assertNotIn(key, captcha.CAPTCHA_STORE)
         self.assertFalse(captcha.verify_captcha(key, "E6FG"))
+
+    def test_oversized_inputs_are_rejected_without_consuming_a_challenge(self):
+        key = "f" * 24
+        captcha.CAPTCHA_STORE[key] = {
+            "code": "F7GH",
+            "expire": time.time() + 60,
+            "failures": 0,
+        }
+
+        self.assertFalse(captcha.verify_captcha(
+            key,
+            "X" * (captcha.CAPTCHA_CODE_INPUT_MAX_LENGTH + 1),
+        ))
+        self.assertFalse(captcha.verify_captcha(
+            "f" * (captcha.CAPTCHA_KEY_INPUT_MAX_LENGTH + 1),
+            "F7GH",
+        ))
+        self.assertEqual(captcha.CAPTCHA_STORE[key]["failures"], 0)
+        self.assertTrue(captcha.verify_captcha(key, "F7GH"))
+
+    def test_registration_validation_never_reflects_rejected_inputs(self):
+        api = FastAPI()
+        api.add_exception_handler(RequestValidationError, request_validation_handler)
+        api.include_router(auth_router)
+        private_password = "private-password-marker"
+        oversized_key = "key-marker-" + "a" * captcha.CAPTCHA_KEY_INPUT_MAX_LENGTH
+        oversized_code = "CODE123"
+
+        with patch("app.routers.auth.verify_captcha") as verify:
+            with TestClient(api) as client:
+                response = client.post("/api/auth/register", json={
+                    "phone": "13900000062",
+                    "password": private_password,
+                    "captcha_key": oversized_key,
+                    "captcha_code": oversized_code,
+                })
+
+        self.assertEqual(response.status_code, 422)
+        self.assertTrue(all("input" not in item for item in response.json()["detail"]))
+        self.assertNotIn(private_password, response.text)
+        self.assertNotIn(oversized_key, response.text)
+        self.assertNotIn(oversized_code, response.text)
+        verify.assert_not_called()
 
     def test_expired_captcha_is_removed(self):
         key = "expired-key"

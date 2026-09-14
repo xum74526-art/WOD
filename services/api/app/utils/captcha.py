@@ -10,6 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire, failures}
 CAPTCHA_EXPIRE = 300  # 5分钟过期
 CAPTCHA_MAX_FAILURES = 5
+CAPTCHA_KEY_INPUT_MAX_LENGTH = 64
+CAPTCHA_CODE_INPUT_MAX_LENGTH = 6
 _CAPTCHA_LOCK = Lock()
 _RNG = secrets.SystemRandom()
 _CAPTCHA_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -138,6 +140,13 @@ def create_captcha() -> dict:
 
 def verify_captcha(key: str, code: str) -> bool:
     """验证验证码，并限制同一个挑战可承受的错误次数。"""
+    if (
+        not key
+        or len(key) > CAPTCHA_KEY_INPUT_MAX_LENGTH
+        or not code
+        or len(code) > CAPTCHA_CODE_INPUT_MAX_LENGTH
+    ):
+        return False
     normalized_code = code.upper().strip()
     with _CAPTCHA_LOCK:
         _cleanup_locked(time.time())
