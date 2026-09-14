@@ -32,7 +32,7 @@ test('settings has one labeled contact row before deletion and logout controls',
   assert.doesNotMatch(page, /class="contact-phone"/)
   assert.match(page, /nav\('\/pages\/account-deletion\/index'\)/)
   assert.match(page, /@confirm="onLogout"/)
-  assert.match(page, /function onLogout\(\) \{\s+showLogout.value = false\s+userStore.logout\(\)\s+uni.reLaunch\(\{ url: '\/pages\/login\/index' \}\)/)
+  assert.match(page, /function onLogout\(\) \{\s+showLogout.value = false\s+void userStore.signOut\(\)\s+uni.reLaunch\(\{ url: '\/pages\/login\/index' \}\)/)
 })
 
 test('only login and settings pages contain platform contact entries', () => {

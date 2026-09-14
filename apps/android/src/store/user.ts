@@ -4,6 +4,7 @@ import { getToken, setToken, clearAuth } from '@/utils/auth'
 import { useAssetStore } from './asset'
 import * as userApi from '@/api/user'
 import type { UserInfo } from '@/api/user'
+import { signOutCurrentDevice } from '@/utils/session-logout'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(getToken())
@@ -81,8 +82,12 @@ export const useUserStore = defineStore('user', () => {
     uni.$emit('wod-auth-expired')
   }
 
+  function signOut() {
+    return signOutCurrentDevice(userApi.logoutCurrentSession, logout)
+  }
+
   const isLogin = computed(() => !!token.value)
   const canSwitchRole = computed(() => userInfo.value?.supplier_status === 'approved')
 
-  return { token, userInfo, role, isLogin, canSwitchRole, login, register, loginWithKaiTicket, bindKaiIdentity, fetchProfile, restore, switchRole, clearSession, logout }
+  return { token, userInfo, role, isLogin, canSwitchRole, login, register, loginWithKaiTicket, bindKaiIdentity, fetchProfile, restore, switchRole, clearSession, logout, signOut }
 })

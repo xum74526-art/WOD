@@ -98,11 +98,13 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
   async function logout() {
     try {
       await logoutCurrentUser();
+    } catch {
+      // Local sign-out remains available if server revocation cannot be
+      // confirmed; the BFF response has already expired the auth cookie.
+    } finally {
       setUser(null);
       setAccountOpen(false);
       window.location.assign("/");
-    } catch {
-      window.location.assign("/account/settings");
     }
   }
 

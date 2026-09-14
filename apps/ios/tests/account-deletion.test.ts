@@ -180,7 +180,7 @@ test('deletion endpoints use the canonical client and submit/status do not attac
   assert.match(api, /\/submit', method: 'POST', data: \{ ticket, confirm: true \}, auth: 'none'/)
   assert.match(api, /\/status', method: 'POST', data: \{ ticket \}, auth: 'none'/)
   assert.match(request, /options.auth === 'none' \? '' : getToken\(\)/)
-  assert.match(request, /if \(options.auth === 'none'\) \{\s+reject\(new ApiRequestError[\s\S]+?return\s+\}\s+expireSession/)
+  assert.match(request, /if \(options.auth === 'none' \|\| options.unauthorized === 'reject'\) \{\s+reject\(new ApiRequestError[\s\S]+?return\s+\}\s+expireSession/)
 })
 
 test('expired deletion capability rejects inline without bearer auth, session clearing or login redirect', async () => {

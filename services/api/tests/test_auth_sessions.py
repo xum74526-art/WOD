@@ -1,6 +1,7 @@
 import unittest
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -9,7 +10,9 @@ from app.core.config import settings
 from app.core.deps import get_current_auth_context
 from app.core.security import create_access_token, decode_access_token
 from app.db.base import Base
+from app.db.session import get_db
 from app.models import AuthSession, User  # noqa: F401
+from app.routers import auth as auth_router
 from app.services.auth_session import create_authenticated_session, resolve_client
 from app.utils.response import BizError
 
@@ -81,6 +84,52 @@ class AuthSessionTests(unittest.TestCase):
     def test_admin_source_requires_admin_role(self):
         with self.assertRaisesRegex(BizError, "仅允许管理员"):
             resolve_client("admin-client", self.user)
+
+    def test_logout_revokes_only_the_current_server_session(self):
+        current = create_authenticated_session(
+            self.db,
+            self.user,
+            platform="web",
+            client_id="web-client",
+            auth_method="password",
+        )
+        other = create_authenticated_session(
+            self.db,
+            self.user,
+            platform="android",
+            client_id="android-client",
+            auth_method="password",
+        )
+        app = FastAPI()
+        app.include_router(auth_router.router)
+
+        def db_override():
+            yield self.db
+
+        app.dependency_overrides[get_db] = db_override
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/auth/logout",
+                headers={"Authorization": f"Bearer {current.token}"},
+            )
+            anonymous = client.post("/api/auth/logout")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["data"],
+            {"logged_out": True, "session_revoked": True},
+        )
+        self.assertEqual(anonymous.status_code, 401)
+        self.db.expire_all()
+        self.assertIsNotNone(self.db.get(AuthSession, current.session.id).revoked_at)
+        self.assertIsNone(self.db.get(AuthSession, other.session.id).revoked_at)
+        with self.assertRaises(HTTPException) as caught:
+            get_current_auth_context(token=current.token, db=self.db)
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertEqual(
+            get_current_auth_context(token=other.token, db=self.db).session_id,
+            other.session.id,
+        )
 
 
 if __name__ == "__main__":

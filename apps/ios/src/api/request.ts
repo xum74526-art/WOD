@@ -52,6 +52,8 @@ export function request<T = unknown>(options: {
   silent?: boolean
   /** Only credential-independent endpoints, such as deletion capability receipts. */
   auth?: 'session' | 'none'
+  /** Explicit logout handles an invalid bearer locally without a second redirect. */
+  unauthorized?: 'expire-session' | 'reject'
 }): Promise<T> {
   const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
@@ -70,7 +72,7 @@ export function request<T = unknown>(options: {
       success: (res) => {
         const body = responseBody<T>(res.data)
         if (res.statusCode === 401 || body.code === 401) {
-          if (options.auth === 'none') {
+          if (options.auth === 'none' || options.unauthorized === 'reject') {
             reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
             return
           }

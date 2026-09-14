@@ -878,7 +878,16 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return apiSuccess({ user: authUser(result.body.data) });
   }
   if (path === "auth/logout" && request.method === "POST") {
-    const response = apiSuccess({ logged_out: true });
+    const result = await upstream(request, "/api/auth/logout", { method: "POST" });
+    const response = result.ok || result.status === 401
+      ? apiSuccess({
+          logged_out: true,
+          session_revoked: result.ok && Boolean(object(result.body.data).session_revoked),
+        })
+      : upstreamFailure(result);
+    // Local sign-out must remain available when the API is temporarily down.
+    // The upstream request has already captured the bearer needed to revoke
+    // the server session whenever it is reachable.
     clearAuthCookie(request, response);
     return response;
   }
@@ -1190,7 +1199,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   if (path.startsWith("canonical/")) {
     const canonicalPath = path.slice("canonical/".length);
     if (!canonicalPath || canonicalPath.includes("..")) return apiError("无效的业务 API 路径", 400);
-    if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
+    if (/^auth\/(?:login|logout|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
     if (request.method === "GET" && canonicalPath === "market/prices/latest") return publicMarketLatest(request);

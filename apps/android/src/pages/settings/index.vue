@@ -275,7 +275,7 @@ function onAbout() {
 
 function onLogout() {
   showLogout.value = false
-  userStore.logout()
+  void userStore.signOut()
   uni.reLaunch({ url: '/pages/login/index' })
 }
 </script>

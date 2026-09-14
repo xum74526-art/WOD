@@ -107,3 +107,28 @@ def create_authenticated_session(
         ),
         session=row,
     )
+
+
+def revoke_current_session(
+    db: Session,
+    *,
+    user_id: int,
+    session_id: str | None,
+) -> bool:
+    """Revoke only the server-owned session identified by the signed token."""
+    if not session_id:
+        # Legacy JWTs have no server-owned session that can be revoked without
+        # also invalidating every device through the user's auth version.
+        raise BizError("当前会话不支持单独退出，请重新登录", status_code=401)
+    revoked = db.query(AuthSession).filter(
+        AuthSession.id == session_id,
+        AuthSession.user_id == user_id,
+        AuthSession.revoked_at.is_(None),
+    ).update(
+        {AuthSession.revoked_at: utcnow()},
+        synchronize_session=False,
+    )
+    # A concurrent retry may already have revoked the row. Committing an
+    # unchanged transaction keeps logout idempotent at the mutation boundary.
+    db.commit()
+    return bool(revoked)

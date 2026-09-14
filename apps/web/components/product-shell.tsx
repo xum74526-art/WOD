@@ -114,7 +114,6 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutFailed, setLogoutFailed] = useState(false);
   const [gateFailed, setGateFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
@@ -152,15 +151,15 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    setLogoutFailed(false);
     try {
       await logoutCurrentUser();
+    } catch {
+      // The BFF still clears this device's HttpOnly cookie on an upstream
+      // failure, so local sign-out must finish without an unhandled rejection.
+    } finally {
       setUser(null);
       setMobileNavOpen(false);
       window.location.replace("/login");
-    } catch {
-      setLogoutFailed(true);
-      setLoggingOut(false);
     }
   }
 
@@ -209,7 +208,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
           {variant === "account" && user.role === "supplier" && <Link href="/supplier"><Storefront size={18}/>{locale === "en" ? "Back to Supplier Console" : "返回商家后台"}</Link>}
           {variant === "supplier" && <Link href="/account"><Users size={18}/>{locale === "en" ? "Buyer Workspace" : "买家工作台"}</Link>}
           {variant === "admin" && <Link href="/"><Storefront size={18}/>{locale === "en" ? "View Public Site" : "查看公开网站"}</Link>}
-          <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : logoutFailed ? (locale === "en" ? "Sign-out failed. Try again" : "退出失败，请重试") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
+          <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
           <button type="button" onClick={() => setNavCollapsed((value) => !value)} aria-expanded={!navCollapsed} title={navCollapsed ? (locale === "en" ? "Expand navigation" : "展开导航") : (locale === "en" ? "Collapse navigation" : "收起导航")}><SidebarSimple size={18}/><span>{navCollapsed ? (locale === "en" ? "Expand navigation" : "展开导航") : (locale === "en" ? "Collapse navigation" : "收起导航")}</span></button>
         </div>
       </aside>
@@ -248,7 +247,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
             </nav>
             <footer>
               <Link href="/"><ArrowSquareOut size={18}/><span>{t("workspace.publicSite", "公开网站")}</span></Link>
-              <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : logoutFailed ? (locale === "en" ? "Sign-out failed. Try again" : "退出失败，请重试") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
+              <button type="button" disabled={loggingOut} onClick={() => void logout()}><SignOut size={18}/><span aria-live="polite">{loggingOut ? (locale === "en" ? "Signing out…" : "正在退出…") : locale === "en" ? "Sign out or switch account" : "退出或更换账号"}</span></button>
             </footer>
           </aside>
         </div>}

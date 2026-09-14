@@ -18,7 +18,11 @@ from app.models.wallet import Wallet
 from app.models.invite import InviteCode, InviteRecord
 from app.schemas.auth import KaiBindStartIn, KaiStartIn, KaiTicketIn
 from app.schemas.user import LoginIn, RegisterIn, UserOut
-from app.services.auth_session import create_authenticated_session, resolve_client
+from app.services.auth_session import (
+    create_authenticated_session,
+    resolve_client,
+    revoke_current_session,
+)
 from app.utils.response import success, BizError
 from app.utils.captcha import create_captcha, verify_captcha
 from app.services import kai_auth
@@ -114,6 +118,19 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         auth_method="password",
     )
     return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+
+
+@router.post("/logout")
+def logout(
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    revoked = revoke_current_session(
+        db,
+        user_id=context.user.id,
+        session_id=context.session_id,
+    )
+    return success({"logged_out": True, "session_revoked": revoked})
 
 
 @router.get("/kai/config")

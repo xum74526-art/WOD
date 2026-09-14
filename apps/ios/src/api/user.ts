@@ -24,6 +24,12 @@ export function register(username: string, phone: string, password: string, invi
   })
 }
 
+export function logoutCurrentSession() {
+  return request<{ logged_out: boolean; session_revoked: boolean }>({
+    url: '/auth/logout', method: 'POST', silent: true, unauthorized: 'reject',
+  })
+}
+
 export interface KaiAuthConfig {
   configured: boolean
   issuer: string
