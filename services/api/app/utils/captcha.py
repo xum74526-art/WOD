@@ -6,12 +6,14 @@ import io
 import time
 import hashlib
 import os
+from threading import Lock
 
 # 简易图形验证码生成（纯Python，不依赖PIL）
 # 生成SVG格式的验证码图片，转base64
 
 CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire}
 CAPTCHA_EXPIRE = 300  # 5分钟过期
+_CAPTCHA_LOCK = Lock()
 
 
 def _generate_code(length: int = 4) -> str:
@@ -68,32 +70,36 @@ def create_captcha() -> dict:
     key = hashlib.md5((code + str(time.time()) + os.urandom(8).hex()).encode()).hexdigest()[:24]
     svg = _make_svg(code)
     svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("utf-8")
-    # 存储
-    CAPTCHA_STORE[key] = {"code": code, "expire": time.time() + CAPTCHA_EXPIRE}
-    # 清理过期
-    _cleanup()
+    now = time.time()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(now)
+        CAPTCHA_STORE[key] = {"code": code, "expire": now + CAPTCHA_EXPIRE}
     return {"key": key, "image": f"data:image/svg+xml;base64,{svg_b64}"}
 
 
 def verify_captcha(key: str, code: str) -> bool:
     """验证验证码"""
-    _cleanup()
-    item = CAPTCHA_STORE.get(key)
-    if not item:
-        return False
-    if time.time() > item["expire"]:
+    normalized_code = code.upper().strip()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(time.time())
+        item = CAPTCHA_STORE.get(key)
+        if not item:
+            return False
+        # 不区分大小写；正确验证码仅允许被消费一次。
+        if item["code"].upper() != normalized_code:
+            return False
         del CAPTCHA_STORE[key]
-        return False
-    # 不区分大小写
-    if item["code"].upper() == code.upper().strip():
-        del CAPTCHA_STORE[key]  # 验证后删除
         return True
-    return False
 
 
 def _cleanup():
     """清理过期验证码"""
-    now = time.time()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(time.time())
+
+
+def _cleanup_locked(now: float) -> None:
+    """在持有验证码锁时清理过期记录。"""
     expired = [k for k, v in CAPTCHA_STORE.items() if now > v["expire"]]
     for k in expired:
-        del CAPTCHA_STORE[k]
+        CAPTCHA_STORE.pop(k, None)
