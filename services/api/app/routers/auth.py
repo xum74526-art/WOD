@@ -2,7 +2,7 @@ from decimal import Decimal
 import random, string
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -41,8 +41,11 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/captcha", dependencies=[Depends(limit_captcha)])
-def get_captcha():
+def get_captcha(response: Response):
     """获取图形验证码"""
+    response.headers["Cache-Control"] = "private, no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return success(create_captcha())
 
 

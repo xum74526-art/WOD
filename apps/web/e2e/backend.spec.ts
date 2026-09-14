@@ -5,6 +5,7 @@ const E2E_CAPTCHA_CODE = process.env.WEB_E2E_CAPTCHA_CODE || "A2BC";
 async function register(request: APIRequestContext) {
   const captchaResponse = await request.get("/api/v1/auth/captcha");
   expect(captchaResponse.ok()).toBeTruthy();
+  expect(captchaResponse.headers()["cache-control"]).toContain("no-store");
   const captcha = (await captchaResponse.json()).data as { key: string; image: string };
   expect(captcha.image).toMatch(/^data:image\/png;base64,/);
   const phone = `137${String(Date.now()).slice(-8)}`;
@@ -20,6 +21,20 @@ async function register(request: APIRequestContext) {
   expect(response.ok()).toBeTruthy();
   return phone;
 }
+
+test("Web BFF never caches or reuses a captcha challenge", async ({ request }) => {
+  const firstResponse = await request.get("/api/v1/auth/captcha");
+  const secondResponse = await request.get("/api/v1/auth/captcha");
+
+  expect(firstResponse.ok()).toBeTruthy();
+  expect(secondResponse.ok()).toBeTruthy();
+  expect(firstResponse.headers()["cache-control"]).toContain("no-store");
+  expect(secondResponse.headers()["cache-control"]).toContain("no-store");
+
+  const first = (await firstResponse.json()).data as { key: string };
+  const second = (await secondResponse.json()).data as { key: string };
+  expect(second.key).not.toBe(first.key);
+});
 
 test("Web BFF 健康检查、公开商品与旧模块停用状态", async ({ request }) => {
   const health = await request.get("/api/v1/health");

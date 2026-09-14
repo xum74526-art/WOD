@@ -6,8 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
 from unittest.mock import patch
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from PIL import Image
 
+from app.core.rate_limit import limit_captcha
+from app.routers.auth import router as auth_router
 from app.utils import captcha
 
 
@@ -56,6 +60,21 @@ class CaptchaTests(unittest.TestCase):
 
         self.assertTrue(captcha.verify_captcha(challenge["key"], "a2bc"))
         self.assertFalse(captcha.verify_captcha(challenge["key"], "A2BC"))
+
+    def test_endpoint_prevents_clients_and_proxies_from_caching_a_challenge(self):
+        api = FastAPI()
+        api.include_router(auth_router)
+        api.dependency_overrides[limit_captcha] = lambda: None
+
+        with TestClient(api) as client:
+            response = client.get("/api/auth/captcha")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers["cache-control"])
+        self.assertIn("no-cache", response.headers["cache-control"])
+        self.assertEqual(response.headers["pragma"], "no-cache")
+        self.assertEqual(response.headers["expires"], "0")
+        self.assertTrue(response.json()["data"]["image"].startswith("data:image/png;base64,"))
 
     def test_code_uses_only_unambiguous_characters(self):
         for length in (1, 4, 6):
