@@ -82,6 +82,67 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'recovery email binding',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/mobile-account-settings.tsx',
+        patterns: [
+          'getRecoveryEmailStatus()',
+          'requestRecoveryEmailVerification(recoveryForm.email.trim(), recoveryForm.currentPassword)',
+          'settings.recoveryEmailUnknown',
+          'recoveryConfig?.email_enabled === false',
+        ],
+      },
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/api.ts',
+        patterns: [
+          '/api/v1/user/recovery-email',
+          '/api/v1/user/recovery-email/request-verification',
+        ],
+      },
+      {
+        client: 'Android',
+        file: 'apps/android/src/pages/recovery-email/index.vue',
+        patterns: [
+          'Promise.allSettled',
+          'recoveryEmailServiceUnknown',
+          'const submittedPassword = currentPassword.value',
+          'onUnload(leavePage)',
+        ],
+      },
+      {
+        client: 'Android settings',
+        file: 'apps/android/src/pages/settings/index.vue',
+        patterns: [
+          'getRecoveryEmailStatus(true)',
+          "uni.$on('wod-session-changed', onSessionChanged)",
+          "'recoveryEmailStatusUnavailable'",
+        ],
+      },
+      {
+        client: 'iOS',
+        file: 'apps/ios/src/pages/recovery-email/index.vue',
+        patterns: [
+          'Promise.allSettled',
+          'recoveryEmailServiceUnknown',
+          'const submittedPassword = currentPassword.value',
+          'onUnload(leavePage)',
+        ],
+      },
+      {
+        client: 'iOS settings',
+        file: 'apps/ios/src/pages/settings/index.vue',
+        patterns: [
+          'getRecoveryEmailStatus(true)',
+          "uni.$on('wod-session-changed', onSessionChanged)",
+          "'recoveryEmailStatusUnavailable'",
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []
@@ -106,6 +167,9 @@ const mirroredMobileFiles = [
   'src/api/buy-request.ts',
   'src/pages/buy-request/index.vue',
   'tests/buy-request-seller-view.test.ts',
+  'src/api/account-recovery.ts',
+  'src/pages/recovery-email/index.vue',
+  'tests/recovery-email-binding.test.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')

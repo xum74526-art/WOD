@@ -44,9 +44,9 @@
         </view>
         <view class="menu-item" @tap="onRecoveryEmail">
           <view class="mi-left">
-            <AppIcon name="verified" :size="40" />
+            <AppIcon name="mail" :size="40" />
             <view>
-              <text class="mi-text">{{ t('recoveryEmail') }}</text>
+              <text class="mi-text">{{ t('recoveryEmailTitle') }}</text>
               <text class="binding-hint">{{ t(recoveryEmailHintKey) }}</text>
             </view>
           </view>
@@ -145,20 +145,15 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { onHide, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import {
-  getKaiBindingStatus,
-  getRecoveryEmailStatus,
-  startKaiBinding,
-  type KaiBindingStatus,
-  type RecoveryEmailStatus,
-} from '@/api/user'
+import { getKaiBindingStatus, startKaiBinding, type KaiBindingStatus } from '@/api/user'
+import { getRecoveryEmailStatus, type RecoveryEmailStatus } from '@/api/account-recovery'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import LanguageSelectorSheet from '@/components/LanguageSelectorSheet.vue'
-import { callContactPhone } from '@/utils/contact-phone'
 import { navigateTo as nav } from '@/utils/nav'
+import { callContactPhone } from '@/utils/contact-phone'
 import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
@@ -192,11 +187,11 @@ const notificationSummary = computed(() => notificationStore.unread > 0
   : t('inAppNotificationsEnabledShort'))
 const recoveryEmailHintKey = computed(() => recoveryEmailLoadFailed.value
   ? 'recoveryEmailLoadFailed'
-  : recoveryEmail.value?.verified ? 'recoveryEmailBoundHint' : 'recoveryEmailUnboundHint')
+  : recoveryEmail.value?.verified ? 'recoveryEmailVerifiedHint' : 'recoveryEmailNotBoundHint')
 const recoveryEmailStatusKey = computed(() => {
   if (recoveryEmailLoading.value) return 'loading'
   if (recoveryEmailLoadFailed.value) return 'recoveryEmailStatusUnavailable'
-  return recoveryEmail.value?.verified ? 'recoveryEmailBound' : 'recoveryEmailUnbound'
+  return recoveryEmail.value?.verified ? 'recoveryEmailVerified' : 'recoveryEmailNotBound'
 })
 const appVersion = getInstalledAppVersion().name
 

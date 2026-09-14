@@ -42,15 +42,18 @@
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="nav('/pages/recovery-email/index')">
+        <view class="menu-item" @tap="onRecoveryEmail">
           <view class="mi-left">
             <AppIcon name="mail" :size="40" />
             <view>
               <text class="mi-text">{{ t('recoveryEmailTitle') }}</text>
-              <text class="binding-hint">{{ t('recoveryEmailMenuHint') }}</text>
+              <text class="binding-hint">{{ t(recoveryEmailHintKey) }}</text>
             </view>
           </view>
-          <AppIcon name="chevron" :size="36" />
+          <view class="mi-right">
+            <text class="mi-sub" :class="{ bound: recoveryEmail?.verified && !recoveryEmailLoadFailed }">{{ t(recoveryEmailStatusKey) }}</text>
+            <AppIcon name="chevron" :size="36" />
+          </view>
         </view>
         <view class="menu-item" @tap="onHelp">
           <view class="mi-left">
@@ -140,9 +143,10 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onHide, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { getKaiBindingStatus, startKaiBinding, type KaiBindingStatus } from '@/api/user'
+import { getRecoveryEmailStatus, type RecoveryEmailStatus } from '@/api/account-recovery'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
@@ -166,6 +170,11 @@ const showLanguage = ref(false)
 const kaiBinding = ref<KaiBindingStatus | null>(null)
 const kaiBindingLoading = ref(false)
 const updateChecking = ref(false)
+const recoveryEmail = ref<RecoveryEmailStatus | null>(null)
+const recoveryEmailLoading = ref(false)
+const recoveryEmailLoadFailed = ref(false)
+let recoveryEmailActive = false
+let recoveryEmailGeneration = 0
 const themeOptions: Array<{ mode: ThemeMode; key: string }> = [
   { mode: 'system', key: 'themeSystem' },
   { mode: 'light', key: 'themeLight' },
@@ -176,6 +185,14 @@ const languageLabel = computed(() => languageOption(i18n.lang).label)
 const notificationSummary = computed(() => notificationStore.unread > 0
   ? t('unreadNotificationCount', { count: notificationStore.unread })
   : t('inAppNotificationsEnabledShort'))
+const recoveryEmailHintKey = computed(() => recoveryEmailLoadFailed.value
+  ? 'recoveryEmailLoadFailed'
+  : recoveryEmail.value?.verified ? 'recoveryEmailVerifiedHint' : 'recoveryEmailNotBoundHint')
+const recoveryEmailStatusKey = computed(() => {
+  if (recoveryEmailLoading.value) return 'loading'
+  if (recoveryEmailLoadFailed.value) return 'recoveryEmailStatusUnavailable'
+  return recoveryEmail.value?.verified ? 'recoveryEmailVerified' : 'recoveryEmailNotBound'
+})
 const appVersion = getInstalledAppVersion().name
 
 function onNotify() {
@@ -192,10 +209,44 @@ async function refreshKaiBinding() {
     kaiBindingLoading.value = false
   }
 }
+async function refreshRecoveryEmail() {
+  if (!recoveryEmailActive || !userStore.isLogin) return
+  const generation = ++recoveryEmailGeneration
+  const sessionToken = userStore.token
+  const sessionUserId = userStore.userInfo?.id ?? null
+  recoveryEmailLoading.value = true
+  recoveryEmailLoadFailed.value = false
+  const isCurrentRequest = () => recoveryEmailActive
+    && generation === recoveryEmailGeneration
+    && userStore.isLogin
+    && userStore.token === sessionToken
+    && (sessionUserId === null || (userStore.userInfo?.id ?? null) === sessionUserId)
+  try {
+    const nextStatus = await getRecoveryEmailStatus(true)
+    if (!isCurrentRequest()) return
+    recoveryEmail.value = nextStatus
+  } catch {
+    if (!isCurrentRequest()) return
+    recoveryEmail.value = null
+    recoveryEmailLoadFailed.value = true
+  } finally {
+    if (isCurrentRequest()) recoveryEmailLoading.value = false
+  }
+}
 onShow(() => {
+  recoveryEmailActive = true
   notificationStore.refresh(true).catch(() => {})
   void refreshKaiBinding()
+  void refreshRecoveryEmail()
 })
+function deactivateRecoveryEmail() {
+  recoveryEmailActive = false
+  recoveryEmailGeneration += 1
+  recoveryEmail.value = null
+  recoveryEmailLoading.value = false
+  recoveryEmailLoadFailed.value = false
+}
+onHide(deactivateRecoveryEmail)
 function openKaiAuthorization(url: string) {
   // #ifdef H5
   window.location.assign(url)
@@ -226,8 +277,20 @@ function onKaiBinding() {
 function onKaiBindingChanged() {
   void refreshKaiBinding()
 }
+function onSessionChanged() {
+  recoveryEmailGeneration += 1
+  recoveryEmail.value = null
+  recoveryEmailLoading.value = false
+  recoveryEmailLoadFailed.value = false
+  if (recoveryEmailActive) void refreshRecoveryEmail()
+}
 uni.$on('wod-kai-binding-changed', onKaiBindingChanged)
-onUnmounted(() => uni.$off('wod-kai-binding-changed', onKaiBindingChanged))
+uni.$on('wod-session-changed', onSessionChanged)
+onUnmounted(() => {
+  deactivateRecoveryEmail()
+  uni.$off('wod-kai-binding-changed', onKaiBindingChanged)
+  uni.$off('wod-session-changed', onSessionChanged)
+})
 function onTheme() {
   uni.showActionSheet({
     title: t('chooseTheme'),
@@ -246,6 +309,9 @@ function onLanguage() {
 }
 function onPassword() {
   nav('/pages/password/index')
+}
+function onRecoveryEmail() {
+  nav('/pages/recovery-email/index')
 }
 function onHelp() {
   uni.showModal({

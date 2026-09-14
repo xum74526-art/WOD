@@ -46,6 +46,7 @@ const PATHS: Record<string, string> = {
   // 银行卡
   'bank-card': 'M3 6h18v12H3zM3 10h18M7 15h4',
   // 实名认证
+  mail: 'M3 5h18v14H3zM3 7l9 7 9-7',
   verified: 'M4 5h16v14H4zM8 9a2 2 0 100-4 2 2 0 000 4zM6 16a3 3 0 016 0M14 11l2 2 4-4',
   // 采购
   procurement: 'M3 4h2l2 11h10l3-8H6M9 20h.01M17 20h.01',
