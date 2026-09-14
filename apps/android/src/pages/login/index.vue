@@ -40,8 +40,8 @@
             <text class="flabel">{{ t('k_b19c3a24') }}</text>
             <view class="captcha-row">
               <input class="finput captcha-input" v-model="form.captcha_code" :placeholder="t('k_8001cfd7')" placeholder-class="ph" maxlength="6" />
-              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha" mode="aspectFit" />
-              <view v-else class="captcha-placeholder" @tap="refreshCaptcha">{{ t('k_3ca790b3') }}</view>
+              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha()" mode="aspectFit" />
+              <view v-else class="captcha-placeholder" @tap="refreshCaptcha()">{{ t('k_3ca790b3') }}</view>
             </view>
           </view>
           <view class="field">
@@ -116,6 +116,7 @@ const authMethod = ref<'phone' | 'kai'>('phone')
 const form = reactive({ username: '', phone: '', password: '', invite_code: '', captcha_code: '' })
 const captchaImg = ref('')
 const captchaKey = ref('')
+let captchaRefreshPromise: Promise<void> | null = null
 const showPwd = ref(false)
 const agree = ref(false)
 const submitting = ref(false)
@@ -147,12 +148,23 @@ function openAccountRecovery() {
   uni.navigateTo({ url: '/pages/forgot-password/index' })
 }
 
-async function refreshCaptcha() {
-  try {
-    const res = await request<{ key: string; image: string }>({ url: '/auth/captcha' })
-    captchaKey.value = res.key
-    captchaImg.value = res.image
-  } catch {}
+async function refreshCaptcha(silent = false) {
+  if (captchaRefreshPromise) return captchaRefreshPromise
+  captchaKey.value = ''
+  captchaImg.value = ''
+  form.captcha_code = ''
+  captchaRefreshPromise = (async () => {
+    try {
+      const res = await request<{ key: string; image: string }>({ url: '/auth/captcha', silent })
+      captchaKey.value = res.key
+      captchaImg.value = res.image
+    } catch {
+      // Keep the captcha empty so an old or uncertain challenge cannot be submitted.
+    } finally {
+      captchaRefreshPromise = null
+    }
+  })()
+  return captchaRefreshPromise
 }
 
 async function checkKaiConfig() {
@@ -340,16 +352,19 @@ async function submit() {
   if (submitting.value) return
   if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
   if (authMethod.value === 'kai') { await submitKai(); return }
+  const isRegistration = mode.value === 'register'
   if (!form.phone || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
-  if (mode.value === 'register' && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
-  if (mode.value === 'register' && !form.captcha_code) { uni.showToast({ title: t('请输入验证码'), icon: 'none' }); return }
+  if (isRegistration && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
+  if (isRegistration && (!captchaKey.value || !form.captcha_code)) { uni.showToast({ title: t('请输入验证码'), icon: 'none' }); return }
   submitting.value = true
   try {
-    if (mode.value === 'login') await userStore.login(form.phone, form.password)
+    if (!isRegistration) await userStore.login(form.phone, form.password)
     else await userStore.register(form.username, form.phone, form.password, form.invite_code || undefined, captchaKey.value, form.captcha_code)
     uni.showToast({ title: t('success'), icon: 'success' })
     setTimeout(enterAuthenticatedApp, 500)
-  } catch { /* request toast */ }
+  } catch {
+    if (isRegistration) await refreshCaptcha(true)
+  }
   submitting.value = false
 }
 
