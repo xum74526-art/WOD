@@ -17,6 +17,7 @@ from app.core.rate_limit import (
     limit_register_account,
     limit_register_request,
 )
+from app.core.request_body_limit import RegistrationBodyLimitRoute
 from app.db.session import get_db
 from app.models.external_identity import ExternalIdentity
 from app.models.ledger import Ledger
@@ -60,7 +61,6 @@ def _ensure_invite_code(user_id: int, db: Session) -> str:
     return code
 
 
-@router.post("/register")
 def register(data: RegisterIn, db: Session = Depends(get_db)):
     limit_register_request()
     # Reject an already-full phone bucket before consuming a one-time captcha,
@@ -126,6 +126,19 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
         db.rollback()
         raise
     return success({"token": issued.token, "user": user_payload})
+
+
+router.add_api_route(
+    "/register",
+    register,
+    methods=["POST"],
+    route_class_override=RegistrationBodyLimitRoute,
+    responses={
+        413: {
+            "description": "Registration request body exceeds 16 KiB",
+        },
+    },
+)
 
 
 @router.post("/login")

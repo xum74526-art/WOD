@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 type SchemaReference = { $ref?: string; anyOf?: SchemaReference[] };
-type Operation = { parameters?: Array<{ name: string }>; requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: SchemaReference } } } };
+type Operation = { parameters?: Array<{ name: string }>; requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: SchemaReference } } }; responses?: Record<string, unknown> };
 type PropertySchema = { type?: string; minLength?: number; maxLength?: number; pattern?: string; anyOf?: PropertySchema[] };
 type OpenApi = { paths: Record<string, Record<string, Operation>>; components: { schemas: Record<string, { properties?: Record<string, PropertySchema>; required?: string[] }> } };
 const contractPath = fileURLToPath(new URL("../../../packages/api-contracts/openapi.json", import.meta.url));
@@ -36,6 +36,7 @@ test("authentication contract records Web origin and supports explicit Kai bindi
     },
     { captchaKey: 64, captchaCode: 6 },
   );
+  assert.ok(operation("/api/auth/register", "post").responses?.["413"]);
   operation("/api/auth/kai/status", "get");
   assert.ok(bodySchema("/api/auth/kai/bind/start", "post").properties?.return_url);
   assert.deepEqual(bodySchema("/api/auth/kai/bind/exchange", "post").required, ["ticket"]);

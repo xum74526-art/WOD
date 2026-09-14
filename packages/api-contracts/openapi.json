@@ -5619,6 +5619,9 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "Registration request body exceeds 16 KiB"
+          },
           "422": {
             "content": {
               "application/json": {

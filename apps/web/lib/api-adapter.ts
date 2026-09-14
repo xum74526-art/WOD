@@ -10,6 +10,12 @@ import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
 import { safeReturnPath } from "@/lib/auth-navigation";
 import { DELETION_SESSION_COOKIE, deletionMarkerMatchesTicket, deletionMayClearSession, deletionSessionMarker } from "@/lib/server/account-deletion-session";
 import {
+  readBoundedJsonBody,
+  REGISTRATION_BODY_MAX_BYTES,
+  REGISTRATION_BODY_TOO_LARGE_MESSAGE,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-json-body";
+import {
   callCanonicalApi as upstream,
   callCanonicalMultipart as upstreamMultipart,
   canonicalErrorMessage,
@@ -134,13 +140,16 @@ function sameOrigin(request: NextRequest) {
   }
 }
 
-async function requestBody(request: NextRequest): Promise<JsonObject> {
+async function requestBody(request: NextRequest, maxBytes?: number): Promise<JsonObject> {
   if (!isMutation(request.method)) return {};
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) return {};
   try {
-    return object(await request.json());
-  } catch {
+    return object(maxBytes === undefined
+      ? await request.json()
+      : await readBoundedJsonBody(request, maxBytes));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) throw error;
     return {};
   }
 }
@@ -783,7 +792,19 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const result = await upstreamMultipart(request, `/api/finance/withdrawals/${markPaid[1]}/mark-paid`, ["receipt"], "打款凭证上传失败，请稍后重试", ["bank_reference", "paid_amount_cny", "paid_at", "payee_confirmed", "reveal_token"]);
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
-  const body = await requestBody(request);
+  const isRegistrationRequest = request.method === "POST" && (
+    path === "auth/password/register"
+    || path === "canonical/auth/register"
+  );
+  let body: JsonObject;
+  try {
+    body = await requestBody(request, isRegistrationRequest ? REGISTRATION_BODY_MAX_BYTES : undefined);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return apiError(REGISTRATION_BODY_TOO_LARGE_MESSAGE, 413, "payload_too_large");
+    }
+    throw error;
+  }
 
   if (path.startsWith("canonical/user/account-deletion")) {
     const matched = path.match(/^canonical\/user\/account-deletion\/(eligibility|verify|submit|status)$/);
