@@ -63,23 +63,35 @@ test('registration fields enforce the canonical input lengths', () => {
 
 test('registration validates and normalizes fields before captcha and network work', () => {
   const handler = loginSource.match(/async function submit\(\) \{([\s\S]*?)\n\}/)?.[1] || ''
+  const phoneGuard = handler.indexOf("t('请输入正确手机号')")
   const usernameGuard = handler.indexOf("t('registrationUsernameLength')")
   const passwordGuard = handler.indexOf("t('registrationPasswordLength')")
   const inviteGuard = handler.indexOf("t('registrationInviteCodeLength')")
   const captchaGuard = handler.indexOf('!hasFreshCaptcha()')
+  const loginCall = handler.indexOf('userStore.login(')
   const registerCall = handler.indexOf('userStore.register(')
 
+  assert.match(handler, /const normalizedPhone = form\.phone\.trim\(\)/)
   assert.match(handler, /const registrationUsername = form\.username\.trim\(\)/)
   assert.match(handler, /const registrationInviteCode = form\.invite_code\.trim\(\)\.toUpperCase\(\)/)
-  assert.ok(usernameGuard >= 0)
+  assert.ok(phoneGuard >= 0)
+  assert.ok(usernameGuard > phoneGuard)
   assert.ok(passwordGuard > usernameGuard)
   assert.ok(inviteGuard > passwordGuard)
   assert.ok(captchaGuard > inviteGuard)
+  assert.ok(loginCall > phoneGuard)
   assert.ok(registerCall > captchaGuard)
+  assert.match(handler, /\^1\\d\{10\}\$/)
   assert.match(handler, /registrationUsername\.length < 2 \|\| registrationUsername\.length > 64/)
   assert.match(handler, /form\.password\.length < 6 \|\| form\.password\.length > 64/)
   assert.match(handler, /registrationInviteCode\.length > 16/)
-  assert.match(handler, /userStore\.register\(registrationUsername, form\.phone, form\.password, registrationInviteCode \|\| undefined/)
+  assert.match(handler, /userStore\.login\(normalizedPhone, form\.password\)/)
+  assert.match(handler, /userStore\.register\(registrationUsername, normalizedPhone, form\.password, registrationInviteCode \|\| undefined/)
+})
+
+test('phone validation guidance is localized for every supported language mode', () => {
+  assert.match(loginSource, /t\('请输入正确手机号'\)/)
+  assert.match(localeSource, /'请输入正确手机号': 'Enter a valid phone number'/)
 })
 
 test('registration length guidance is available in Chinese and English', () => {
