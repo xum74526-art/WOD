@@ -192,7 +192,7 @@ function trustedBilibiliVideoId(source: CommunityVideoSource): string {
   return BILIBILI_VIDEO_ID.test(videoId) ? videoId : ''
 }
 
-type CommunityVideoJsonRequest = (
+export type CommunityVideoJsonRequest = (
   url: string,
   headers: Record<string, string>,
 ) => Promise<unknown>
@@ -218,26 +218,10 @@ function trustedStreamUrl(source: CommunityVideoSource, value: unknown): string 
   return trustedSuffixes.some(suffix => authority.endsWith(suffix)) ? candidate : ''
 }
 
-function requestCommunityVideoJson(url: string, headers: Record<string, string>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    uni.request({
-      url,
-      method: 'GET',
-      timeout: NATIVE_VIDEO_LOAD_TIMEOUT_MS,
-      header: headers,
-      success: (response) => {
-        if (response.statusCode >= 200 && response.statusCode < 300) resolve(response.data)
-        else reject(new Error(`Bilibili HTTP ${response.statusCode}`))
-      },
-      fail: reject,
-    })
-  })
-}
-
 /** Resolve a progressive MP4 so iOS can use its native media player. */
 export async function resolveCommunityVideoStreamUrl(
   source: CommunityVideoSource,
-  requestJson: CommunityVideoJsonRequest = requestCommunityVideoJson,
+  requestJson: CommunityVideoJsonRequest,
 ): Promise<string> {
   const videoId = trustedBilibiliVideoId(source)
   if (!videoId) return ''
@@ -603,10 +587,15 @@ export async function openCommunityVideo(
   source: CommunityVideoSource,
   title: string,
   onError?: CommunityVideoFailureHandler,
+  requestJson?: CommunityVideoJsonRequest,
 ): Promise<boolean> {
   // #ifdef APP-PLUS
+  if (!requestJson) {
+    reportFailure(onError, 'player-load-failed', '视频请求通道不可用')
+    return false
+  }
   try {
-    const streamUrl = await resolveCommunityVideoStreamUrl(source)
+    const streamUrl = await resolveCommunityVideoStreamUrl(source, requestJson)
     if (!streamUrl) {
       reportFailure(onError, 'player-load-failed', '无法取得视频播放地址')
       return false
