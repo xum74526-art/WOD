@@ -1,6 +1,7 @@
 import { getToken, clearAuth } from '@/utils/auth'
 import { API_BASE } from '@/utils/config'
 import { useI18nStore } from '@/store/i18n'
+import { stageAuthReturnPath } from '@/utils/auth-return-path'
 
 export interface ApiResponse<T = unknown> {
   code: number
@@ -31,6 +32,7 @@ function expireSession(i18n: ReturnType<typeof useI18nStore>, requestToken: stri
   // clear the newer session.
   if (getToken() !== requestToken || expiringToken === requestToken) return
   expiringToken = requestToken
+  stageAuthReturnPath()
   clearAuth()
   uni.$emit('wod-auth-expired')
   uni.reLaunch({

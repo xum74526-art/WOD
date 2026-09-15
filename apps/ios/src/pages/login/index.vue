@@ -103,6 +103,7 @@ import {
   type KaiAuthCallback,
 } from '@/utils/kai-auth-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
+import { consumeAuthReturnPath } from '@/utils/auth-return-path'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
 
@@ -343,9 +344,21 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   }
 }
 
+let authenticatedNavigationStarted = false
+
 function enterAuthenticatedApp() {
+  if (authenticatedNavigationStarted) return
+  authenticatedNavigationStarted = true
+  const returnPath = consumeAuthReturnPath()
   if (hasInquiryRequestPrefill()) {
     uni.reLaunch({ url: '/pages/buy-request/index?compose=1' })
+    return
+  }
+  if (returnPath) {
+    uni.reLaunch({
+      url: returnPath,
+      fail: () => uni.reLaunch({ url: '/pages/index/index' }),
+    })
     return
   }
   uni.switchTab({

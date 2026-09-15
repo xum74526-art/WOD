@@ -342,6 +342,41 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'safe post-authentication return navigation',
+    evidence: [
+      {
+        client: 'Web gate',
+        file: 'apps/web/components/product-shell.tsx',
+        patterns: ['loginHref(locationReturnPath(window.location))'],
+      },
+      {
+        client: 'Web login',
+        file: 'apps/web/components/auth-panel.tsx',
+        patterns: ['normalizeReturnPath(requestedReturnTo)', 'window.location.assign(destination)'],
+      },
+      {
+        client: 'Android request',
+        file: 'apps/android/src/api/request.ts',
+        patterns: ['getToken() !== requestToken', 'stageAuthReturnPath()', 'expireSession(i18n, token)'],
+      },
+      {
+        client: 'Android login',
+        file: 'apps/android/src/pages/login/index.vue',
+        patterns: ['consumeAuthReturnPath()', 'authenticatedNavigationStarted', 'url: returnPath'],
+      },
+      {
+        client: 'iOS request',
+        file: 'apps/ios/src/api/request.ts',
+        patterns: ['getToken() !== requestToken', 'stageAuthReturnPath()', 'expireSession(i18n, token)'],
+      },
+      {
+        client: 'iOS login',
+        file: 'apps/ios/src/pages/login/index.vue',
+        patterns: ['consumeAuthReturnPath()', 'authenticatedNavigationStarted', 'url: returnPath'],
+      },
+    ],
+  },
 ]
 
 const violations = []
@@ -380,6 +415,8 @@ const mirroredMobileFiles = [
   'tests/asset-detail-resilience.test.ts',
   'src/api/request.ts',
   'tests/auth-expiry-race.test.ts',
+  'src/utils/auth-return-path.ts',
+  'tests/auth-return-path.test.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')

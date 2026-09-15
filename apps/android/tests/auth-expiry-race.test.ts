@@ -17,6 +17,7 @@ function fixture(initialToken = 'old-session') {
   let cleared = 0
   let emitted = 0
   let redirected = 0
+  let staged = 0
 
   const requireMock = (name: string) => {
     if (name === '@/utils/auth') {
@@ -28,6 +29,7 @@ function fixture(initialToken = 'old-session') {
         },
       }
     }
+    if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => { staged += 1 } }
     if (name === '@/utils/config') return { API_BASE: 'https://example.invalid/api' }
     if (name === '@/store/i18n') {
       return {
@@ -63,6 +65,7 @@ function fixture(initialToken = 'old-session') {
     cleared: () => cleared,
     emitted: () => emitted,
     redirected: () => redirected,
+    staged: () => staged,
   }
 }
 
@@ -77,6 +80,7 @@ test('a late 401 from an old request cannot clear a newly signed-in session', as
   assert.equal(flow.cleared(), 0)
   assert.equal(flow.emitted(), 0)
   assert.equal(flow.redirected(), 0)
+  assert.equal(flow.staged(), 0)
 })
 
 test('concurrent 401 responses expire the current session only once', async () => {
@@ -92,6 +96,7 @@ test('concurrent 401 responses expire the current session only once', async () =
   assert.equal(flow.cleared(), 1)
   assert.equal(flow.emitted(), 1)
   assert.equal(flow.redirected(), 1)
+  assert.equal(flow.staged(), 1)
 })
 
 test('a late 401 from an old upload cannot clear a newly signed-in session', async () => {
@@ -105,6 +110,7 @@ test('a late 401 from an old upload cannot clear a newly signed-in session', asy
   assert.equal(flow.cleared(), 0)
   assert.equal(flow.emitted(), 0)
   assert.equal(flow.redirected(), 0)
+  assert.equal(flow.staged(), 0)
 })
 
 test('a current upload 401 still expires the active session', async () => {
@@ -117,6 +123,7 @@ test('a current upload 401 still expires the active session', async () => {
   assert.equal(flow.cleared(), 1)
   assert.equal(flow.emitted(), 1)
   assert.equal(flow.redirected(), 1)
+  assert.equal(flow.staged(), 1)
 })
 
 test('an empty-token 401 redirects only while no newer session exists', async () => {
@@ -127,6 +134,7 @@ test('an empty-token 401 redirects only while no newer session exists', async ()
   assert.equal(currentGuest.cleared(), 1)
   assert.equal(currentGuest.emitted(), 1)
   assert.equal(currentGuest.redirected(), 1)
+  assert.equal(currentGuest.staged(), 1)
 
   const staleGuest = fixture('')
   const stalePending = staleGuest.request({ url: '/assets' })
@@ -137,4 +145,5 @@ test('an empty-token 401 redirects only while no newer session exists', async ()
   assert.equal(staleGuest.cleared(), 0)
   assert.equal(staleGuest.emitted(), 0)
   assert.equal(staleGuest.redirected(), 0)
+  assert.equal(staleGuest.staged(), 0)
 })
