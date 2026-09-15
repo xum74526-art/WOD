@@ -89,3 +89,11 @@ export function normalizeBuyRequestContactPhone(value: string): string | null {
   const normalized = trimmed.replace(/[ ()-]/g, "");
   return /^(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})$/.test(normalized) ? normalized : null;
 }
+
+export function buyRequestAdditionalRequirements(
+  requirements: Readonly<Record<string, unknown>> | null | undefined,
+) {
+  const note = typeof requirements?.note === "string" ? requirements.note.trim() : "";
+  if (note) return note;
+  return typeof requirements?.remark === "string" ? requirements.remark.trim() : "";
+}

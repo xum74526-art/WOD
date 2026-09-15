@@ -223,6 +223,7 @@ def _request_out(
                 _mask_phone(item.phone) or "",
             ))),
         )
+    requirements = _response_requirements(requirements)
     _, targeted_supplier_id = _target_supplier_scope(item)
     target_supplier = (
         db.query(Supplier).filter(Supplier.id == targeted_supplier_id).first()
@@ -235,7 +236,7 @@ def _request_out(
         "buyer_name": buyer.username if show_buyer_identity and buyer else None,
         "request_type": item.request_type,
         "gpu_model": item.gpu_model,
-        "gpu_variant": item.gpu_variant,
+        "gpu_variant": _request_gpu_variant(item.gpu_variant, requirements),
         "quantity": item.quantity,
         "gpu_hours": item.gpu_hours,
         "max_unit_price": float(item.max_unit_price) if item.max_unit_price is not None else None,
@@ -398,6 +399,78 @@ def _quantized_request_decimal(value: float | None, quantum: Decimal) -> Decimal
     return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
 
 
+def _nonempty_requirement_text(requirements: dict, key: str) -> str:
+    value = requirements.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _request_requirement_note(requirements: dict | None) -> str:
+    values = requirements if isinstance(requirements, dict) else {}
+    return (
+        _nonempty_requirement_text(values, "note")
+        or _nonempty_requirement_text(values, "remark")
+    )
+
+
+def _response_requirements(requirements: dict | None) -> dict:
+    """Expose canonical and legacy note aliases without changing stored metadata."""
+    values = dict(requirements) if isinstance(requirements, dict) else {}
+    note = _request_requirement_note(values)
+    if not note:
+        return values
+    for key in ("note", "remark"):
+        raw_value = values.get(key)
+        if raw_value is None or (
+            isinstance(raw_value, str) and not raw_value.strip()
+        ):
+            values[key] = note
+    return values
+
+
+def _request_gpu_variant(value: str | None, requirements: dict | None) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    values = requirements if isinstance(requirements, dict) else {}
+    legacy_value = values.get("gpu_variant")
+    if isinstance(legacy_value, str) and legacy_value.strip():
+        return legacy_value.strip()
+    return None
+
+
+def _comparable_requirements(
+    requirements: dict | None,
+    effective_gpu_variant: str | None,
+) -> dict:
+    values = dict(requirements) if isinstance(requirements, dict) else {}
+    note_value = values.get("note")
+    remark_value = values.get("remark")
+    aliases_are_text = all(
+        value is None or isinstance(value, str)
+        for value in (note_value, remark_value)
+    )
+    if aliases_are_text:
+        note = _nonempty_requirement_text(values, "note")
+        remark = _nonempty_requirement_text(values, "remark")
+        values.pop("note", None)
+        values.pop("remark", None)
+        if note and remark and note != remark:
+            values["note"] = note
+            values["remark"] = remark
+        elif note or remark:
+            values["note"] = note or remark
+
+    legacy_gpu_variant = values.get("gpu_variant")
+    if legacy_gpu_variant is None:
+        values.pop("gpu_variant", None)
+    elif isinstance(legacy_gpu_variant, str):
+        normalized_legacy_variant = legacy_gpu_variant.strip()
+        if not normalized_legacy_variant or normalized_legacy_variant == effective_gpu_variant:
+            values.pop("gpu_variant", None)
+        else:
+            values["gpu_variant"] = normalized_legacy_variant
+    return values
+
+
 def _same_create_request(
     item: BuyRequest,
     data: BuyRequestIn,
@@ -413,10 +486,12 @@ def _same_create_request(
         expiry_hours_match = round(
             (item.expires_at - item.created_at).total_seconds() / 3600
         ) == data.expires_in_hours
+    item_gpu_variant = _request_gpu_variant(item.gpu_variant, item.requirements)
+    data_gpu_variant = _request_gpu_variant(data.gpu_variant, requirements)
     return (
         item.request_type == data.request_type
         and item.gpu_model == gpu_model
-        and item.gpu_variant == data.gpu_variant
+        and item_gpu_variant == data_gpu_variant
         and int(item.quantity) == data.quantity
         and item.gpu_hours == data.gpu_hours
         and _decimal_request_value_matches(
@@ -432,7 +507,8 @@ def _same_create_request(
         and item.currency == data.currency.upper()
         and item.region == data.region
         and item.billing_mode == data.billing_mode
-        and (item.requirements or {}) == requirements
+        and _comparable_requirements(item.requirements, item_gpu_variant)
+        == _comparable_requirements(requirements, data_gpu_variant)
         and (not data.contact or (item.contact or "") == contact)
         and (
             not data.phone

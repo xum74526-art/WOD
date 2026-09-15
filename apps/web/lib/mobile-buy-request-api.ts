@@ -15,7 +15,7 @@ export type MobileBuyRequest = {
   currency: string;
   region?: string;
   billing_mode?: string;
-  requirements: Record<string, unknown>;
+  requirements: MobileBuyRequestRequirements;
   contact?: string;
   phone?: string | null;
   status: string;
@@ -27,6 +27,11 @@ export type MobileBuyRequest = {
   created_at?: string;
   updated_at?: string;
   legacy: boolean;
+};
+
+export type MobileBuyRequestRequirements = Record<string, unknown> & {
+  note?: unknown;
+  remark?: unknown;
 };
 
 export type MobileBuyQuoteRevision = {

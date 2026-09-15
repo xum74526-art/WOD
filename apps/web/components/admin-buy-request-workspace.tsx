@@ -15,6 +15,7 @@ import {
   type AdminBuyRequestItem,
 } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
+import { buyRequestAdditionalRequirements } from "@/lib/web-business-contract";
 
 const statusLabels: Record<string, string> = {
   published: "待报价",
@@ -121,6 +122,7 @@ export function AdminBuyRequestWorkspace() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const detailRequirementNote = buyRequestAdditionalRequirements(detail?.request.requirements);
 
   const loadDetail = useCallback(async (id: number) => {
     setSelectedId(id);
@@ -194,6 +196,7 @@ export function AdminBuyRequestWorkspace() {
       <main className="admin-request-detail">{detail ? <>
         <header><div><small>REQUEST #{detail.request.id}</small><h2>{metadata(detail.request, "product_name") || detail.request.gpu_model} × {detail.request.quantity}</h2><span>{formatDate(detail.request.created_at)}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts"><span><small>需求人</small><strong><User size={14}/>{detail.request.contact || "未填写"}</strong></span><span><small>联系电话</small><strong>{detail.request.phone || "未填写"}</strong></span><span><small>分发对象</small><strong><Storefront size={14}/>{targetLabel(detail.request)}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span></div>
+        {detailRequirementNote && <div className="workspace-service-note"><strong>补充需求：</strong>{detailRequirementNote}</div>}
         <section className="admin-request-quotes"><h3>报价与协商记录</h3>{detail.quotes.length ? detail.quotes.map((quote) => <article key={quote.id}><div><strong>{quote.supplier_name || `商家 #${quote.supplier_id}`}</strong><small>报价 #{quote.id} · {quote.revision_count || quote.revisions?.length || 1} 轮</small></div><b>¥{quote.latest_revision?.total_price ?? quote.total_price}</b><em>{statusLabel(quote.status)}</em></article>) : <div className="mobile-inline-empty">暂无报价</div>}</section>
         {detail.deal ? <section className="admin-deal-review"><header><div><small>DEAL #{detail.deal.id}</small><h3>撮合审核与凭据托管</h3></div><b>{statusLabel(detail.deal.status)}</b></header>
           {detail.events?.length ? <ol className="matchmaking-timeline">{detail.events.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{timelineEventLabel(event)}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>)}</ol> : null}

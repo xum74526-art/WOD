@@ -158,7 +158,7 @@
 
           <view class="field">
             <text class="field-label">{{ t('additionalRequirements') }}</text>
-            <textarea v-model="form.remark" class="field-textarea" :placeholder="t('requirementsPlaceholder')" placeholder-class="placeholder" maxlength="500" />
+            <textarea v-model="form.remark" class="field-textarea" :placeholder="t('requirementsPlaceholder')" placeholder-class="placeholder" maxlength="1000" />
           </view>
         </view>
 
@@ -191,7 +191,7 @@
           <view class="detail-cell"><text class="detail-label">{{ t('region') }}</text><text class="detail-value">{{ detail.request.region ? localizeRegionName(detail.request.region, i18n.lang) : t('notLimited') }}</text></view>
             <view v-if="viewMode === 'buyer'" class="detail-cell"><text class="detail-label">{{ t('quotesReceived') }}</text><text class="detail-value">{{ detail.request.quote_count }}</text></view>
           </view>
-          <text v-if="detail.request.requirements?.remark" class="detail-remark">{{ detail.request.requirements.remark }}</text>
+          <text v-if="detailRequirementNote" class="detail-remark">{{ detailRequirementNote }}</text>
 
           <template v-if="viewMode === 'buyer'">
             <text class="section-title">{{ t('receivedQuotes') }}</text>
@@ -349,6 +349,7 @@ import { localizeRegionName } from '@/utils/region-name'
 import { formatQuoteAmount } from '@/utils/quote-currency'
 import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 import { normalizeBuyRequestContactPhone } from '@/utils/buy-request-contact'
+import { buyRequestAdditionalRequirements } from '@/utils/buy-request-requirements'
 import {
   canBuyerConfirmDelivery as buyerCanConfirmDelivery,
   canBuyerReportDelivery as buyerCanReportDelivery,
@@ -423,6 +424,7 @@ const emptyHintKey = computed(() => viewMode.value === 'seller'
   : requestType.value === 'online' ? 'onlineRequestHint' : 'offlineRequestHint')
 const modelLabels = computed(() => marketModels.value.map((item) => `${item.gpu_model}${item.gpu_variant ? ` ${item.gpu_variant}` : ''}`))
 const billingLabels = computed(() => [t('onDemand'), t('interruptible'), t('reserved')])
+const detailRequirementNote = computed(() => buyRequestAdditionalRequirements(detail.value?.request.requirements))
 const billingValues = ['ondemand', 'bid', 'reserved']
 const expiryLabels = computed(() => [t('oneHour'), t('sixHours'), t('twentyFourHours'), t('threeDays')])
 const expiryValues = [1, 6, 24, 72]
@@ -627,6 +629,7 @@ function resetForm() {
 }
 function resetRequestIntent() { pendingRequestIntent.value = null }
 function buildRequestPayload(): Omit<BuyRequestPayload, 'client_request_id'> {
+  const additionalRequirements = form.remark.trim() || undefined
   return {
     request_type: requestType.value,
     gpu_model: form.gpu_model,
@@ -641,7 +644,8 @@ function buildRequestPayload(): Omit<BuyRequestPayload, 'client_request_id'> {
       supplier_id: inquiryContext.value?.supplier_id ?? null,
       source: inquiryContext.value?.source || 'direct_request',
       product_name: inquiryContext.value?.product_name || `${form.gpu_model}${form.gpu_variant ? ` ${form.gpu_variant}` : ''}`,
-      remark: form.remark,
+      note: additionalRequirements,
+      remark: additionalRequirements,
       need_hosting: form.need_hosting,
       invoice_required: form.invoice_required,
     },

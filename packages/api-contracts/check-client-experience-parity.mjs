@@ -283,6 +283,65 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'buy-request specification and note visibility',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/mobile-buy-request-workspace.tsx',
+        patterns: [
+          'gpu_variant: initialPrefill?.gpu_variant || undefined',
+          'note: additionalRequirements',
+          'remark: additionalRequirements',
+          'buyRequestAdditionalRequirements(detail?.request.requirements)',
+          'row.gpu_variant ? ` ${row.gpu_variant}` : ""',
+          'detail.request.gpu_variant ? ` ${detail.request.gpu_variant}` : ""',
+        ],
+      },
+      {
+        client: 'Web admin',
+        file: 'apps/web/components/admin-buy-request-workspace.tsx',
+        patterns: [
+          'buyRequestAdditionalRequirements(detail?.request.requirements)',
+          'detailRequirementNote && <div className="workspace-service-note"',
+        ],
+      },
+      {
+        client: 'Android',
+        file: 'apps/android/src/pages/buy-request/index.vue',
+        patterns: [
+          'gpu_variant: form.gpu_variant || undefined',
+          'note: additionalRequirements',
+          'remark: additionalRequirements',
+          'maxlength="1000"',
+          'buyRequestAdditionalRequirements(detail.value?.request.requirements)',
+          'v-if="detailRequirementNote"',
+        ],
+      },
+      {
+        client: 'iOS',
+        file: 'apps/ios/src/pages/buy-request/index.vue',
+        patterns: [
+          'gpu_variant: form.gpu_variant || undefined',
+          'note: additionalRequirements',
+          'remark: additionalRequirements',
+          'maxlength="1000"',
+          'buyRequestAdditionalRequirements(detail.value?.request.requirements)',
+          'v-if="detailRequirementNote"',
+        ],
+      },
+      {
+        client: 'Canonical API',
+        file: 'services/api/app/routers/buy_request.py',
+        patterns: [
+          'requirements: dict | None = None',
+          'requirements = _response_requirements(requirements)',
+          '_request_gpu_variant(item.gpu_variant, requirements)',
+          '_comparable_requirements(item.requirements, item_gpu_variant)',
+        ],
+      },
+    ],
+  },
 ]
 
 const violations = []
@@ -314,6 +373,7 @@ const mirroredMobileFiles = [
   'tests/profile-widgets.test.ts',
   'src/config/home-promotions.ts',
   'src/components/HomePromoCarousel.vue',
+  'src/utils/buy-request-requirements.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')

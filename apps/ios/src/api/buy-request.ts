@@ -2,6 +2,11 @@ import { request } from './request'
 
 export type BuyRequestView = 'buyer' | 'seller'
 
+export interface BuyRequestRequirements extends Record<string, unknown> {
+  note?: unknown
+  remark?: unknown
+}
+
 export interface BuyRequestItem {
   id: number
   user_id: number | null
@@ -16,7 +21,7 @@ export interface BuyRequestItem {
   currency: string
   region?: string
   billing_mode?: string
-  requirements: Record<string, any>
+  requirements: BuyRequestRequirements
   contact?: string | null
   phone?: string | null
   status: string
@@ -140,7 +145,7 @@ export interface BuyRequestPayload {
   currency: string
   region?: string
   billing_mode?: string
-  requirements?: Record<string, any>
+  requirements?: BuyRequestRequirements
   contact?: string
   phone?: string
   expires_in_hours: number

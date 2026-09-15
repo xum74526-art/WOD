@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 import {
+  buyRequestAdditionalRequirements,
   buyRequestIntentSignature,
   directOrderIntentSignature,
   ensureBuyRequestIntent,
@@ -50,6 +51,24 @@ test("buy-request contact phone matches the API storage contract", () => {
   assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
   assert.match(workspace, /type="tel" inputMode="tel" maxLength=\{32\}/);
   assert.match(workspace, /phone: event\.target\.value\.slice\(0, 32\)/);
+});
+
+test("buy-request notes and GPU variants remain compatible across Web and App", () => {
+  assert.equal(buyRequestAdditionalRequirements({ note: "Web 补充需求" }), "Web 补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ note: "新补充需求", remark: "旧补充需求" }), "新补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ remark: "旧 App 补充需求" }), "旧 App 补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ note: "  ", remark: "旧值" }), "旧值");
+  assert.equal(buyRequestAdditionalRequirements({}), "");
+
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const admin = fs.readFileSync(new URL("../components/admin-buy-request-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /gpu_variant: initialPrefill\?\.gpu_variant \|\| undefined/);
+  assert.doesNotMatch(workspace, /\n\s+gpu_variant: initialPrefill\?\.gpu_variant,\n/);
+  assert.match(workspace, /note: additionalRequirements,[\s\S]*remark: additionalRequirements/);
+  assert.match(workspace, /row\.gpu_variant \? ` \$\{row\.gpu_variant\}` : ""/);
+  assert.match(workspace, /detail\.request\.gpu_variant \? ` \$\{detail\.request\.gpu_variant\}` : ""/);
+  assert.match(workspace, /detailRequirementNote && <div className="workspace-service-note">/);
+  assert.match(admin, /detailRequirementNote && <div className="workspace-service-note">/);
 });
 
 test("new and renewal orders use integer hours plus a Web request id", () => {

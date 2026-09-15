@@ -28,6 +28,7 @@ import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import {
   buyRequestIntentSignature,
+  buyRequestAdditionalRequirements,
   ensureBuyRequestIntent,
   normalizeBuyRequestContactPhone,
   type BuyRequestIntent,
@@ -212,6 +213,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
     view === "seller" && detail && !detail.request.is_own && !detail.deal && requestFlowEnabled &&
     openRequestStatuses.has(detail.request.status) && !sellerQuote,
   );
+  const detailRequirementNote = buyRequestAdditionalRequirements(detail?.request.requirements);
 
   function quoteInput(): MobileBuyQuoteInput {
     return {
@@ -249,9 +251,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
       setError("请输入有效联系电话（可使用 +国家区号）。");
       return;
     }
+    const additionalRequirements = form.requirements_text.trim() || undefined;
     const input = {
       request_type: type,
       gpu_model: form.gpu_model,
+      gpu_variant: initialPrefill?.gpu_variant || undefined,
       quantity: Number(form.quantity),
       gpu_hours: type === "online" ? Number(form.gpu_hours) : undefined,
       currency: "CNY",
@@ -263,8 +267,8 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
         source: initialPrefill?.source,
         product_name: initialPrefill?.product_name,
         seller_name: initialPrefill?.seller_name,
-        gpu_variant: initialPrefill?.gpu_variant,
-        note: form.requirements_text.trim() || undefined,
+        note: additionalRequirements,
+        remark: additionalRequirements,
       },
       contact: form.contact.trim(), phone, expires_in_hours: Number(form.expires_in_hours),
     };
@@ -418,15 +422,16 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
       <aside>
         <header><strong>{view === "buyer" ? "我的需求" : sellerScope === "quoted" ? "我的报价需求" : "可接需求"}</strong><b>{rows.length}</b></header>
         {rows.length ? rows.map((row) => <button className={selected === row.id ? "active" : ""} key={row.id} onClick={() => void loadDetail(row.id)}>
-          <span><strong>{row.gpu_model} × {row.quantity}</strong><small>{view === "seller" ? `匿名需求 #${row.id}` : `我的需求 #${row.id}`} · {formatDate(row.created_at)}</small></span>
+          <span><strong>{row.gpu_model}{row.gpu_variant ? ` ${row.gpu_variant}` : ""} × {row.quantity}</strong><small>{view === "seller" ? `匿名需求 #${row.id}` : `我的需求 #${row.id}`} · {formatDate(row.created_at)}</small></span>
           <b>{view === "seller" && row.is_own ? "我的需求 · 仅查看" : view === "seller" && row.targeted_to_me ? "定向需求" : statusLabel(row.status)}</b>
         </button>) : <div className="mobile-inline-empty">{view === "seller" && sellerScope === "quoted" ? "暂无报价记录" : "暂无需求"}</div>}
       </aside>
       <main>{detail ? <>
-        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
+        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model}{detail.request.gpu_variant ? ` ${detail.request.gpu_variant}` : ""} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts">
           <span><small>服务价格</small><strong>询价</strong></span><span><small>交易方式</small><strong>平台撮合</strong></span><span><small>报价数</small><strong>{detail.request.quote_count}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span>
         </div>
+        {detailRequirementNote && <div className="workspace-service-note"><strong>补充需求：</strong>{detailRequirementNote}</div>}
         {view === "seller" && <div className="workspace-service-note"><LockKey size={16}/>购买人身份、联系人和手机号已隐藏；您只能查看和修改自己的报价。</div>}
         <section className="mobile-quote-list">
           <h3><Receipt size={17}/>{view === "buyer" ? "报价记录" : detail.request.is_own ? "收到的报价" : "我的报价"}</h3>

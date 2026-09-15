@@ -115,6 +115,144 @@ class BuyRequestIdempotencyTests(unittest.TestCase):
                 {self.first_user_id, self.second_user_id},
             )
 
+    def test_requirements_preserve_canonical_note_legacy_remark_and_extra_fields(self):
+        canonical = self._create(
+            self.first_user_id,
+            self._payload(
+                client_request_id="canonical-note-request-0001",
+                gpu_variant="80GB",
+                requirements={"note": "CUDA 12.4", "network": "10Gbps"},
+            ),
+        )
+        legacy = self._create(
+            self.first_user_id,
+            self._payload(
+                client_request_id="legacy-remark-request-0001",
+                requirements={
+                    "remark": "旧版补充需求",
+                    "gpu_variant": "94GB",
+                    "custom_flag": True,
+                },
+            ),
+        )
+
+        self.assertEqual(canonical["data"]["gpu_variant"], "80GB")
+        self.assertEqual(
+            canonical["data"]["requirements"],
+            {
+                "note": "CUDA 12.4",
+                "network": "10Gbps",
+                "remark": "CUDA 12.4",
+            },
+        )
+        self.assertEqual(
+            legacy["data"]["requirements"],
+            {
+                "remark": "旧版补充需求",
+                "gpu_variant": "94GB",
+                "custom_flag": True,
+                "note": "旧版补充需求",
+            },
+        )
+        self.assertEqual(legacy["data"]["gpu_variant"], "94GB")
+        with self.Session() as db:
+            stored = db.get(BuyRequest, legacy["data"]["id"])
+            self.assertIsNone(stored.gpu_variant)
+            historical = buy_request_router._request_out(
+                stored,
+                db,
+                reveal_contact=True,
+                viewer_user_id=self.first_user_id,
+            )
+        self.assertEqual(historical["gpu_variant"], "94GB")
+
+    def test_legacy_variant_fallback_cannot_bypass_supplier_privacy_filter(self):
+        created = self._create(
+            self.first_user_id,
+            self._payload(
+                client_request_id="private-legacy-variant-0001",
+                requirements={"gpu_variant": "13931000001"},
+            ),
+        )
+        with self.Session() as db:
+            stored = db.get(BuyRequest, created["data"]["id"])
+            self.assertIsNone(stored.gpu_variant)
+            public = buy_request_router._request_out(
+                stored,
+                db,
+                viewer_role="seller",
+            )
+        self.assertEqual(public["gpu_variant"], "[已隐藏]")
+        self.assertEqual(public["requirements"]["gpu_variant"], "[已隐藏]")
+
+    def test_unrestricted_legacy_requirement_shapes_remain_accepted(self):
+        requirements = {
+            "note": {"structured": True},
+            "remark": 42,
+            "gpu_variant": {"legacy": "value"},
+            "long_value": "x" * 2000,
+        }
+        payload = self._payload(
+            client_request_id="unrestricted-requirements-0001",
+            requirements=requirements,
+        )
+        created = self._create(self.first_user_id, payload)
+        self.assertEqual(created["data"]["requirements"], requirements)
+
+    def test_retry_treats_legacy_and_canonical_requirement_fields_as_equivalent(self):
+        client_request_id = "cross-client-retry-request-0001"
+        legacy = self._create(
+            self.first_user_id,
+            self._payload(
+                client_request_id=client_request_id,
+                requirements={
+                    "remark": "  需要 CUDA 12.4  ",
+                    "gpu_variant": "80GB",
+                    "network": "10Gbps",
+                },
+            ),
+        )
+        canonical = self._create(
+            self.first_user_id,
+            self._payload(
+                client_request_id=client_request_id,
+                gpu_variant="80GB",
+                requirements={"note": "需要 CUDA 12.4", "network": "10Gbps"},
+            ),
+        )
+
+        self.assertEqual(legacy["data"]["id"], canonical["data"]["id"])
+        self.assertEqual(canonical["data"]["gpu_variant"], "80GB")
+        self.assertEqual(
+            buy_request_router._request_requirement_note(
+                {"note": "   ", "remark": " 旧版内容 "},
+            ),
+            "旧版内容",
+        )
+        for conflicting_requirements in (
+            {
+                "note": "需要 CUDA 12.4",
+                "remark": "不同的旧版内容",
+                "network": "10Gbps",
+            },
+            {
+                "note": "需要 CUDA 12.4",
+                "gpu_variant": "94GB",
+                "network": "10Gbps",
+            },
+        ):
+            with self.subTest(conflicting_requirements=conflicting_requirements):
+                with self.assertRaises(BizError) as raised:
+                    self._create(
+                        self.first_user_id,
+                        self._payload(
+                            client_request_id=client_request_id,
+                            gpu_variant="80GB",
+                            requirements=conflicting_requirements,
+                        ),
+                    )
+                self.assertEqual(raised.exception.status_code, 409)
+
     def test_legacy_clients_without_a_key_remain_compatible(self):
         first = self._create(self.first_user_id, self._payload(client_request_id=None))
         second = self._create(self.first_user_id, self._payload(client_request_id=None))

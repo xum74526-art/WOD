@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { buyRequestAdditionalRequirements } from '../src/utils/buy-request-requirements.ts'
 
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -80,6 +81,19 @@ test('asset and order follow-up requests preserve attribution and safe duration 
   assert.match(orderDetail, /source: current\.market_source \|\| current\.seller_type \|\| 'existing_order'/)
   assert.match(orderDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
   assert.match(orderDetail, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/)
+})
+
+test('Web notes and legacy App remarks remain visible with the GPU variant', () => {
+  assert.equal(buyRequestAdditionalRequirements({ note: 'CUDA 12.4' }), 'CUDA 12.4')
+  assert.equal(buyRequestAdditionalRequirements({ note: '新补充需求', remark: '旧补充需求' }), '新补充需求')
+  assert.equal(buyRequestAdditionalRequirements({ remark: '旧版补充需求' }), '旧版补充需求')
+  assert.equal(buyRequestAdditionalRequirements({ note: '  ', remark: '旧版内容' }), '旧版内容')
+  assert.equal(buyRequestAdditionalRequirements({}), '')
+  assert.match(buyRequest, /gpu_variant: form\.gpu_variant \|\| undefined/)
+  assert.match(buyRequest, /const additionalRequirements = form\.remark\.trim\(\) \|\| undefined/)
+  assert.match(buyRequest, /note: additionalRequirements,[\s\S]*remark: additionalRequirements/)
+  assert.match(buyRequest, /maxlength="1000"/)
+  assert.match(buyRequest, /v-if="detailRequirementNote"[\s\S]*?\{\{ detailRequirementNote \}\}/)
 })
 
 test('supplier withdrawal is capability-gated with an explicit disabled state', () => {
