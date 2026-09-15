@@ -19,20 +19,25 @@ export class ApiRequestError extends Error {
   }
 }
 
-let redirecting = false
+let expiringToken: string | null = null
 
 function responseBody<T>(value: unknown): Partial<ApiResponse<T>> {
   return value && typeof value === 'object' ? value as Partial<ApiResponse<T>> : {}
 }
 
-function expireSession(i18n: ReturnType<typeof useI18nStore>) {
+function expireSession(i18n: ReturnType<typeof useI18nStore>, requestToken: string) {
+  // A response belongs to the token captured when the request started. An old
+  // request may finish after the user has signed in again, so it must never
+  // clear the newer session.
+  if (getToken() !== requestToken || expiringToken === requestToken) return
+  expiringToken = requestToken
   clearAuth()
   uni.$emit('wod-auth-expired')
-  if (redirecting) return
-  redirecting = true
   uni.reLaunch({
     url: '/pages/login/index',
-    complete: () => { redirecting = false },
+    complete: () => {
+      if (expiringToken === requestToken) expiringToken = null
+    },
   })
 }
 
@@ -76,7 +81,7 @@ export function request<T = unknown>(options: {
             reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
             return
           }
-          expireSession(i18n)
+          expireSession(i18n, token)
           reject(new Error(i18n.t('未登录')))
           return
         }
@@ -135,7 +140,7 @@ export function upload<T = unknown>(options: {
           body = {}
         }
         if (res.statusCode === 401 || body?.code === 401) {
-          expireSession(i18n)
+          expireSession(i18n, token)
           reject(new Error(i18n.t('未登录')))
           return
         }

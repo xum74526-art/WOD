@@ -378,6 +378,8 @@ const mirroredMobileFiles = [
   'src/pages/asset/detail.vue',
   'src/utils/asset-detail-requests.ts',
   'tests/asset-detail-resilience.test.ts',
+  'src/api/request.ts',
+  'tests/auth-expiry-race.test.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')
