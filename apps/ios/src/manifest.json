@@ -10,9 +10,11 @@
     "app-plus" : {
         "usingComponents" : true,
         "modules" : {
+            "Invocation" : {},
             "VideoPlayer" : {}
         },
         "darkmode" : true,
+        "themeLocation" : "theme.json",
         "safearea" : {
             "background" : "#FFFFFF",
             "backgroundDark" : "#0A0E14",
@@ -51,6 +53,8 @@
     },
     "h5" : {
         "title" : "ZTW",
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
         "router" : {
             "mode" : "history",
             "base" : "/"

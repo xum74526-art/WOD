@@ -70,8 +70,31 @@ function updateDocumentTheme(theme: ResolvedTheme) {
   document.documentElement.style.colorScheme = theme
 }
 
+function updateIOSInterfaceStyle(theme: ResolvedTheme) {
+  // #ifdef APP-PLUS
+  if (plus.os.name !== 'iOS') return
+  let application: ReturnType<typeof plus.ios.invoke> | null = null
+  let window: ReturnType<typeof plus.ios.invoke> | null = null
+  try {
+    const UIApplication = plus.ios.importClass('UIApplication')
+    if (!UIApplication) return
+    application = plus.ios.invoke(UIApplication, 'sharedApplication')
+    window = plus.ios.invoke(application, 'keyWindow')
+    if (!window) return
+    // UIUserInterfaceStyle: light = 1, dark = 2. The native window owns the
+    // iPhone home-indicator safe area below the uni-app content window.
+    plus.ios.invoke(window, 'setOverrideUserInterfaceStyle:', theme === 'dark' ? 2 : 1)
+  } catch {
+  } finally {
+    if (window) plus.ios.deleteObject(window)
+    if (application) plus.ios.deleteObject(application)
+  }
+  // #endif
+}
+
 function updateNativeChrome(theme: ResolvedTheme) {
   const colors = PALETTE[theme]
+  updateIOSInterfaceStyle(theme)
   try {
     uni.setTabBarStyle({
       color: colors.muted,
@@ -100,6 +123,7 @@ function updateNativeChrome(theme: ResolvedTheme) {
 
   // #ifdef APP-PLUS
   try {
+    plus.nativeUI.setUIStyle(theme)
     plus.navigator.setStatusBarBackground(colors.background)
     plus.navigator.setStatusBarStyle(theme === 'dark' ? 'light' : 'dark')
   } catch {}
@@ -157,9 +181,10 @@ export const useThemeStore = defineStore('theme', () => {
     // callback fires. Re-apply briefly after render so it never flashes back
     // to the default light variables.
     clearScheduledUpdates()
-    ;[0, 80, 240].forEach((delay) => {
+    ;[0, 80, 240, 700].forEach((delay) => {
       appPlusTimers.push(setTimeout(() => {
         updateDocumentTheme(resolvedMode.value)
+        updateNativeChrome(resolvedMode.value)
         updateAppPlusWebviews(resolvedMode.value)
       }, delay))
     })

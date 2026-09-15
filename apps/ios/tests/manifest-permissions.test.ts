@@ -4,6 +4,24 @@ import test from 'node:test'
 
 const manifest = JSON.parse(readFileSync(new URL('../src/manifest.json', import.meta.url), 'utf8'))
 const privacy = manifest['app-plus']?.distribute?.ios?.privacyDescription ?? {}
+const safeArea = manifest['app-plus']?.safearea ?? {}
+const themeSource = readFileSync(new URL('../src/store/theme.ts', import.meta.url), 'utf8')
+const theme = JSON.parse(readFileSync(new URL('../src/theme.json', import.meta.url), 'utf8'))
+const pages = JSON.parse(readFileSync(new URL('../src/pages.json', import.meta.url), 'utf8'))
+
+test('iOS native chrome and the home-indicator safe area follow the in-app theme', () => {
+  assert.deepEqual(manifest['app-plus']?.modules?.Invocation, {})
+  assert.equal(safeArea.background, '#FFFFFF')
+  assert.equal(safeArea.backgroundDark, '#0A0E14')
+  assert.equal(safeArea.bottom?.offset, 'auto')
+  assert.equal(manifest['app-plus']?.themeLocation, 'theme.json')
+  assert.equal(theme.light.tabBackgroundColor, '#FFFFFF')
+  assert.equal(theme.dark.tabBackgroundColor, '#0A0E14')
+  assert.equal(pages.tabBar?.backgroundColor, '@tabBackgroundColor')
+  assert.equal(pages.globalStyle?.backgroundColorBottom, '@backgroundColorContent')
+  assert.match(themeSource, /plus\.nativeUI\.setUIStyle\(theme\)/)
+  assert.match(themeSource, /setOverrideUserInterfaceStyle:/)
+})
 
 test('iOS declares purpose strings for each user-selected media source', () => {
   for (const key of [
