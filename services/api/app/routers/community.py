@@ -10,10 +10,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import and_, case, delete, func, insert, or_, update
+from sqlalchemy import and_, case, delete, func, insert, or_, text, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -550,10 +550,111 @@ def list_comments(pid: int, db: Session = Depends(get_db)):
     out = []
     for c in items:
         u = db.query(User).filter(User.id == c.user_id).first()
-        d = CommentOut.model_validate(c).model_dump()
+        # ``post_comments`` is authoritative metadata for create responses.
+        # Keep the historical list-item shape unchanged instead of emitting
+        # an unnecessary nullable field on every existing comment.
+        d = CommentOut.model_validate(c).model_dump(exclude={"post_comments"})
         d["author_name"] = u.username if u else "匿名"
         out.append(d)
     return success(out)
+
+
+_COMMENT_REQUEST_CONFLICT_MESSAGE = "重复评论请求参数不一致，请重新提交"
+_COMMENT_WRITE_CONFLICT_MESSAGE = "评论正在提交，请稍后重试"
+
+
+def _begin_serialized_comment_transaction(db: Session) -> None:
+    """Avoid SQLite read-then-write races; database constraints cover other engines."""
+
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    try:
+        # Authentication already opened a deferred read transaction. Restart it
+        # before inspecting the idempotency key so only one SQLite writer can
+        # decide whether a comment must be inserted and counted.
+        if db.in_transaction():
+            db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    except OperationalError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if "locked" in message or "busy" in message:
+            raise BizError(_COMMENT_WRITE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
+
+
+def _find_comment_by_client_id(
+    db: Session,
+    user_id: int,
+    client_request_id: str,
+) -> Comment | None:
+    return db.query(Comment).filter(
+        Comment.user_id == user_id,
+        Comment.client_request_id == client_request_id,
+    ).first()
+
+
+def _same_comment_intent(comment: Comment, *, post_id: int, content: str) -> bool:
+    return comment.post_id == post_id and comment.content == content
+
+
+def _insert_comment_if_missing(
+    db: Session,
+    *,
+    post_id: int,
+    user_id: int,
+    content: str,
+    client_request_id: str | None,
+    platform: str,
+) -> tuple[Comment, bool]:
+    values = {
+        "post_id": post_id,
+        "user_id": user_id,
+        "content": content,
+        "client_request_id": client_request_id,
+        "created_platform": platform,
+    }
+    if client_request_id is None:
+        comment = Comment(**values)
+        db.add(comment)
+        db.flush()
+        return comment, True
+
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        # Targetless conflict handling works with both the partial migrated
+        # index and the matching partial index created from model metadata.
+        statement = sqlite_insert(Comment).values(**values).on_conflict_do_nothing()
+        inserted = db.execute(statement).rowcount == 1
+    elif dialect == "postgresql":
+        statement = postgresql_insert(Comment).values(**values).on_conflict_do_nothing()
+        inserted = db.execute(statement).rowcount == 1
+    else:
+        try:
+            with db.begin_nested():
+                inserted = db.execute(insert(Comment).values(**values)).rowcount == 1
+        except IntegrityError:
+            inserted = False
+
+    comment = _find_comment_by_client_id(db, user_id, client_request_id)
+    if comment is None:
+        db.rollback()
+        raise BizError(_COMMENT_WRITE_CONFLICT_MESSAGE, status_code=409)
+    return comment, inserted
+
+
+def _created_comment_out(comment_id: int, post_id: int, db: Session) -> dict:
+    comment = db.get(Comment, comment_id)
+    if comment is None:
+        raise BizError(_COMMENT_WRITE_CONFLICT_MESSAGE, status_code=409)
+    post_comments = int(
+        db.query(func.count(Comment.id)).filter(Comment.post_id == post_id).scalar() or 0
+    )
+    author = db.query(User).filter(User.id == comment.user_id).first()
+    result = CommentOut.model_validate(comment).model_dump()
+    result["author_name"] = author.username if author else "匿名"
+    result["post_comments"] = post_comments
+    return result
 
 
 @router.post("/posts/{pid}/comments")
@@ -564,27 +665,53 @@ def create_comment(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    p = db.query(Post).filter(Post.id == pid).first()
-    if not p:
-        raise BizError("动态不存在", status_code=404)
     if not data.content:
         raise BizError("评论内容不能为空")
+    user_id = int(user.id)
+    client_request_id = str(data.client_request_id or "").strip() or None
     source_platform = normalize_platform(platform)
-    c = Comment(
+    _begin_serialized_comment_transaction(db)
+
+    if db.query(Post.id).filter(Post.id == pid).scalar() is None:
+        db.rollback()
+        raise BizError("动态不存在", status_code=404)
+
+    if client_request_id:
+        existing = _find_comment_by_client_id(db, user_id, client_request_id)
+        if existing:
+            if not _same_comment_intent(existing, post_id=pid, content=data.content):
+                db.rollback()
+                raise BizError(_COMMENT_REQUEST_CONFLICT_MESSAGE, status_code=409)
+            comment_id = existing.id
+            db.commit()
+            return success(_created_comment_out(comment_id, pid, db))
+
+    comment, inserted = _insert_comment_if_missing(
+        db,
         post_id=pid,
-        user_id=user.id,
+        user_id=user_id,
         content=data.content,
-        created_platform=source_platform,
+        client_request_id=client_request_id,
+        platform=source_platform,
     )
-    db.add(c)
-    p.comments = p.comments + 1
-    p.last_modified_platform = source_platform
+    if not _same_comment_intent(comment, post_id=pid, content=data.content):
+        db.rollback()
+        raise BizError(_COMMENT_REQUEST_CONFLICT_MESSAGE, status_code=409)
+
+    if inserted:
+        updated = db.execute(
+            update(Post).where(Post.id == pid).values(
+                comments=func.coalesce(Post.comments, 0) + 1,
+                last_modified_platform=source_platform,
+            )
+        ).rowcount or 0
+        if updated != 1:
+            db.rollback()
+            raise BizError("动态不存在", status_code=404)
+
+    comment_id = comment.id
     db.commit()
-    db.refresh(c)
-    u = db.query(User).filter(User.id == c.user_id).first()
-    d = CommentOut.model_validate(c).model_dump()
-    d["author_name"] = u.username if u else "匿名"
-    return success(d)
+    return success(_created_comment_out(comment_id, pid, db))
 
 
 def _insert_follow_if_missing(

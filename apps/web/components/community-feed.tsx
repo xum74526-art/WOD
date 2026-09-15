@@ -18,6 +18,11 @@ import {
 } from "@/lib/mobile-community-api";
 import { formatDate } from "@/lib/commerce-ui";
 import { acquireCommunityAction, releaseCommunityAction } from "@/lib/community-action-lock";
+import {
+  communityCommentIntentSignature,
+  ensureCommunityCommentIntent,
+  type CommunityCommentIntent,
+} from "@/lib/web-business-contract";
 import { useI18n } from "@/components/locale-root";
 import {
   COMMUNITY_POST_MAX_LENGTH,
@@ -220,7 +225,10 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const [openComments, setOpenComments] = useState<number | null>(null);
   const [comments, setComments] = useState<Record<number, CommunityComment[]>>({});
+  const commentsRef = useRef<Record<number, CommunityComment[]>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
+  const commentDraftsRef = useRef<Record<number, string>>({});
+  const pendingCommentIntents = useRef(new Map<number, CommunityCommentIntent>());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -248,6 +256,18 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     releaseCommunityAction(pendingActions.current, key);
     setBusy(new Set(pendingActions.current));
     if (key === "publish") setPublishProgress(idlePublishProgress);
+  }
+
+  function storeComments(id: number, next: CommunityComment[]) {
+    const value = { ...commentsRef.current, [id]: next };
+    commentsRef.current = value;
+    setComments(value);
+  }
+
+  function updateCommentDraft(id: number, value: string) {
+    const next = { ...commentDraftsRef.current, [id]: value };
+    commentDraftsRef.current = next;
+    setCommentDrafts(next);
   }
 
   async function publish(event: FormEvent) {
@@ -334,7 +354,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   async function showComments(id: number) {
     if (openComments === id) { setOpenComments(null); return; }
     setOpenComments(id);
-    try { const next = await getCommunityComments(id); setComments((value) => ({ ...value, [id]: next })); }
+    try { const next = await getCommunityComments(id); storeComments(id, next); }
     catch (reason) { setError(localizedCommunityError(reason, t)); }
   }
 
@@ -345,15 +365,37 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
     const action = `comment-${id}`;
     if (!beginAction(action)) return;
     try {
-      await createCommunityComment(id, value);
-      setCommentDrafts((drafts) => {
-        const next = { ...drafts };
+      const intent = ensureCommunityCommentIntent(
+        pendingCommentIntents.current.get(id) || null,
+        communityCommentIntentSignature(id, value),
+        () => crypto.randomUUID(),
+      );
+      pendingCommentIntents.current.set(id, intent);
+      const result = await createCommunityComment(id, value, intent.requestId);
+      const draftStillMatches = communityCommentIntentSignature(
+        id,
+        (commentDraftsRef.current[id] || "").trim(),
+      ) === intent.signature;
+      if (pendingCommentIntents.current.get(id) === intent) {
+        pendingCommentIntents.current.delete(id);
+      }
+      if (draftStillMatches) {
+        const next = { ...commentDraftsRef.current };
         delete next[id];
-        return next;
-      });
-      const next = await getCommunityComments(id);
-      setComments((items) => ({ ...items, [id]: next }));
-      setRows((items) => items.map((item) => item.id === id ? { ...item, comments: next.length } : item));
+        commentDraftsRef.current = next;
+        setCommentDrafts(next);
+      }
+      const currentComments = commentsRef.current[id] || [];
+      const knownComment = currentComments.some((item) => item.id === result.id);
+      storeComments(id, [result, ...currentComments.filter((item) => item.id !== result.id)]);
+      const postComments = typeof result.post_comments === "number"
+        && Number.isInteger(result.post_comments)
+        && result.post_comments >= 0
+        ? result.post_comments
+        : null;
+      setRows((items) => items.map((item) => item.id === id
+        ? { ...item, comments: postComments ?? item.comments + (knownComment ? 0 : 1) }
+        : item));
     } catch (reason) { setError(localizedCommunityError(reason, t)); }
     finally { finishAction(action); }
   }
@@ -393,7 +435,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
 
     {error && <div className="commerce-error" data-i18n-skip>{error}</div>}
     {message && <div className="commerce-success">{message}</div>}
-    {loading ? <div className="news-skeleton" role="status" aria-label={t("community.feed.loading", "正在加载社区动态")}><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={commentDrafts[row.id] || ""} onCommentChange={(value) => setCommentDrafts((drafts) => ({ ...drafts, [row.id]: value }))} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShare={(item) => void share(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>{t("community.feed.empty.title", "当前没有动态")}</strong><p>{t("community.feed.empty.description", "切换标签或发布第一条内容。")}</p></div>}</div>}
+    {loading ? <div className="news-skeleton" role="status" aria-label={t("community.feed.loading", "正在加载社区动态")}><span/><span/><span/></div> : <div className="mobile-community-list">{rows.length ? rows.map((row, index) => <CommunityCard key={row.id} row={row} featured={index === 0 && page === 1} busy={busy} openComments={openComments} comments={comments} comment={commentDrafts[row.id] || ""} onCommentChange={(value) => updateCommentDraft(row.id, value)} onLike={(item) => void like(item)} onFollow={(item) => void follow(item)} onShare={(item) => void share(item)} onShowComments={(id) => void showComments(id)} onSubmitComment={(event, id) => void submitComment(event, id)} />) : <div className="data-empty"><ChatCircle size={30}/><strong>{t("community.feed.empty.title", "当前没有动态")}</strong><p>{t("community.feed.empty.description", "切换标签或发布第一条内容。")}</p></div>}</div>}
 
     {total > 10 && <nav className="community-page-nav" aria-label={t("community.feed.paginationAria", "社区动态分页")}><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{t("community.feed.previous", "上一页")}</button><span>{t("community.feed.page", "第 {page} 页", { page: formatNumber(page, dateLocale) })}</span><button disabled={page * 10 >= total} onClick={() => setPage((value) => value + 1)}>{t("community.feed.next", "下一页")}</button></nav>}
   </section>;

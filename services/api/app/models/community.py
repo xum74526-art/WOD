@@ -57,10 +57,21 @@ class Comment(Base):
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     content: Mapped[str] = mapped_column(Text)
+    client_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy", index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    __table_args__ = (
+        Index(
+            "uq_comments_user_client_request",
+            "user_id",
+            "client_request_id",
+            unique=True,
+            sqlite_where=client_request_id.is_not(None),
+            postgresql_where=client_request_id.is_not(None),
+        ),
+    )
 
 
 class Like(Base):

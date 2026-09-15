@@ -49,7 +49,7 @@ _ENSURE = {
         "canonical_url", "content_hash", "ingested_at", "publish_batch", "video_duration",
         "created_platform", "last_modified_platform",
     ],
-    "comments": ["created_platform"],
+    "comments": ["created_platform", "client_request_id"],
     "likes": ["created_platform"],
     "follows": ["created_platform"],
     "notifications": ["title_en", "content_en", "action_url", "dedupe_key"],
@@ -591,6 +591,100 @@ def _migrate_community_like_idempotency(db_engine=None) -> dict[str, int | bool]
         print(f"[init_db] 社区点赞去重: 删除 {removed} 条重复记录")
     return {
         "duplicates_removed": max(0, int(removed)),
+        "index_created": not has_scoped_unique,
+    }
+
+
+def _migrate_community_comment_idempotency(db_engine=None) -> dict[str, int | bool]:
+    """Deduplicate keyed comments, repair cached counts, and scope keys per user."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    tables = set(inspector.get_table_names())
+    if not {"comments", "posts"}.issubset(tables):
+        return {
+            "duplicates_removed": 0,
+            "counts_repaired": 0,
+            "index_created": False,
+        }
+
+    columns = {item["name"] for item in inspector.get_columns("comments")}
+    if "client_request_id" not in columns:
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE comments ADD COLUMN client_request_id VARCHAR(64)"
+            ))
+        print("[init_db] 补列: comments.client_request_id")
+
+    inspector = inspect(target_engine)
+    indexes = inspector.get_indexes("comments")
+    constraints = inspector.get_unique_constraints("comments")
+    expected_columns = ["user_id", "client_request_id"]
+    has_scoped_unique = any(
+        item.get("unique")
+        and list(item.get("column_names") or []) == expected_columns
+        for item in indexes
+    ) or any(
+        list(item.get("column_names") or []) == expected_columns
+        for item in constraints
+    )
+    index_name = "uq_comments_user_client_request"
+    if not has_scoped_unique and any(
+        item.get("name") == index_name for item in indexes + constraints
+    ):
+        raise RuntimeError(f"{index_name} exists with an incompatible definition")
+
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE comments SET client_request_id = NULL "
+            "WHERE client_request_id IS NOT NULL AND TRIM(client_request_id) = ''"
+        ))
+        conflicting_intent = conn.execute(text(
+            "SELECT first.user_id, first.client_request_id "
+            "FROM comments AS first JOIN comments AS other "
+            "ON first.user_id = other.user_id "
+            "AND first.client_request_id = other.client_request_id "
+            "AND first.id < other.id "
+            "WHERE first.client_request_id IS NOT NULL "
+            "AND (first.post_id != other.post_id OR first.content != other.content) "
+            "LIMIT 1"
+        )).first()
+        if conflicting_intent:
+            raise RuntimeError(
+                "conflicting per-user community comment request ids detected; "
+                "resolve before startup"
+            )
+        removed = conn.execute(text(
+            "DELETE FROM comments WHERE client_request_id IS NOT NULL AND id NOT IN ("
+            "SELECT keep_id FROM ("
+            "SELECT MIN(id) AS keep_id FROM comments "
+            "WHERE client_request_id IS NOT NULL "
+            "GROUP BY user_id, client_request_id"
+            ") AS retained_comments)"
+        )).rowcount or 0
+        repaired = conn.execute(text(
+            "UPDATE posts SET comments = ("
+            "SELECT COUNT(*) FROM comments AS stored_comments "
+            "WHERE stored_comments.post_id = posts.id"
+            ") WHERE COALESCE(posts.comments, -1) != ("
+            "SELECT COUNT(*) FROM comments AS stored_comments "
+            "WHERE stored_comments.post_id = posts.id"
+            ")"
+        )).rowcount or 0
+        if not has_scoped_unique:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_comments_user_client_request "
+                "ON comments (user_id, client_request_id) "
+                "WHERE client_request_id IS NOT NULL"
+            ))
+
+    if removed:
+        print(f"[init_db] 社区评论去重: 删除 {removed} 条重复记录")
+    if repaired:
+        print(f"[init_db] 社区评论计数修复: 更新 {repaired} 条动态")
+    return {
+        "duplicates_removed": max(0, int(removed)),
+        "counts_repaired": max(0, int(repaired)),
         "index_created": not has_scoped_unique,
     }
 
@@ -1474,6 +1568,7 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_community_comment_idempotency()
     _migrate_community_like_idempotency()
     _migrate_community_follow_idempotency()
     _migrate_buy_request_idempotency()

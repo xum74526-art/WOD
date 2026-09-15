@@ -13,8 +13,26 @@ export function hourlyOrderBody(hours: number, clientRequestId: string) {
   return { hours, client_request_id: clientRequestId };
 }
 
-export function webRequestId(kind: "order" | "renew" | "buy-request" | "supplier-device", uuid: string) {
+export function webRequestId(kind: "order" | "renew" | "comment" | "buy-request" | "supplier-device", uuid: string) {
   return `web-${kind}-${uuid}`.slice(0, 64);
+}
+
+export type CommunityCommentIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function communityCommentIntentSignature(postId: number, content: string) {
+  return JSON.stringify([postId, content]);
+}
+
+export function ensureCommunityCommentIntent(
+  current: CommunityCommentIntent | null,
+  signature: string,
+  createUuid: () => string,
+): CommunityCommentIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("comment", createUuid()) };
 }
 
 export type RenewalIntent = Readonly<{

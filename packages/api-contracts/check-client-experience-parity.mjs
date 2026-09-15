@@ -103,6 +103,41 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'idempotent community comments',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/mobile-community-api.ts',
+        patterns: ['createCommunityComment(id: number, content: string, clientRequestId: string)', 'client_request_id: clientRequestId', 'retryIdempotentMutationOnce(submit)'],
+      },
+      {
+        client: 'Web',
+        file: 'apps/web/components/community-feed.tsx',
+        patterns: ['ensureCommunityCommentIntent(', 'pendingCommentIntents.current.set(id, intent)', 'item.id !== result.id', 'result.post_comments'],
+      },
+      {
+        client: 'Android API',
+        file: 'apps/android/src/api/community.ts',
+        patterns: ['createComment(id: number, content: string, client_request_id: string)', 'data: { content, client_request_id }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'Android detail',
+        file: 'apps/android/src/pages/community/detail.vue',
+        patterns: ['!postId || !content || commentInFlight', 'ensureClientRequestIntent(', 'createComment(postId, content, intent.requestId)', 'item.id !== c.id', 'c.post_comments'],
+      },
+      {
+        client: 'iOS API',
+        file: 'apps/ios/src/api/community.ts',
+        patterns: ['createComment(id: number, content: string, client_request_id: string)', 'data: { content, client_request_id }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'iOS detail',
+        file: 'apps/ios/src/pages/community/detail.vue',
+        patterns: ['!postId || !content || commentInFlight', 'ensureClientRequestIntent(', 'createComment(postId, content, intent.requestId)', 'item.id !== c.id', 'c.post_comments'],
+      },
+    ],
+  },
+  {
     name: 'registration captcha freshness',
     evidence: [
       {

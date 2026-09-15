@@ -52,6 +52,12 @@ class PostOut(OrmModel):
 
 class CommentIn(BaseModel):
     content: str
+    client_request_id: str | None = Field(
+        default=None,
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
 
 
 class LikeStateIn(BaseModel):
@@ -69,3 +75,4 @@ class CommentOut(OrmModel):
     content: str
     created_at: datetime | None = None
     author_name: str | None = None
+    post_comments: int | None = None

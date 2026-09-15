@@ -587,6 +587,20 @@
       },
       "CommentIn": {
         "properties": {
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 12,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
           "content": {
             "title": "Content",
             "type": "string"

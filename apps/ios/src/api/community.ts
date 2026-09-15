@@ -45,6 +45,7 @@ export interface CommentItem {
   content: string
   created_at?: string
   author_name?: string
+  post_comments?: number
 }
 
 export function getPosts(tab: string = 'recommend', page: number = 1, keyword: string = '') {
@@ -100,8 +101,13 @@ export function getComments(id: number) {
   return request<CommentItem[]>({ url: `/community/posts/${id}/comments` })
 }
 
-export function createComment(id: number, content: string) {
-  return request<CommentItem>({ url: `/community/posts/${id}/comments`, method: 'POST', data: { content } })
+export function createComment(id: number, content: string, client_request_id: string) {
+  return request<CommentItem>({
+    url: `/community/posts/${id}/comments`,
+    method: 'POST',
+    data: { content, client_request_id },
+    retryUncertainOnce: true,
+  })
 }
 
 export function setFollow(uid: number, following: boolean) {

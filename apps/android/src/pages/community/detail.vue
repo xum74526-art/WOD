@@ -122,6 +122,7 @@ import { localizeCommunityText, localizeInternalBrandText, localizePersonName } 
 import { openExternalLink } from '@/utils/external-link'
 import { buildCommunityVideoPlayerUrl, buildCommunityVideoSourceUrl, openCommunityVideo } from '@/utils/community-video'
 import { resolveApiMediaUrl } from '@/utils/config'
+import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -132,8 +133,10 @@ const loading = ref(true)
 const loadError = ref(false)
 const commentsError = ref(false)
 const pid = ref(0)
+const pendingCommentIntent = ref<ClientRequestIntent | null>(null)
 let likeInFlight = false
 let followInFlight = false
+let commentInFlight = false
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)
@@ -290,14 +293,33 @@ function onShare() {
 }
 
 async function onComment() {
-  if (!commentText.value.trim()) return
+  const postId = pid.value
+  const content = commentText.value.trim()
+  if (!postId || !content || commentInFlight) return
+  const intent = ensureClientRequestIntent(
+    pendingCommentIntent.value,
+    { post_id: postId, content },
+    () => `community-comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+  )
+  pendingCommentIntent.value = intent
+  commentInFlight = true
   try {
-    const c = await createComment(pid.value, commentText.value)
-    comments.value.unshift(c)
-    commentText.value = ''
-    if (post.value) post.value.comments++
+    const c = await createComment(postId, content, intent.requestId)
+    if (pendingCommentIntent.value === intent) pendingCommentIntent.value = null
+    const submittedDraftStillCurrent = pid.value === postId && commentText.value.trim() === content
+    if (submittedDraftStillCurrent) commentText.value = ''
+    if (pid.value !== postId) return
+    const knownComment = comments.value.some(item => item.id === c.id)
+    comments.value = [c, ...comments.value.filter(item => item.id !== c.id)]
+    if (post.value?.id === postId) {
+      const postComments = typeof c.post_comments === 'number' && Number.isInteger(c.post_comments) && c.post_comments >= 0
+        ? c.post_comments
+        : null
+      post.value.comments = postComments ?? post.value.comments + (knownComment ? 0 : 1)
+    }
     uni.showToast({ title: t('commentSuccess'), icon: 'success' })
   } catch {}
+  finally { commentInFlight = false }
 }
 </script>
 
