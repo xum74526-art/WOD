@@ -97,7 +97,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
-import { getPosts, toggleLike, toggleFollow, type PostItem } from '@/api/community'
+import { getPosts, setLike, toggleFollow, type PostItem } from '@/api/community'
 import { formatDate } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
 import { openExternalLink } from '@/utils/external-link'
@@ -174,6 +174,7 @@ const searching = ref(false)
 const keyword = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let loadGeneration = 0
+const likeInFlight = new Set<number>()
 
 async function load(reset = false) {
   if (!reset && loading.value) return
@@ -237,11 +238,17 @@ function clearKeyword() {
 }
 
 async function onLike(d: PostItem) {
+  if (likeInFlight.has(d.id)) return
+  const targetLiked = !d.is_liked
+  likeInFlight.add(d.id)
   try {
-    const res = await toggleLike(d.id)
-    d.is_liked = res.liked
-    d.likes = res.likes
+    const res = await setLike(d.id, targetLiked)
+    const current = list.value.find(item => item.id === d.id)
+    if (!current) return
+    current.is_liked = res.liked
+    current.likes = res.likes
   } catch {}
+  finally { likeInFlight.delete(d.id) }
 }
 
 function onShare(d: PostItem) {

@@ -13,6 +13,51 @@ function source(relative) {
 // Web, Android and iOS. Platform-only integrations do not belong here.
 const commonCapabilities = [
   {
+    name: 'idempotent community likes',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/mobile-community-api.ts',
+        patterns: ['setCommunityLike(id: number, liked: boolean)', 'JSON.stringify({ liked })', 'retryIdempotentMutationOnce(submit)'],
+      },
+      {
+        client: 'Web',
+        file: 'apps/web/components/community-feed.tsx',
+        patterns: ['const targetLiked = !row.is_liked', 'setCommunityLike(row.id, targetLiked)', 'is_liked: result.liked'],
+      },
+      {
+        client: 'Android API',
+        file: 'apps/android/src/api/community.ts',
+        patterns: ['setLike(id: number, liked: boolean)', 'data: { liked }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'Android list',
+        file: 'apps/android/src/pages/community/index.vue',
+        patterns: ['likeInFlight.has(d.id)', 'setLike(d.id, targetLiked)', 'list.value.find(item => item.id === d.id)', 'likeInFlight.delete(d.id)'],
+      },
+      {
+        client: 'Android detail',
+        file: 'apps/android/src/pages/community/detail.vue',
+        patterns: ['!post.value || likeInFlight', 'setLike(pid.value, targetLiked)', 'likeInFlight = false'],
+      },
+      {
+        client: 'iOS API',
+        file: 'apps/ios/src/api/community.ts',
+        patterns: ['setLike(id: number, liked: boolean)', 'data: { liked }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'iOS list',
+        file: 'apps/ios/src/pages/community/index.vue',
+        patterns: ['likeInFlight.has(d.id)', 'setLike(d.id, targetLiked)', 'list.value.find(item => item.id === d.id)', 'likeInFlight.delete(d.id)'],
+      },
+      {
+        client: 'iOS detail',
+        file: 'apps/ios/src/pages/community/detail.vue',
+        patterns: ['!post.value || likeInFlight', 'setLike(pid.value, targetLiked)', 'likeInFlight = false'],
+      },
+    ],
+  },
+  {
     name: 'registration captcha freshness',
     evidence: [
       {

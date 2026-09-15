@@ -87,8 +87,13 @@ export function createPost(data: {
   return request<PostItem>({ url: '/community/posts', method: 'POST', data })
 }
 
-export function toggleLike(id: number) {
-  return request<{ liked: boolean; likes: number }>({ url: `/community/posts/${id}/like`, method: 'POST' })
+export function setLike(id: number, liked: boolean) {
+  return request<{ liked: boolean; likes: number }>({
+    url: `/community/posts/${id}/like`,
+    method: 'POST',
+    data: { liked },
+    retryUncertainOnce: true,
+  })
 }
 
 export function getComments(id: number) {

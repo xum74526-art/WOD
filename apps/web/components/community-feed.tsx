@@ -11,7 +11,7 @@ import {
   getCommunityComments,
   getCommunityPosts,
   toggleCommunityFollow,
-  toggleCommunityLike,
+  setCommunityLike,
   uploadCommunityMedia,
   type CommunityComment,
   type CommunityPost,
@@ -290,7 +290,8 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   async function like(row: CommunityPost) {
     const action = `like-${row.id}`;
     if (!beginAction(action)) return;
-    try { const result = await toggleCommunityLike(row.id); setRows((items) => items.map((item) => item.id === row.id ? { ...item, likes: result.likes, is_liked: result.liked } : item)); }
+    const targetLiked = !row.is_liked;
+    try { const result = await setCommunityLike(row.id, targetLiked); setRows((items) => items.map((item) => item.id === row.id ? { ...item, likes: result.likes, is_liked: result.liked } : item)); }
     catch (reason) { setError(localizedCommunityError(reason, t)); }
     finally { finishAction(action); }
   }

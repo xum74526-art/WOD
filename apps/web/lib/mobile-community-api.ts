@@ -1,4 +1,4 @@
-import { apiRequest, apiUploadRequest, type ApiUploadProgress } from "@/lib/api";
+import { apiRequest, apiUploadRequest, retryIdempotentMutationOnce, type ApiUploadProgress } from "@/lib/api";
 import { canonicalApiPath as path } from "@/lib/canonical-api";
 
 export type CommunityPost = { id: number; user_id: number; content: string; images?: string[] | null; video?: string | null; video_duration?: number | null; topic?: string | null; origin?: string | null; content_type?: string | null; source_key?: string | null; source_name?: string | null; source_url?: string | null; source_author?: string | null; source_published_at?: string | null; summary?: string | null; video_url?: string | null; embed_url?: string | null; thumbnail_url?: string | null; canonical_url?: string | null; likes: number; comments: number; shares: number; created_at?: string; author_name?: string; author_avatar?: string; is_liked: boolean; is_following: boolean; is_own: boolean };
@@ -15,7 +15,13 @@ export function uploadCommunityMedia(file: File, onProgress?: (progress: ApiUplo
     onProgress,
   );
 }
-export function toggleCommunityLike(id: number) { return apiRequest<{ liked: boolean; likes: number }>(path(`/community/posts/${id}/like`), { method: "POST" }); }
+export function setCommunityLike(id: number, liked: boolean) {
+  const submit = () => apiRequest<{ liked: boolean; likes: number }>(path(`/community/posts/${id}/like`), {
+    method: "POST",
+    body: JSON.stringify({ liked }),
+  });
+  return retryIdempotentMutationOnce(submit);
+}
 export function toggleCommunityFollow(id: number) { return apiRequest<{ following: boolean }>(path(`/community/users/${id}/follow`), { method: "POST" }); }
 export function getCommunityComments(id: number) { return apiRequest<CommunityComment[]>(path(`/community/posts/${id}/comments`)); }
 export function createCommunityComment(id: number, content: string) { return apiRequest<CommunityComment>(path(`/community/posts/${id}/comments`), { method: "POST", body: JSON.stringify({ content }) }); }
