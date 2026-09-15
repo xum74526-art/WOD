@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -65,6 +65,9 @@ class Comment(Base):
 
 class Like(Base):
     __tablename__ = "likes"
+    __table_args__ = (
+        Index("uq_likes_post_user", "post_id", "user_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id"), index=True)

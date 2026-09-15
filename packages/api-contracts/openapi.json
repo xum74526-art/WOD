@@ -1660,6 +1660,19 @@
         "title": "KaiTicketIn",
         "type": "object"
       },
+      "LikeStateIn": {
+        "properties": {
+          "liked": {
+            "title": "Liked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "liked"
+        ],
+        "title": "LikeStateIn",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "client_id": {
@@ -7138,6 +7151,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LikeStateIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

@@ -10,7 +10,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import and_, case, or_
+from sqlalchemy import and_, case, delete, func, insert, or_, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -18,7 +21,7 @@ from app.core.deps import get_current_platform, get_current_user, get_optional_c
 from app.db.session import get_db
 from app.models.community import Comment, ContentIngestRun, ContentSource, Follow, Like, Post
 from app.models.user import User
-from app.schemas.community import CommentIn, CommentOut, PostCreateIn, PostOut
+from app.schemas.community import CommentIn, CommentOut, LikeStateIn, PostCreateIn, PostOut
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
 from app.services.community_video import (
@@ -434,30 +437,109 @@ def post_detail(pid: int, user: User = Depends(get_current_user), db: Session = 
     return success(_post_out(p, user, db))
 
 
+def _insert_like_if_missing(
+    db: Session,
+    *,
+    post_id: int,
+    user_id: int,
+    platform: str,
+) -> bool:
+    values = {
+        "post_id": post_id,
+        "user_id": user_id,
+        "created_platform": platform,
+    }
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        statement = sqlite_insert(Like).values(**values).on_conflict_do_nothing(
+            index_elements=["post_id", "user_id"]
+        )
+    elif dialect == "postgresql":
+        statement = postgresql_insert(Like).values(**values).on_conflict_do_nothing(
+            index_elements=["post_id", "user_id"]
+        )
+    else:
+        existing = db.query(Like.id).filter(
+            Like.post_id == post_id, Like.user_id == user_id
+        ).first()
+        if existing:
+            return False
+        try:
+            with db.begin_nested():
+                result = db.execute(insert(Like).values(**values))
+            return result.rowcount == 1
+        except IntegrityError:
+            return False
+    return db.execute(statement).rowcount == 1
+
+
+def _set_like_state(
+    pid: int,
+    user_id: int,
+    liked: bool,
+    db: Session,
+    platform: str,
+):
+    if db.query(Post.id).filter(Post.id == pid).scalar() is None:
+        raise BizError("动态不存在", status_code=404)
+
+    source_platform = normalize_platform(platform)
+    if liked:
+        changed = _insert_like_if_missing(
+            db,
+            post_id=pid,
+            user_id=user_id,
+            platform=source_platform,
+        )
+        if changed:
+            db.execute(
+                update(Post).where(Post.id == pid).values(
+                    likes=func.coalesce(Post.likes, 0) + 1,
+                    last_modified_platform=source_platform,
+                )
+            )
+    else:
+        deleted = db.execute(
+            delete(Like).where(Like.post_id == pid, Like.user_id == user_id)
+        ).rowcount or 0
+        if deleted > 0:
+            current_likes = func.coalesce(Post.likes, 0)
+            db.execute(
+                update(Post).where(Post.id == pid).values(
+                    likes=case(
+                        (current_likes >= deleted, current_likes - deleted),
+                        else_=0,
+                    ),
+                    last_modified_platform=source_platform,
+                )
+            )
+
+    db.commit()
+    actual_liked = db.query(Like.id).filter(
+        Like.post_id == pid, Like.user_id == user_id
+    ).first() is not None
+    likes = db.query(Post.likes).filter(Post.id == pid).scalar()
+    if likes is None:
+        raise BizError("动态不存在", status_code=404)
+    return success({"liked": actual_liked, "likes": max(0, int(likes))})
+
+
 @router.post("/posts/{pid}/like")
 def toggle_like(
     pid: int,
+    data: LikeStateIn | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    p = db.query(Post).filter(Post.id == pid).first()
-    if not p:
-        raise BizError("动态不存在", status_code=404)
-    existing = db.query(Like).filter(Like.post_id == pid, Like.user_id == user.id).first()
-    if existing:
-        db.delete(existing)
-        p.likes = max(0, p.likes - 1)
-        p.last_modified_platform = normalize_platform(platform)
-        db.commit()
-        return success({"liked": False, "likes": p.likes})
+    if data is None:
+        existing = db.query(Like.id).filter(
+            Like.post_id == pid, Like.user_id == user.id
+        ).first()
+        liked = existing is None
     else:
-        source_platform = normalize_platform(platform)
-        db.add(Like(post_id=pid, user_id=user.id, created_platform=source_platform))
-        p.likes = p.likes + 1
-        p.last_modified_platform = source_platform
-        db.commit()
-        return success({"liked": True, "likes": p.likes})
+        liked = bool(data.liked)
+    return _set_like_state(pid, user.id, liked, db, platform)
 
 
 @router.get("/posts/{pid}/comments")

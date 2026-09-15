@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 from app.schemas.common import OrmModel
 
@@ -52,6 +52,10 @@ class PostOut(OrmModel):
 
 class CommentIn(BaseModel):
     content: str
+
+
+class LikeStateIn(BaseModel):
+    liked: StrictBool
 
 
 class CommentOut(OrmModel):

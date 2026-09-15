@@ -543,6 +543,58 @@ def _migrate_buy_request_idempotency(db_engine=None) -> None:
         ))
 
 
+def _migrate_community_like_idempotency(db_engine=None) -> dict[str, int | bool]:
+    """Deduplicate likes, repair cached counts, and enforce one like per user."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    tables = set(inspector.get_table_names())
+    if not {"likes", "posts"}.issubset(tables):
+        return {"duplicates_removed": 0, "index_created": False}
+
+    indexes = inspector.get_indexes("likes")
+    constraints = inspector.get_unique_constraints("likes")
+    expected_columns = ["post_id", "user_id"]
+    has_scoped_unique = any(
+        item.get("unique")
+        and list(item.get("column_names") or []) == expected_columns
+        for item in indexes
+    ) or any(
+        list(item.get("column_names") or []) == expected_columns
+        for item in constraints
+    )
+    index_name = "uq_likes_post_user"
+    if not has_scoped_unique and any(
+        item.get("name") == index_name for item in indexes + constraints
+    ):
+        raise RuntimeError(f"{index_name} exists with an incompatible definition")
+
+    with target_engine.begin() as conn:
+        removed = conn.execute(text(
+            "DELETE FROM likes WHERE id NOT IN ("
+            "SELECT keep_id FROM ("
+            "SELECT MIN(id) AS keep_id FROM likes GROUP BY post_id, user_id"
+            ") AS retained_likes)"
+        )).rowcount or 0
+        conn.execute(text(
+            "UPDATE posts SET likes = ("
+            "SELECT COUNT(*) FROM likes WHERE likes.post_id = posts.id"
+            ")"
+        ))
+        if not has_scoped_unique:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_likes_post_user "
+                "ON likes (post_id, user_id)"
+            ))
+
+    if removed:
+        print(f"[init_db] 社区点赞去重: 删除 {removed} 条重复记录")
+    return {
+        "duplicates_removed": max(0, int(removed)),
+        "index_created": not has_scoped_unique,
+    }
+
+
 def _sqlite_rebuild_orders_without_global_request_unique(target_engine) -> None:
     """Remove the legacy SQLite UNIQUE(client_request_id) constraint."""
 
@@ -1376,6 +1428,7 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_community_like_idempotency()
     _migrate_buy_request_idempotency()
     _migrate_market_candle_resolutions()
     _migrate_order_request_scope()
