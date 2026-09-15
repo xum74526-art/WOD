@@ -13,12 +13,74 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models.market_price import MarketHistoryPoint
-from app.routers.market import MARKET_LATEST_CACHE_SECONDS, _MARKET_RESPONSE_CACHE, latest_prices
+from app.routers.market import (
+    MARKET_LATEST_CACHE_SECONDS,
+    MARKET_SUMMARY_CACHE_SECONDS,
+    _MARKET_RESPONSE_CACHE,
+    _summary_history_metrics,
+    latest_prices,
+)
 from app.services.market_history_sync import select_market_history_bulk
 from app.services.sync_ttl_cache import SyncTtlCache, SyncTtlCacheOverloadedError
 
 
 class MarketPerformanceTests(unittest.TestCase):
+    def test_nginx_compresses_large_market_json_responses(self):
+        repository = Path(__file__).resolve().parents[3]
+        nginx = (repository / "infra" / "kai-nginx.conf").read_text(encoding="utf-8")
+
+        self.assertIn("gzip on;", nginx)
+        self.assertIn("gzip_min_length 1024;", nginx)
+        self.assertIn("gzip_types application/json", nginx)
+
+    def test_summary_prefers_official_candles_without_snapshot_rescan(self):
+        identity = ("RTX4090", "24GB")
+        official = {identity: {"history_provenance": {"kind": "official_historical_ohlc"}}}
+
+        with patch("app.routers.market._kai_history_metrics", return_value=official) as candle_metrics, patch(
+            "app.routers.market._seven_day_metrics",
+        ) as snapshot_metrics:
+            result = _summary_history_metrics(
+                self,
+                datetime(2026, 9, 15),
+                [identity],
+                {"kai"},
+            )
+
+        self.assertEqual(result, official)
+        candle_metrics.assert_called_once_with(self, {identity})
+        snapshot_metrics.assert_not_called()
+        self.assertGreaterEqual(MARKET_SUMMARY_CACHE_SECONDS, 300)
+
+    def test_summary_limits_snapshot_fallback_to_missing_identities(self):
+        official_identity = ("RTX4090", "24GB")
+        missing_identity = ("H100", "80GB")
+        official_metric = {"history_provenance": {"kind": "official_historical_ohlc"}}
+        fallback_metric = {"history_provenance": {"kind": "snapshot_fallback"}}
+
+        with patch(
+            "app.routers.market._kai_history_metrics",
+            return_value={official_identity: official_metric},
+        ), patch(
+            "app.routers.market._seven_day_metrics",
+            return_value={missing_identity: fallback_metric},
+        ) as snapshot_metrics:
+            result = _summary_history_metrics(
+                self,
+                datetime(2026, 9, 15),
+                [official_identity, missing_identity],
+                {"kai"},
+            )
+
+        self.assertEqual(result[official_identity], official_metric)
+        self.assertEqual(result[missing_identity], fallback_metric)
+        snapshot_metrics.assert_called_once_with(
+            self,
+            datetime(2026, 9, 15),
+            {"kai"},
+            {missing_identity},
+        )
+
     def test_duplicate_market_requests_share_one_loader(self):
         cache = SyncTtlCache(max_entries=8)
         calls = 0
