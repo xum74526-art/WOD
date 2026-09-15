@@ -9,6 +9,7 @@ import { useCommerceStore } from './store/commerce'
 import { kaiAuthCallbackFingerprint, parseKaiAuthUrl } from './utils/kai-auth-callback'
 import { stagePasswordResetCallback } from './utils/password-reset-callback'
 import { checkForAppUpdate } from './utils/app-update'
+import { CLIENT_PLATFORM } from './utils/client-platform'
 
 const HANDLED_KAI_BIND_CALLBACK_KEY = 'wod_kai_bind_callback_fingerprint'
 let kaiBindingCallbackProcessing = ''
@@ -101,7 +102,7 @@ onLaunch(() => {
   useThemeStore().init()
   useI18nStore().init()
   // #ifdef APP-PLUS
-  setTimeout(() => { void checkForAppUpdate('ios') }, 800)
+  setTimeout(() => { void checkForAppUpdate(CLIENT_PLATFORM) }, 800)
   // #endif
   void useCommerceStore().refresh(true)
   const user = useUserStore()

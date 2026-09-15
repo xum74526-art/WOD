@@ -7,7 +7,7 @@
         <text class="gpu-tag">{{ product.memory }}</text>
       </view>
       <view class="gpu-price">
-        <text class="price-label">{{ t(commerce.directTradeEnabled ? '国内参考价' : commerce.matchmakingEnabled && product.inquiry_available !== false ? 'inquiryResource' : 'operationTemporarilyUnavailable') }}</text>
+        <text class="price-label">{{ t(commerce.directTradeEnabled ? '国内参考价' : commerce.matchmakingEnabled && product.inquiry_available !== false ? 'servicePrice' : 'operationTemporarilyUnavailable') }}</text>
         <view v-if="commerce.directTradeEnabled" class="price-row">
           <text class="price">{{ fmtCH(directTradeCardHoursPerGpuHour(product)) }}</text>
           <text class="unit">/h</text>

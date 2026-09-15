@@ -11,6 +11,7 @@ test('password login opens the native account-recovery flow without a browser ha
   assert.match(page, /<view v-if="mode === 'login'" class="account-recovery-row">/)
   assert.equal((page.match(/@tap="openAccountRecovery"/g) || []).length, 1)
   assert.match(page, /uni\.navigateTo\(\{ url: '\/pages\/forgot-password\/index' \}\)/)
+  assert.doesNotMatch(page, /resolvePublicWebUrl|openExternalLink/)
   assert.ok(pages.pages.some((item: { path: string }) => item.path === 'pages/forgot-password/index'))
   assert.ok(pages.pages.some((item: { path: string }) => item.path === 'pages/reset-password/index'))
 

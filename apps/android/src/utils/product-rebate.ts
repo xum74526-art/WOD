@@ -61,7 +61,7 @@ export function estimateUsageExpiryRebate(
     || minimum < 0
     || amount < minimum
     || !Number.isFinite(remaining)
-    || remaining < 0
+    || remaining <= 0
   ) {
     return { amount: 0, ratePercent: 0 }
   }

@@ -24,9 +24,8 @@ export function normalizeStoredLanguage(value: unknown): AppLanguage {
   if (value === 'en') return 'en'
   if (value === 'zh-Hans' || value === 'zh-CN') return 'zh-Hans'
   if (value === 'zh-Hant' || value === 'zh-TW' || value === 'zh-HK') return 'zh-Hant'
-  // Older releases stored all Chinese as `zh`. Migrate those users to the new
-  // primary Traditional Chinese experience instead of silently keeping the
-  // retired two-language default.
+  // Legacy clients stored all Chinese as `zh`; migrate them to the new
+  // primary Traditional Chinese experience.
   return DEFAULT_LANGUAGE
 }
 

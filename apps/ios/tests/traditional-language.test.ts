@@ -18,7 +18,7 @@ function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
 }
 
-test('Traditional Chinese is the iOS default and legacy preferences migrate safely', () => {
+test('Traditional Chinese is the mobile default and legacy preferences migrate safely', () => {
   assert.equal(DEFAULT_LANGUAGE, 'zh-Hant')
   assert.equal(normalizeStoredLanguage(undefined), 'zh-Hant')
   assert.equal(normalizeStoredLanguage('zh'), 'zh-Hant')
@@ -27,7 +27,7 @@ test('Traditional Chinese is the iOS default and legacy preferences migrate safe
   assert.equal(normalizeStoredLanguage('en'), 'en')
 })
 
-test('iOS language metadata and switching cover all three languages', () => {
+test('mobile language metadata and switching cover all three languages', () => {
   assert.deepEqual(LANGUAGE_OPTIONS, [
     { language: 'zh-Hant', label: '繁體中文', shortLabel: '繁中', locale: 'zh-TW', mark: '繁' },
     { language: 'zh-Hans', label: '简体中文', shortLabel: '简中', locale: 'zh-CN', mark: '简' },
@@ -44,14 +44,14 @@ test('iOS language metadata and switching cover all three languages', () => {
   assert.equal(supportApiLanguage('zh-Hant'), 'zh')
 })
 
-test('the iOS converter covers fixed and runtime business terminology', () => {
+test('the mobile converter covers fixed and runtime business terminology', () => {
   assert.equal(
     toTraditionalChinese('设置、视频上传、账号注销、资产、卡时、联系我们'),
     '設置、視頻上傳、賬號註銷、資產、卡時、聯繫我們',
   )
 })
 
-test('iOS entry points apply Traditional Chinese throughout the app', () => {
+test('mobile entry points apply Traditional Chinese throughout the app', () => {
   const i18n = source('../src/store/i18n.ts')
   const languageToggle = source('../src/components/LanguageToggle.vue')
   const languageSelector = source('../src/components/LanguageSelectorSheet.vue')

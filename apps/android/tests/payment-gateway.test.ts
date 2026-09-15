@@ -21,11 +21,11 @@ test('recharge history supports server-authorized query and cancellation', () =>
   assert.match(rechargeOrdersPage, /cancelRechargePayment\(order\.order_no, true\)/)
 })
 
-test('wallet cannot start, replace, continue, or restart a recharge', () => {
-  assert.doesNotMatch(walletPage, /createRechargePayment|confirmRechargeAmount|requestReplaceRecharge|continueCurrentPayment|handleRestartRecharge|openRecharge/)
-  assert.doesNotMatch(rechargeOrdersPage, /createRechargeRestartRoute|restartOrder|restartRecharge/)
-  assert.match(walletPage, /queryRechargePayment/)
-  assert.match(walletPage, /cancelRechargePayment/)
+test('wallet keeps historical query and cancellation without opening a new recharge', () => {
+  assert.match(walletPage, /queryRechargePayment\(orderNo, true\)/)
+  assert.match(walletPage, /cancelRechargePayment\(paymentSession\.value\.orderNo, true\)/)
+  assert.doesNotMatch(walletPage, /createRechargePayment|requestReplaceRecharge|handleRestartRecharge|continueCurrentPayment/)
+  assert.doesNotMatch(rechargeOrdersPage, /restartOrder|restartRecharge|createRechargeRestartRoute/)
 })
 
 test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
@@ -34,10 +34,9 @@ test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
   assert.doesNotMatch(locale, /码支付订单号|MaPay order|MaPay has no merchant/)
 })
 
-test('wallet removes the 0.01 test recharge and all new recharge or withdrawal controls', () => {
+test('wallet hides all new recharge and withdrawal entry points', () => {
   assert.doesNotMatch(walletPage, /0\.01/)
-  assert.doesNotMatch(walletPage, /effectiveRechargeMinimum|effectiveWithdrawalMinimum|quickAmounts|createWithdrawal/)
-  assert.doesNotMatch(walletPage, /@tap="openRecharge"|@tap="openWithdraw"/)
+  assert.doesNotMatch(walletPage, /createRechargePayment|createWithdrawal|openRecharge|openWithdraw|payAndRecharge/)
   assert.match(walletPage, /goRechargeOrders/)
   assert.match(walletPage, /goWithdrawals/)
 })

@@ -533,6 +533,52 @@ for (const relative of mirroredMobileFiles) {
   if (android !== ios) violations.push(`shared mobile experience drifted: apps/android/${relative} differs from apps/ios/${relative}`)
 }
 
+// Shared Mobile code is intentionally mirrored. Keep the allowlist limited to
+// package identity, build entry points, the platform constant, native manifests,
+// and iOS-only App Store/privacy assets.
+const allowedMobileDrift = new Set([
+  'README.md',
+  'package.json',
+  'package-lock.json',
+  'vite.config.ts',
+  'src/manifest.json',
+  'src/utils/client-platform.ts',
+  'src/static/logo/logo-1024.png',
+  'tests/manifest-permissions.test.ts',
+])
+const ignoredMobileNames = new Set(['node_modules', 'dist', '.DS_Store', '.env.local'])
+
+function mobileFileMap(client) {
+  const base = path.join(root, 'apps', client)
+  const files = new Map()
+  function visit(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (ignoredMobileNames.has(entry.name)) continue
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) visit(absolute)
+      else if (entry.isFile()) files.set(path.relative(base, absolute).replaceAll(path.sep, '/'), absolute)
+    }
+  }
+  visit(base)
+  return files
+}
+
+const androidFiles = mobileFileMap('android')
+const iosFiles = mobileFileMap('ios')
+const allMobileFiles = new Set([...androidFiles.keys(), ...iosFiles.keys()])
+for (const relative of [...allMobileFiles].sort()) {
+  if (allowedMobileDrift.has(relative)) continue
+  const androidPath = androidFiles.get(relative)
+  const iosPath = iosFiles.get(relative)
+  if (!androidPath || !iosPath) {
+    violations.push(`shared mobile file is missing from one platform: ${relative}`)
+    continue
+  }
+  if (!fs.readFileSync(androidPath).equals(fs.readFileSync(iosPath))) {
+    violations.push(`shared mobile source drifted outside the platform allowlist: ${relative}`)
+  }
+}
+
 if (violations.length) {
   console.error('Client experience parity check failed:')
   for (const violation of violations) console.error(`- ${violation}`)

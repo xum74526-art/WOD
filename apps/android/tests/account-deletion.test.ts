@@ -250,7 +250,7 @@ test('deletion and privacy pages do not expose phone entries after contact reloc
   for (const source of [page, privacy]) {
     assert.doesNotMatch(source, /callContactPhone|platformContactNumber|platformContactLink|deletion-contact|4001082026/)
   }
-  assert.match(privacy, /<text v-for="paragraph in section.paragraphs" :key="paragraph" class="p">\{\{ paragraph \}\}<\/text>/)
+  assert.match(privacy, /<template v-for="paragraph in section.paragraphs" :key="paragraph">/)
 })
 
 test('the relocated shared contact helper still requires explicit activation with the exact international number', () => {

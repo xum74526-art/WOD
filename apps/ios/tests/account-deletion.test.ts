@@ -242,15 +242,18 @@ test('mobile entry, consent, password wiping and bounded status recovery are pre
   assert.doesNotMatch(page, /clearStorage|setStorageSync\([^)]*password|console\./)
 })
 
-test('deletion and privacy views do not expose the contact number', () => {
+test('deletion and privacy pages do not expose phone entries after contact relocation', () => {
   const page = readFileSync(new URL('../src/pages/account-deletion/index.vue', import.meta.url), 'utf8')
   const privacy = readFileSync(new URL('../src/pages/agreement/index.vue', import.meta.url), 'utf8')
+  assert.match(page, /<scroll-view scroll-y class="body">\s+<view v-if="receiptView"/)
   assert.doesNotMatch(page, /\/pages\/kefu\/index|deletionResolveHelp/)
-  assert.doesNotMatch(page, /callContactPhone|platformContactNumber|4001082026/)
-  assert.doesNotMatch(privacy, /callContactPhone|platformContactNumber|4001082026/)
+  for (const source of [page, privacy]) {
+    assert.doesNotMatch(source, /callContactPhone|platformContactNumber|platformContactLink|deletion-contact|4001082026/)
+  }
+  assert.match(privacy, /<template v-for="paragraph in section.paragraphs" :key="paragraph">/)
 })
 
-test('contact link opens the dialer only on explicit activation with the exact international number', () => {
+test('the relocated shared contact helper still requires explicit activation with the exact international number', () => {
   const source = readFileSync(new URL('../src/utils/contact-phone.ts', import.meta.url), 'utf8')
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   const called: string[] = []

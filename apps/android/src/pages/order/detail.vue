@@ -73,7 +73,7 @@
       </view>
       <view v-else-if="canRenew" class="bar-row">
         <DirectTradeOrderRenewAction v-if="commerce.directTradeEnabled" :order-id="oid" @refreshed="fetchOrder" />
-        <view v-else-if="commerce.matchmakingEnabled" class="btn primary full" @tap="submitFollowUpRequirement">{{ t('submitRequirement') }}</view>
+        <view v-else-if="commerce.matchmakingEnabled" class="btn primary full" @tap="submitRenewalRequirement">{{ t('submitRequirement') }}</view>
         <view v-else class="info-text">{{ t('dataUnavailable') }}</view>
       </view>
       <view v-else-if="order.status === 'completed' && order.purchase_type === 'holding'" class="bar-row">
@@ -252,7 +252,7 @@ async function onDispute() {
   }
 }
 
-function submitFollowUpRequirement() {
+function submitRenewalRequirement() {
   const current = order.value
   if (!current?.product_id) return
   const originalHours = Number(current.duration_hours ?? current.purchase_hours)
