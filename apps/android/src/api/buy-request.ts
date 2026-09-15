@@ -175,7 +175,7 @@ export function getBuyRequestDetail(id: number) {
 }
 
 export function submitBuyRequestQuote(requestId: number, data: BuyRequestQuotePayload) {
-  return request<BuyRequestQuote>({ url: `/buy-requests/${requestId}/quotes`, method: 'POST', data })
+  return request<BuyRequestQuote>({ url: `/buy-requests/${requestId}/quotes`, method: 'POST', data, retryUncertainOnce: true })
 }
 
 export function counterBuyRequestQuote(requestId: number, quoteId: number, data: BuyRequestQuotePayload) {

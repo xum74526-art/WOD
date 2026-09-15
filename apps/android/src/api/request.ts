@@ -62,51 +62,65 @@ export function request<T = unknown>(options: {
   auth?: 'session' | 'none'
   /** Explicit logout handles an invalid bearer locally without a second redirect. */
   unauthorized?: 'expire-session' | 'reject'
+  /** Only for mutations whose server endpoint safely reconciles an identical retry. */
+  retryUncertainOnce?: boolean
 }): Promise<T> {
   const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
   return new Promise((resolve, reject) => {
-    uni.request({
-      url: API_BASE + options.url,
-      method: options.method || 'GET',
-      data: options.data,
-      timeout: 15000,
-      header: {
-        'Content-Type': 'application/json',
-        'Accept-Language': i18n.locale,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      success: (res) => {
-        const body = responseBody<T>(res.data)
-        if (res.statusCode === 401 || body.code === 401) {
-          if (options.auth === 'none' || options.unauthorized === 'reject') {
-            reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
+    const send = (attempt: 0 | 1) => {
+      uni.request({
+        url: API_BASE + options.url,
+        method: options.method || 'GET',
+        data: options.data,
+        timeout: 15000,
+        header: {
+          'Content-Type': 'application/json',
+          'Accept-Language': i18n.locale,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        success: (res) => {
+          const body = responseBody<T>(res.data)
+          if (res.statusCode === 401 || body.code === 401) {
+            if (options.auth === 'none' || options.unauthorized === 'reject') {
+              reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
+              return
+            }
+            expireSession(i18n, token)
+            reject(new Error(i18n.t('未登录')))
             return
           }
-          expireSession(i18n, token)
-          reject(new Error(i18n.t('未登录')))
-          return
-        }
-        if (res.statusCode >= 400) {
-          const fallback = res.statusCode === 422 ? 'requestValidationFailed' : '请求失败'
-          const msg = errorMessage(i18n, body, fallback)
-          if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
-          reject(new ApiRequestError(msg, res.statusCode))
-          return
-        }
-        if (body.code !== 0 || !('data' in body)) {
-          const msg = errorMessage(i18n, body, '请求失败')
-          if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
-          reject(new Error(msg))
-          return
-        }
-        resolve(body.data as T)
-      },
-      fail: (err) => {
-        if (!options.silent) uni.showToast({ title: i18n.t('网络异常'), icon: 'none' })
-        reject(err)
-      },
-    })
+          const uncertainStatus = res.statusCode === 408 || res.statusCode === 502 || res.statusCode === 503 || res.statusCode === 504
+          if (options.retryUncertainOnce && attempt === 0 && uncertainStatus) {
+            send(1)
+            return
+          }
+          if (res.statusCode >= 400) {
+            const fallback = res.statusCode === 422 ? 'requestValidationFailed' : '请求失败'
+            const msg = errorMessage(i18n, body, fallback)
+            if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
+            reject(new ApiRequestError(msg, res.statusCode))
+            return
+          }
+          if (body.code !== 0 || !('data' in body)) {
+            const msg = errorMessage(i18n, body, '请求失败')
+            if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
+            reject(new Error(msg))
+            return
+          }
+          resolve(body.data as T)
+        },
+        fail: (err) => {
+          if (options.retryUncertainOnce && attempt === 0) {
+            send(1)
+            return
+          }
+          if (!options.silent) uni.showToast({ title: i18n.t('网络异常'), icon: 'none' })
+          reject(err)
+        },
+      })
+    }
+    send(0)
   })
 }
 

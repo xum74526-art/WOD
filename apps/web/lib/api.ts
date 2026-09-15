@@ -11,9 +11,32 @@ export type ApiErrorBody = {
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly code?: string, public readonly status?: number) {
+  readonly code?: string;
+  readonly status?: number;
+
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = "ApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function isUncertainApiFailure(reason: unknown) {
+  if (!(reason instanceof ApiError)) return true;
+  return reason.status === 408 || reason.status === 502 || reason.status === 503 || reason.status === 504;
+}
+
+/**
+ * Retries once after a transport/gateway failure. Only use this for mutations
+ * whose server endpoint safely reconciles an identical duplicate request.
+ */
+export async function retryIdempotentMutationOnce<T>(submit: () => Promise<T>): Promise<T> {
+  try {
+    return await submit();
+  } catch (reason) {
+    if (!isUncertainApiFailure(reason)) throw reason;
+    return submit();
   }
 }
 

@@ -23,7 +23,7 @@ import {
   type MobileBuyRequestDetail,
   type MobileBuyRequestEvent,
 } from "@/lib/mobile-buy-request-api";
-import { ApiError } from "@/lib/api";
+import { ApiError, retryIdempotentMutationOnce } from "@/lib/api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import {
@@ -298,13 +298,16 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
   async function submitQuote(event: FormEvent) {
     event.preventDefault();
     if (!detail || !Number.isFinite(Number(quote.total_price)) || Number(quote.total_price) < 0) return;
+    const requestId = detail.request.id;
+    const input = quoteInput();
+    const quoteId = editingQuoteId;
     setBusy("quote"); setError(""); setMessage("");
     try {
-      if (editingQuoteId) await counterMobileBuyQuote(detail.request.id, editingQuoteId, quoteInput());
-      else await createMobileBuyQuote(detail.request.id, quoteInput());
+      if (quoteId !== null) await counterMobileBuyQuote(requestId, quoteId, input);
+      else await retryIdempotentMutationOnce(() => createMobileBuyQuote(requestId, input));
       setQuote(emptyQuote); setEditingQuoteId(null);
-      setMessage(editingQuoteId ? "新一轮报价已提交，等待对方回应。" : "报价已提交，购买人不会看到您的私人联系方式。");
-      await load(detail.request.id);
+      setMessage(quoteId !== null ? "新一轮报价已提交，等待对方回应。" : "报价已提交，购买人不会看到您的私人联系方式。");
+      await load(requestId);
     } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
   }
 
