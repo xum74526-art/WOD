@@ -58,6 +58,51 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'idempotent community follows',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/mobile-community-api.ts',
+        patterns: ['setCommunityFollow(id: number, following: boolean)', 'JSON.stringify({ following })', 'retryIdempotentMutationOnce(submit)'],
+      },
+      {
+        client: 'Web',
+        file: 'apps/web/components/community-feed.tsx',
+        patterns: ['const action = `follow-${row.user_id}`', 'const targetFollowing = !row.is_following', 'setCommunityFollow(row.user_id, targetFollowing)'],
+      },
+      {
+        client: 'Android API',
+        file: 'apps/android/src/api/community.ts',
+        patterns: ['setFollow(uid: number, following: boolean)', 'data: { following }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'Android list',
+        file: 'apps/android/src/pages/community/index.vue',
+        patterns: ['followInFlight.has(d.user_id)', 'setFollow(d.user_id, targetFollowing)', 'followInFlight.delete(d.user_id)'],
+      },
+      {
+        client: 'Android detail',
+        file: 'apps/android/src/pages/community/detail.vue',
+        patterns: ['!post.value || followInFlight', 'setFollow(post.value.user_id, targetFollowing)', 'followInFlight = false'],
+      },
+      {
+        client: 'iOS API',
+        file: 'apps/ios/src/api/community.ts',
+        patterns: ['setFollow(uid: number, following: boolean)', 'data: { following }', 'retryUncertainOnce: true'],
+      },
+      {
+        client: 'iOS list',
+        file: 'apps/ios/src/pages/community/index.vue',
+        patterns: ['followInFlight.has(d.user_id)', 'setFollow(d.user_id, targetFollowing)', 'followInFlight.delete(d.user_id)'],
+      },
+      {
+        client: 'iOS detail',
+        file: 'apps/ios/src/pages/community/detail.vue',
+        patterns: ['!post.value || followInFlight', 'setFollow(post.value.user_id, targetFollowing)', 'followInFlight = false'],
+      },
+    ],
+  },
+  {
     name: 'registration captcha freshness',
     evidence: [
       {

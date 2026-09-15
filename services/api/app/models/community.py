@@ -80,6 +80,9 @@ class Like(Base):
 
 class Follow(Base):
     __tablename__ = "follows"
+    __table_args__ = (
+        Index("uq_follows_follower_following", "follower_id", "following_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 关注者

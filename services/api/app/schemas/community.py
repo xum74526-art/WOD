@@ -58,6 +58,10 @@ class LikeStateIn(BaseModel):
     liked: StrictBool
 
 
+class FollowStateIn(BaseModel):
+    following: StrictBool
+
+
 class CommentOut(OrmModel):
     id: int
     post_id: int

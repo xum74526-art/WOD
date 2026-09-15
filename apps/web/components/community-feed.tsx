@@ -10,7 +10,7 @@ import {
   createCommunityPost,
   getCommunityComments,
   getCommunityPosts,
-  toggleCommunityFollow,
+  setCommunityFollow,
   setCommunityLike,
   uploadCommunityMedia,
   type CommunityComment,
@@ -170,7 +170,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
           {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : communityDisplayText(row.author_name || t("community.feed.avatarFallback", "匿"), row.source_key).slice(0, 1)}
         </div>
         <span><strong data-i18n-skip>{authorName}</strong><small>{formatDate(row.source_published_at || row.created_at, dateLocale)}{row.topic ? <> · <span data-i18n-skip>{row.topic}</span></> : ""}</small></span>
-        {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy.has(`follow-${row.id}`)} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? t("community.feed.following", "已关注") : t("community.feed.follow", "关注")}</button>}
+        {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy.has(`follow-${row.user_id}`)} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? t("community.feed.following", "已关注") : t("community.feed.follow", "关注")}</button>}
       </header>
 
       <div className="community-post-card__copy">
@@ -297,9 +297,10 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   }
 
   async function follow(row: CommunityPost) {
-    const action = `follow-${row.id}`;
+    const action = `follow-${row.user_id}`;
     if (!beginAction(action)) return;
-    try { const result = await toggleCommunityFollow(row.user_id); setRows((items) => items.map((item) => item.user_id === row.user_id ? { ...item, is_following: result.following } : item)); }
+    const targetFollowing = !row.is_following;
+    try { const result = await setCommunityFollow(row.user_id, targetFollowing); setRows((items) => items.map((item) => item.user_id === row.user_id ? { ...item, is_following: result.following } : item)); }
     catch (reason) { setError(localizedCommunityError(reason, t)); }
     finally { finishAction(action); }
   }

@@ -595,6 +595,52 @@ def _migrate_community_like_idempotency(db_engine=None) -> dict[str, int | bool]
     }
 
 
+def _migrate_community_follow_idempotency(db_engine=None) -> dict[str, int | bool]:
+    """Deduplicate follows and enforce one relationship per user pair."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "follows" not in set(inspector.get_table_names()):
+        return {"duplicates_removed": 0, "index_created": False}
+
+    indexes = inspector.get_indexes("follows")
+    constraints = inspector.get_unique_constraints("follows")
+    expected_columns = ["follower_id", "following_id"]
+    has_scoped_unique = any(
+        item.get("unique")
+        and list(item.get("column_names") or []) == expected_columns
+        for item in indexes
+    ) or any(
+        list(item.get("column_names") or []) == expected_columns
+        for item in constraints
+    )
+    index_name = "uq_follows_follower_following"
+    if not has_scoped_unique and any(
+        item.get("name") == index_name for item in indexes + constraints
+    ):
+        raise RuntimeError(f"{index_name} exists with an incompatible definition")
+
+    with target_engine.begin() as conn:
+        removed = conn.execute(text(
+            "DELETE FROM follows WHERE id NOT IN ("
+            "SELECT keep_id FROM ("
+            "SELECT MIN(id) AS keep_id FROM follows GROUP BY follower_id, following_id"
+            ") AS retained_follows)"
+        )).rowcount or 0
+        if not has_scoped_unique:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_follows_follower_following "
+                "ON follows (follower_id, following_id)"
+            ))
+
+    if removed:
+        print(f"[init_db] 社区关注去重: 删除 {removed} 条重复记录")
+    return {
+        "duplicates_removed": max(0, int(removed)),
+        "index_created": not has_scoped_unique,
+    }
+
+
 def _sqlite_rebuild_orders_without_global_request_unique(target_engine) -> None:
     """Remove the legacy SQLite UNIQUE(client_request_id) constraint."""
 
@@ -1429,6 +1475,7 @@ def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
     _migrate_community_like_idempotency()
+    _migrate_community_follow_idempotency()
     _migrate_buy_request_idempotency()
     _migrate_market_candle_resolutions()
     _migrate_order_request_scope()

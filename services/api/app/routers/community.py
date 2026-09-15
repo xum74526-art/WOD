@@ -21,7 +21,7 @@ from app.core.deps import get_current_platform, get_current_user, get_optional_c
 from app.db.session import get_db
 from app.models.community import Comment, ContentIngestRun, ContentSource, Follow, Like, Post
 from app.models.user import User
-from app.schemas.community import CommentIn, CommentOut, LikeStateIn, PostCreateIn, PostOut
+from app.schemas.community import CommentIn, CommentOut, FollowStateIn, LikeStateIn, PostCreateIn, PostOut
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
 from app.services.community_video import (
@@ -587,31 +587,89 @@ def create_comment(
     return success(d)
 
 
+def _insert_follow_if_missing(
+    db: Session,
+    *,
+    follower_id: int,
+    following_id: int,
+    platform: str,
+) -> bool:
+    values = {
+        "follower_id": follower_id,
+        "following_id": following_id,
+        "created_platform": platform,
+    }
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        statement = sqlite_insert(Follow).values(**values).on_conflict_do_nothing(
+            index_elements=["follower_id", "following_id"]
+        )
+    elif dialect == "postgresql":
+        statement = postgresql_insert(Follow).values(**values).on_conflict_do_nothing(
+            index_elements=["follower_id", "following_id"]
+        )
+    else:
+        existing = db.query(Follow.id).filter(
+            Follow.follower_id == follower_id, Follow.following_id == following_id
+        ).first()
+        if existing:
+            return False
+        try:
+            with db.begin_nested():
+                result = db.execute(insert(Follow).values(**values))
+            return result.rowcount == 1
+        except IntegrityError:
+            return False
+    return db.execute(statement).rowcount == 1
+
+
+def _set_follow_state(
+    uid: int,
+    follower_id: int,
+    following: bool,
+    db: Session,
+    platform: str,
+):
+    if uid == follower_id:
+        raise BizError("不能关注自己")
+    if db.query(User.id).filter(User.id == uid).scalar() is None:
+        raise BizError("用户不存在", status_code=404)
+
+    if following:
+        _insert_follow_if_missing(
+            db,
+            follower_id=follower_id,
+            following_id=uid,
+            platform=normalize_platform(platform),
+        )
+    else:
+        db.execute(delete(Follow).where(
+            Follow.follower_id == follower_id, Follow.following_id == uid
+        ))
+
+    db.commit()
+    actual_following = db.query(Follow.id).filter(
+        Follow.follower_id == follower_id, Follow.following_id == uid
+    ).first() is not None
+    return success({"following": actual_following})
+
+
 @router.post("/users/{uid}/follow")
 def toggle_follow(
     uid: int,
+    data: FollowStateIn | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    if uid == user.id:
-        raise BizError("不能关注自己")
-    target = db.query(User).filter(User.id == uid).first()
-    if not target:
-        raise BizError("用户不存在", status_code=404)
-    existing = db.query(Follow).filter(Follow.follower_id == user.id, Follow.following_id == uid).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
-        return success({"following": False})
+    if data is None:
+        existing = db.query(Follow.id).filter(
+            Follow.follower_id == user.id, Follow.following_id == uid
+        ).first()
+        following = existing is None
     else:
-        db.add(Follow(
-            follower_id=user.id,
-            following_id=uid,
-            created_platform=normalize_platform(platform),
-        ))
-        db.commit()
-        return success({"following": True})
+        following = bool(data.following)
+    return _set_follow_state(uid, user.id, following, db, platform)
 
 
 @router.get("/sources")

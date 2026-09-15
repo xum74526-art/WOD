@@ -5,10 +5,10 @@ import test from "node:test";
 test("Web sends an explicit like state and safely retries only the identical operation", () => {
   const api = fs.readFileSync(new URL("../lib/mobile-community-api.ts", import.meta.url), "utf8");
   const start = api.indexOf("export function setCommunityLike");
-  const end = api.indexOf("export function toggleCommunityFollow", start);
+  const end = api.indexOf("export function setCommunityFollow", start);
   const flow = api.slice(start, end);
 
-  assert.ok(start >= 0);
+  assert.ok(start >= 0 && end > start);
   assert.match(flow, /setCommunityLike\(id: number, liked: boolean\)/);
   assert.match(flow, /body: JSON\.stringify\(\{ liked \}\)/);
   assert.match(flow, /return retryIdempotentMutationOnce\(submit\)/);

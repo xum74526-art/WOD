@@ -104,6 +104,11 @@ export function createComment(id: number, content: string) {
   return request<CommentItem>({ url: `/community/posts/${id}/comments`, method: 'POST', data: { content } })
 }
 
-export function toggleFollow(uid: number) {
-  return request<{ following: boolean }>({ url: `/community/users/${uid}/follow`, method: 'POST' })
+export function setFollow(uid: number, following: boolean) {
+  return request<{ following: boolean }>({
+    url: `/community/users/${uid}/follow`,
+    method: 'POST',
+    data: { following },
+    retryUncertainOnce: true,
+  })
 }

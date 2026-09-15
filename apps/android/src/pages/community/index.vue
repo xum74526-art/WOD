@@ -97,7 +97,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
-import { getPosts, setLike, toggleFollow, type PostItem } from '@/api/community'
+import { getPosts, setFollow, setLike, type PostItem } from '@/api/community'
 import { formatDate } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
 import { openExternalLink } from '@/utils/external-link'
@@ -175,6 +175,7 @@ const keyword = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let loadGeneration = 0
 const likeInFlight = new Set<number>()
+const followInFlight = new Set<number>()
 
 async function load(reset = false) {
   if (!reset && loading.value) return
@@ -259,12 +260,16 @@ function onShare(d: PostItem) {
 }
 
 async function onFollow(d: PostItem) {
+  if (followInFlight.has(d.user_id)) return
+  const targetFollowing = !d.is_following
+  followInFlight.add(d.user_id)
   try {
-    const res = await toggleFollow(d.user_id)
+    const res = await setFollow(d.user_id, targetFollowing)
     list.value.forEach(p => {
       if (p.user_id === d.user_id) p.is_following = res.following
     })
   } catch {}
+  finally { followInFlight.delete(d.user_id) }
 }
 
 function goPublish() { nav('/pages/community/publish') }

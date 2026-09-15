@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getPostDetail, getComments, createComment, setLike, toggleFollow, type PostItem, type CommentItem } from '@/api/community'
+import { getPostDetail, getComments, createComment, setFollow, setLike, type PostItem, type CommentItem } from '@/api/community'
 import { formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -133,6 +133,7 @@ const loadError = ref(false)
 const commentsError = ref(false)
 const pid = ref(0)
 let likeInFlight = false
+let followInFlight = false
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)
@@ -270,11 +271,14 @@ async function onLike() {
 }
 
 async function onFollow() {
-  if (!post.value) return
+  if (!post.value || followInFlight) return
+  const targetFollowing = !post.value.is_following
+  followInFlight = true
   try {
-    const res = await toggleFollow(post.value.user_id)
+    const res = await setFollow(post.value.user_id, targetFollowing)
     post.value.is_following = res.following
   } catch {}
+  finally { followInFlight = false }
 }
 
 function onShare() {

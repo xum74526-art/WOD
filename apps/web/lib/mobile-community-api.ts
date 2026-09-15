@@ -22,6 +22,12 @@ export function setCommunityLike(id: number, liked: boolean) {
   });
   return retryIdempotentMutationOnce(submit);
 }
-export function toggleCommunityFollow(id: number) { return apiRequest<{ following: boolean }>(path(`/community/users/${id}/follow`), { method: "POST" }); }
+export function setCommunityFollow(id: number, following: boolean) {
+  const submit = () => apiRequest<{ following: boolean }>(path(`/community/users/${id}/follow`), {
+    method: "POST",
+    body: JSON.stringify({ following }),
+  });
+  return retryIdempotentMutationOnce(submit);
+}
 export function getCommunityComments(id: number) { return apiRequest<CommunityComment[]>(path(`/community/posts/${id}/comments`)); }
 export function createCommunityComment(id: number, content: string) { return apiRequest<CommunityComment>(path(`/community/posts/${id}/comments`), { method: "POST", body: JSON.stringify({ content }) }); }
