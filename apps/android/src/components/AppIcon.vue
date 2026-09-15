@@ -20,9 +20,8 @@ const PATHS: Record<string, string> = {
   order: 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',
   revenue: 'M4 16l4-5 4 3 4-6 4 4',
   settings: 'M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2',
-  language: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c3 3 4.5 6.3 4.5 10S15 19 12 22M12 2c-3 3-4.5 6.3-4.5 10S9 19 12 22',
+  language: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c3 3 4 6 4 10s-1 7-4 10c-3-3-4-6-4-10s1-7 4-10z',
   help: 'M12 22a10 10 0 100-20 10 10 0 000 20zM9.5 9a2.5 2.5 0 015 0c0 2.5-2.5 2-2.5 4M12 17h.01',
-  mail: 'M3 5h18v14H3zM3 7l9 7 9-7',
   shield: 'M12 3l8 3v6c0 4-3 7-8 9-5-2-8-5-8-9V6l8-3z',
   plus: 'M12 5v14M5 12h14',
   minus: 'M5 12h14',
@@ -47,6 +46,7 @@ const PATHS: Record<string, string> = {
   // 银行卡
   'bank-card': 'M3 6h18v12H3zM3 10h18M7 15h4',
   // 实名认证
+  mail: 'M3 5h18v14H3zM3 7l9 7 9-7',
   verified: 'M4 5h16v14H4zM8 9a2 2 0 100-4 2 2 0 000 4zM6 16a3 3 0 016 0M14 11l2 2 4-4',
   // 采购
   procurement: 'M3 4h2l2 11h10l3-8H6M9 20h.01M17 20h.01',

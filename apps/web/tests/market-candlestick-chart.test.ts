@@ -461,8 +461,8 @@ test("Web K-line renderer follows the App visual and refresh contract", () => {
   const styles = fs.readFileSync(new URL("../components/market-candlestick-chart.module.css", import.meta.url), "utf8");
 
   assert.match(chart, /useState<MarketChartRange>\("30d"\)/);
-  assert.match(chart, /LATEST_REFRESH_MS = 10_000/);
-  assert.match(chart, /"24h": 30_000/);
+  assert.match(chart, /LATEST_REFRESH_MS = 300_000/);
+  assert.match(chart, /"24h": 300_000/);
   assert.match(chart, /"7d": 300_000/);
   assert.match(chart, /"90d": 300_000/);
   assert.match(chart, /value: "90d"/);

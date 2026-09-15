@@ -127,7 +127,7 @@
       </view>
     </scroll-view>
 
-    <LanguageSelectorSheet v-model:visible="showLanguage" />
+    <LanguageSelectorSheet v-model:visible="showLanguageSelector" />
 
     <ConfirmSheet
       :visible="showLogout"
@@ -158,6 +158,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
 import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
+import { CLIENT_PLATFORM } from '@/utils/client-platform'
 import { languageOption } from '@/utils/language'
 
 const i18n = useI18nStore()
@@ -166,7 +167,7 @@ const userStore = useUserStore()
 const themeStore = useThemeStore()
 const notificationStore = useNotificationStore()
 const showLogout = ref(false)
-const showLanguage = ref(false)
+const showLanguageSelector = ref(false)
 const kaiBinding = ref<KaiBindingStatus | null>(null)
 const kaiBindingLoading = ref(false)
 const updateChecking = ref(false)
@@ -305,7 +306,7 @@ function onTheme() {
   })
 }
 function onLanguage() {
-  showLanguage.value = true
+  showLanguageSelector.value = true
 }
 function onPassword() {
   nav('/pages/password/index')
@@ -325,7 +326,7 @@ async function onCheckUpdate() {
   if (updateChecking.value) return
   updateChecking.value = true
   try {
-    await checkForAppUpdate('android', { manual: true })
+    await checkForAppUpdate(CLIENT_PLATFORM, { manual: true })
   } finally {
     updateChecking.value = false
   }

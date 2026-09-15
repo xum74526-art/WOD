@@ -33,7 +33,7 @@ function finiteNumber(value: NumericValue): number {
 
 /**
  * `Number#toLocaleString` 在部分 Android App Webview / JSCore 中会忽略
- * maximumFractionDigits，導致同一份數據在 H5 是兩位小數、APK 卻展示完整
+ * maximumFractionDigits，导致同一份数据在 H5 是两位小数、APK 却展示完整
  * 浮点尾数。这里仅使用项目实际需要的中英文数字规则（千分位逗号、小数点）
  * 手工生成结果，保证 H5、Android 与小程序输出一致。
  */
@@ -85,7 +85,7 @@ export function formatNumber(
 ): string {
   const maximumFractionDigits = Math.max(0, Math.min(options.maximumFractionDigits ?? 2, 20))
   const minimumFractionDigits = Math.max(0, Math.min(options.minimumFractionDigits ?? 0, maximumFractionDigits))
-  // 保留 locale 參數以兼容現有調用；當前支持的中英文數字分隔規則相同。
+  // 保留 locale 参数以兼容现有调用；当前支持的 zh-CN / en-US 数字分隔规则相同。
   void (options.locale || currentLocale())
   return stableDecimal(
     finiteNumber(value),

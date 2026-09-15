@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -29,7 +31,13 @@ def configured_platform_fulfiller_ids(db: Session) -> set[int]:
     }
 
 
-def product_purchase_availability(product, db: Session) -> tuple[bool, str | None]:
+def product_purchase_availability(
+    product,
+    db: Session,
+    *,
+    platform_fulfiller_ids: set[int] | None = None,
+    suppliers: Mapping[int, Supplier] | None = None,
+) -> tuple[bool, str | None]:
     """Return whether ZTW can actually fulfil this offer.
 
     Provider-backed cards may enter the manual-fulfilment order workflow while their
@@ -40,14 +48,23 @@ def product_purchase_availability(product, db: Session) -> tuple[bool, str | Non
         return False, UNAVAILABLE_LISTING_REASON
     source = product_market_source(product)
     if source == "kai":
-        if not configured_platform_fulfiller_ids(db):
+        fulfiller_ids = (
+            configured_platform_fulfiller_ids(db)
+            if platform_fulfiller_ids is None
+            else platform_fulfiller_ids
+        )
+        if not fulfiller_ids:
             return False, PLATFORM_FULFILLMENT_UNAVAILABLE_REASON
         return True, None
     if source != "wod":
         return False, RETIRED_MARKET_SOURCE_REASON
     if not product.supplier_id:
         return False, UNVERIFIED_SUPPLIER_REASON
-    supplier = db.query(Supplier).filter(Supplier.id == product.supplier_id).first()
+    supplier = (
+        suppliers.get(int(product.supplier_id))
+        if suppliers is not None
+        else db.query(Supplier).filter(Supplier.id == product.supplier_id).first()
+    )
     if not supplier or supplier.status != "approved":
         return False, UNVERIFIED_SUPPLIER_REASON
     return True, None

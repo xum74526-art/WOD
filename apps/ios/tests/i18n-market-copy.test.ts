@@ -4,7 +4,7 @@ import test from 'node:test'
 
 import { englishRegionName, localizeMarketLocation, localizeRegionName } from '../src/utils/region-name.ts'
 
-test('iOS localizes every canonical KAI market region', () => {
+test('mobile localizes every canonical KAI market region', () => {
   const cases: Array<[string, string, string]> = [
     ['north_china', '华北', 'North China'],
     ['east_china', '华东', 'East China'],
@@ -35,7 +35,7 @@ test('iOS localizes every canonical KAI market region', () => {
   assert.equal(localizeMarketLocation('华东', 'east_china', 'CN-East-1', 'en'), 'East China · CN-East-1')
 })
 
-test('iOS English market copy uses buyer-friendly natural language', () => {
+test('mobile English market copy uses buyer-friendly natural language', () => {
   const i18n = fs.readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
   const generated = fs.readFileSync(new URL('../src/store/i18n_generated.ts', import.meta.url), 'utf8')
   const supplierSettings = fs.readFileSync(new URL('../src/pages/supplier/settings.vue', import.meta.url), 'utf8')

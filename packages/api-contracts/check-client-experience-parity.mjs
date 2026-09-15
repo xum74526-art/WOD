@@ -502,6 +502,104 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'mobile market sort options',
+    evidence: ['android', 'ios'].map(client => ({
+      client,
+      file: `apps/${client}/src/pages/market/index.vue`,
+      patterns: [
+        'const sorts = computed(() => commerce.directTradeEnabled',
+        "{ key: 'price_asc', label: 'sortPriceUp' }",
+        "{ key: 'price_desc', label: 'sortPriceDown' }",
+        "if (!commerce.directTradeEnabled && sort.value !== 'default')",
+      ],
+    })),
+  },
+  {
+    name: 'mobile product inquiry login continuation',
+    evidence: ['android', 'ios'].map(client => ({
+      client,
+      file: `apps/${client}/src/pages/product/detail.vue`,
+      patterns: [
+        "source: current.market_source || current.seller_type || 'wod'",
+        "region: current.region_code || current.region_name || current.city || ''",
+        "const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'",
+        'nav(target)',
+      ],
+    })),
+  },
+  {
+    name: 'mobile rebate presentation',
+    evidence: ['android', 'ios'].flatMap(client => [
+      {
+        client,
+        file: `apps/${client}/src/pages/supplier/dashboard.vue`,
+        patterns: ["t('supplierSalesRebateTitle')", "t('supplierSalesRebateCardHint'"],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/supplier/rebate.vue`,
+        patterns: [
+          "t('supplierSalesRebateRuleBasis')",
+          "t('supplierSalesRebateRuleTarget')",
+          "t('supplierSalesRebateRuleTopUp')",
+          "t('supplierSalesRebateRuleExclusions')",
+          "t('supplierBuyerRebateIndependent')",
+          "t('monthlyRebateCapRule'",
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/profile/index.vue`,
+        patterns: [
+          "t('supplierSalesRebateTitle')",
+          "t('supplierSalesRebateCardHint'",
+          "t('personalPurchaseRebateTitle')",
+          "t('personalPurchaseRebateCardHint'",
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/rebate/index.vue`,
+        patterns: [
+          "t('personalPurchaseRebateRuleBasis')",
+          "t('personalPurchaseRebateRuleConfirm')",
+          "t('personalPurchaseRebateRulePayout')",
+          "t('personalPurchaseRebateRuleExclusions')",
+          "t('monthlyRebateCapRule'",
+        ],
+      },
+    ]),
+  },
+  {
+    name: 'mobile native video playback',
+    evidence: ['android', 'ios'].flatMap(client => [
+      {
+        client,
+        file: `apps/${client}/src/utils/community-video.ts`,
+        patterns: [
+          'resolveCommunityVideoStreamUrl',
+          'runtime.video.createVideoPlayer',
+          'COMMUNITY_VIDEO_PLAYBACK_RATES',
+          'video?.playbackRate(rate)',
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/community/detail.vue`,
+        patterns: [
+          'requestTrustedPublicJson',
+          'await openCommunityVideo',
+          "uni.showLoading({ title: t('loading'), mask: true })",
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/manifest.json`,
+        patterns: ['"VideoPlayer"'],
+      },
+    ]),
+  },
 ]
 
 const violations = []
@@ -531,6 +629,17 @@ const mirroredMobileFiles = [
   'tests/recovery-email-binding.test.ts',
   'src/config/profile-widgets.ts',
   'tests/profile-widgets.test.ts',
+  'src/pages/profile/index.vue',
+  'src/pages/supplier/dashboard.vue',
+  'src/pages/supplier/rebate.vue',
+  'src/pages/rebate/index.vue',
+  'tests/rebate-presentation.test.ts',
+  'src/pages/index/index.vue',
+  'src/pages/market/index.vue',
+  'src/pages/product/detail.vue',
+  'src/pages/community/detail.vue',
+  'src/utils/community-video.ts',
+  'tests/community-video-playback.test.ts',
   'src/config/home-promotions.ts',
   'src/components/HomePromoCarousel.vue',
   'src/utils/buy-request-requirements.ts',
@@ -547,6 +656,52 @@ for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')
   const ios = source(path.join('apps/ios', relative)).replaceAll('\r\n', '\n')
   if (android !== ios) violations.push(`shared mobile experience drifted: apps/android/${relative} differs from apps/ios/${relative}`)
+}
+
+// Shared Mobile code is intentionally mirrored. Keep the allowlist limited to
+// package identity, build entry points, the platform constant, native manifests,
+// and iOS-only App Store/privacy assets.
+const allowedMobileDrift = new Set([
+  'README.md',
+  'package.json',
+  'package-lock.json',
+  'vite.config.ts',
+  'src/manifest.json',
+  'src/utils/client-platform.ts',
+  'src/static/logo/logo-1024.png',
+  'tests/manifest-permissions.test.ts',
+])
+const ignoredMobileNames = new Set(['node_modules', 'dist', '.DS_Store', '.env.local'])
+
+function mobileFileMap(client) {
+  const base = path.join(root, 'apps', client)
+  const files = new Map()
+  function visit(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (ignoredMobileNames.has(entry.name)) continue
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) visit(absolute)
+      else if (entry.isFile()) files.set(path.relative(base, absolute).replaceAll(path.sep, '/'), absolute)
+    }
+  }
+  visit(base)
+  return files
+}
+
+const androidFiles = mobileFileMap('android')
+const iosFiles = mobileFileMap('ios')
+const allMobileFiles = new Set([...androidFiles.keys(), ...iosFiles.keys()])
+for (const relative of [...allMobileFiles].sort()) {
+  if (allowedMobileDrift.has(relative)) continue
+  const androidPath = androidFiles.get(relative)
+  const iosPath = iosFiles.get(relative)
+  if (!androidPath || !iosPath) {
+    violations.push(`shared mobile file is missing from one platform: ${relative}`)
+    continue
+  }
+  if (!fs.readFileSync(androidPath).equals(fs.readFileSync(iosPath))) {
+    violations.push(`shared mobile source drifted outside the platform allowlist: ${relative}`)
+  }
 }
 
 if (violations.length) {

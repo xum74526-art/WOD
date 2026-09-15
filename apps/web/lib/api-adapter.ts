@@ -38,12 +38,12 @@ type PublicMarketLatestPayload = {
   data: JsonObject;
 };
 
-const PUBLIC_MARKET_SUMMARY_TTL_MS = 60_000;
-const PUBLIC_MARKET_SUMMARY_STALE_MS = 120_000;
+const PUBLIC_MARKET_SUMMARY_TTL_MS = 300_000;
+const PUBLIC_MARKET_SUMMARY_STALE_MS = 600_000;
 const PUBLIC_MARKET_SUMMARY_RETRY_DELAY_MS = 5_000;
 const PUBLIC_MARKET_SUMMARY_CACHE_LIMIT = 8;
-const PUBLIC_MARKET_LATEST_TTL_MS = 0;
-const PUBLIC_MARKET_LATEST_STALE_MS = 20_000;
+const PUBLIC_MARKET_LATEST_TTL_MS = 300_000;
+const PUBLIC_MARKET_LATEST_STALE_MS = 600_000;
 const PUBLIC_MARKET_LATEST_RETRY_DELAY_MS = 2_000;
 const PUBLIC_MARKET_LATEST_CACHE_LIMIT = 256;
 
@@ -555,7 +555,7 @@ function publicMarketLatestQuery(searchParams: URLSearchParams) {
 }
 
 async function marketRanking(request: NextRequest) {
-  const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 30 });
+  const ranking = await upstream(request, "/api/market/ranking", { auth: false, revalidate: 300 });
   if (!ranking.ok) return upstreamFailure(ranking);
   const rankingData = object(ranking.body.data);
   const entries = array(rankingData.items).map((entry) => ({
@@ -575,7 +575,7 @@ async function marketRanking(request: NextRequest) {
     observed_at: text(rankingData.server_time),
     count: entries.length,
     source: "canonical-api",
-  });
+  }, 300);
 }
 
 async function buildMarketSummary(request: NextRequest): Promise<PublicMarketSummaryPayload> {
@@ -654,7 +654,7 @@ const readPublicMarketSummary = createStaleTtlCache<
 async function marketSummary(request: NextRequest) {
   try {
     const payload = await readPublicMarketSummary(request, resolveApiOrigin(), publicMarketLocale(request));
-    return publicApiSuccess(payload.data, payload.meta);
+    return publicApiSuccess(payload.data, payload.meta, 300);
   } catch (error) {
     if (error instanceof PublicMarketSummaryUpstreamError) return upstreamFailure(error.result);
     return apiError("市场行情暂时不可用，请稍后重试", 503);
@@ -988,11 +988,12 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     if (marketSource !== "kai" && marketSource !== "wod") query.delete("market_source");
     if (marketSource === "kai") query.set("representative", "true");
     else query.delete("representative");
-    const result = await upstream(request, "/api/products", { query, auth: false, revalidate: 15 });
+    const cacheSeconds = marketSource === "kai" ? 300 : 15;
+    const result = await upstream(request, "/api/products", { query, auth: false, revalidate: cacheSeconds });
     if (!result.ok) return upstreamFailure(result);
     const page = pageEnvelope(result.body.data);
     const products = page.data.map((item) => product(item));
-    return publicApiSuccess(products, { ...page.meta, count: products.length, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, 5);
+    return publicApiSuccess(products, { ...page.meta, count: products.length, real_data_only: true, server_rental_available: true, payment_mode: "mobile_wallet", source: "canonical-api" }, marketSource === "kai" ? 300 : 5);
   }
   const productMatch = path.match(/^public\/products\/(\d+)$/);
   if (productMatch && request.method === "GET") {

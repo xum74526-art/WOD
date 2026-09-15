@@ -20,6 +20,67 @@ export class ApiRequestError extends Error {
   }
 }
 
+export interface TrustedPublicJsonRequestOptions {
+  url: string
+  timeout?: number
+  header?: Record<string, string>
+}
+
+const TRUSTED_PUBLIC_JSON_ORIGIN = 'https://api.bilibili.com'
+const UNSAFE_HEADER_VALUE = /[\r\n\u0000]/
+
+function trustedPublicJsonUrl(value: string): string | null {
+  const url = String(value || '').trim()
+  if (!url.startsWith(`${TRUSTED_PUBLIC_JSON_ORIGIN}/`) || /[\u0000-\u0020\u007f]/.test(url)) return null
+  const authority = /^https:\/\/([^/?#]+)(?:[/?#]|$)/i.exec(url)?.[1]?.toLowerCase() || ''
+  return authority === 'api.bilibili.com' ? url : null
+}
+
+function trustedPublicJsonHeaders(value: TrustedPublicJsonRequestOptions['header']) {
+  const result: Record<string, string> = {}
+  for (const [name, raw] of Object.entries(value || {})) {
+    if (!['Accept', 'Referer', 'User-Agent'].includes(name)) throw new Error('Untrusted public JSON request header')
+    const headerValue = String(raw || '').trim()
+    if (!headerValue || UNSAFE_HEADER_VALUE.test(headerValue)) throw new Error('Invalid public JSON request header')
+    result[name] = headerValue
+  }
+  return result
+}
+
+/**
+ * Credential-free transport for the one approved public metadata origin.
+ * Session tokens, locale headers and API response-envelope handling must never
+ * be added here because the destination is outside the canonical KAI API.
+ */
+export function requestTrustedPublicJson<T = unknown>(options: TrustedPublicJsonRequestOptions): Promise<T> {
+  const url = trustedPublicJsonUrl(options.url)
+  if (!url) return Promise.reject(new Error('Untrusted public JSON request URL'))
+
+  let header: Record<string, string>
+  try {
+    header = trustedPublicJsonHeaders(options.header)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  const timeout = Math.max(1000, Math.min(15000, Math.round(Number(options.timeout) || 15000)))
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url,
+      method: 'GET',
+      timeout,
+      header,
+      success: (response) => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(response.data as T)
+          return
+        }
+        reject(new Error(`Public JSON request failed with HTTP ${response.statusCode}`))
+      },
+      fail: reject,
+    })
+  })
+}
+
 let expiringToken: string | null = null
 
 function responseBody<T>(value: unknown): Partial<ApiResponse<T>> {

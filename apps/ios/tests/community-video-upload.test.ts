@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-test('iOS accepts common source containers but publishes only server-standardized MP4', () => {
+test('mobile accepts common source containers but publishes only server-standardized MP4', () => {
   const api = readFileSync(new URL('../src/api/community.ts', import.meta.url), 'utf8')
   const publish = readFileSync(new URL('../src/pages/community/publish.vue', import.meta.url), 'utf8')
   const locale = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
@@ -18,7 +18,7 @@ test('iOS accepts common source containers but publishes only server-standardize
   assert.match(locale, /上传后统一转换为兼容 MP4；最长 5 分钟，不超过 20MB/)
 })
 
-test('iOS upload UX distinguishes byte transfer from server processing', () => {
+test('mobile upload UX distinguishes byte transfer from server processing', () => {
   const request = readFileSync(new URL('../src/api/request.ts', import.meta.url), 'utf8')
   const api = readFileSync(new URL('../src/api/community.ts', import.meta.url), 'utf8')
   const publish = readFileSync(new URL('../src/pages/community/publish.vue', import.meta.url), 'utf8')

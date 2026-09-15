@@ -8,6 +8,8 @@
     { "path": "pages/assets/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/login/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/forgot-password/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/reset-password/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/product/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/asset/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/devices/index", "style": { "navigationStyle": "custom" } },
@@ -26,8 +28,6 @@
     { "path": "pages/bank-cards/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/password/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/recovery-email/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/forgot-password/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/reset-password/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/profile-edit/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/invite/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/coupons/index", "style": { "navigationStyle": "custom" } },
@@ -51,15 +51,19 @@
     { "path": "pages/agreement/index", "style": { "navigationStyle": "custom" } }
   ],
   "globalStyle": {
-    "navigationBarTextStyle": "black",
-    "navigationBarBackgroundColor": "#FFFFFF",
-    "backgroundColor": "#F5F7FA"
+    "navigationBarTextStyle": "@navigationBarTextStyle",
+    "navigationBarBackgroundColor": "@navigationBarBackgroundColor",
+    "backgroundColor": "@backgroundColor",
+    "backgroundColorContent": "@backgroundColorContent",
+    "backgroundColorTop": "@backgroundColorContent",
+    "backgroundColorBottom": "@backgroundColorContent",
+    "backgroundTextStyle": "@backgroundTextStyle"
   },
   "tabBar": {
-    "color": "#A1ADB2",
-    "selectedColor": "#18AFC4",
-    "backgroundColor": "#FFFFFF",
-    "borderStyle": "white",
+    "color": "@tabColor",
+    "selectedColor": "@tabSelectedColor",
+    "backgroundColor": "@tabBackgroundColor",
+    "borderStyle": "@tabBorderStyle",
     "list": [
       { "pagePath": "pages/index/index", "text": "首頁", "iconPath": "static/tabbar/home.png", "selectedIconPath": "static/tabbar/home-active.png" },
       { "pagePath": "pages/market/index", "text": "算力", "iconPath": "static/tabbar/compute.png", "selectedIconPath": "static/tabbar/compute-active.png" },

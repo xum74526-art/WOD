@@ -182,6 +182,7 @@ import {
   marketObservedDayCount,
   marketSourceDisplayName,
 } from '@/utils/market-history'
+import { MARKET_PUBLICATION_MS } from '@/utils/market-polling'
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
@@ -384,7 +385,7 @@ async function refreshCandles(silent = true) {
 
 function startCandleTimer() {
   stopCandleTimer()
-  candleTimer = setInterval(() => refreshCandles(true), 10000)
+  candleTimer = setInterval(() => refreshCandles(true), MARKET_PUBLICATION_MS)
 }
 
 function stopCandleTimer() {
@@ -420,20 +421,17 @@ function submitInquiry() {
     product_id: current.id,
     supplier_id: current.supplier_id,
     seller_name: sellerDisplayName.value,
-    source: current.market_source || current.seller_type || '',
+    source: current.market_source || current.seller_type || 'wod',
     gpu_model: current.gpu_model,
     gpu_variant: current.memory || '',
     quantity: quantity.value,
     gpu_hours: hours.value,
-    region: current.region_code || current.region_name || '',
+    region: current.region_code || current.region_name || current.city || '',
     product_name: current.name,
   })
-  if (!userStore.isLogin) {
-    uni.reLaunch({ url: '/pages/login/index' })
-    return
-  }
-  nav('/pages/buy-request/index?compose=1')
-  submitting.value = false
+  const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'
+  nav(target)
+  setTimeout(() => { submitting.value = false }, 800)
 }
 
 function goStore() {

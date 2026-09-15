@@ -75,7 +75,7 @@
               </template>
               <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
                 <view class="hourly-price"><text class="pp">{{ t('inquiry') }}</text></view>
-                <text class="price-cny">{{ t('inquiryPriceHint') }}</text>
+                <text class="price-cny">{{ t('inquiryContactHintShort') }}</text>
               </template>
               <template v-else>
                 <view class="hourly-price"><text class="pp unavailable-price">{{ t('viewDetail') }}</text></view>
@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getProducts } from '@/api/gpu'
 import { getMarketRanking, type MarketRankingItem } from '@/api/market'
@@ -116,6 +116,7 @@ import { localizePersonName, localizeProductName } from '@/utils/localize-conten
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { marketSourceDisplayName } from '@/utils/market-history'
+import { MARKET_PUBLICATION_MS } from '@/utils/market-polling'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import {
   buildMarketRangeMap,
@@ -158,7 +159,7 @@ const sourceTabs: Array<{ key: MarketSourceFilter; label: string; hint: string }
 ]
 
 async function loadQuote() {
-  if (Date.now() - quoteLoadedAt < 30_000) return
+  if (Date.now() - quoteLoadedAt < MARKET_PUBLICATION_MS) return
   if (quoteInFlight) return quoteInFlight
   quoteInFlight = (async () => {
     try {
@@ -195,9 +196,13 @@ const regions = [
   { code: 'northwest_china', name: 'northwest' },
   { code: 'southwest_china', name: 'southwest' },
 ]
-const sorts = [
-  { key: 'default', label: 'hotSort' },
-]
+const sorts = computed(() => commerce.directTradeEnabled
+  ? [
+      { key: 'default', label: 'hotSort' },
+      { key: 'price_asc', label: 'sortPriceUp' },
+      { key: 'price_desc', label: 'sortPriceDown' },
+    ]
+  : [{ key: 'default', label: 'hotSort' }])
 
 async function load(reset = false) {
   if (!reset && (loading.value || finished.value)) return
@@ -242,7 +247,11 @@ async function load(reset = false) {
 onShow(() => {
   i18n.updateTabBar()
   const storedKeyword = uni.getStorageSync('wod-market-keyword')
-  let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= 30_000
+  let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= MARKET_PUBLICATION_MS
+  if (!commerce.directTradeEnabled && sort.value !== 'default') {
+    sort.value = 'default'
+    shouldReload = true
+  }
   if (storedKeyword) {
     keyword.value = String(storedKeyword)
     uni.removeStorageSync('wod-market-keyword')
@@ -380,6 +389,6 @@ function markImageFailed(id: number) {
 .pbot { display: flex; justify-content: space-between; align-items: flex-end; gap: 18rpx; }
 .pp { color: var(--up); font-size: 40rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pu { color: var(--text-sub); font-size: 24rpx; }
-.buy { flex-shrink: 0; color: var(--primary); font-size: 26rpx; border: 1rpx solid var(--primary); padding: 12rpx 32rpx; border-radius: var(--radius); }
+.buy { color: var(--primary); font-size: 26rpx; border: 1rpx solid var(--primary); padding: 12rpx 32rpx; border-radius: var(--radius); }
 .buy.disabled { color: var(--text-dim); border-color: var(--border); }
 </style>

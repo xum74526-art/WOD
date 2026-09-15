@@ -60,18 +60,18 @@ test("Web trend separates live quote polling from the heavier market catalogue",
   const api = fs.readFileSync(new URL("../lib/mobile-market-api.ts", import.meta.url), "utf8");
   const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
-  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 60_000/);
+  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 300_000/);
   assert.match(panel, /if \(!initialData\) void load\(false, true\)/);
   assert.match(panel, /if \(!document\.hidden\) void load\(true, false\);[\s\S]*MARKET_CATALOG_REFRESH_MS/);
   assert.match(panel, /if \(inFlight\) return/);
   assert.match(panel, /void refreshRegionalQuotes\(true\)/);
   assert.match(panel, /if \(!document\.hidden\) void refreshRegionalQuotes\(false\);[\s\S]*MARKET_CATALOG_REFRESH_MS/);
   assert.doesNotMatch(panel, /getMobileLatestMarket\(model\)/);
-  assert.match(chart, /LATEST_REFRESH_MS = 10_000/);
+  assert.match(chart, /LATEST_REFRESH_MS = 300_000/);
   assert.match(chart, /if \(!document\.hidden\) void refreshLatest\(\)/);
   assert.match(chart, /onLatestRef\.current\?\.\(value\)/);
-  assert.match(adapter, /PUBLIC_MARKET_LATEST_TTL_MS = 0/);
-  assert.match(adapter, /PUBLIC_MARKET_LATEST_STALE_MS = 20_000/);
+  assert.match(adapter, /PUBLIC_MARKET_LATEST_TTL_MS = 300_000/);
+  assert.match(adapter, /PUBLIC_MARKET_LATEST_STALE_MS = 600_000/);
   assert.match(adapter, /createStaleTtlCache<\s*\[NextRequest, string, string, string\]/);
   assert.match(adapter, /JSON\.stringify\(\[apiOrigin, locale, queryString\]\)/);
   assert.match(adapter, /searchParams\.getAll\("model"\)/);

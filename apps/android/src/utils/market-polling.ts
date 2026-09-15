@@ -1,4 +1,6 @@
-export const QUOTE_POLL_SECONDS = 10
+export const MARKET_PUBLICATION_SECONDS = 5 * 60
+export const MARKET_PUBLICATION_MS = MARKET_PUBLICATION_SECONDS * 1000
+export const QUOTE_POLL_SECONDS = MARKET_PUBLICATION_SECONDS
 
 type MarketObservation = {
   observed_at?: string | null
@@ -15,4 +17,16 @@ export function latestMarketObservationMs(items: MarketObservation[]): number {
 export function hasAdvancedMarketObservation(previous: number, items: MarketObservation[]): boolean {
   const current = latestMarketObservationMs(items)
   return current > 0 && current > previous
+}
+
+export function marketCandlesNeedRefresh(
+  previousObservationMs: number,
+  items: MarketObservation[],
+  candleObservedAt?: string | null,
+): boolean {
+  if (previousObservationMs <= 0) return false
+  const currentObservationMs = latestMarketObservationMs(items)
+  if (currentObservationMs <= previousObservationMs) return false
+  const candleObservationMs = candleObservedAt ? new Date(candleObservedAt).getTime() : 0
+  return !Number.isFinite(candleObservationMs) || candleObservationMs < currentObservationMs
 }

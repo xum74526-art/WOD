@@ -502,8 +502,6 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .page { min-height: 100vh; background: var(--bg-2); }
 .shell { padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
-.contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
-.contact-link::after { border: 0; }
 .logo-area { display: flex; align-items: center; margin: 28rpx 8rpx 40rpx; }
 .logo-img { width: 88rpx; height: 88rpx; border-radius: 22rpx; margin-right: 22rpx; }
 .brand-copy { display: flex; flex-direction: column; }
@@ -547,4 +545,6 @@ onUnmounted(() => {
 .btn-primary { background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; }
 .btn-primary.disabled { opacity: 0.4; }
 .security-note { display: block; text-align: center; color: var(--text-dim); font-size: 21rpx; margin: 20rpx 0 4rpx; }
+.contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
+.contact-link::after { border: 0; }
 </style>

@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-test('native password recovery uses the public canonical API wrapper', async () => {
+test('native password recovery uses the canonical request wrapper without authentication', async () => {
   const source = readSource('../src/api/account-recovery.ts')
   assert.match(source, /import \{ request \} from '\.\/request'/)
   assert.doesNotMatch(source, /uni\.request|fetch\(|axios|API_BASE/)
@@ -17,8 +17,11 @@ test('native password recovery uses the public canonical API wrapper', async () 
   const exports: Record<string, any> = {}
   new Function('require', 'exports', compiled)(
     (name: string) => {
-      assert.equal(name, './request')
-      return { request: async (options: Record<string, unknown>) => { calls.push(options); return { accepted: true } } }
+      if (name === './request') {
+        return { request: async (options: Record<string, unknown>) => { calls.push(options); return { accepted: true } } }
+      }
+      if (name === './user') return { getAccountRecoveryConfig: async () => ({ email_enabled: true }) }
+      throw new Error(`Unexpected module: ${name}`)
     },
     exports,
   )
@@ -68,7 +71,6 @@ test('reset-password page consumes a one-shot in-memory token and clears sensiti
   assert.match(page, /const submittedToken = normalizedToken\.value/)
   assert.match(page, /confirmPasswordReset\(submittedToken, submittedPassword\)/)
   assert.match(page, /candidate\.length >= 32 && candidate\.length <= 256/)
-  assert.match(page, /if \(!candidate\) return[\s\S]*?password\.value = ''[\s\S]*?confirmation\.value = ''/)
   assert.match(page, /password\.value\.length < 8 \|\| password\.value\.length > 64/)
   assert.match(page, /function clearSensitiveFields\(\) \{[\s\S]*?token\.value = ''[\s\S]*?password\.value = ''[\s\S]*?confirmation\.value = ''/)
   assert.match(page, /onLoad\(\(\) => \{[\s\S]*?takePendingToken\(\)/)
@@ -80,8 +82,12 @@ test('reset-password page consumes a one-shot in-memory token and clears sensiti
   assert.doesNotMatch(page, /setStorageSync|getStorageSync|removeStorageSync|openExternalLink|resolvePublicWebUrl|console\.|options\?\.token/i)
 })
 
-test('native password recovery has matching Chinese and English copy', () => {
+test('native recovery routes and bilingual copy are complete', () => {
+  const pages = JSON.parse(readSource('../src/pages.json')) as { pages: Array<{ path: string }> }
   const locale = readSource('../src/store/i18n.ts')
+
+  assert.ok(pages.pages.some(item => item.path === 'pages/forgot-password/index'))
+  assert.ok(pages.pages.some(item => item.path === 'pages/reset-password/index'))
   for (const key of [
     'passwordRecoveryTitle',
     'passwordRecoveryPrivacyNotice',

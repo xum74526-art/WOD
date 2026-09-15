@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <AppNavBar :title="t('merchantSalesRebate')" />
+    <AppNavBar :title="t('supplierSalesRebateTitle')" />
     <view class="shell">
       <view v-if="loading" class="load-state">{{ t('loading') }}</view>
       <view v-else-if="loadError" class="load-state load-error">
@@ -13,24 +13,25 @@
       <!-- 返佣看板 -->
       <view class="card hero">
         <view class="hero-main">
-          <text class="hero-label">{{ t('supplierMonthRebated') }}</text>
+          <text class="hero-label">{{ t('k_e08bcd4e') }}</text>
           <text class="hero-val up">{{ fmtCHn(info?.month_rebated ?? 0) }}</text>
         </view>
         <view class="hero-grid">
           <view class="hg-item">
           <text class="hg-v">{{ formatNumber(info?.current_rate ?? 0) }}%</text>
-            <text class="hg-l">{{ t('merchantSalesRebateTier') }}</text>
+            <text class="hg-l">{{ t('k_cfc752a6') }}</text>
           </view>
           <view class="hg-item">
             <text class="hg-v">{{ fmtCHn(info?.month_sales ?? 0) }}</text>
-            <text class="hg-l">{{ t('confirmedSalesThisMonth') }}</text>
+            <text class="hg-l">{{ t('k_e1e32957') }}</text>
           </view>
           <view class="hg-item">
-            <text class="hg-v">{{ fmtCHn(estimatedSalesRebate) }}</text>
-            <text class="hg-l">{{ t('supplierEstimatedRebate') }}</text>
+            <text class="hg-v">{{ fmtCHn(info?.est_total_rebate ?? 0) }}</text>
+            <text class="hg-l">{{ t('supplierMonthlyTargetRebate') }}</text>
           </view>
         </view>
         <text class="hero-hint">{{ tr(info?.next_tier_hint || '') }}</text>
+        <text class="cap-hint">{{ t('rebateCapUsage', { used: formatNumber(info?.cap_used ?? 0), cap: formatNumber(info?.monthly_cap ?? 0) }) }}</text>
       </view>
 
       <!-- 阶梯说明 -->
@@ -48,11 +49,12 @@
       <!-- 规则说明 -->
       <SectionHeader :title="t('k_9317c0d3')" />
       <view class="card rules-card">
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateConfirmedSalesRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateFormulaRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateTiersRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierRebateNotServiceFeeRule') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleBasis') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleTarget') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleTopUp') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleExclusions') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('monthlyRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierBuyerRebateIndependent') }}</text></view>
       </view>
 
       <!-- 返佣记录 -->
@@ -87,9 +89,8 @@ const info = ref<SupplierRebate | null>(null)
 const records = ref<LedgerItem[]>([])
 const loading = ref(true)
 const loadError = ref(false)
-const estimatedSalesRebate = computed(() => Number(info.value?.est_total_rebate ?? 0))
 
-type SupplierTier = SupplierRebate['tiers'][number]
+type SupplierTier = NonNullable<SupplierRebate['tiers']>[number]
 const tiers = computed<SupplierTier[]>(() => info.value?.tiers ?? [])
 
 function tierRange(tier: SupplierTier, index: number) {
@@ -139,6 +140,7 @@ onShow(() => load())
 .hg-l { color: var(--text-sub); font-size: 20rpx; display: block; }
 .hg-v { color: var(--text); font-size: 28rpx; font-weight: 700; display: block; margin-bottom: 4rpx; }
 .hero-hint { display: block; color: var(--primary); font-size: 22rpx; margin-top: 20rpx; text-align: center; }
+.cap-hint { display: block; color: var(--text-sub); font-size: 21rpx; margin-top: 10rpx; text-align: center; }
 .up { color: var(--up); }
 
 .tier-card { padding: 8rpx 32rpx; margin-bottom: 24rpx; }

@@ -167,7 +167,7 @@ test('player URL rejects untrusted providers, post types, origins and malformed 
   }
 })
 
-test('iOS resolves the trusted Bilibili page to a progressive HTTPS stream', async () => {
+test('the app resolves the trusted Bilibili page to a progressive HTTPS stream', async () => {
   const requests: string[] = []
   const resolved = await resolveCommunityVideoStreamUrl(validSource, async (url) => {
     requests.push(url)
@@ -437,7 +437,7 @@ test('legacy internal market sources always display the current ZTW brand', () =
   assert.match(locale, /ztwMarketName: 'ZTW Compute Market'/)
 })
 
-test('the iOS app manifest enables the native VideoPlayer module', () => {
+test('the app manifest enables the native VideoPlayer module', () => {
   const manifest = JSON.parse(readFileSync(new URL('../src/manifest.json', import.meta.url), 'utf8'))
   assert.deepEqual(manifest['app-plus']?.modules?.VideoPlayer, {})
 })

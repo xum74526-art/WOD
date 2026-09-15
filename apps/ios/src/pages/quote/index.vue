@@ -289,8 +289,8 @@ import {
   marketSourceDisplayName,
 } from '@/utils/market-history'
 import {
-  hasAdvancedMarketObservation,
   latestMarketObservationMs,
+  marketCandlesNeedRefresh,
   QUOTE_POLL_SECONDS,
 } from '@/utils/market-polling'
 
@@ -466,7 +466,8 @@ function changeTone(value: number | null): string {
 }
 
 async function loadBase() {
-  initialLoading.value = true
+  const hasExistingModels = models.value.length > 0
+  if (!hasExistingModels) initialLoading.value = true
   initialError.value = false
   try {
     const [modelResult, statusResult] = await Promise.allSettled([
@@ -489,7 +490,7 @@ async function loadBase() {
     if (!selectedKey.value && models.value.length) selectedKey.value = modelKey(models.value[0])
     if (currentModel.value) {
       selectedSources.value = ['kai']
-      await refreshPrices(false, true)
+      await refreshPrices(hasExistingModels, !candles.value)
     }
     // Ranking includes the heavier seven-day comparison. It is useful for the
     // ranking tab, but must not block the current price and K-line card.
@@ -523,38 +524,57 @@ async function refreshPrices(silent = true, forceHistory = false) {
   const historyKey = `${model.gpu_model}|${model.gpu_variant}|${range}|${[...sources].sort().join(',')}|${billingMode}`
   const historyRefreshMs = range === '7d' || range === '30d' ? 5 * 60_000 : 30_000
   const needsSourceState = !sourceStates.value.length || Date.now() - sourceStatesLoadedAt >= 30_000
+  const needsHistory = forceHistory
+    || !candles.value
+    || candleRequestKey !== historyKey
+    || Date.now() - candlesLoadedAt >= historyRefreshMs
   refreshing.value = true
   try {
-    const [latestResult, stateResult] = await Promise.allSettled([
+    const [latestResult, stateResult, candleResult] = await Promise.allSettled([
       getLatestMarket(model.gpu_model, model.gpu_variant, sources, silent),
       needsSourceState
         ? getMarketSourceStatus(silent)
         : Promise.resolve({ server_time: '', items: sourceStates.value }),
+      needsHistory
+        ? getMarketCandles(model.gpu_model, model.gpu_variant, range, sources, silent, billingMode)
+        : Promise.resolve(candles.value),
     ])
     // A model/source/range switch may happen while the previous request is in
     // flight. Only the latest selection is allowed to update the screen.
     if (generation !== refreshGeneration) return
     if (latestResult.status === 'rejected') throw latestResult.reason
     const nextLatest = latestResult.value
-    const observationAdvanced = hasAdvancedMarketObservation(candleObservationCursor, nextLatest.items)
     const currentObservationMs = latestMarketObservationMs(nextLatest.items)
     latest.value = nextLatest
-    const needsHistory = forceHistory
-      || !candles.value
-      || candleRequestKey !== historyKey
-      || Date.now() - candlesLoadedAt >= historyRefreshMs
-    const [candleResult] = await Promise.allSettled([
-      needsHistory
-        ? getMarketCandles(model.gpu_model, model.gpu_variant, range, sources, silent, billingMode, {
-            force_refresh: observationAdvanced,
-          })
-        : Promise.resolve(candles.value),
-    ])
+    let nextCandles = candleResult.status === 'fulfilled' ? candleResult.value : null
+    let historyRefreshed = needsHistory && candleResult.status === 'fulfilled'
+    let candleRefreshFailed = false
+    if (marketCandlesNeedRefresh(
+      candleObservationCursor,
+      nextLatest.items,
+      nextCandles?.latest_live_observed_at,
+    )) {
+      try {
+        nextCandles = await getMarketCandles(
+          model.gpu_model,
+          model.gpu_variant,
+          range,
+          sources,
+          silent,
+          billingMode,
+          { force_refresh: true },
+        )
+        historyRefreshed = true
+      } catch {
+        // Preserve the last verified chart and retry on the next refresh.
+        candleRefreshFailed = true
+      }
+    }
     if (generation !== refreshGeneration) return
-    if (candleResult.status === 'fulfilled' && candleResult.value) {
-      candles.value = candleResult.value
+    if (nextCandles) {
+      candles.value = nextCandles
       candleLoadError.value = false
-      if (needsHistory) {
+      if (historyRefreshed) {
         candleRequestKey = historyKey
         candlesLoadedAt = Date.now()
       }
@@ -565,7 +585,9 @@ async function refreshPrices(silent = true, forceHistory = false) {
       sourceStates.value = stateResult.value.items
       if (needsSourceState) sourceStatesLoadedAt = Date.now()
     }
-    if (currentObservationMs > candleObservationCursor) candleObservationCursor = currentObservationMs
+    if (!candleRefreshFailed && currentObservationMs > candleObservationCursor) {
+      candleObservationCursor = currentObservationMs
+    }
     refreshIn.value = QUOTE_POLL_SECONDS
   } catch {
     if (generation === refreshGeneration) refreshIn.value = QUOTE_POLL_SECONDS
@@ -648,7 +670,11 @@ onLoad((options) => {
 })
 onShow(async () => {
   i18n.updateTabBar()
-  await loadBase()
+  if (!models.value.length) await loadBase()
+  else {
+    void refreshPrices(true)
+    if (!ranking.value.length) void refreshRanking(true)
+  }
   startTimer()
 })
 onHide(stopTimer)

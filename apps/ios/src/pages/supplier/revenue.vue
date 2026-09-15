@@ -56,7 +56,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getSupplierWallet, getRevenueDetail } from '@/api/supplier'
-import { formatMoneyShort, fmtCH, fmtCHr, toCardHours, formatDate } from '@/utils/format'
+import { fmtCH, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'

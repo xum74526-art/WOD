@@ -73,7 +73,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
     let active = true;
     async function loadMarket() {
       try {
-        const payload = await publicApiEnvelopeRequest<MarketResponse["data"], MarketResponse["meta"]>("/api/v1/public/market/ranking", 30_000);
+        const payload = await publicApiEnvelopeRequest<MarketResponse["data"], MarketResponse["meta"]>("/api/v1/public/market/ranking", 300_000);
         if (!active) return;
         const ranked = (payload.data ?? []).filter((item) => item.median_price_card_hours > 0);
         const withHistory = ranked.filter((item) => item.history_point_count >= 2 || item.history_day_count >= 2);

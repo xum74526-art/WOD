@@ -63,12 +63,12 @@
         </template>
         <template v-else-if="commerce.matchmakingEnabled">
           <view class="q-item" @tap="go('/pages/buy-request/index?compose=1')">
-            <view class="q-icon"><AppIcon name="search" :size="36" /></view>
+            <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
             <text class="q-text">{{ t('submitRequirement') }}</text>
           </view>
           <view class="q-item" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myBuyRequests') }}</text>
+            <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
         <template v-else>
@@ -78,7 +78,7 @@
           </view>
           <view class="q-item" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myBuyRequests') }}</text>
+            <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
         <view class="q-item" @tap="goTab('/pages/market/index')">
@@ -202,6 +202,7 @@
             </template>
             <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
               <text class="pp">{{ t('inquiry') }}</text>
+              <text class="pu">{{ t('inquiryContactHintShort') }}</text>
               <text class="p-buy">{{ t('submitRequirement') }}</text>
             </template>
             <template v-else>
@@ -291,6 +292,7 @@ let rankingLoadedAt = 0
 let cachedPopularModels: MarketRankingItem[] = []
 let candlesLoadedAt = 0
 let candleCandidateSignature = ''
+let featuredProductsLoadedAt = 0
 
 const totalAsset = computed(() => (assetStore.summary?.total_value ?? 0) + walletBalance.value)
 const assets = computed(() => assetStore.summary?.items ?? [])
@@ -309,10 +311,12 @@ async function load() {
 }
 
 async function loadFeaturedProducts(silent = true) {
+  if (productPool.value.length && Date.now() - featuredProductsLoadedAt < HOME_RANKING_REFRESH_MS) return
   if (!productPool.value.length) featuredLoading.value = true
   try {
     const response = await getProducts({ page_size: 100, market_source: 'kai', representative: true })
     productPool.value = response.items.filter((item) => item.market_source === 'kai')
+    featuredProductsLoadedAt = Date.now()
     updateHotProducts()
     featuredError.value = false
   } catch (error) {
@@ -338,9 +342,8 @@ async function loadHotMarket(silent = true, forceCandles = false) {
   if (typeof document !== 'undefined' && document.hidden && silent) return
   hotMarketInFlight = true
   try {
-    // Seven-day ranking is substantially heavier than the current candle
-    // query and does not change every ten seconds. Reuse it briefly while the
-    // real candles continue to refresh on the requested ten-second cadence.
+    // KAI publishes one quote cohort every five minutes. Reuse the matching
+    // ranking and candle cohort until the next publication window.
     if (!rankingLoadedAt || Date.now() - rankingLoadedAt >= HOME_RANKING_REFRESH_MS) {
       const ranking = await getMarketRanking(silent)
       const kaiRanking = ranking.items.filter((item) => item.sources.includes('kai'))
@@ -365,8 +368,8 @@ async function loadHotMarket(silent = true, forceCandles = false) {
     const plan = buildHomeTrendRequests(cachedPopularModels)
     const signature = plan.map((request) => `${request.key}|${request.sources.join(',')}|${request.billingMode}`).join(';')
     const existingByKey = new Map(hotTrends.value.map((trend) => [gpuKey(trend.item.gpu_model, trend.item.gpu_variant), trend]))
-    // Keep the current quote fields fresh every ten seconds without reloading
-    // the denser 30-day chart on every countdown tick.
+    // Reuse current quote fields and the denser 30-day chart for this source
+    // publication window.
     hotTrends.value = plan.map((request) => {
       const existing = existingByKey.get(request.key)
       return existing
@@ -423,7 +426,7 @@ async function loadHotMarket(silent = true, forceCandles = false) {
 
 function startMarketTimer() {
   stopMarketTimer()
-  marketTimer = setInterval(() => loadHotMarket(true), 10000)
+  marketTimer = setInterval(() => loadHotMarket(true), HOME_RANKING_REFRESH_MS)
 }
 
 function productCardHourPrice(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): string {

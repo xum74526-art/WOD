@@ -26,6 +26,11 @@ test('product inquiry preserves configuration and market context without checkou
   assert.match(product, /quantity\.value/)
   assert.match(product, /saveInquiryRequestPrefill\([\s\S]*?product_id:[\s\S]*?supplier_id:[\s\S]*?gpu_hours:/)
   assert.match(product, /\/pages\/buy-request\/index\?compose=1/)
+  assert.match(product, /source: current\.market_source \|\| current\.seller_type \|\| 'wod'/)
+  assert.match(product, /region: current\.region_code \|\| current\.region_name \|\| current\.city \|\| ''/)
+  assert.match(product, /const target = userStore\.isLogin \? '\/pages\/buy-request\/index\?compose=1' : '\/pages\/login\/index'/)
+  assert.match(product, /nav\(target\)/)
+  assert.doesNotMatch(product, /uni\.reLaunch\(\{ url: '\/pages\/login\/index' \}\)/)
   assert.doesNotMatch(product, /createOrder|getWallet|getRebateSummary|ConfirmSheet/)
 })
 

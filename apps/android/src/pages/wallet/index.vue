@@ -123,6 +123,7 @@
       </view>
       </template>
     </scroll-view>
+
   </view>
 </template>
 
@@ -226,7 +227,6 @@ const canQueryPayment = computed(() => Boolean(
 const canCancelPayment = computed(() => Boolean(
   commerce.historyReadEnabled && pendingPayment.value && rechargeCanCancel(pendingPayment.value),
 ))
-
 let resumePromise: Promise<void> | null = null
 
 onLoad(query => {

@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <AppNavBar :title="t('personalPurchaseRebate')" />
+    <AppNavBar :title="t('personalPurchaseRebateTitle')" />
     <view class="shell">
       <view v-if="loading" class="load-state">{{ t('loading') }}</view>
       <view v-else-if="loadError" class="load-state load-error">
@@ -13,24 +13,25 @@
       <!-- 返佣看板 -->
       <view class="card hero">
         <view class="hero-main">
-          <text class="hero-label">{{ t('personalMonthRebated') }}</text>
+          <text class="hero-label">{{ t('k_e08bcd4e') }}</text>
           <text class="hero-val up">{{ fmtCHn(info?.month_rebated ?? 0) }}</text>
         </view>
         <view class="hero-grid">
           <view class="hg-item">
           <text class="hg-v">{{ formatNumber(info?.current_rate ?? 0) }}%</text>
-            <text class="hg-l">{{ t('personalPurchaseRebateTier') }}</text>
+            <text class="hg-l">{{ t('k_5bfd670e') }}</text>
           </view>
           <view class="hg-item">
             <text class="hg-v">{{ fmtCHn(info?.month_spent ?? 0) }}</text>
-            <text class="hg-l">{{ t('confirmedUsagePurchasesThisMonth') }}</text>
+            <text class="hg-l">{{ t('k_bd96c2e3') }}</text>
           </view>
           <view class="hg-item">
             <text class="hg-v">{{ fmtCHn(info?.pending_rebate ?? 0) }}</text>
-            <text class="hg-l">{{ t('pendingExpiryRebate') }}</text>
+            <text class="hg-l">{{ t('k_ec4f52f4') }}</text>
           </view>
         </view>
         <text class="hero-hint">{{ tr(info?.next_tier_hint || '') }}</text>
+        <text class="cap-hint">{{ t('rebateCapUsage', { used: formatNumber(info?.cap_used ?? 0), cap: formatNumber(info?.monthly_cap ?? 0) }) }}</text>
       </view>
 
       <!-- 阶梯说明 -->
@@ -48,11 +49,11 @@
       <!-- 规则说明 -->
       <SectionHeader :title="t('k_9317c0d3')" />
       <view class="card rules-card">
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalRebateUsageOnlyRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalRebateMonthlyVolumeRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalRebateLockRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalRebateExpiryRule') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalPurchaseRebateRuleBasis') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalPurchaseRebateRuleConfirm') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalPurchaseRebateRulePayout') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('personalPurchaseRebateRuleExclusions') }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('monthlyRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
       </view>
 
       <!-- 返佣记录 -->
@@ -73,7 +74,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getRebateSummary, type RebateSummary } from '@/api/user'
+import { getRebateSummary, type ConsumerRebateTier, type RebateSummary } from '@/api/user'
 import { getLedger, type LedgerItem } from '@/api/wallet'
 import { fmtCHn, formatDate, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
@@ -88,10 +89,9 @@ const records = ref<LedgerItem[]>([])
 const loading = ref(true)
 const loadError = ref(false)
 
-type ConsumerTier = RebateSummary['tiers'][number]
-const tiers = computed<ConsumerTier[]>(() => info.value?.tiers ?? [])
+const tiers = computed(() => info.value?.tiers ?? [])
 
-function tierRange(tier: ConsumerTier, index: number) {
+function tierRange(tier: ConsumerRebateTier, index: number) {
   const previous = index > 0 ? tiers.value[index - 1]?.max_month_spent : null
   const upper = tier.max_month_spent
   if (i18n.lang === 'en') {
@@ -138,6 +138,7 @@ onShow(() => load())
 .hg-l { color: var(--text-sub); font-size: 20rpx; display: block; }
 .hg-v { color: var(--text); font-size: 28rpx; font-weight: 700; display: block; margin-bottom: 4rpx; }
 .hero-hint { display: block; color: var(--primary); font-size: 22rpx; margin-top: 20rpx; text-align: center; }
+.cap-hint { display: block; color: var(--text-sub); font-size: 21rpx; margin-top: 10rpx; text-align: center; }
 .up { color: var(--up); }
 
 .tier-card { padding: 8rpx 32rpx; margin-bottom: 24rpx; }

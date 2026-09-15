@@ -112,6 +112,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getPostDetail, getComments, createComment, setFollow, setLike, type PostItem, type CommentItem } from '@/api/community'
+import { requestTrustedPublicJson } from '@/api/request'
 import { formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -175,10 +176,10 @@ function openSource(value: PostItem) {
   openExternalLink(url, () => uni.showToast({ title: t('openFailed'), icon: 'none' }))
 }
 
-function watchVideo(value: PostItem): boolean {
+async function watchVideo(value: PostItem): Promise<boolean> {
   if (!buildCommunityVideoPlayerUrl(value)) return false
   let failed = false
-  const opened = openCommunityVideo(value, t('video'), () => {
+  const opened = await openCommunityVideo(value, t('video'), () => {
     failed = true
     const url = buildCommunityVideoSourceUrl(value)
     if (!url) {
@@ -194,12 +195,17 @@ function watchVideo(value: PostItem): boolean {
         if (confirm) openExternalLink(url, () => uni.showToast({ title: t('openFailed'), icon: 'none' }))
       },
     })
-  })
+  }, (url, headers) => requestTrustedPublicJson({ url, header: headers }))
   return opened || failed
 }
 
-function openVideo(value: PostItem) {
-  if (!watchVideo(value)) uni.showToast({ title: t('videoUnavailable'), icon: 'none' })
+async function openVideo(value: PostItem) {
+  uni.showLoading({ title: t('loading'), mask: true })
+  try {
+    if (!(await watchVideo(value))) uni.showToast({ title: t('videoUnavailable'), icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 function postImages(value: PostItem): string[] {

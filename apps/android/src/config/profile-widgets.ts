@@ -51,6 +51,7 @@ const SUPPLIER_OPERATION_ITEMS: ProfileWidget[] = [
 
 const SUPPLIER_ACCOUNT_ITEMS: ProfileWidget[] = [
   { key: 'wallet', label: 'wallet', icon: 'coin', route: '/pages/wallet/index' },
+  { key: 'procurement', label: 'buyRequests', icon: 'search', route: '/pages/buy-request/index' },
   { key: 'bank', label: 'bankCard', icon: 'bank-card', route: '/pages/bank-cards/index' },
   { key: 'verified', label: '实名认证', icon: 'verified', route: '/pages/verification/index' },
   { key: 'coupon', label: 'coupons', icon: 'coupon', route: '/pages/coupons/index' },

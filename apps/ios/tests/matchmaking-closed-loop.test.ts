@@ -64,6 +64,7 @@ test('matchmaking surfaces protect buyer contact and use non-financial coordinat
   assert.match(page, /quoteSelectionStale/)
   assert.match(page, /viewMode === 'seller' \? 'anonymousRequestId' : 'requestId'/)
   assert.match(i18n, /anonymousRequestId: '匿名需求 #\{id\}'/)
+  assert.match(i18n, /anonymousRequestId: 'Anonymous Request #\{id\}'/)
   assert.match(i18n, /requestId: '需求 #\{id\}'/)
   assert.match(i18n, /requestId: 'Request #\{id\}'/)
   assert.match(i18n, /platformCoordination: '平台协调'/)

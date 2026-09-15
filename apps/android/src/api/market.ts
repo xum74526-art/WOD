@@ -1,4 +1,5 @@
 import { request } from './request'
+import { MARKET_PUBLICATION_MS } from '../utils/market-polling'
 
 type TimedMarketValue = { expiresAt: number; value: unknown }
 const marketResponseCache = new Map<string, TimedMarketValue>()
@@ -229,18 +230,21 @@ function activeMarketSources(sources: string[]): string[] {
 }
 
 export function getMarketModels(silent = false) {
-  return cachedMarketRequest('models', 30_000, () => (
+  return cachedMarketRequest('models', MARKET_PUBLICATION_MS, () => (
     request<{ server_time: string; items: MarketModel[] }>({ url: '/market/models', silent })
   ))
 }
 
 export function getLatestMarket(model: string, variant: string, sources: string[], silent = false) {
   const activeSources = activeMarketSources(sources)
-  return request<LatestMarket>({
-    url: '/market/prices/latest',
-    data: { model, variant, sources: activeSources.join(',') },
-    silent,
-  })
+  const key = `latest|${model}|${variant}|${activeSources.join(',')}`
+  return cachedMarketRequest(key, MARKET_PUBLICATION_MS, () => (
+    request<LatestMarket>({
+      url: '/market/prices/latest',
+      data: { model, variant, sources: activeSources.join(',') },
+      silent,
+    })
+  ))
 }
 
 export function getMarketHistory(model: string, variant: string, range: string, sources: string[], silent = false) {
@@ -289,7 +293,7 @@ export function getMarketSourceStatus(silent = false) {
 }
 
 export function getMarketRanking(silent = false) {
-  return cachedMarketRequest('ranking', 8_000, () => (
+  return cachedMarketRequest('ranking', MARKET_PUBLICATION_MS, () => (
     request<{ server_time: string; items: MarketRankingItem[] }>({ url: '/market/ranking', silent })
   ))
 }

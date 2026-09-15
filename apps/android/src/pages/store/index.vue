@@ -14,7 +14,7 @@
             <view class="sc-info">
               <text class="sc-name">{{ displayCompanyName }}</text>
               <text v-if="contactSummary" class="sc-sub">{{ contactSummary }}</text>
-              <text class="sc-tags">{{ localizeRegionName(info.region || '', i18n.lang) }} · {{ t('评分 {rating}', { rating: info.rating == null ? '-' : formatNumber(info.rating) }) }} · {{ t('{count} 单', { count: info.order_count ?? 0 }) }}</text>
+      <text class="sc-tags">{{ localizeRegionName(info.region || '', i18n.lang) }} · {{ t('评分 {rating}', { rating: info.rating == null ? '-' : formatNumber(info.rating) }) }} · {{ t('{count} 单', { count: info.order_count ?? 0 }) }}</text>
             </view>
           </view>
           <text class="sc-desc" v-if="info.desc">{{ tr(info.desc) }}</text>

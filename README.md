@@ -213,6 +213,7 @@ node --test static-review/site.test.mjs
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 唯一数据源、请求链路、模块边界和兼容层治理 |
 | [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md) | 撮合审核版与未来直接交易版的能力门禁 |
+| [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) | Android/iOS 共享能力、平台差异和本地验证 |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 本地开发、启动、采集与契约更新 |
 | [`docs/APP_OWNERSHIP.md`](docs/APP_OWNERSHIP.md) | Web、iOS、Android 的源码边界 |
 | [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | 自动门禁、人工检查和外部上线条件 |

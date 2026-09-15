@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -164,6 +165,16 @@ class ProductCatalogTests(unittest.TestCase):
         self.assertIn("平台安排人工交付", a10["assurance_description"])
         self.assertIsNone(a10["supplier_id"])
         self.assertIsNone(a10["supplier_name"])
+
+    def test_representative_catalog_resolves_platform_fulfillers_once(self):
+        with patch(
+            "app.routers.product.configured_platform_fulfiller_ids",
+            return_value={1},
+        ) as resolve_fulfillers:
+            data = self._list()
+
+        self.assertEqual(data["total"], 3)
+        resolve_fulfillers.assert_called_once_with(self.db)
 
     def test_inquiry_mode_never_exposes_a_purchasable_product(self):
         settings.DIRECT_TRADE_ENABLED = False

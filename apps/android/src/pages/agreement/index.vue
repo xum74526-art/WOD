@@ -8,7 +8,9 @@
 
         <template v-for="section in document" :key="section.title">
           <text class="h2">{{ section.title }}</text>
-          <text v-for="paragraph in section.paragraphs" :key="paragraph" class="p">{{ paragraph }}</text>
+          <template v-for="paragraph in section.paragraphs" :key="paragraph">
+            <text class="p">{{ paragraph }}</text>
+          </template>
         </template>
       </view>
     </scroll-view>

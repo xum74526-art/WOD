@@ -158,6 +158,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
 import { useNotificationStore } from '@/store/notification'
 import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
+import { CLIENT_PLATFORM } from '@/utils/client-platform'
 import { languageOption } from '@/utils/language'
 
 const i18n = useI18nStore()
@@ -325,7 +326,7 @@ async function onCheckUpdate() {
   if (updateChecking.value) return
   updateChecking.value = true
   try {
-    await checkForAppUpdate('ios', { manual: true })
+    await checkForAppUpdate(CLIENT_PLATFORM, { manual: true })
   } finally {
     updateChecking.value = false
   }

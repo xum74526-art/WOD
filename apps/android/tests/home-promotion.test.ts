@@ -18,7 +18,7 @@ const pages = JSON.parse(source('../src/pages.json')) as {
 const zhLocale = JSON.parse(source('../src/locale/zh-Hans.json')) as Record<string, string>
 const enLocale = JSON.parse(source('../src/locale/en.json')) as Record<string, string>
 
-test('homepage app promotions use the approved local assets and real internal routes', () => {
+test('mobile homepage app promotions use approved local assets and real internal routes', () => {
   assert.deepEqual(HOME_PROMOTIONS.map((item) => item.route), [
     '/pages/market/index',
     '/pages/quote/index',
@@ -38,7 +38,7 @@ test('homepage app promotions use the approved local assets and real internal ro
   assert.deepEqual(HOME_NOTICES.map((item) => item.route), HOME_PROMOTIONS.map((item) => item.route))
 })
 
-test('homepage matching promotion replaces wallet messaging and opens request composition', () => {
+test('mobile matching promotion replaces wallet messaging and opens request composition', () => {
   const hourlyPromotion = HOME_PROMOTIONS[0]
   const requestPromotion = HOME_PROMOTIONS[2]
   assert.equal(hourlyPromotion?.titleKey, 'homePromoHourlyTitle')
@@ -62,7 +62,7 @@ test('homepage matching promotion replaces wallet messaging and opens request co
   assert.doesNotMatch(i18n, /homePromoWallet(?:Kicker|Title|Description|Action|ImageAlt)/)
 })
 
-test('promotion carousel uses a dark media card with internal paging and no playback control', () => {
+test('mobile promotion carousel uses a dark media card with internal paging and no playback control', () => {
   const heroPosition = homePage.indexOf('<view class="hero">')
   const carouselPosition = homePage.indexOf('<HomePromoCarousel />')
   const firstDividerPosition = homePage.indexOf('<view class="divider"></view>')
@@ -86,14 +86,14 @@ test('promotion carousel uses a dark media card with internal paging and no play
   assert.match(carousel, /class="notice-swiper"[\s\S]*?vertical/)
 })
 
-test('homepage uses a light cool card surface without changing other pages', () => {
+test('mobile homepage uses a light cool card surface without changing other pages', () => {
   assert.match(appStyles, /--home-card: #F6F8F8;/)
   assert.match(appStyles, /--home-card: rgba\(255, 255, 255, 0\.07\);/)
   assert.match(homePage, /--card: var\(--home-card\);/)
   assert.match(homePage, /--card-border: var\(--home-card-border\);/)
 })
 
-test('all pre-existing live homepage sections remain wired to their original components and APIs', () => {
+test('mobile keeps every pre-existing live homepage section wired to its original components and APIs', () => {
   for (const marker of [
     'class="topbar"',
     'class="price-bar"',
@@ -112,7 +112,7 @@ test('all pre-existing live homepage sections remain wired to their original com
   ]) assert.ok(homePage.includes(marker), `homepage must retain ${marker}`)
 })
 
-test('community remains the internal route while its default native tab is Traditional Chinese', () => {
+test('mobile keeps community as the internal route while its default native tab is Traditional Chinese', () => {
   const communityTab = pages.tabBar.list.find((item) => item.pagePath === 'pages/community/index')
   assert.equal(communityTab?.text, '資訊')
   assert.equal(zhLocale['tab.community'], '资讯')

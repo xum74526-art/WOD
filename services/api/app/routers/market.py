@@ -155,6 +155,11 @@ def _with_card_hour_candles(payload: dict) -> dict:
 
 _MARKET_RESPONSE_CACHE: SyncTtlCache[tuple, object] = SyncTtlCache(max_entries=256)
 MARKET_LATEST_CACHE_SECONDS = 8
+# KAI publishes a new quote cohort every five minutes.  Models and ranking are
+# summaries of that cohort plus worker-cached OHLC, so rebuilding them every
+# eight or thirty seconds only rescans unchanged history.  Keep the cache on the
+# source cadence; current-price reads retain their shorter cache above.
+MARKET_SUMMARY_CACHE_SECONDS = max(int(settings.KAI_PRICING_REFRESH_SECONDS), 30)
 
 
 def _source_refresh_seconds(source: str) -> int | None:
@@ -195,6 +200,32 @@ def _cached_payload(
         return _MARKET_RESPONSE_CACHE.get_or_load(key, ttl_seconds, loader)
     except SyncTtlCacheOverloadedError as error:
         raise BizError("行情请求繁忙，请稍后重试", status_code=503) from error
+
+
+def _market_summary_cache_key(db: Session, name: str) -> tuple:
+    """Tie a long-lived summary cache entry to the persisted market revision."""
+
+    source_revision = db.query(
+        MarketSourceStatus.enabled,
+        MarketSourceStatus.status,
+        MarketSourceStatus.last_success_at,
+        MarketSourceStatus.updated_at,
+    ).filter(MarketSourceStatus.source == "kai").one_or_none()
+    candle_revision = db.query(
+        MarketCandleSyncStatus.enabled,
+        MarketCandleSyncStatus.status,
+        MarketCandleSyncStatus.last_success_at,
+        MarketCandleSyncStatus.updated_at,
+    ).filter(MarketCandleSyncStatus.source == "kai").one_or_none()
+    product_revision = db.query(func.max(Product.price_updated_at)).filter(
+        Product.market_source == "kai",
+    ).scalar()
+    return (
+        name,
+        tuple(source_revision) if source_revision else None,
+        tuple(candle_revision) if candle_revision else None,
+        product_revision,
+    )
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -761,7 +792,21 @@ def _seven_day_metrics(
     db: Session,
     now: datetime,
     allowed_sources: set[str] | None = None,
+    requested_identities: Iterable[tuple[str, str]] | None = None,
 ) -> dict[tuple[str, str], dict]:
+    requested = (
+        {
+            (
+                canonicalize_gpu(model) or model,
+                normalize_gpu_variant(canonicalize_gpu(model) or model, variant),
+            )
+            for model, variant in requested_identities
+        }
+        if requested_identities is not None
+        else None
+    )
+    if requested is not None and not requested:
+        return {}
     # The history table grows continuously.  Loading complete ORM entities here
     # also deserializes every price percentile, FX field and quality column even
     # though the seven-day calculation needs only six values.  On the closed-
@@ -787,6 +832,8 @@ def _seven_day_metrics(
     for row in rows.order_by(MarketPriceSnapshot.observed_at.asc()).all():
         model = canonicalize_gpu(row.gpu_model) or row.gpu_model
         variant = normalize_gpu_variant(model, row.gpu_variant)
+        if requested is not None and (model, variant) not in requested:
+            continue
         exact_series[(model, variant, row.billing_mode, row.source)].append(
             (row.observed_at, Decimal(row.median_price_cny))
         )
@@ -1048,6 +1095,43 @@ def _kai_history_metrics(
     return result
 
 
+def _summary_history_metrics(
+    db: Session,
+    now: datetime,
+    identities: Iterable[tuple[str, str]],
+    current_sources: set[str],
+) -> dict[tuple[str, str], dict]:
+    """Resolve summary history without rescanning snapshots already superseded by OHLC.
+
+    The scheduled candle worker is the preferred source for KAI seven-day
+    metrics.  Snapshot aggregation remains a truthful compatibility fallback,
+    but it is evaluated only for identities that have no stored official
+    candle at all.  A partial official series already won over snapshots before
+    this optimization and continues to do so.
+    """
+
+    requested = {
+        (
+            canonicalize_gpu(model) or model,
+            normalize_gpu_variant(canonicalize_gpu(model) or model, variant),
+        )
+        for model, variant in identities
+    }
+    if not requested:
+        return {}
+    official = _kai_history_metrics(db, requested) if "kai" in current_sources else {}
+    missing = requested.difference(official)
+    fallback = (
+        _seven_day_metrics(db, now, current_sources, missing)
+        if missing
+        else {}
+    )
+    return {
+        identity: official.get(identity) or fallback.get(identity, _empty_metric())
+        for identity in requested
+    }
+
+
 def _history_metric_matches_live_sources(metric: dict | None, live_sources: Iterable[str]) -> bool:
     """Only attach an archive to a currently comparable provider.
 
@@ -1152,7 +1236,12 @@ def source_status(db: Session = Depends(get_db)):
 
 @router.get("/models")
 def models(db: Session = Depends(get_db)):
-    return success(_cached_payload(db, ("market_models",), 30, lambda: _models_payload(db)))
+    return success(_cached_payload(
+        db,
+        _market_summary_cache_key(db, "market_models"),
+        MARKET_SUMMARY_CACHE_SECONDS,
+        lambda: _models_payload(db),
+    ))
 
 
 def _models_payload(db: Session) -> dict:
@@ -1160,7 +1249,6 @@ def _models_payload(db: Session) -> dict:
     source_states = _source_states(db, now)
     current_sources = {source for source, state in source_states.items() if state in HOT_SOURCE_STATES}
     rows = _latest_normalized_rows(row for row in _latest_rows(db) if row.source in current_sources)
-    metrics = _seven_day_metrics(db, now, current_sources)
     grouped: dict[tuple[str, str], dict] = {}
     for model, variant, row in rows:
         key = (model, variant)
@@ -1179,9 +1267,9 @@ def _models_payload(db: Session) -> dict:
             item["sources"].append(row.source)
         item["sample_count"] += row.sample_count
         item["quote_sample_count"] += row.sample_count
-    kai_metrics = _kai_history_metrics(db, grouped.keys())
+    metrics = _summary_history_metrics(db, now, grouped.keys(), current_sources)
     for key, item in grouped.items():
-        item.update(kai_metrics.get(key) or metrics.get(key, _empty_metric()))
+        item.update(metrics.get(key, _empty_metric()))
         item["seven_day_status"] = (
             "full" if item.get("history_coverage_status") == "complete" and item.get("change_7d_pct") is not None
             else "partial" if item.get("history_day_count", 0) > 0
@@ -2375,10 +2463,12 @@ def _price_candles_payload(
 
 @router.get("/ranking")
 def ranking(db: Session = Depends(get_db)):
-    # The live median refreshes frequently, while the seven-day archive does
-    # not. An eight-second cache still honors the ten-second UI refresh cycle
-    # and collapses simultaneous homepage/market/quote requests to one scan.
-    return success(_cached_payload(db, ("market_ranking",), 8, lambda: _ranking_payload(db)))
+    return success(_cached_payload(
+        db,
+        _market_summary_cache_key(db, "market_ranking"),
+        MARKET_SUMMARY_CACHE_SECONDS,
+        lambda: _ranking_payload(db),
+    ))
 
 
 def _ranking_payload(db: Session) -> dict:
@@ -2389,11 +2479,10 @@ def _ranking_payload(db: Session) -> dict:
     grouped: dict[tuple[str, str], list[MarketPriceSnapshot]] = defaultdict(list)
     for model, variant, row in latest:
         grouped[(model, variant)].append(row)
-    metrics = _seven_day_metrics(db, now, current_sources)
     comparison: dict[tuple[str, str], list[MarketPriceSnapshot]] = defaultdict(list)
     for model, variant, row in _latest_normalized_rows(_comparison_rows(db, now, current_sources)):
         comparison[(model, variant)].append(row)
-    kai_metrics = _kai_history_metrics(db, grouped.keys())
+    metrics = _summary_history_metrics(db, now, grouped.keys(), current_sources)
     cutoff = now - timedelta(seconds=max(int(settings.PRODUCT_OFFER_MAX_AGE_SECONDS), 60))
     product_regions: dict[tuple[str, str], set[str]] = defaultdict(set)
     product_locations: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -2418,7 +2507,7 @@ def _ranking_payload(db: Session) -> dict:
         old_rows = comparison.get((model, variant), [])
         old_price = _weighted_median(old_rows)
         change = round((current / old_price - 1) * 100, 2) if current is not None and old_price else None
-        metric = kai_metrics.get((model, variant)) or metrics.get((model, variant), _empty_metric())
+        metric = metrics.get((model, variant), _empty_metric())
         min_values = [float(row.min_price_cny) for row in rows if row.min_price_cny is not None]
         max_values = [float(row.max_price_cny) for row in rows if row.max_price_cny is not None]
         p25_values = [float(row.p25_price) for row in rows if row.currency == "CNY"]

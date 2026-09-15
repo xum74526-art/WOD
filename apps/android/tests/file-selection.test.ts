@@ -11,7 +11,7 @@ test('native image selection normalizes both a single path and a path array', ()
   assert.deepEqual(normalizeTempFilePaths(undefined), [])
 })
 
-test('all Android image pickers use the shared path normalizer', () => {
+test('all mobile image pickers use the shared path normalizer', () => {
   for (const page of [
     '../src/pages/community/publish.vue',
     '../src/pages/profile-edit/index.vue',

@@ -112,6 +112,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getPostDetail, getComments, createComment, setFollow, setLike, type PostItem, type CommentItem } from '@/api/community'
+import { requestTrustedPublicJson } from '@/api/request'
 import { formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -194,7 +195,7 @@ async function watchVideo(value: PostItem): Promise<boolean> {
         if (confirm) openExternalLink(url, () => uni.showToast({ title: t('openFailed'), icon: 'none' }))
       },
     })
-  })
+  }, (url, headers) => requestTrustedPublicJson({ url, header: headers }))
   return opened || failed
 }
 

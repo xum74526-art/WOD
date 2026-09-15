@@ -1,7 +1,9 @@
 import OpenCC from 'opencc-js/cn2t'
 
-// Keep business wording intact and convert characters only. Regional phrase
-// substitution can change account-operation terminology.
+// Use Taiwan-standard Traditional characters without regional phrase
+// substitution. Phrase substitution can change business meaning (for example,
+// converting account cancellation into sign-out), while character conversion
+// keeps the original ZTW wording intact.
 const convert = OpenCC.Converter({ from: 'cn', to: 'tw' })
 const cache = new Map<string, string>()
 const MAX_CACHE_SIZE = 800
