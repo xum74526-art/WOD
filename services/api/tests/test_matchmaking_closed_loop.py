@@ -220,6 +220,78 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
         self.assertNotIn("甲联系人", json.dumps(buyer_detail, ensure_ascii=False))
         self.assertNotIn(self.supplier.phone, json.dumps(buyer_detail, ensure_ascii=False))
 
+    def test_identical_quote_retry_returns_existing_quote(self):
+        request = self._request()
+        first = self._quote(request, self.supplier_user, 100)
+        retry = self._quote(request, self.supplier_user, 100)
+
+        self.assertEqual(retry["id"], first["id"])
+        self.assertEqual(retry["revision_count"], 1)
+        self.assertEqual(self.db.query(BuyRequestQuote).count(), 1)
+        self.assertEqual(self.db.query(BuyRequestQuoteRevision).count(), 1)
+        self.assertEqual(self.db.query(BuyRequestEvent).filter(
+            BuyRequestEvent.event_type == "quote_submitted",
+        ).count(), 1)
+
+    def test_equivalent_quote_retry_normalizes_precision_and_timezone(self):
+        request = self._request()
+        self._set_user(self.supplier_user)
+        payload = {
+            "unit_price": 4.1666675,
+            "total_price": 100.005,
+            "currency": "cny",
+            "available_at": "2026-09-20T08:30:00+08:00",
+            "message": "可于指定时间交付",
+            "expires_in_hours": 36,
+        }
+
+        first = self.client.post(
+            f"/api/buy-requests/{request.id}/quotes",
+            json=payload,
+        )
+        retry = self.client.post(
+            f"/api/buy-requests/{request.id}/quotes",
+            json={
+                **payload,
+                "currency": "CNY",
+                "available_at": "2026-09-20T00:30:00Z",
+            },
+        )
+
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(retry.status_code, 200, retry.text)
+        first_body = first.json()
+        retry_body = retry.json()
+        self.assertEqual(first_body["code"], 0)
+        self.assertEqual(retry_body["code"], 0)
+        self.assertEqual(retry_body["data"]["id"], first_body["data"]["id"])
+        self.assertEqual(retry_body["data"]["unit_price"], 4.166668)
+        self.assertEqual(retry_body["data"]["total_price"], 100.01)
+        self.assertEqual(retry_body["data"]["available_at"], "2026-09-20T00:30:00Z")
+        self.assertEqual(self.db.query(BuyRequestQuote).count(), 1)
+        self.assertEqual(self.db.query(BuyRequestQuoteRevision).count(), 1)
+        self.assertEqual(self.db.query(BuyRequestEvent).filter(
+            BuyRequestEvent.event_type == "quote_submitted",
+        ).count(), 1)
+
+    def test_quote_retry_with_changed_terms_remains_rejected(self):
+        request = self._request()
+        self._quote(request, self.supplier_user, 100)
+
+        self._set_user(self.supplier_user)
+        response = self.client.post(f"/api/buy-requests/{request.id}/quotes", json={
+            "unit_price": 4.166667,
+            "total_price": 101,
+            "currency": "CNY",
+            "message": "首版方案",
+            "expires_in_hours": 24,
+        })
+
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertEqual(response.json()["msg"], "已经提交过有效报价")
+        self.assertEqual(self.db.query(BuyRequestQuote).count(), 1)
+        self.assertEqual(self.db.query(BuyRequestQuoteRevision).count(), 1)
+
     def test_counteroffers_alternate_preserve_history_and_withdraw_is_idempotent(self):
         request = self._request()
         quote = self._quote(request, self.supplier_user, 100)
@@ -865,7 +937,7 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                 check.close()
                 engine.dispose()
 
-    def test_concurrent_quote_creation_keeps_one_active_supplier_quote(self):
+    def test_concurrent_identical_quote_creation_returns_one_quote(self):
         with tempfile.TemporaryDirectory() as tempdir:
             database = Path(tempdir) / "concurrent-quotes.db"
             engine = create_engine(
@@ -917,7 +989,7 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                 try:
                     local_user = db.get(User, supplier_user_id)
                     barrier.wait(timeout=5)
-                    buy_request_router.create_quote(
+                    result = buy_request_router.create_quote(
                         request_id,
                         buy_request_router.QuoteIn(
                             unit_price=4.2,
@@ -929,7 +1001,7 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                         local_user,
                         db,
                     )
-                    return "created"
+                    return f"created:{result['data']['id']}"
                 except BizError as exc:
                     db.rollback()
                     return exc.msg
@@ -937,10 +1009,11 @@ class MatchmakingClosedLoopTests(unittest.TestCase):
                     db.close()
 
             with ThreadPoolExecutor(max_workers=2) as pool:
-                results = sorted(pool.map(quote, (100.0, 101.0)))
+                results = sorted(pool.map(quote, (100.0, 100.0)))
 
             check = Session()
-            self.assertEqual(results, ["created", "已经提交过有效报价"])
+            self.assertEqual(len(set(results)), 1)
+            self.assertTrue(results[0].startswith("created:"), results)
             self.assertEqual(check.query(BuyRequestQuote).count(), 1)
             self.assertEqual(check.query(BuyRequestQuoteRevision).count(), 1)
             self.assertEqual(check.query(BuyRequestEvent).filter(

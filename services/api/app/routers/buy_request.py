@@ -399,6 +399,12 @@ def _quantized_request_decimal(value: float | None, quantum: Decimal) -> Decimal
     return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
 
 
+def _normalized_quote_available_at(value: datetime | None) -> datetime | None:
+    if value is not None and value.tzinfo:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 def _nonempty_requirement_text(requirements: dict, key: str) -> str:
     value = requirements.get(key)
     return value.strip() if isinstance(value, str) else ""
@@ -514,6 +520,31 @@ def _same_create_request(
             not data.phone
             or (_normalize_contact_phone(item.phone) or item.phone or "") == (phone or "")
         )
+        and expiry_hours_match
+    )
+
+
+def _same_create_quote(item: BuyRequestQuote, data: QuoteIn) -> bool:
+    if item.created_at is None or item.expires_at is None:
+        expiry_hours_match = False
+    else:
+        expiry_hours_match = round(
+            (item.expires_at - item.created_at).total_seconds() / 3600
+        ) == data.expires_in_hours
+    return (
+        _decimal_request_value_matches(
+            item.unit_price,
+            data.unit_price,
+            Decimal("0.000001"),
+        )
+        and _decimal_request_value_matches(
+            item.total_price,
+            data.total_price,
+            Decimal("0.01"),
+        )
+        and item.currency == data.currency.upper()
+        and item.available_at == _normalized_quote_available_at(data.available_at)
+        and item.message == data.message
         and expiry_hours_match
     )
 
@@ -901,18 +932,22 @@ def create_quote(
             latest.status = "expired"
         existing = None
     if existing:
-        raise BizError("已经提交过有效报价")
+        if not _same_create_quote(existing, data):
+            raise BizError("已经提交过有效报价")
+        db.commit()
+        return success(_quote_out(
+            existing,
+            db,
+            viewer_role="supplier",
+            viewer_supplier_id=supplier.id,
+        ))
     quote = BuyRequestQuote(
         buy_request_id=item.id,
         supplier_id=supplier.id,
-        unit_price=Decimal(str(data.unit_price)) if data.unit_price is not None else None,
-        total_price=Decimal(str(data.total_price)),
+        unit_price=_quantized_request_decimal(data.unit_price, Decimal("0.000001")),
+        total_price=_quantized_request_decimal(data.total_price, Decimal("0.01")),
         currency=data.currency.upper(),
-        available_at=(
-            data.available_at.astimezone(timezone.utc).replace(tzinfo=None)
-            if data.available_at and data.available_at.tzinfo
-            else data.available_at
-        ),
+        available_at=_normalized_quote_available_at(data.available_at),
         message=data.message,
         status="active",
         expires_at=_now() + timedelta(hours=data.expires_in_hours),
