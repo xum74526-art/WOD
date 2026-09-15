@@ -516,17 +516,39 @@ const commonCapabilities = [
     })),
   },
   {
-    name: 'mobile product inquiry login continuation',
-    evidence: ['android', 'ios'].map(client => ({
-      client,
-      file: `apps/${client}/src/pages/product/detail.vue`,
-      patterns: [
-        "source: current.market_source || current.seller_type || 'wod'",
-        "region: current.region_code || current.region_name || current.city || ''",
-        "const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'",
-        'nav(target)',
-      ],
-    })),
+    name: 'product inquiry login continuation and region normalization',
+    evidence: [
+      {
+        client: 'Web detail',
+        file: 'apps/web/components/product-detail.tsx',
+        patterns: [
+          'normalizeInquiryRegionRequirement(product.region)',
+          'if (region) params.set("region", region)',
+        ],
+      },
+      {
+        client: 'Web request form',
+        file: 'apps/web/components/mobile-buy-request-workspace.tsx',
+        patterns: ['region: normalizeInquiryRegionRequirement(initialPrefill?.region)'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} detail`,
+          file: `apps/${client}/src/pages/product/detail.vue`,
+          patterns: [
+            "source: current.market_source || current.seller_type || 'wod'",
+            'region: productInquiryRegionRequirement(current.region_name, current.region_code, current.city, i18n.lang)',
+            "const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'",
+            'nav(target)',
+          ],
+        },
+        {
+          client: `${client} request form`,
+          file: `apps/${client}/src/pages/buy-request/index.vue`,
+          patterns: ['form.region = normalizeInquiryRegionRequirement(prefill.region, i18n.lang)'],
+        },
+      ]),
+    ],
   },
   {
     name: 'mobile rebate presentation',

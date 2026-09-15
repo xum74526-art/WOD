@@ -115,6 +115,9 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(detail, /DEFAULT_PURCHASE_HOURS/);
   assert.doesNotMatch(detail, /purchase_hour_options\.length > 0/);
   assert.match(detail, /function beginInquiry\(\)/);
+  assert.match(detail, /normalizeInquiryRegionRequirement\(product\.region\)/);
+  assert.match(detail, /if \(region\) params\.set\("region", region\)/);
+  assert.doesNotMatch(detail, /region: product\.region \|\| ""/);
   assert.match(detail, /new URLSearchParams\(/);
   assert.match(detail, /\/account\/requests\?\$\{params\.toString\(\)\}/);
   assert.match(detail, /directTradeEnabled \? `\$\{product\.unit_price_ch[\s\S]*? : "询价"/);

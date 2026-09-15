@@ -345,7 +345,7 @@ import MatchmakingQuoteForm, { type MatchmakingQuoteFormValue } from '@/componen
 import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
 import { useCommerceStore } from '@/store/commerce'
-import { localizeRegionName } from '@/utils/region-name'
+import { localizeRegionName, normalizeInquiryRegionRequirement } from '@/utils/region-name'
 import { formatQuoteAmount } from '@/utils/quote-currency'
 import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 import { normalizeBuyRequestContactPhone } from '@/utils/buy-request-contact'
@@ -667,7 +667,7 @@ function applyInquiryPrefill(prefill: InquiryRequestPrefill) {
   form.gpu_variant = prefill.gpu_variant || ''
   form.quantity = String(Math.max(1, prefill.quantity || 1))
   form.gpu_hours = String(Math.max(1, prefill.gpu_hours || 1))
-  form.region = prefill.region || ''
+  form.region = normalizeInquiryRegionRequirement(prefill.region, i18n.lang)
 }
 async function openForm() {
   if (viewMode.value !== 'buyer' || !commerce.matchmakingEnabled) {

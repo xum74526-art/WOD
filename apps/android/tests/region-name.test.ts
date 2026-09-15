@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { localizeMarketLocation, localizeRegionName } from '../src/utils/region-name.ts'
+import {
+  localizeMarketLocation,
+  localizeRegionName,
+  normalizeInquiryRegionRequirement,
+  productInquiryRegionRequirement,
+} from '../src/utils/region-name.ts'
 
 const MARKET_REGIONS = [
   ['north_china', '华北', 'North China'],
@@ -57,6 +62,19 @@ test('stable region code wins over stale upstream text and duplicate detail is r
   assert.equal(localizeRegionName('全球 / 未披露', 'en'), 'Global / Undisclosed')
   assert.equal(localizeMarketLocation('欧洲', 'europe', '欧洲', 'en'), 'Europe')
   assert.equal(localizeMarketLocation('华东', 'east_china', 'CN-East-1', 'en'), 'East China · CN-East-1')
+})
+
+test('inquiry prefill never exposes non-specific region codes as an address requirement', () => {
+  for (const value of ['global_unspecified', '全球/未披露', '全球 ／ 未披露', 'Global / Undisclosed', '地区待确认']) {
+    assert.equal(normalizeInquiryRegionRequirement(value, 'zh-Hans'), '')
+  }
+  assert.equal(normalizeInquiryRegionRequirement('east_china', 'zh-Hans'), '华东')
+  assert.equal(normalizeInquiryRegionRequirement('east_china', 'zh-Hant'), '華東')
+  assert.equal(normalizeInquiryRegionRequirement('east_china', 'en'), 'East China')
+  assert.equal(productInquiryRegionRequirement('全球/未披露', 'global_unspecified', '全球/未披露', 'zh-Hans'), '')
+  assert.equal(productInquiryRegionRequirement('旧地区名', 'europe', 'EU-West-1', 'zh-Hans'), '欧洲')
+  assert.equal(productInquiryRegionRequirement('旧地区名', 'europe', 'EU-West-1', 'en'), 'Europe')
+  assert.equal(productInquiryRegionRequirement('', '', '上海市', 'zh-Hans'), '上海市')
 })
 
 test('all market, request, and merchant pages use the shared runtime region localizer', () => {

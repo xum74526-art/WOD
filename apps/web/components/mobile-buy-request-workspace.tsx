@@ -33,6 +33,7 @@ import {
   normalizeBuyRequestContactPhone,
   type BuyRequestIntent,
 } from "@/lib/web-business-contract";
+import { normalizeInquiryRegionRequirement } from "@/lib/request-navigation";
 
 const statuses: Record<string, string> = {
   published: "已提交",
@@ -177,7 +178,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
     gpu_model: initialPrefill?.gpu_model || "",
     quantity: String(initialPrefill?.quantity || 1),
     gpu_hours: String(initialPrefill?.gpu_hours || 24),
-    region: initialPrefill?.region || "",
+    region: normalizeInquiryRegionRequirement(initialPrefill?.region),
     contact: "",
     phone: "",
     requirements_text: "",

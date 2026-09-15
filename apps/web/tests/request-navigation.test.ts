@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { legacyRequestCreateHref, requestCreateHref } from "../lib/request-navigation.ts";
+import {
+  legacyRequestCreateHref,
+  normalizeInquiryRegionRequirement,
+  requestCreateHref,
+} from "../lib/request-navigation.ts";
 
 test("canonical request links keep shared asset and order attribution", () => {
   assert.equal(
@@ -41,6 +45,19 @@ test("legacy request creation links preserve only supported prefill values", () 
   assert.equal(
     legacyRequestCreateHref({ create: "0", product_id: "7", gpu_hours: ["24", "48"] }),
     "/account/requests?create=1&product_id=7&gpu_hours=24",
+  );
+});
+
+test("request links keep internal or non-specific market regions out of the editable form", () => {
+  for (const value of ["global_unspecified", "全球/未披露", "全球 ／ 未披露", "Global / Undisclosed", "地区待确认"]) {
+    assert.equal(normalizeInquiryRegionRequirement(value), "");
+    assert.equal(requestCreateHref({ gpu_model: "RTX4070TI", region: value }), "/account/requests?create=1&gpu_model=RTX4070TI");
+  }
+  assert.equal(normalizeInquiryRegionRequirement("east_china"), "华东");
+  assert.equal(normalizeInquiryRegionRequirement("CN-SH"), "CN-SH");
+  assert.equal(
+    requestCreateHref({ gpu_model: "H100", region: "east_china" }),
+    "/account/requests?create=1&gpu_model=H100&region=%E5%8D%8E%E4%B8%9C",
   );
 });
 

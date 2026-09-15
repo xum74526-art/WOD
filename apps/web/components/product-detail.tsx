@@ -14,6 +14,7 @@ import { useI18n } from "@/components/locale-root";
 import { localizeSupplierName } from "@/lib/market-localization";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import { directOrderIntentSignature, ensureDirectOrderIntent, type DirectOrderIntent } from "@/lib/web-business-contract";
+import { normalizeInquiryRegionRequirement } from "@/lib/request-navigation";
 
 const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168];
 
@@ -127,6 +128,7 @@ export function ProductDetail({ productId }: { productId: string }) {
   function beginInquiry() {
     if (!product || !matchmakingEnabled || product.inquiry_available === false) return;
     normalizeHours();
+    const region = normalizeInquiryRegionRequirement(product.region);
     const params = new URLSearchParams({
       create: "1",
       product_id: String(product.id),
@@ -134,11 +136,11 @@ export function ProductDetail({ productId }: { productId: string }) {
       gpu_variant: product.memory || "",
       quantity: String(quantity),
       gpu_hours: String(clampPurchaseHours(purchaseHours)),
-      region: product.region || "",
       product_name: product.name,
       seller_name: product.seller_name || product.supplier_name || product.source_name || "",
       source: product.seller_type === "kai_self_operated" || product.market_source === "kai" ? "kai" : "merchant",
     });
+    if (region) params.set("region", region);
     if (product.supplier_id != null) params.set("supplier_id", String(product.supplier_id));
     const requestHref = `/account/requests?${params.toString()}`;
     router.push(user ? requestHref : loginHref(requestHref));

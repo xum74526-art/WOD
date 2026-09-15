@@ -171,7 +171,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
 import { useCommerceStore } from '@/store/commerce'
 import { directTradeCardHoursPerGpuHour, directTradeCnyPerGpuHour } from '@/utils/direct-trade'
-import { localizeMarketLocation } from '@/utils/region-name'
+import { localizeMarketLocation, productInquiryRegionRequirement } from '@/utils/region-name'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
@@ -426,7 +426,7 @@ function submitInquiry() {
     gpu_variant: current.memory || '',
     quantity: quantity.value,
     gpu_hours: hours.value,
-    region: current.region_code || current.region_name || current.city || '',
+    region: productInquiryRegionRequirement(current.region_name, current.region_code, current.city, i18n.lang),
     product_name: current.name,
   })
   const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'

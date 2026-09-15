@@ -528,6 +528,7 @@ test("Web matchmaking selection requests platform coordination without creating 
 
   assert.match(workspace, /contact: form\.contact\.trim\(\)/);
   assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
+  assert.match(workspace, /region: normalizeInquiryRegionRequirement\(initialPrefill\?\.region\)/);
   assert.match(workspace, /product_id: initialPrefill\?\.product_id/);
   assert.match(workspace, /supplier_id: initialPrefill\?\.supplier_id/);
   assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);

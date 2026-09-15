@@ -93,6 +93,40 @@ const MARKET_REGION_EN_BY_CODE: Record<string, string> = {
   global_unspecified: 'Global / Undisclosed',
 }
 
+const MARKET_REGION_ZH_BY_CODE: Record<string, string> = {
+  north_china: '华北',
+  east_china: '华东',
+  central_china: '华中',
+  south_china: '华南',
+  northeast_china: '东北',
+  northwest_china: '西北',
+  southwest_china: '西南',
+  china_unspecified: '中国大陆',
+  asia_pacific: '亚太',
+  north_america: '北美',
+  europe: '欧洲',
+  middle_east: '中东',
+  south_america: '南美',
+  africa: '非洲',
+  global_unspecified: '全球/未披露',
+}
+
+const NON_SPECIFIC_REGION_KEYS = new Set([
+  'global_unspecified',
+  'global/undisclosed',
+  'global',
+  'undisclosed',
+  'unspecified',
+  '全球/未披露',
+  '全球/未公开',
+  '全球',
+  '未披露',
+  '未标注',
+  '地区待确认',
+  '-',
+  '—',
+])
+
 const MARKET_REGION_TOKEN_EN: Array<[string, string]> = [
   ['中国大陆-东北', 'Northeast China'],
   ['中国大陆-西北', 'Northwest China'],
@@ -167,6 +201,38 @@ export function englishRegionName(name: string, regionCode = ''): string {
 export function localizeRegionName(name: string, lang: AppLanguage, regionCode = ''): string {
   if (lang === 'en') return englishRegionName(name, regionCode)
   return lang === 'zh-Hant' ? toTraditionalChinese(name) : name
+}
+
+function regionRequirementKey(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase().replace(/／/g, '/').replace(/\s+/g, '')
+}
+
+export function normalizeInquiryRegionRequirement(
+  value: string | null | undefined,
+  lang: AppLanguage,
+): string {
+  const source = String(value || '').trim()
+  const key = regionRequirementKey(source)
+  if (!key || NON_SPECIFIC_REGION_KEYS.has(key)) return ''
+  const canonicalName = MARKET_REGION_ZH_BY_CODE[key]
+  return localizeRegionName(canonicalName || source, lang, canonicalName ? key : '')
+}
+
+export function productInquiryRegionRequirement(
+  regionName: string | null | undefined,
+  regionCode: string | null | undefined,
+  detail: string | null | undefined,
+  lang: AppLanguage,
+): string {
+  const codeKey = regionRequirementKey(regionCode)
+  if (NON_SPECIFIC_REGION_KEYS.has(codeKey)) return ''
+
+  const canonicalName = MARKET_REGION_ZH_BY_CODE[codeKey]
+  if (canonicalName) return normalizeInquiryRegionRequirement(canonicalName, lang)
+
+  const rawName = String(regionName || '').trim()
+  if (NON_SPECIFIC_REGION_KEYS.has(regionRequirementKey(rawName))) return ''
+  return normalizeInquiryRegionRequirement(rawName || detail || regionCode, lang)
 }
 
 export function localizeMarketLocation(
