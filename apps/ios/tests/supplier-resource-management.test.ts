@@ -38,6 +38,9 @@ test('supplier API exposes only the required create and update resource writes',
   const updateResource = exportedFunction(supplierApi, 'updateSupplierDevice')
   assert.match(updateResource, /url:\s*`\/supplier\/devices\/\$\{[^}]+\}`/)
   assert.match(updateResource, /method:\s*['"]PUT['"]/)
+  assert.match(updateResource, /expectedVersion:\s*number/)
+  assert.match(updateResource, /expected_version:\s*expectedVersion/)
+  assert.match(supplierApi, /interface SupplierDeviceItem[\s\S]*version:\s*number/)
 })
 
 test('seller resource list is writable and displays the backend card-hour unit directly', () => {
@@ -63,6 +66,12 @@ test('resource creation submits card hours without applying the RMB conversion h
   assert.match(createPage, /slice\(0, 4\)/)
   assert.match(createPage, /if \(submitting\.value\) return/)
   assert.match(createPage, /if \(!listed\) submitting\.value = false/)
+  assert.match(createPage, /ensureClientRequestIntent/)
+  assert.match(createPage, /client_request_id:\s*ensureCreateRequestId\(payload\)/)
+  assert.match(createPage, /pendingCreateIntent\.value = null/)
+  assert.match(createPage, /onBackPress\(\(\) => submitting\.value\)/)
+  assert.match(createPage, /:show-back="!submitting"/)
+  assert.match(supplierApi, /interface SupplierDeviceCreateInput[\s\S]*client_request_id:\s*string/)
 })
 
 test('resource editing preserves four-decimal prices and submits only changed fields', () => {
@@ -70,4 +79,15 @@ test('resource editing preserves four-decimal prices and submits only changed fi
   assert.match(devicePage, /slice\(0, 4\)/)
   assert.match(devicePage, /const changes:\s*SupplierDeviceUpdateInput = \{\}/)
   assert.match(devicePage, /if \(stock !== editTarget\.value\.stock\) changes\.stock = stock/)
+  assert.match(devicePage, /updateSupplierDevice\(editTarget\.value\.id, editTarget\.value\.version, changes\)/)
+  assert.match(devicePage, /updateSupplierDevice\(device\.id, device\.version, \{ status \}\)/)
+})
+
+test('stale resource edits reload the latest device version instead of retrying old data', () => {
+  const i18n = source('../src/store/i18n.ts')
+  assert.match(devicePage, /error instanceof ApiRequestError/)
+  assert.match(devicePage, /error\.statusCode !== 409/)
+  assert.match(devicePage, /await load\(\)/)
+  assert.match(devicePage, /t\('resourceChangedRefresh'\)/)
+  assert.match(i18n, /resourceChangedRefresh:/)
 })

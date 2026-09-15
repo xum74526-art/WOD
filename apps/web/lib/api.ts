@@ -337,7 +337,7 @@ export function getCurrentUser(force = false) {
 export function logoutCurrentUser() {
   currentUserCache = null;
   currentUserFailure = null;
-  return apiRequest<{ logged_out: boolean }>("/api/v1/auth/logout", { method: "POST" });
+  return apiRequest<{ logged_out: boolean; session_revoked: boolean }>("/api/v1/auth/logout", { method: "POST" });
 }
 
 export function getAccountSecurity() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle, Cpu, HardDrives, ShieldCheck, TerminalWindow, Wallet, X } from "@phosphor-icons/react";
@@ -13,6 +13,7 @@ import { clampPurchaseHours, estimateProductExpiryRebate, type ProductPurchaseTy
 import { useI18n } from "@/components/locale-root";
 import { localizeSupplierName } from "@/lib/market-localization";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { directOrderIntentSignature, ensureDirectOrderIntent, type DirectOrderIntent } from "@/lib/web-business-contract";
 
 const DEFAULT_PURCHASE_HOURS = [1, 6, 12, 24, 72, 168];
 
@@ -32,6 +33,8 @@ export function ProductDetail({ productId }: { productId: string }) {
   const purchaseType = "usage" as const satisfies ProductPurchaseType;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const orderSubmissionInFlight = useRef(false);
+  const pendingOrderIntent = useRef<DirectOrderIntent | null>(null);
 
   useEffect(() => {
     getPublicProduct(Number(productId))
@@ -58,7 +61,10 @@ export function ProductDetail({ productId }: { productId: string }) {
   }, [directTradeEnabled, user]);
 
   useEffect(() => {
-    if (!directTradeEnabled) setConfirmOpen(false);
+    if (!directTradeEnabled) {
+      pendingOrderIntent.current = null;
+      setConfirmOpen(false);
+    }
   }, [directTradeEnabled]);
 
   const walletTotal = useMemo(
@@ -94,6 +100,30 @@ export function ProductDetail({ productId }: { productId: string }) {
     setPurchaseHours(clampPurchaseHours(value));
   }
 
+  function ensurePendingOrder(hours = clampPurchaseHours(purchaseHours)) {
+    if (!product) return null;
+    const input = {
+      product_id: product.id,
+      quantity,
+      hours,
+      purchase_type: purchaseType,
+      expected_unit_price_card_hours: product.unit_price_ch,
+    };
+    const intent = ensureDirectOrderIntent(
+      pendingOrderIntent.current,
+      directOrderIntentSignature(input),
+      () => crypto.randomUUID(),
+    );
+    pendingOrderIntent.current = intent;
+    return { input, requestId: intent.requestId };
+  }
+
+  function cancelPurchase() {
+    if (busy) return;
+    pendingOrderIntent.current = null;
+    setConfirmOpen(false);
+  }
+
   function beginInquiry() {
     if (!product || !matchmakingEnabled || product.inquiry_available === false) return;
     normalizeHours();
@@ -118,29 +148,31 @@ export function ProductDetail({ productId }: { productId: string }) {
     if (!directTradeEnabled) return;
     if (!user) { router.push(loginHref(`/market/products/${productId}`)); return; }
     if (!product?.purchasable || product.purchase_unit !== "hour") return;
-    normalizeHours();
+    const hours = clampPurchaseHours(purchaseHours);
+    normalizeHours(hours);
+    ensurePendingOrder(hours);
     setConfirmOpen(true);
   }
 
   async function purchase() {
     if (!user) { router.push(loginHref(`/market/products/${productId}`)); return; }
     if (!directTradeEnabled || !product?.purchasable || product.purchase_unit !== "hour") return;
+    if (orderSubmissionInFlight.current) return;
+    const pending = ensurePendingOrder();
+    if (!pending) return;
+    orderSubmissionInFlight.current = true;
     setConfirmOpen(false);
     setBusy(true);
     setError("");
     try {
-      const result = await createDirectOrder({
-        product_id: product.id,
-        quantity,
-        hours: clampPurchaseHours(purchaseHours),
-        purchase_type: purchaseType,
-        expected_unit_price_card_hours: product.unit_price_ch,
-      });
+      const result = await createDirectOrder(pending.input, pending.requestId);
+      pendingOrderIntent.current = null;
       router.push(`/account/orders?order=${result.order.id}`);
     } catch (reason) {
       setError(reason instanceof ApiError && reason.status === 409
         ? `当前无法创建直接交易订单，请刷新服务状态或改为提交需求。${reason.message ? `（${reason.message}）` : ""}`
         : reason instanceof Error ? reason.message : "订单创建失败");
+      orderSubmissionInFlight.current = false;
       setBusy(false);
     }
   }
@@ -195,5 +227,5 @@ export function ProductDetail({ productId }: { productId: string }) {
       <p>{directTradeEnabled ? `卖方为 ${sellerName}，${fulfillmentLabel}。余额、冻结金额和订单状态均来自统一业务后端。` : `卖方为 ${sellerName}，${fulfillmentLabel}。提交后由人工联系确认配置、库存、价格和交付安排。`}</p>
       {error && <div className="commerce-error">{error}</div>}
     </aside>
-  </div>{directTradeEnabled && confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setConfirmOpen(false); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label="关闭购买确认" disabled={busy} onClick={() => setConfirmOpen(false)}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">确认小时购买</h2><p>{product.name}</p><dl><div><dt>卖方</dt><dd>{sellerName} · {fulfillmentLabel}</dd></div><div><dt>GPU / 数量</dt><dd>{product.gpu_model} × {quantity} 台</dd></div><div><dt>购买时长</dt><dd>{purchaseHours} 小时</dd></div><div><dt>购买模式</dt><dd>使用</dd></div><div><dt>钱包扣款</dt><dd>{walletTotal.toFixed(4)} 卡时</dd></div><div><dt>{t("product.rebate.label", "预计到期个人购买返佣")}</dt><dd>{rebateAmountText}</dd></div></dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={() => setConfirmOpen(false)}>返回修改</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? "正在创建订单…" : "确认并下单"}</button></div><small>{t("product.rebate.settlement", "页面金额为预计值；确认交付时服务端会按个人等级和剩余额度最终重算，实际金额以资产到期结算为准。")}</small></section></div>}</>;
+  </div>{directTradeEnabled && confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPurchase(); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label="关闭购买确认" disabled={busy} onClick={cancelPurchase}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">确认小时购买</h2><p>{product.name}</p><dl><div><dt>卖方</dt><dd>{sellerName} · {fulfillmentLabel}</dd></div><div><dt>GPU / 数量</dt><dd>{product.gpu_model} × {quantity} 台</dd></div><div><dt>购买时长</dt><dd>{purchaseHours} 小时</dd></div><div><dt>购买模式</dt><dd>使用</dd></div><div><dt>钱包扣款</dt><dd>{walletTotal.toFixed(4)} 卡时</dd></div><div><dt>{t("product.rebate.label", "预计到期个人购买返佣")}</dt><dd>{rebateAmountText}</dd></div></dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={cancelPurchase}>返回修改</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? "正在创建订单…" : "确认并下单"}</button></div><small>{t("product.rebate.settlement", "页面金额为预计值；确认交付时服务端会按个人等级和剩余额度最终重算，实际金额以资产到期结算为准。")}</small></section></div>}</>;
 }

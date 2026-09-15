@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request
-from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -195,6 +195,7 @@ async def http_handler(request: Request, exc: FastAPIHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_handler(request: Request, exc: RequestValidationError):
+    validation_errors = list(exc.errors())
     # Consent is intentionally a required strict boolean in the public schema.
     # Convert the otherwise-generic FastAPI 422 into an explicit client error
     # so old clients cannot silently submit identity documents without it.
@@ -204,14 +205,23 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
     )
     consent_error = any(
         error_item.get("loc", ())[-1:] == ("sensitive_consent",)
-        for error_item in exc.errors()
+        for error_item in validation_errors
     )
     if is_verification_submit and consent_error:
         return JSONResponse(
             status_code=400,
             content=error("请先单独同意身份证敏感信息用于本地文字识别和人工审核"),
         )
-    return await request_validation_exception_handler(request, exc)
+    # FastAPI's default response includes each rejected input. That can reflect
+    # passwords and turn oversized fields into equally oversized responses.
+    safe_errors = [
+        {key: value for key, value in error_item.items() if key != "input"}
+        for error_item in validation_errors
+    ]
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": safe_errors}),
+    )
 
 
 app.include_router(auth.router)

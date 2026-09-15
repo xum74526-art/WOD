@@ -1,5 +1,5 @@
 import { apiEnvelopeRequest, apiRequest, publicApiEnvelopeRequest, type ApiEnvelope } from "@/lib/api";
-import { hourlyOrderBody, webRequestId } from "@/lib/web-business-contract";
+import { hourlyOrderBody } from "@/lib/web-business-contract";
 
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
@@ -115,6 +115,7 @@ export type Order = {
   quantity: number;
   purchase_type?: "usage" | "holding";
   purchase_hours?: number | null;
+  market_source?: "kai" | "wod" | null;
   cycle_days?: number | null;
   end_at?: string | null;
   remaining_days?: number;
@@ -354,27 +355,10 @@ function queryString(values: Record<string, string | number | undefined>) {
   return text ? `?${text}` : "";
 }
 
-export function listPublicRequests(filters: { gpu_model?: string; region?: string; sort?: string } = {}) {
-  return apiEnvelopeRequest<BuyRequest[], PageMeta>(`/api/v1/public/buy-requests${queryString(filters)}`);
-}
-export function getPublicRequest(requestNo: string) { return apiRequest<BuyRequest>(`/api/v1/public/buy-requests/${encodeURIComponent(requestNo)}`); }
-export function listBuyerRequests(status?: string) { return apiEnvelopeRequest<BuyRequest[], PageMeta>(`/api/v1/account/buy-requests${queryString({ status })}`); }
-export function getBuyerRequest(id: number) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}`); }
-export function createBuyRequest(input: Record<string, unknown>) { return apiRequest<BuyRequest>("/api/v1/buy-requests", { method: "POST", body: JSON.stringify(input) }); }
-export function updateBuyRequest(id: number, input: Record<string, unknown>) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function deleteBuyRequest(id: number, version: number) { return apiRequest<{ deleted: boolean }>(`/api/v1/account/buy-requests/${id}?version=${version}`, { method: "DELETE" }); }
-export function publishBuyRequest(id: number, version: number) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/publish`, { method: "POST", body: JSON.stringify({ version }) }); }
-export function closeBuyRequest(id: number, version: number, reason: string) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/close`, { method: "POST", body: JSON.stringify({ version, reason }) }); }
-export function extendBuyRequest(id: number, version: number, quoteDeadlineAt: string) { return apiRequest<BuyRequest>(`/api/v1/account/buy-requests/${id}/extend`, { method: "POST", body: JSON.stringify({ version, quote_deadline_at: quoteDeadlineAt }) }); }
-export function listBuyerQuotes(id: number) { return apiEnvelopeRequest<{ request: Pick<BuyRequest, "request_no" | "title" | "status" | "gpu_model" | "gpu_quantity" | "quote_deadline_at"> & { id: number }; quotes: Quote[] }, PageMeta>(`/api/v1/account/buy-requests/${id}/quotes`); }
-export function decideQuote(requestId: number, quoteId: number, action: "shortlist" | "reject", quoteVersion: number, note?: string) { return apiRequest<Quote>(`/api/v1/account/buy-requests/${requestId}/quotes/${quoteId}/${action}`, { method: "POST", body: JSON.stringify({ quote_version: quoteVersion, note: note || null }) }); }
-export function acceptQuote(requestId: number, quoteId: number, requestVersion: number, quoteVersion: number, note?: string) { return apiRequest<{ id: number; order_no: string; status: string }>(`/api/v1/account/buy-requests/${requestId}/quotes/${quoteId}/accept`, { method: "POST", body: JSON.stringify({ request_version: requestVersion, quote_version: quoteVersion, note: note || null }) }); }
-
 export function listSupplierRequests(filters: { gpu_model?: string; region?: string; sort?: string } = {}) { return apiEnvelopeRequest<(BuyRequest & { id: number })[], PageMeta>(`/api/v1/supplier/buy-requests${queryString(filters)}`); }
 export function getSupplierRequest(id: number) { return apiRequest<{ request: BuyRequest; own_quotes: Quote[] }>(`/api/v1/supplier/buy-requests/${id}`); }
 export function createSupplierQuote(requestId: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/buy-requests/${requestId}/quotes`, { method: "POST", body: JSON.stringify(input) }); }
 export function updateSupplierQuote(id: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function listSupplierQuotes(status?: string) { return apiEnvelopeRequest<Quote[], PageMeta>(`/api/v1/supplier/quotes${queryString({ status })}`); }
 export function submitSupplierQuote(id: number, version: number) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/submit`, { method: "POST", body: JSON.stringify({ version }) }); }
 export function withdrawSupplierQuote(id: number, version: number, reason?: string) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/withdraw`, { method: "POST", body: JSON.stringify({ version, reason: reason || null }) }); }
 
@@ -386,16 +370,14 @@ export function startOrderDelivery(id: number, version: number, note?: string) {
 export function markOrderDelivered(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/mark-delivered`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function completeOrder(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/complete`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function disputeOrder(id: number, reason: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/dispute`, { method: "POST", body: JSON.stringify({ reason }) }); }
-export function renewOrder(id: number, hours: number) {
-  const clientRequestId = webRequestId("renew", crypto.randomUUID());
+export function renewOrder(id: number, hours: number, clientRequestId: string) {
   return apiRequest<Order>(`/api/v1/account/orders/${id}/renew`, {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },
     body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
   });
 }
-export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }) {
-  const clientRequestId = webRequestId("order", crypto.randomUUID());
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }, clientRequestId: string) {
   return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },

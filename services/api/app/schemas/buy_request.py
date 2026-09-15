@@ -13,6 +13,10 @@ class QuoteRevisionIn(BaseModel):
     expires_in_hours: int = Field(default=24, ge=1, le=24 * 30)
 
 
+class QuoteSelectionIn(BaseModel):
+    expected_revision_id: int = Field(ge=1)
+
+
 class DealActionIn(BaseModel):
     expected_version: int | None = Field(default=None, ge=1)
 

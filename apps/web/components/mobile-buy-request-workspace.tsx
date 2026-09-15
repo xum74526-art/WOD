@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, CheckCircle, Handshake, Key, LockKey, Plus, Receipt, Storefront, WarningCircle } from "@phosphor-icons/react";
 import {
   confirmMobileBuyRequestDeal,
@@ -21,17 +21,29 @@ import {
   type MobileBuyRequest,
   type MobileBuyRequestCredential,
   type MobileBuyRequestDetail,
+  type MobileBuyRequestEvent,
 } from "@/lib/mobile-buy-request-api";
+import { ApiError } from "@/lib/api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import {
+  buyRequestIntentSignature,
+  buyRequestAdditionalRequirements,
+  ensureBuyRequestIntent,
+  normalizeBuyRequestContactPhone,
+  type BuyRequestIntent,
+} from "@/lib/web-business-contract";
 
 const statuses: Record<string, string> = {
   published: "已提交",
   quoting: "方案协商中",
   active: "待回应",
   countered: "待回应",
+  revised: "待回应",
   withdrawn: "已撤回",
   selected: "已选定",
+  coordination_requested: "平台协调中",
+  declined: "未选中",
   quote_selected: "已选定方案",
   buyer_selected: "等待商家确认",
   supplier_confirmed: "商家已确认",
@@ -46,9 +58,41 @@ const statuses: Record<string, string> = {
   completed: "已完成",
   expired: "已过期",
   cancelled: "已取消",
+  processing: "处理中",
+  rejected: "未通过",
+  pending_payment: "待付款",
+  closed: "已关闭",
+  superseded: "已被新方案替代",
+  submitted: "已提交",
+  released: "已放行",
+};
+const eventLabels: Record<string, string> = {
+  quote_history_initialized: "报价记录已建立",
+  quote_submitted: "商家已提交方案",
+  quote_countered: "方案已更新",
+  quote_withdrawn: "商家已撤回方案",
+  buyer_selected_quote: "买家已选择方案",
+  supplier_confirmed: "商家已确认资源",
+  supplier_declined: "商家无法承接",
+  platform_approved: "平台审核已通过",
+  platform_rejected: "平台审核未通过",
+  credential_submitted: "商家已提交交付凭据",
+  credential_released: "平台已放行交付凭据",
+  credential_rejected: "交付凭据需重新提交",
+  delivery_confirmed: "买家已确认交付",
+  delivery_reported: "买家已报告交付问题",
 };
 const openRequestStatuses = new Set(["published", "quoting", "active"]);
 const activeQuoteStatuses = new Set(["active", "countered", "revised"]);
+
+function statusLabel(status?: string | null) {
+  return (status && statuses[status]) || "状态更新中";
+}
+
+function timelineEventLabel(event: MobileBuyRequestEvent) {
+  const eventType = event.event_type || event.label || "";
+  return eventLabels[eventType] || statusLabel(event.status);
+}
 
 type RequestPrefill = {
   create?: boolean;
@@ -71,6 +115,25 @@ function latestQuote(item: MobileBuyQuote) {
   return item.latest_revision || item.revisions?.at(-1) || item;
 }
 
+function quoteSelectionSnapshot(item: MobileBuyQuote) {
+  const revision = item.latest_revision ?? item.revisions?.at(-1);
+  const revisionId = Number(revision?.id);
+  const revisionNo = Number(revision?.revision_no);
+  const totalPrice = Number(revision?.total_price);
+  if (
+    !Number.isInteger(revisionId)
+    || revisionId <= 0
+    || (revision?.quote_id != null && Number(revision.quote_id) !== item.id)
+    || !Number.isFinite(totalPrice)
+  ) return null;
+  return {
+    revisionId,
+    revisionNo: Number.isInteger(revisionNo) && revisionNo > 0 ? revisionNo : 1,
+    totalPrice,
+    currency: revision?.currency || item.currency,
+  };
+}
+
 function dateTimeInput(value?: string) {
   if (!value) return "";
   const date = new Date(value);
@@ -87,12 +150,15 @@ function canCounterQuote(view: "buyer" | "seller", request: MobileBuyRequest, it
   return request.is_own !== true && lastActor !== "supplier" && lastActor !== "seller";
 }
 
-export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: { view: "buyer" | "seller"; initialId?: number; initialPrefill?: RequestPrefill }) {
+type SellerRequestScope = "all" | "quoted";
+
+export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, initialSellerScope = "all" }: { view: "buyer" | "seller"; initialId?: number; initialPrefill?: RequestPrefill; initialSellerScope?: SellerRequestScope }) {
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const matchmakingEnabled = capabilities.matchmaking_enabled === true;
   const requestFlowEnabled = matchmakingEnabled;
   const [type, setType] = useState<"online" | "offline">("online");
+  const [sellerScope, setSellerScope] = useState<SellerRequestScope>(initialSellerScope);
   const [rows, setRows] = useState<MobileBuyRequest[]>([]);
   const [selected, setSelected] = useState<number | null>(initialId || null);
   const [detail, setDetail] = useState<MobileBuyRequestDetail | null>(null);
@@ -105,6 +171,8 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
   const [credential, setCredential] = useState<MobileBuyRequestCredential | null>(null);
   const [credentialForm, setCredentialForm] = useState({ host: "", port: "22", username: "", auth_type: "password" as "password" | "private_key", secret: "", note: "" });
   const [issueReason, setIssueReason] = useState("");
+  const requestSubmissionInFlight = useRef(false);
+  const pendingBuyRequestIntent = useRef<BuyRequestIntent | null>(null);
   const [form, setForm] = useState({
     gpu_model: initialPrefill?.gpu_model || "",
     quantity: String(initialPrefill?.quantity || 1),
@@ -127,7 +195,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
   const load = useCallback(async (preferredId?: number) => {
     setError("");
     try {
-      const result = await listMobileBuyRequests(type, view);
+      const result = await listMobileBuyRequests(type, view, view === "seller" && sellerScope === "quoted");
       setRows(result);
       const id = preferredId || initialId || selected || result[0]?.id;
       if (id && result.some((row) => row.id === id)) await loadDetail(id);
@@ -136,15 +204,16 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     } catch (reason) {
       setError(errorMessage(reason));
     }
-  }, [initialId, loadDetail, selected, type, view]);
+  }, [initialId, loadDetail, selected, sellerScope, type, view]);
 
-  useEffect(() => { void load(); }, [type, view]);
+  useEffect(() => { void load(); }, [type, view, sellerScope]);
 
-  const sellerQuote = useMemo(() => view === "seller" ? detail?.quotes[0] || null : null, [detail, view]);
+  const sellerQuote = useMemo(() => view === "seller" && !detail?.request.is_own ? detail?.quotes[0] || null : null, [detail, view]);
   const canCreateSellerQuote = Boolean(
     view === "seller" && detail && !detail.request.is_own && !detail.deal && requestFlowEnabled &&
     openRequestStatuses.has(detail.request.status) && !sellerQuote,
   );
+  const detailRequirementNote = buyRequestAdditionalRequirements(detail?.request.requirements);
 
   function quoteInput(): MobileBuyQuoteInput {
     return {
@@ -169,33 +238,61 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     });
   }
 
+  function toggleCreateForm() {
+    if (creating) pendingBuyRequestIntent.current = null;
+    setCreating((value) => !value);
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (requestSubmissionInFlight.current) return;
+    const phone = normalizeBuyRequestContactPhone(form.phone);
+    if (!phone) {
+      setError("请输入有效联系电话（可使用 +国家区号）。");
+      return;
+    }
+    const additionalRequirements = form.requirements_text.trim() || undefined;
+    const input = {
+      request_type: type,
+      gpu_model: form.gpu_model,
+      gpu_variant: initialPrefill?.gpu_variant || undefined,
+      quantity: Number(form.quantity),
+      gpu_hours: type === "online" ? Number(form.gpu_hours) : undefined,
+      currency: "CNY",
+      region: form.region || undefined,
+      billing_mode: type === "online" ? "card_hour" : "device",
+      requirements: {
+        product_id: initialPrefill?.product_id,
+        supplier_id: initialPrefill?.supplier_id,
+        source: initialPrefill?.source,
+        product_name: initialPrefill?.product_name,
+        seller_name: initialPrefill?.seller_name,
+        note: additionalRequirements,
+        remark: additionalRequirements,
+      },
+      contact: form.contact.trim(), phone, expires_in_hours: Number(form.expires_in_hours),
+    };
+    const intent = ensureBuyRequestIntent(
+      pendingBuyRequestIntent.current,
+      buyRequestIntentSignature(input),
+      () => crypto.randomUUID(),
+    );
+    pendingBuyRequestIntent.current = intent;
+    requestSubmissionInFlight.current = true;
     setBusy("request"); setError(""); setMessage("");
     try {
       const row = await createMobileBuyRequest({
-        request_type: type,
-        gpu_model: form.gpu_model,
-        quantity: Number(form.quantity),
-        gpu_hours: type === "online" ? Number(form.gpu_hours) : undefined,
-        currency: "CNY",
-        region: form.region || undefined,
-        billing_mode: type === "online" ? "card_hour" : "device",
-        requirements: {
-          product_id: initialPrefill?.product_id,
-          supplier_id: initialPrefill?.supplier_id,
-          source: initialPrefill?.source,
-          product_name: initialPrefill?.product_name,
-          seller_name: initialPrefill?.seller_name,
-          gpu_variant: initialPrefill?.gpu_variant,
-          note: form.requirements_text.trim() || undefined,
-        },
-        contact: form.contact.trim(), phone: form.phone.trim(), expires_in_hours: Number(form.expires_in_hours),
+        ...input,
+        client_request_id: intent.requestId,
       });
+      pendingBuyRequestIntent.current = null;
       setCreating(false);
       setMessage("需求已提交，联系方式仅平台管理员可见。");
       await load(row.id);
-    } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
+    } catch (reason) { setError(errorMessage(reason)); } finally {
+      requestSubmissionInFlight.current = false;
+      setBusy("");
+    }
   }
 
   async function submitQuote(event: FormEvent) {
@@ -213,16 +310,29 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
 
   async function selectQuote(item: MobileBuyQuote) {
     if (!detail) return;
+    const requestId = detail.request.id;
+    const snapshot = quoteSelectionSnapshot(item);
+    if (!snapshot) {
+      setError("报价资料已更新，请刷新后重新确认。");
+      try { await loadDetail(requestId); } catch { /* the existing quote remains visible */ }
+      return;
+    }
+    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${snapshot.currency} ${snapshot.totalPrice.toFixed(2)}`;
     const prompt = directTradeEnabled
-      ? `确认选择 ${item.supplier_name} 的报价 ¥${latestQuote(item).total_price}？`
-      : `确认选择 ${item.supplier_name} 的方案？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
+      ? `确认选择 ${item.supplier_name} 的报价（${confirmedTerms}）？`
+      : `确认选择 ${item.supplier_name} 的方案（${confirmedTerms}）？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
     if (!window.confirm(prompt)) return;
     setBusy(`select-${item.id}`); setError(""); setMessage("");
     try {
-      const result = await selectMobileBuyQuote(detail.request.id, item.id);
+      const result = await selectMobileBuyQuote(requestId, item.id, snapshot.revisionId);
       setMessage(result.commerce_mode === "matchmaking" ? "方案已选定，正在等待商家确认资源；当前未创建资金订单，也未扣除卡时。请等待工作人员联系确认平台审核进度。" : "报价已选择，请按订单流程继续处理。");
-      await load(detail.request.id);
-    } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
+      await load(requestId);
+    } catch (reason) {
+      setError(errorMessage(reason));
+      if (reason instanceof ApiError && reason.status === 409) {
+        try { await loadDetail(requestId); } catch { /* keep the actionable 409 message */ }
+      }
+    } finally { setBusy(""); }
   }
 
   async function withdrawQuote(item: MobileBuyQuote) {
@@ -287,7 +397,12 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     <div className="commerce-tabs">
       <button className={type === "online" ? "active" : ""} onClick={() => setType("online")}>在线算力</button>
       <button className={type === "offline" ? "active" : ""} onClick={() => setType("offline")}>线下设备</button>
-      {view === "buyer" && requestFlowEnabled && <button className="request-create-trigger" onClick={() => setCreating((value) => !value)}><Plus size={14}/>提交需求</button>}
+      {view === "seller" && <div className="mobile-request-scope" role="group" aria-label="需求显示范围">
+        <span>显示范围</span>
+        <button aria-pressed={sellerScope === "all"} className={sellerScope === "all" ? "active" : ""} onClick={() => setSellerScope("all")}>全部需求</button>
+        <button aria-pressed={sellerScope === "quoted"} className={sellerScope === "quoted" ? "active" : ""} onClick={() => setSellerScope("quoted")}>我的报价</button>
+      </div>}
+      {view === "buyer" && requestFlowEnabled && <button className="request-create-trigger" onClick={toggleCreateForm}><Plus size={14}/>提交需求</button>}
     </div>
     {error && <div className="commerce-error">{error}</div>}
     {message && <div className="commerce-success">{message}</div>}
@@ -296,7 +411,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
       <label>数量<input required min="1" type="number" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })}/></label>
       {type === "online" && <label>预计使用时长（小时）<input required min="1" type="number" value={form.gpu_hours} onChange={(event) => setForm({ ...form, gpu_hours: event.target.value })}/></label>}
       <label>联系人<input required maxLength={50} value={form.contact} onChange={(event) => setForm({ ...form, contact: event.target.value })} placeholder="仅平台管理员可见"/></label>
-      <label>联系电话<input required inputMode="tel" maxLength={30} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="仅平台管理员可见"/></label>
+      <label>联系电话<input required type="tel" inputMode="tel" maxLength={32} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.slice(0, 32) })} placeholder="可填写国家区号，仅平台管理员可见"/></label>
       <label>地区<input value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}/></label>
       <label>有效小时<input min="1" max="720" type="number" value={form.expires_in_hours} onChange={(event) => setForm({ ...form, expires_in_hours: event.target.value })}/></label>
       <label className="mobile-request-form__wide">补充需求<textarea rows={3} maxLength={1000} value={form.requirements_text} onChange={(event) => setForm({ ...form, requirements_text: event.target.value })} placeholder="网络、CUDA、镜像、交付时间等，可留空"/></label>
@@ -305,25 +420,26 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
     </form>}
     <div className="mobile-request-console">
       <aside>
-        <header><strong>{view === "buyer" ? "我的需求" : "可接需求"}</strong><b>{rows.length}</b></header>
+        <header><strong>{view === "buyer" ? "我的需求" : sellerScope === "quoted" ? "我的报价需求" : "可接需求"}</strong><b>{rows.length}</b></header>
         {rows.length ? rows.map((row) => <button className={selected === row.id ? "active" : ""} key={row.id} onClick={() => void loadDetail(row.id)}>
-          <span><strong>{row.gpu_model} × {row.quantity}</strong><small>{view === "seller" ? `匿名需求 #${row.id}` : `我的需求 #${row.id}`} · {formatDate(row.created_at)}</small></span>
-          <b>{view === "seller" && row.is_own ? "我的需求 · 仅查看" : view === "seller" && row.targeted_to_me ? "定向需求" : statuses[row.status] || row.status}</b>
-        </button>) : <div className="mobile-inline-empty">暂无需求</div>}
+          <span><strong>{row.gpu_model}{row.gpu_variant ? ` ${row.gpu_variant}` : ""} × {row.quantity}</strong><small>{view === "seller" ? `匿名需求 #${row.id}` : `我的需求 #${row.id}`} · {formatDate(row.created_at)}</small></span>
+          <b>{view === "seller" && row.is_own ? "我的需求 · 仅查看" : view === "seller" && row.targeted_to_me ? "定向需求" : statusLabel(row.status)}</b>
+        </button>) : <div className="mobile-inline-empty">{view === "seller" && sellerScope === "quoted" ? "暂无报价记录" : "暂无需求"}</div>}
       </aside>
       <main>{detail ? <>
-        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statuses[detail.deal?.status || detail.request.status] || detail.deal?.status || detail.request.status}</b></header>
+        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model}{detail.request.gpu_variant ? ` ${detail.request.gpu_variant}` : ""} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts">
           <span><small>服务价格</small><strong>询价</strong></span><span><small>交易方式</small><strong>平台撮合</strong></span><span><small>报价数</small><strong>{detail.request.quote_count}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span>
         </div>
+        {detailRequirementNote && <div className="workspace-service-note"><strong>补充需求：</strong>{detailRequirementNote}</div>}
         {view === "seller" && <div className="workspace-service-note"><LockKey size={16}/>购买人身份、联系人和手机号已隐藏；您只能查看和修改自己的报价。</div>}
         <section className="mobile-quote-list">
-          <h3><Receipt size={17}/>{view === "buyer" ? "报价记录" : "我的报价"}</h3>
+          <h3><Receipt size={17}/>{view === "buyer" ? "报价记录" : detail.request.is_own ? "收到的报价" : "我的报价"}</h3>
           {detail.quotes.length ? detail.quotes.map((item) => {
             const latest = latestQuote(item);
             return <article key={item.id} className="matchmaking-quote-card">
-              <span><strong>{view === "seller" ? "我的方案" : item.supplier_name || "认证商家"}</strong><small>{latest.message || "无补充说明"}</small><small>第 {item.revision_count || item.revisions?.length || 1} 轮 · {latest.available_at ? `${formatDate(latest.available_at)} 可交付` : "交付时间待确认"}</small></span>
-              <b>¥{latest.total_price}</b><em>{statuses[item.status] || item.status}</em>
+              <span><strong>{view === "seller" && !detail.request.is_own ? "我的方案" : item.supplier_name || "认证商家"}</strong><small>{latest.message || "无补充说明"}</small><small>第 {item.revision_count || item.revisions?.length || 1} 轮 · {latest.available_at ? `${formatDate(latest.available_at)} 可交付` : "交付时间待确认"}</small></span>
+              <b>¥{latest.total_price}</b><em>{statusLabel(item.status)}</em>
               <div className="matchmaking-actions">
                 {canCounterQuote(view, detail.request, item, Boolean(detail.deal), matchmakingEnabled) && <button type="button" disabled={Boolean(busy)} onClick={() => beginCounter(item)}>{view === "buyer" ? "还价" : "修改方案"}</button>}
                 {view === "seller" && item.can_withdraw !== false && !detail.deal && matchmakingEnabled && openRequestStatuses.has(detail.request.status) && activeQuoteStatuses.has(item.status) && <button className="danger" type="button" disabled={Boolean(busy)} onClick={() => void withdrawQuote(item)}>撤回</button>}
@@ -350,7 +466,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill }: {
         {detail.deal && <section className="matchmaking-deal">
           <header><div><small>PLATFORM ESCROW</small><h3>撮合与交付</h3></div><b>#{detail.deal.id}</b></header>
           <ol className="matchmaking-timeline">
-            {(detail.events || []).length ? detail.events!.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{event.label || statuses[event.status || ""] || event.event_type || "状态更新"}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>) : <li><span><CheckCircle size={16}/></span><div><strong>{statuses[detail.deal.status] || detail.deal.status}</strong><small>{formatDate(detail.deal.updated_at)}</small></div></li>}
+            {(detail.events || []).length ? detail.events!.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{timelineEventLabel(event)}</strong><small>{event.message || formatDate(event.created_at)}</small></div></li>) : <li><span><CheckCircle size={16}/></span><div><strong>{statusLabel(detail.deal.status)}</strong><small>{formatDate(detail.deal.updated_at)}</small></div></li>}
           </ol>
           {view === "seller" && (detail.deal.can_supplier_confirm || detail.deal.can_supplier_decline) && <div className="matchmaking-action-panel"><h4>确认资源</h4><p>确认后由平台审核方案；无法提供时请及时拒绝。</p><div className="matchmaking-actions">{detail.deal.can_supplier_decline && <button className="danger" disabled={Boolean(busy)} onClick={() => void dealAction("decline")}>无法承接</button>}{detail.deal.can_supplier_confirm && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void dealAction("confirm")}>确认可提供</button>}</div></div>}
           {view === "seller" && detail.deal.can_submit_credential && <form className="matchmaking-credential-form" onSubmit={submitCredential}><h4><Key size={17}/>提交 SSH 凭据</h4><p>凭据会加密托管，平台审核放行前购买人不可见。</p><label>主机地址<input required value={credentialForm.host} onChange={(event) => setCredentialForm({ ...credentialForm, host: event.target.value })}/></label><label>端口<input required min="1" max="65535" type="number" value={credentialForm.port} onChange={(event) => setCredentialForm({ ...credentialForm, port: event.target.value })}/></label><label>用户名<input required value={credentialForm.username} onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value })}/></label><label>认证方式<select value={credentialForm.auth_type} onChange={(event) => setCredentialForm({ ...credentialForm, auth_type: event.target.value as "password" | "private_key" })}><option value="password">密码</option><option value="private_key">私钥</option></select></label><label className="wide">{credentialForm.auth_type === "password" ? "密码" : "私钥"}<textarea required rows={credentialForm.auth_type === "password" ? 2 : 6} value={credentialForm.secret} onChange={(event) => setCredentialForm({ ...credentialForm, secret: event.target.value })}/></label><label className="wide">交付说明<textarea rows={2} value={credentialForm.note} onChange={(event) => setCredentialForm({ ...credentialForm, note: event.target.value })}/></label><button className="commerce-primary" disabled={Boolean(busy)}>{busy === "credential" ? "加密提交中…" : "提交平台审核"}</button></form>}

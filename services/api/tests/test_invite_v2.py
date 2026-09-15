@@ -112,6 +112,24 @@ class InviteV2Tests(unittest.TestCase):
         for name, value in self.original_switches.items():
             setattr(settings, name, value)
 
+    def test_summary_generates_ztw_code_for_account_without_invite_code(self):
+        user = User(
+            username="new-inviter",
+            phone="13910000002",
+            password="!",
+            phone_bound=True,
+        )
+        self.db.add(user)
+        self.db.commit()
+
+        result = summary(user, self.db)["data"]
+
+        self.assertRegex(result["code"], r"^ZTW[A-Z0-9]{6}$")
+        self.assertEqual(
+            self.db.query(InviteCode).filter(InviteCode.user_id == user.id).one().code,
+            result["code"],
+        )
+
     def _friend(self, *, verified: bool = True, id_card: str | None = None):
         self.sequence += 1
         user = User(

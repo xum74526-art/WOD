@@ -3,12 +3,19 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeStoredLocale } from "@/lib/language";
 import { isValidMarketLatestPayload } from "@/lib/market-latest-payload";
+import { notificationActionPath } from "@/lib/notification-navigation";
 import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
 import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
 import { safeReturnPath } from "@/lib/auth-navigation";
 import { DELETION_SESSION_COOKIE, deletionMarkerMatchesTicket, deletionMayClearSession, deletionSessionMarker } from "@/lib/server/account-deletion-session";
+import {
+  readBoundedJsonBody,
+  REGISTRATION_BODY_MAX_BYTES,
+  REGISTRATION_BODY_TOO_LARGE_MESSAGE,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-json-body";
 import {
   callCanonicalApi as upstream,
   callCanonicalMultipart as upstreamMultipart,
@@ -134,13 +141,16 @@ function sameOrigin(request: NextRequest) {
   }
 }
 
-async function requestBody(request: NextRequest): Promise<JsonObject> {
+async function requestBody(request: NextRequest, maxBytes?: number): Promise<JsonObject> {
   if (!isMutation(request.method)) return {};
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) return {};
   try {
-    return object(await request.json());
-  } catch {
+    return object(maxBytes === undefined
+      ? await request.json()
+      : await readBoundedJsonBody(request, maxBytes));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) throw error;
     return {};
   }
 }
@@ -419,7 +429,7 @@ function notice(value: unknown) {
     category: text(item.type, "system"),
     title: text(item.title),
     body: text(item.content),
-    action_path: text(item.action_url) || null,
+    action_path: notificationActionPath(item.action_url),
     is_read: Boolean(item.is_read),
     read_at: null,
     created_at: text(item.created_at),
@@ -471,6 +481,7 @@ function order(value: unknown, supplierView = false) {
     price_unit: "order_total",
     quantity: number(item.quantity, 1),
     purchase_type: text(item.purchase_type, "usage"),
+    market_source: text(item.market_source) === "kai" ? "kai" : text(item.market_source) === "wod" ? "wod" : null,
     cycle_days: cycleDays,
     end_at: text(item.end_at) || null,
     remaining_days: number(item.remaining_days),
@@ -783,7 +794,19 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const result = await upstreamMultipart(request, `/api/finance/withdrawals/${markPaid[1]}/mark-paid`, ["receipt"], "打款凭证上传失败，请稍后重试", ["bank_reference", "paid_amount_cny", "paid_at", "payee_confirmed", "reveal_token"]);
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);
   }
-  const body = await requestBody(request);
+  const isRegistrationRequest = request.method === "POST" && (
+    path === "auth/password/register"
+    || path === "canonical/auth/register"
+  );
+  let body: JsonObject;
+  try {
+    body = await requestBody(request, isRegistrationRequest ? REGISTRATION_BODY_MAX_BYTES : undefined);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return apiError(REGISTRATION_BODY_TOO_LARGE_MESSAGE, 413, "payload_too_large");
+    }
+    throw error;
+  }
 
   if (path.startsWith("canonical/user/account-deletion")) {
     const matched = path.match(/^canonical\/user\/account-deletion\/(eligibility|verify|submit|status)$/);
@@ -878,7 +901,16 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     return apiSuccess({ user: authUser(result.body.data) });
   }
   if (path === "auth/logout" && request.method === "POST") {
-    const response = apiSuccess({ logged_out: true });
+    const result = await upstream(request, "/api/auth/logout", { method: "POST" });
+    const response = result.ok || result.status === 401
+      ? apiSuccess({
+          logged_out: true,
+          session_revoked: result.ok && Boolean(object(result.body.data).session_revoked),
+        })
+      : upstreamFailure(result);
+    // Local sign-out must remain available when the API is temporarily down.
+    // The upstream request has already captured the bearer needed to revoke
+    // the server session whenever it is reachable.
     clearAuthCookie(request, response);
     return response;
   }
@@ -1190,7 +1222,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   if (path.startsWith("canonical/")) {
     const canonicalPath = path.slice("canonical/".length);
     if (!canonicalPath || canonicalPath.includes("..")) return apiError("无效的业务 API 路径", 400);
-    if (/^auth\/(?:login|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
+    if (/^auth\/(?:login|logout|register|kai\/(?:exchange|callback))$/.test(canonicalPath)) {
       return apiError("Web 鉴权必须使用 HttpOnly Cookie 适配接口", 403, "web_auth_adapter_required");
     }
     if (request.method === "GET" && canonicalPath === "market/prices/latest") return publicMarketLatest(request);

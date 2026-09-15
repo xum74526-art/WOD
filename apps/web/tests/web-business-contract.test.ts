@@ -2,7 +2,21 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { hourlyOrderBody, kaiPricingQuery, webRequestId } from "../lib/web-business-contract.ts";
+import {
+  buyRequestAdditionalRequirements,
+  buyRequestIntentSignature,
+  directOrderIntentSignature,
+  ensureBuyRequestIntent,
+  ensureDirectOrderIntent,
+  ensureRenewalIntent,
+  ensureSupplierDeviceIntent,
+  hourlyOrderBody,
+  kaiPricingQuery,
+  normalizeBuyRequestContactPhone,
+  renewalIntentSignature,
+  supplierDeviceIntentSignature,
+  webRequestId,
+} from "../lib/web-business-contract.ts";
 import { communityDisplayText } from "../lib/community-ui.ts";
 
 test("legacy community brand values are renamed for display without changing backend identifiers", () => {
@@ -23,12 +37,233 @@ test("all live market requests force KAI Pricing as the only source", () => {
   assert.equal(query.get("model"), "H100");
 });
 
+test("buy-request contact phone matches the API storage contract", () => {
+  assert.equal(normalizeBuyRequestContactPhone(" +86 (139) 1000-0001 "), "+8613910000001");
+  assert.equal(normalizeBuyRequestContactPhone("1".repeat(20)), "1".repeat(20));
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(15)}`), `+${"1".repeat(15)}`);
+  assert.equal(normalizeBuyRequestContactPhone("12345"), null);
+  assert.equal(normalizeBuyRequestContactPhone("86+13910000001"), null);
+  assert.equal(normalizeBuyRequestContactPhone("+0123456789"), null);
+  assert.equal(normalizeBuyRequestContactPhone("139.1000.0001"), null);
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(20)}`), null);
+  assert.equal(normalizeBuyRequestContactPhone(`+${"1".repeat(16)}`), null);
+  assert.equal(normalizeBuyRequestContactPhone("1".repeat(21)), null);
+
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
+  assert.match(workspace, /type="tel" inputMode="tel" maxLength=\{32\}/);
+  assert.match(workspace, /phone: event\.target\.value\.slice\(0, 32\)/);
+});
+
+test("buy-request notes and GPU variants remain compatible across Web and App", () => {
+  assert.equal(buyRequestAdditionalRequirements({ note: "Web 补充需求" }), "Web 补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ note: "新补充需求", remark: "旧补充需求" }), "新补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ remark: "旧 App 补充需求" }), "旧 App 补充需求");
+  assert.equal(buyRequestAdditionalRequirements({ note: "  ", remark: "旧值" }), "旧值");
+  assert.equal(buyRequestAdditionalRequirements({}), "");
+
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const admin = fs.readFileSync(new URL("../components/admin-buy-request-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /gpu_variant: initialPrefill\?\.gpu_variant \|\| undefined/);
+  assert.doesNotMatch(workspace, /\n\s+gpu_variant: initialPrefill\?\.gpu_variant,\n/);
+  assert.match(workspace, /note: additionalRequirements,[\s\S]*remark: additionalRequirements/);
+  assert.match(workspace, /row\.gpu_variant \? ` \$\{row\.gpu_variant\}` : ""/);
+  assert.match(workspace, /detail\.request\.gpu_variant \? ` \$\{detail\.request\.gpu_variant\}` : ""/);
+  assert.match(workspace, /detailRequirementNote && <div className="workspace-service-note">/);
+  assert.match(admin, /detailRequirementNote && <div className="workspace-service-note">/);
+});
+
 test("new and renewal orders use integer hours plus a Web request id", () => {
   const requestId = webRequestId("order", "12345678-1234-1234-1234-123456789abc");
   assert.deepEqual(hourlyOrderBody(24, requestId), { hours: 24, client_request_id: requestId });
   assert.equal("cycle_days" in hourlyOrderBody(24, requestId), false);
   assert.throws(() => hourlyOrderBody(1.5, requestId), /整数小时/);
   assert.throws(() => hourlyOrderBody(721, requestId), /1 至 720/);
+});
+
+test("renewal retries reuse one request id until the order or hours change or confirmation is cancelled", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const signature = renewalIntentSignature(17, 24);
+  const first = ensureRenewalIntent(null, signature, createUuid);
+  const retry = ensureRenewalIntent(first, signature, createUuid);
+
+  assert.equal(signature, JSON.stringify([17, 24]));
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changedHours = ensureRenewalIntent(retry, renewalIntentSignature(17, 48), createUuid);
+  assert.notEqual(changedHours.requestId, first.requestId);
+
+  const changedOrder = ensureRenewalIntent(changedHours, renewalIntentSignature(18, 48), createUuid);
+  assert.notEqual(changedOrder.requestId, changedHours.requestId);
+
+  const afterCancel = ensureRenewalIntent(null, signature, createUuid);
+  assert.notEqual(afterCancel.requestId, first.requestId);
+  assert.equal(sequence, 4);
+});
+
+test("Web renewal submission keeps the same explicit id through retries", () => {
+  const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+  const workspace = fs.readFileSync(new URL("../components/order-workspace.tsx", import.meta.url), "utf8");
+  const renewal = api.slice(api.indexOf("export function renewOrder"), api.indexOf("export function createDirectOrder"));
+  const renewalAction = workspace.slice(workspace.indexOf("function submitRenewal"), workspace.indexOf("function deliveryNote"));
+
+  assert.match(renewal, /renewOrder\(id: number, hours: number, clientRequestId: string\)/);
+  assert.match(renewal, /"Idempotency-Key": clientRequestId/);
+  assert.match(renewal, /hourlyOrderBody\(hours, clientRequestId\)/);
+  assert.doesNotMatch(renewal, /randomUUID/);
+  assert.match(renewalAction, /const orderId = detail\.id;\s+const hours = renewalHour;/);
+  assert.match(renewalAction, /if \(!detail \|\| busy \|\| renewalSubmissionInFlight\.current\) return;/);
+  assert.match(renewalAction, /ensureRenewalIntent\(\s+pendingRenewalIntent\.current,\s+renewalIntentSignature\(orderId, hours\)/);
+  assert.match(renewalAction, /pendingRenewalIntent\.current = intent;/);
+  assert.match(renewalAction, /if \(!window\.confirm[\s\S]*?pendingRenewalIntent\.current = null;\s+return;/);
+  assert.match(renewalAction, /renewalSubmissionInFlight\.current = true;/);
+  assert.match(renewalAction, /await renewOrder\(orderId, hours, intent\.requestId\);\s+pendingRenewalIntent\.current = null;[\s\S]*?renewalSubmissionInFlight\.current = false;/);
+  assert.equal(renewalAction.match(/pendingRenewalIntent\.current = null/g)?.length, 2);
+});
+
+test("Web asset and order follow-up links preserve shared request context", () => {
+  const assets = fs.readFileSync(new URL("../components/mobile-assets-workspace.tsx", import.meta.url), "utf8");
+  const orders = fs.readFileSync(new URL("../components/order-workspace.tsx", import.meta.url), "utf8");
+  const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
+
+  assert.match(assets, /requestCreateHref\(\{ product_id: item\.product_id, source: "existing_asset"[\s\S]*?gpu_hours: 24 \}\)/);
+  assert.match(orders, /supplier_id: order\.supplier_id/);
+  assert.match(orders, /source: order\.market_source \|\| order\.seller_type \|\| "existing_order"/);
+  assert.match(orders, /seller_name: sellerCopy\(order\)/);
+  assert.match(orders, /const originalHours = Number\(order\.duration_hours \?\? order\.purchase_hours\)/);
+  assert.match(orders, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/);
+  assert.match(orders, /href=\{renewalRequestHref\(detail\)\}/);
+  assert.match(adapter, /market_source: text\(item\.market_source\) === "kai"/);
+  assert.doesNotMatch(orders, /gpu_hours=24`/);
+});
+
+test("direct-order retries reuse one request id until the intent changes or is cancelled", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    product_id: 17,
+    quantity: 2,
+    hours: 24,
+    purchase_type: "usage" as const,
+    expected_unit_price_card_hours: 3.25,
+  };
+  const signature = directOrderIntentSignature(input);
+  const first = ensureDirectOrderIntent(null, signature, createUuid);
+  const retry = ensureDirectOrderIntent(first, signature, createUuid);
+
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changed = ensureDirectOrderIntent(
+    retry,
+    directOrderIntentSignature({ ...input, hours: 48 }),
+    createUuid,
+  );
+  assert.notEqual(changed.requestId, first.requestId);
+
+  const afterCancel = ensureDirectOrderIntent(null, signature, createUuid);
+  assert.notEqual(afterCancel.requestId, first.requestId);
+  assert.equal(sequence, 3);
+});
+
+test("Web direct-order submission keeps the same explicit id in its body and header", () => {
+  const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+  const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
+  const directOrder = api.slice(api.indexOf("export function createDirectOrder"), api.indexOf("export function listSshKeys"));
+
+  assert.match(directOrder, /createDirectOrder\([^)]*clientRequestId: string\)/);
+  assert.match(directOrder, /"Idempotency-Key": clientRequestId/);
+  assert.match(directOrder, /hourlyOrderBody\(input\.hours, clientRequestId\)/);
+  assert.doesNotMatch(directOrder, /randomUUID/);
+  assert.match(detail, /if \(orderSubmissionInFlight\.current\) return;/);
+  assert.match(detail, /createDirectOrder\(pending\.input, pending\.requestId\)/);
+  assert.match(detail, /pendingOrderIntent\.current = null;/);
+});
+
+test("buy-request retries reuse one request id until the payload changes or the form closes", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    request_type: "online",
+    gpu_model: "H100",
+    quantity: 2,
+    gpu_hours: 24,
+    currency: "CNY",
+    requirements: { source: "kai", note: "CUDA 12" },
+    contact: "采购人",
+    phone: "13800138000",
+    expires_in_hours: 72,
+  };
+  const signature = buyRequestIntentSignature(input);
+  const first = ensureBuyRequestIntent(null, signature, createUuid);
+  const retry = ensureBuyRequestIntent(first, signature, createUuid);
+
+  assert.equal(signature, JSON.stringify(input));
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changed = ensureBuyRequestIntent(
+    retry,
+    buyRequestIntentSignature({ ...input, gpu_hours: 48 }),
+    createUuid,
+  );
+  assert.notEqual(changed.requestId, first.requestId);
+
+  const afterClose = ensureBuyRequestIntent(null, signature, createUuid);
+  assert.notEqual(afterClose.requestId, first.requestId);
+  assert.match(first.requestId, /^web-buy-request-/);
+  assert.equal(sequence, 3);
+});
+
+test("Web buy-request submission has a synchronous lock and sends the stable id in JSON", () => {
+  const api = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
+  const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const createRequest = workspace.slice(workspace.indexOf("async function create("), workspace.indexOf("async function submitQuote"));
+  const toggleForm = workspace.slice(workspace.indexOf("function toggleCreateForm"), workspace.indexOf("async function create("));
+
+  assert.match(createRequest, /if \(requestSubmissionInFlight\.current\) return;/);
+  assert.ok(createRequest.indexOf("requestSubmissionInFlight.current = true") < createRequest.indexOf("await createMobileBuyRequest"));
+  assert.match(createRequest, /buyRequestIntentSignature\(input\)/);
+  assert.match(createRequest, /client_request_id: intent\.requestId/);
+  assert.match(createRequest, /pendingBuyRequestIntent\.current = null;[\s\S]*?setCreating\(false\)/);
+  assert.match(createRequest, /finally \{[\s\S]*?requestSubmissionInFlight\.current = false;/);
+  const failedRequest = createRequest.slice(createRequest.indexOf("catch (reason)"), createRequest.indexOf("finally"));
+  assert.doesNotMatch(failedRequest, /pendingBuyRequestIntent\.current = null/);
+  assert.match(toggleForm, /if \(creating\) pendingBuyRequestIntent\.current = null;/);
+  assert.match(api, /MobileBuyRequestInput[\s\S]*?client_request_id: string/);
+  assert.match(api, /createMobileBuyRequest\(input: MobileBuyRequestInput\)/);
+  assert.match(api, /body: JSON\.stringify\(input\)/);
+  assert.doesNotMatch(api, /randomUUID/);
+});
+
+test("supplier resource retries reuse one request id until the create payload changes", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const input = {
+    name: "H100 80GB",
+    gpu_model: "H100",
+    memory: "80GB",
+    price: 24.8,
+    stock: 4,
+    region_code: "east_china",
+    region_name: "华东",
+    city: "上海",
+  };
+  const signature = supplierDeviceIntentSignature(input);
+  const first = ensureSupplierDeviceIntent(null, signature, createUuid);
+  const retry = ensureSupplierDeviceIntent(first, signature, createUuid);
+  const changed = ensureSupplierDeviceIntent(
+    retry,
+    supplierDeviceIntentSignature({ ...input, stock: 5 }),
+    createUuid,
+  );
+
+  assert.equal(retry.requestId, first.requestId);
+  assert.notEqual(changed.requestId, first.requestId);
+  assert.match(first.requestId, /^web-supplier-device-/);
+  assert.equal(sequence, 2);
 });
 
 test("released Web account copy does not expose retired test-only wording", () => {
@@ -42,6 +277,9 @@ test("released Web account copy does not expose retired test-only wording", () =
 test("Web registration offers phone and Kai registration through the existing authorization route", () => {
   const panel = fs.readFileSync(new URL("../components/auth-panel.tsx", import.meta.url), "utf8");
 
+  assert.match(panel, /value=\{name\}[^\r\n]*minLength=\{2\} maxLength=\{64\}/);
+  assert.match(panel, /value=\{password\}[^\r\n]*minLength=\{isRegister \? 6 : 1\} maxLength=\{64\}/);
+  assert.match(panel, /value=\{inviteCode\}[^\r\n]*maxLength=\{16\}/);
   assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
   assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
   assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);
@@ -218,10 +456,27 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
 
 test("seller resource workspace uses the backend card-hour price contract", () => {
   const resource = fs.readFileSync(new URL("../components/resource-workspace.tsx", import.meta.url), "utf8");
+  const supplierApi = fs.readFileSync(new URL("../lib/supplier-api.ts", import.meta.url), "utf8");
 
   assert.match(resource, /每 GPU 小时价格（卡时）/);
   assert.match(resource, /selected\.price\.toFixed\(4\).*卡时 \/ GPU·小时/);
   assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|selected\.price\.toFixed\(4\).*CNY/);
+  assert.match(supplierApi, /MobileSupplierDevice[\s\S]*version: number/);
+  assert.match(supplierApi, /expected_version: expectedVersion/);
+  assert.match(resource, /updateMobileSupplierDevice\(selected\.id, selected\.version, changes\)/);
+  assert.match(resource, /updateMobileSupplierDevice\(item\.id, item\.version/);
+  assert.match(resource, /deleteMobileSupplierDevice\(item\.id, item\.version\)/);
+  assert.match(resource, /reason instanceof ApiError/);
+  assert.match(resource, /reason\.status !== 409/);
+  assert.match(resource, /商品信息已发生变化，请确认最新库存后重新编辑/);
+  assert.match(resource, /if \(stock !== selected\.stock\) changes\.stock = stock/);
+  assert.match(resource, /if \(submissionInFlight\.current\) return/);
+  assert.match(resource, /type="button" disabled=\{busy\} onClick=\{\(\) => \{/);
+  assert.match(resource, /supplierDeviceIntentSignature\(input\)/);
+  assert.match(resource, /client_request_id: intent\.requestId/);
+  assert.match(resource, /pendingCreateIntent\.current = null/);
+  assert.match(supplierApi, /MobileSupplierDeviceCreate[\s\S]*client_request_id: string/);
+  assert.match(supplierApi, /createMobileSupplierDevice\(input: MobileSupplierDeviceCreate\)/);
 });
 
 test("Web wallet keeps safe history actions and capability-gates future money movement", () => {
@@ -266,17 +521,23 @@ test("Web wallet keeps safe history actions and capability-gates future money mo
 
 test("Web matchmaking selection requests platform coordination without creating a financial order", () => {
   const workspace = fs.readFileSync(new URL("../components/mobile-buy-request-workspace.tsx", import.meta.url), "utf8");
+  const buyRequestApi = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
   const requestPage = fs.readFileSync(new URL("../app/account/requests/page.tsx", import.meta.url), "utf8");
   const paymentPage = fs.readFileSync(new URL("../app/payment/[paymentNo]/page.tsx", import.meta.url), "utf8");
   const paymentGate = fs.readFileSync(new URL("../components/capability-payment-checkout.tsx", import.meta.url), "utf8");
 
   assert.match(workspace, /contact: form\.contact\.trim\(\)/);
-  assert.match(workspace, /phone: form\.phone\.trim\(\)/);
+  assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
   assert.match(workspace, /product_id: initialPrefill\?\.product_id/);
   assert.match(workspace, /supplier_id: initialPrefill\?\.supplier_id/);
   assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);
   assert.match(workspace, /请等待工作人员联系确认/);
   assert.match(workspace, /selectMobileBuyQuote/);
+  assert.match(workspace, /const snapshot = quoteSelectionSnapshot\(item\)/);
+  assert.match(workspace, /selectMobileBuyQuote\(requestId, item\.id, snapshot\.revisionId\)/);
+  assert.doesNotMatch(workspace, /latestQuote\(item\)\.id/);
+  assert.match(buyRequestApi, /expected_revision_id: expectedRevisionId/);
+  assert.match(buyRequestApi, /body: JSON\.stringify/);
   assert.match(workspace, /result\.commerce_mode === "matchmaking"/);
   assert.match(workspace, /当前未创建资金订单/);
   assert.match(requestPage, /positiveNumber\(query\.product_id\)/);

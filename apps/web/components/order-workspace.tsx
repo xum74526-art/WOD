@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle,
@@ -27,7 +27,9 @@ import {
   type OrderStatus,
 } from "@/lib/commerce-api";
 import { errorMessage, formatDate, formatMoney, orderStatusLabel } from "@/lib/commerce-ui";
+import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { ensureRenewalIntent, renewalIntentSignature, type RenewalIntent } from "@/lib/web-business-contract";
 
 const filters: Array<[OrderStatus | "", string]> = [
   ["", "全部"],
@@ -66,6 +68,8 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
   const [success, setSuccess] = useState("");
   const [renewalHours, setRenewalHours] = useState<number[]>([24]);
   const [renewalHour, setRenewalHour] = useState(24);
+  const pendingRenewalIntent = useRef<RenewalIntent | null>(null);
+  const renewalSubmissionInFlight = useRef(false);
 
   const loadDetail = useCallback(async (id: number) => {
     const order = await getOrder(scope, id);
@@ -130,6 +134,31 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     void act("dispute", () => disputeOrder(detail.id, reason.trim()), "争议已提交，订单卡时将继续冻结等待平台处理");
   }
 
+  function submitRenewal() {
+    if (!detail || busy || renewalSubmissionInFlight.current) return;
+    const orderId = detail.id;
+    const hours = renewalHour;
+    const intent = ensureRenewalIntent(
+      pendingRenewalIntent.current,
+      renewalIntentSignature(orderId, hours),
+      () => crypto.randomUUID(),
+    );
+    pendingRenewalIntent.current = intent;
+    if (!window.confirm(`确认使用统一钱包续费 ${hours} 小时？`)) {
+      pendingRenewalIntent.current = null;
+      return;
+    }
+    renewalSubmissionInFlight.current = true;
+    void act("renew", async () => {
+      try {
+        await renewOrder(orderId, hours, intent.requestId);
+        pendingRenewalIntent.current = null;
+      } finally {
+        renewalSubmissionInFlight.current = false;
+      }
+    }, `已续费 ${hours} 小时`);
+  }
+
   function deliveryNote(promptText: string, action: (note: string) => Promise<unknown>, key: string, message: string, sshDelivery = false) {
     const note = window.prompt(sshDelivery ? `${promptText}\n示例：ssh gpu-user@203.0.113.10 -p 2222\n请勿填写密码或私钥。` : `${promptText}\n请勿填写密码或私钥。`, "");
     if (note !== null) void act(key, () => action(note.trim()), message);
@@ -162,6 +191,19 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (order.cycle_days) return `${order.cycle_days} 天（历史订单）`;
     return order.duration_hours ? `${order.duration_hours} 小时` : "";
   }
+  function renewalRequestHref(order: Order) {
+    const originalHours = Number(order.duration_hours ?? order.purchase_hours);
+    return requestCreateHref({
+      product_id: order.product_id,
+      supplier_id: order.supplier_id,
+      source: order.market_source || order.seller_type || "existing_order",
+      product_name: orderTitle(order),
+      seller_name: sellerCopy(order),
+      gpu_model: orderSpec(order) || "GPU",
+      quantity: Math.max(1, Number(order.quantity) || 1),
+      gpu_hours: Number.isFinite(originalHours) && originalHours >= 1 ? originalHours : 24,
+    });
+  }
   function deadlineCopy(order: Order) {
     if (order.dispute_due_at) return { title: "争议处理截止", value: order.dispute_due_at };
     if (order.confirmation_due_at) return { title: "买家验收截止", value: order.confirmation_due_at };
@@ -185,8 +227,8 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
         {deadlineCopy(detail) && <div className="delivery-note"><ClockCountdown size={18} /><div><strong>{deadlineCopy(detail)?.title}</strong><p>{formatDate(deadlineCopy(detail)?.value)}</p></div></div>}
         {detail.status === "disputed" && detail.dispute_reason && <div className="delivery-note"><ShieldWarning size={18} /><div><strong>争议说明</strong><p>{detail.dispute_reason}</p></div></div>}
         {detail.available_actions.includes("renew") && (directTradeEnabled
-          ? <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><div>{renewalHours.map((hours) => <button type="button" className={renewalHour === hours ? "active" : ""} key={hours} onClick={() => setRenewalHour(hours)}>{hours} 小时</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => { if (window.confirm(`确认使用统一钱包续费 ${renewalHour} 小时？`)) void act("renew", () => renewOrder(detail.id, renewalHour), `已续费 ${renewalHour} 小时`); }}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>
-          : <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL REQUEST</small><h3>延长服务需求</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><p>当前不支持在线续费。提交需求后，工作人员会联系确认可用资源、服务时长和价格。</p><Link className="commerce-primary" href={`/account/requests?create=1&product_id=${detail.product_id || ""}&gpu_model=${encodeURIComponent(orderSpec(detail))}&quantity=${detail.quantity}&gpu_hours=24`}>提交需求</Link></section>)}
+          ? <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL</small><h3>订单续费</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><div>{renewalHours.map((hours) => <button type="button" className={renewalHour === hours ? "active" : ""} key={hours} onClick={() => setRenewalHour(hours)}>{hours} 小时</button>)}</div><button className="commerce-primary" disabled={Boolean(busy)} onClick={submitRenewal}>{busy === "renew" ? "续费中…" : "确认续费"}</button></section>
+          : <section className="order-renewal"><header><ClockCountdown size={18}/><div><small>RENEWAL REQUEST</small><h3>延长服务需求</h3></div><span>{detail.remaining_hours ?? 0} 小时后到期</span></header><p>当前不支持在线续费。提交需求后，工作人员会联系确认可用资源、服务时长和价格。</p><Link className="commerce-primary" href={renewalRequestHref(detail)}>提交需求</Link></section>)}
         {detail.events && detail.events.length > 0 && <section className="order-timeline"><header><ClockCountdown size={18} /><h3>订单时间线</h3></header>{detail.events.map((event) => <article key={event.id}><i /><div><strong>{eventLabels[event.event_type] || event.event_type}</strong><span>{formatDate(event.created_at)} · {event.actor_role}</span>{event.payload.note && <p>{event.payload.note}</p>}</div></article>)}</section>}
         <footer className="order-actions">
           {detail.available_actions.includes("confirm") && <button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void act("confirm", () => confirmOrder(scope, detail.id, detail.version, "确认资源与交付计划"), "订单已确认") }><CheckCircle size={16} />{busy === "confirm" ? "确认中…" : "确认接单"}</button>}

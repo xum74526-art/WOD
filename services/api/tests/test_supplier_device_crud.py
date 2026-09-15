@@ -1,5 +1,6 @@
 import unittest
 from decimal import Decimal
+from unittest.mock import patch
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -117,6 +118,114 @@ class SupplierDeviceCrudTests(unittest.TestCase):
         self.assertEqual(product.stock_semantics, "supplier_reported_inventory")
         self.assertEqual(product.cycle, [])
         self.assertEqual(product.region_code, "east_china")
+        self.assertEqual(product.version, 1)
+
+        response = self.client.get("/api/supplier/devices", params={"status_filter": "all"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"][0]["version"], 1)
+
+    def test_same_create_intent_reuses_resource_after_later_product_edits(self):
+        request_id = "supplier-device-retry-0001"
+        initial_payload = self._device_payload(
+            client_request_id=request_id,
+            price="12.3000",
+        )
+        first = self.client.post("/api/supplier/devices", json=initial_payload)
+        self.assertEqual(first.status_code, 200, first.text)
+        product_id = first.json()["data"]["id"]
+
+        product = self.db.query(Product).filter(Product.id == product_id).one()
+        product.price = Decimal("14.0000")
+        product.stock = 3
+        self.db.commit()
+        self.db.refresh(product)
+
+        retry = self.client.post(
+            "/api/supplier/devices",
+            json={**initial_payload, "price": "12.3"},
+        )
+
+        self.assertEqual(retry.status_code, 200, retry.text)
+        self.assertEqual(retry.json()["data"]["id"], product_id)
+        self.assertEqual(retry.json()["data"]["version"], product.version)
+        self.assertEqual(
+            self.db.query(Product).filter(Product.supplier_id == product.supplier_id).count(),
+            1,
+        )
+
+    def test_same_create_intent_rejects_different_resource_payload(self):
+        request_id = "supplier-device-conflict-0001"
+        first = self.client.post(
+            "/api/supplier/devices",
+            json=self._device_payload(client_request_id=request_id),
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+
+        conflict = self.client.post(
+            "/api/supplier/devices",
+            json=self._device_payload(
+                client_request_id=request_id,
+                name="RTX 5090 第二台资源",
+            ),
+        )
+
+        self.assertEqual(conflict.status_code, 409, conflict.text)
+        self.assertIn("参数不一致", conflict.json()["msg"])
+        self.assertEqual(self.db.query(Product).count(), 1)
+
+    def test_unique_conflict_recovers_when_initial_idempotency_lookup_misses(self):
+        request_id = "supplier-device-race-recovery-0001"
+        payload = self._device_payload(client_request_id=request_id)
+        first = self.client.post("/api/supplier/devices", json=payload)
+        self.assertEqual(first.status_code, 200, first.text)
+        original_find = supplier_router._find_device_by_client_request
+        lookup_count = 0
+
+        def miss_then_find(db, supplier_id, client_request_id):
+            nonlocal lookup_count
+            lookup_count += 1
+            if lookup_count == 1:
+                return None
+            return original_find(db, supplier_id, client_request_id)
+
+        with patch.object(
+            supplier_router,
+            "_find_device_by_client_request",
+            side_effect=miss_then_find,
+        ):
+            retry = self.client.post("/api/supplier/devices", json=payload)
+
+        self.assertEqual(retry.status_code, 200, retry.text)
+        self.assertEqual(retry.json()["data"]["id"], first.json()["data"]["id"])
+        self.assertEqual(lookup_count, 2)
+        self.assertEqual(self.db.query(Product).count(), 1)
+
+    def test_create_intent_is_scoped_to_supplier(self):
+        request_id = "supplier-device-shared-0001"
+        first = self.client.post(
+            "/api/supplier/devices",
+            json=self._device_payload(client_request_id=request_id),
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+
+        self.current_user = self.other_supplier
+        second = self.client.post(
+            "/api/supplier/devices",
+            json=self._device_payload(client_request_id=request_id),
+        )
+
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertNotEqual(first.json()["data"]["id"], second.json()["data"]["id"])
+        self.assertEqual(self.db.query(Product).count(), 2)
+
+    def test_legacy_create_without_request_id_remains_compatible(self):
+        first = self.client.post("/api/supplier/devices", json=self._device_payload())
+        second = self.client.post("/api/supplier/devices", json=self._device_payload())
+
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertNotEqual(first.json()["data"]["id"], second.json()["data"]["id"])
+        self.assertEqual(self.db.query(Product).count(), 2)
 
     def test_supplier_cannot_update_another_suppliers_resource(self):
         product = self._create_owned_device()
@@ -197,14 +306,57 @@ class SupplierDeviceCrudTests(unittest.TestCase):
 
         for expected_status in ("off", "on"):
             with self.subTest(status=expected_status):
+                previous_version = product.version
                 response = self.client.put(
                     f"/api/supplier/devices/{product.id}",
-                    json={"status": expected_status},
+                    json={"status": expected_status, "expected_version": previous_version},
                 )
                 self.assertEqual(response.status_code, 200, response.text)
                 self.assertTrue(response.json()["data"]["updated"])
                 self.db.refresh(product)
                 self.assertEqual(product.status, expected_status)
+                self.assertEqual(product.version, previous_version + 1)
+                self.assertEqual(response.json()["data"]["version"], product.version)
+
+    def test_stale_supplier_edit_cannot_restore_reserved_inventory(self):
+        product = self._create_owned_device()
+        edit_version = product.version
+
+        # Simulate an order reserving one unit after the merchant opened the
+        # edit form. Product's mapper increments the row version automatically.
+        product.stock = 7
+        self.db.commit()
+        self.db.refresh(product)
+        self.assertEqual(product.version, edit_version + 1)
+
+        response = self.client.put(
+            f"/api/supplier/devices/{product.id}",
+            json={
+                "name": "旧页面名称",
+                "stock": 8,
+                "expected_version": edit_version,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("刷新后重新编辑", response.json()["msg"])
+        self.db.refresh(product)
+        self.assertEqual(product.name, "RTX 5090 32GB")
+        self.assertEqual(product.stock, 7)
+        self.assertEqual(product.version, edit_version + 1)
+
+    def test_legacy_supplier_update_without_version_remains_compatible(self):
+        product = self._create_owned_device()
+
+        response = self.client.put(
+            f"/api/supplier/devices/{product.id}",
+            json={"stock": 9},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.db.refresh(product)
+        self.assertEqual(product.stock, 9)
+        self.assertEqual(product.version, 2)
 
 
 if __name__ == "__main__":

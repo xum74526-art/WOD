@@ -1,3 +1,6 @@
-import { ProductShell } from "@/components/product-shell";
-import { SupplierQuotes } from "@/components/supplier-quotes";
-export default function SupplierQuotesPage() { return <ProductShell variant="supplier"><SupplierQuotes /></ProductShell>; }
+import { redirect } from "next/navigation";
+
+export default function SupplierQuotesPage() {
+  // Quote operations now live beside each request in the unified supplier workspace.
+  redirect("/supplier/requests?scope=quoted");
+}

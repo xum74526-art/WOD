@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import or_, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_admin
@@ -23,6 +24,7 @@ from app.schemas.buy_request import (
     DeliveryIssueIn,
     MatchmakingCredentialIn,
     QuoteRevisionIn,
+    QuoteSelectionIn,
 )
 from app.services import buy_request_matchmaking as matchmaking
 from app.services.gpu_catalog import canonicalize_gpu
@@ -37,13 +39,32 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/buy-requests", tags=["buy-request"])
 admin_router = APIRouter(prefix="/api/admin/buy-requests", tags=["admin", "buy-request"])
 OPEN_STATUSES = ("published", "quoting")
+_MATCHMAKING_WRITE_CONFLICT_MESSAGE = "撮合状态正在更新，请刷新后重试"
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _normalize_contact_phone(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > 32 or not re.fullmatch(r"[+0-9 ()-]+", cleaned):
+        return None
+    normalized = re.sub(r"[ ()-]", "", cleaned)
+    if not re.fullmatch(r"(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})", normalized):
+        return None
+    return normalized
+
+
 class BuyRequestIn(BaseModel):
+    client_request_id: str | None = Field(
+        default=None,
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
     request_type: str
     gpu_model: str
     gpu_variant: str | None = None
@@ -56,8 +77,25 @@ class BuyRequestIn(BaseModel):
     billing_mode: str | None = None
     requirements: dict | None = None
     contact: str | None = None
-    phone: str | None = None
+    phone: str | None = Field(
+        default=None,
+        min_length=6,
+        max_length=20,
+        pattern=r"^(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})$",
+    )
     expires_in_hours: int = Field(default=24, ge=1, le=24 * 30)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def clean_contact_phone(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        if isinstance(value, str):
+            normalized = _normalize_contact_phone(value)
+            if normalized is None:
+                raise ValueError("invalid contact phone")
+            return normalized
+        return value
 
 
 class QuoteIn(BaseModel):
@@ -185,6 +223,7 @@ def _request_out(
                 _mask_phone(item.phone) or "",
             ))),
         )
+    requirements = _response_requirements(requirements)
     _, targeted_supplier_id = _target_supplier_scope(item)
     target_supplier = (
         db.query(Supplier).filter(Supplier.id == targeted_supplier_id).first()
@@ -197,7 +236,7 @@ def _request_out(
         "buyer_name": buyer.username if show_buyer_identity and buyer else None,
         "request_type": item.request_type,
         "gpu_model": item.gpu_model,
-        "gpu_variant": item.gpu_variant,
+        "gpu_variant": _request_gpu_variant(item.gpu_variant, requirements),
         "quantity": item.quantity,
         "gpu_hours": item.gpu_hours,
         "max_unit_price": float(item.max_unit_price) if item.max_unit_price is not None else None,
@@ -305,6 +344,178 @@ def _approved_supplier(user: User, db: Session) -> Supplier:
     if not supplier:
         raise BizError("商家资料不存在")
     return supplier
+
+
+def _begin_serialized_matchmaking_transaction(db: Session) -> None:
+    """Serialize matchmaking writes on SQLite; constraints cover other databases."""
+
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    # Authentication opens a read transaction before the endpoint. Restart it
+    # as IMMEDIATE before any admission read so concurrent processes cannot both
+    # observe the same idempotency key or supplier/request pair as available.
+    try:
+        if db.in_transaction():
+            db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    except OperationalError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if "locked" in message or "busy" in message:
+            raise BizError(_MATCHMAKING_WRITE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
+
+
+def _find_request_by_client_id(
+    db: Session,
+    user_id: int,
+    client_request_id: str,
+) -> BuyRequest | None:
+    return db.query(BuyRequest).filter(
+        BuyRequest.user_id == user_id,
+        BuyRequest.client_request_id == client_request_id,
+    ).first()
+
+
+def _decimal_request_value_matches(
+    stored: Decimal | None,
+    submitted: float | None,
+    quantum: Decimal,
+) -> bool:
+    if stored is None or submitted is None:
+        return stored is None and submitted is None
+    return Decimal(str(stored)).quantize(
+        quantum,
+        rounding=ROUND_HALF_UP,
+    ) == Decimal(str(submitted)).quantize(
+        quantum,
+        rounding=ROUND_HALF_UP,
+    )
+
+
+def _quantized_request_decimal(value: float | None, quantum: Decimal) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
+
+
+def _nonempty_requirement_text(requirements: dict, key: str) -> str:
+    value = requirements.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _request_requirement_note(requirements: dict | None) -> str:
+    values = requirements if isinstance(requirements, dict) else {}
+    return (
+        _nonempty_requirement_text(values, "note")
+        or _nonempty_requirement_text(values, "remark")
+    )
+
+
+def _response_requirements(requirements: dict | None) -> dict:
+    """Expose canonical and legacy note aliases without changing stored metadata."""
+    values = dict(requirements) if isinstance(requirements, dict) else {}
+    note = _request_requirement_note(values)
+    if not note:
+        return values
+    for key in ("note", "remark"):
+        raw_value = values.get(key)
+        if raw_value is None or (
+            isinstance(raw_value, str) and not raw_value.strip()
+        ):
+            values[key] = note
+    return values
+
+
+def _request_gpu_variant(value: str | None, requirements: dict | None) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    values = requirements if isinstance(requirements, dict) else {}
+    legacy_value = values.get("gpu_variant")
+    if isinstance(legacy_value, str) and legacy_value.strip():
+        return legacy_value.strip()
+    return None
+
+
+def _comparable_requirements(
+    requirements: dict | None,
+    effective_gpu_variant: str | None,
+) -> dict:
+    values = dict(requirements) if isinstance(requirements, dict) else {}
+    note_value = values.get("note")
+    remark_value = values.get("remark")
+    aliases_are_text = all(
+        value is None or isinstance(value, str)
+        for value in (note_value, remark_value)
+    )
+    if aliases_are_text:
+        note = _nonempty_requirement_text(values, "note")
+        remark = _nonempty_requirement_text(values, "remark")
+        values.pop("note", None)
+        values.pop("remark", None)
+        if note and remark and note != remark:
+            values["note"] = note
+            values["remark"] = remark
+        elif note or remark:
+            values["note"] = note or remark
+
+    legacy_gpu_variant = values.get("gpu_variant")
+    if legacy_gpu_variant is None:
+        values.pop("gpu_variant", None)
+    elif isinstance(legacy_gpu_variant, str):
+        normalized_legacy_variant = legacy_gpu_variant.strip()
+        if not normalized_legacy_variant or normalized_legacy_variant == effective_gpu_variant:
+            values.pop("gpu_variant", None)
+        else:
+            values["gpu_variant"] = normalized_legacy_variant
+    return values
+
+
+def _same_create_request(
+    item: BuyRequest,
+    data: BuyRequestIn,
+    *,
+    gpu_model: str,
+    requirements: dict,
+    contact: str,
+    phone: str | None,
+) -> bool:
+    if item.created_at is None or item.expires_at is None:
+        expiry_hours_match = False
+    else:
+        expiry_hours_match = round(
+            (item.expires_at - item.created_at).total_seconds() / 3600
+        ) == data.expires_in_hours
+    item_gpu_variant = _request_gpu_variant(item.gpu_variant, item.requirements)
+    data_gpu_variant = _request_gpu_variant(data.gpu_variant, requirements)
+    return (
+        item.request_type == data.request_type
+        and item.gpu_model == gpu_model
+        and item_gpu_variant == data_gpu_variant
+        and int(item.quantity) == data.quantity
+        and item.gpu_hours == data.gpu_hours
+        and _decimal_request_value_matches(
+            item.max_unit_price,
+            data.max_unit_price,
+            Decimal("0.000001"),
+        )
+        and _decimal_request_value_matches(
+            item.budget,
+            data.budget,
+            Decimal("0.01"),
+        )
+        and item.currency == data.currency.upper()
+        and item.region == data.region
+        and item.billing_mode == data.billing_mode
+        and _comparable_requirements(item.requirements, item_gpu_variant)
+        == _comparable_requirements(requirements, data_gpu_variant)
+        and (not data.contact or (item.contact or "") == contact)
+        and (
+            not data.phone
+            or (_normalize_contact_phone(item.phone) or item.phone or "") == (phone or "")
+        )
+        and expiry_hours_match
+    )
 
 
 @admin_router.get("")
@@ -438,6 +649,7 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
 def list_requests(
     request_type: str | None = None,
     view: str = "buyer",
+    quoted_only: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -448,7 +660,16 @@ def list_requests(
     supplier = None
     if view == "seller":
         supplier = _approved_supplier(user, db)
+        if quoted_only:
+            query = query.filter(
+                db.query(BuyRequestQuote.id).filter(
+                    BuyRequestQuote.buy_request_id == BuyRequest.id,
+                    BuyRequestQuote.supplier_id == supplier.id,
+                ).exists()
+            )
     else:
+        if quoted_only:
+            raise BizError("我的报价筛选仅适用于商家视图", status_code=422)
         query = query.filter(BuyRequest.user_id == user.id)
     items = query.order_by(BuyRequest.created_at.desc()).all()
     for item in items:
@@ -486,11 +707,34 @@ def create_request(
         raise BizError("请输入 GPU 型号")
     if data.request_type == "online" and not data.gpu_hours:
         raise BizError("请输入总卡时")
+    user_id = int(user.id)
     contact = (data.contact or user.username or "").strip()
-    phone = (data.phone or user.phone or "").strip()
+    phone = _normalize_contact_phone(data.phone) or _normalize_contact_phone(user.phone)
     if data.request_type == "offline" and (not contact or not phone):
         raise BizError("线下求购需要联系人和联系电话")
     requirements = data.requirements or {}
+    client_request_id = str(data.client_request_id or "").strip() or None
+    if client_request_id:
+        _begin_serialized_matchmaking_transaction(db)
+        existing = _find_request_by_client_id(db, user_id, client_request_id)
+        if existing:
+            if not _same_create_request(
+                existing,
+                data,
+                gpu_model=model,
+                requirements=requirements,
+                contact=contact,
+                phone=phone,
+            ):
+                db.rollback()
+                raise BizError("重复请求参数不一致，请重新提交", status_code=409)
+            db.commit()
+            return success(_request_out(
+                existing,
+                db,
+                reveal_contact=True,
+                viewer_user_id=user_id,
+            ))
     has_target, targeted_supplier_id = _target_supplier_scope(requirements)
     if has_target:
         target_supplier = (
@@ -504,14 +748,18 @@ def create_request(
         if not target_supplier:
             raise BizError("指定商家不存在或尚未通过认证")
     item = BuyRequest(
-        user_id=user.id,
+        user_id=user_id,
+        client_request_id=client_request_id,
         request_type=data.request_type,
         gpu_model=model,
         gpu_variant=data.gpu_variant,
         quantity=data.quantity,
         gpu_hours=data.gpu_hours,
-        max_unit_price=Decimal(str(data.max_unit_price)) if data.max_unit_price is not None else None,
-        budget=Decimal(str(data.budget)) if data.budget is not None else None,
+        max_unit_price=_quantized_request_decimal(
+            data.max_unit_price,
+            Decimal("0.000001"),
+        ),
+        budget=_quantized_request_decimal(data.budget, Decimal("0.01")),
         currency=data.currency.upper(),
         region=data.region,
         billing_mode=data.billing_mode,
@@ -522,9 +770,36 @@ def create_request(
         expires_at=_now() + timedelta(hours=data.expires_in_hours),
     )
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            _find_request_by_client_id(db, user_id, client_request_id)
+            if client_request_id
+            else None
+        )
+        if existing:
+            if not _same_create_request(
+                existing,
+                data,
+                gpu_model=model,
+                requirements=requirements,
+                contact=contact,
+                phone=phone,
+            ):
+                db.rollback()
+                raise BizError("重复请求参数不一致，请重新提交", status_code=409) from None
+            db.commit()
+            return success(_request_out(
+                existing,
+                db,
+                reveal_contact=True,
+                viewer_user_id=user_id,
+            ))
+        raise BizError("提交需求冲突，请重试", status_code=409) from None
     db.refresh(item)
-    return success(_request_out(item, db, reveal_contact=True, viewer_user_id=user.id))
+    return success(_request_out(item, db, reveal_contact=True, viewer_user_id=user_id))
 
 
 @router.get("/{request_id}")
@@ -599,8 +874,11 @@ def create_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
-    item = db.query(BuyRequest).filter(BuyRequest.id == request_id).first()
+    item = db.query(BuyRequest).filter(
+        BuyRequest.id == request_id,
+    ).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
     _expire_if_needed(item, _now())
@@ -662,6 +940,7 @@ def counter_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     quote = db.query(BuyRequestQuote).filter(
         BuyRequestQuote.id == quote_id,
@@ -704,6 +983,7 @@ def withdraw_quote(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     quote = db.query(BuyRequestQuote).filter(
@@ -728,6 +1008,7 @@ def select_quote(
     quote_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    data: QuoteSelectionIn | None = None,
 ):
     # In matchmaking mode this records only a cooperation intention for
     # platform coordination. It must never create an Order, freeze a Wallet or
@@ -735,6 +1016,7 @@ def select_quote(
     # quote-selected semantics for compatibility.
     if not direct_trade_enabled():
         require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(
         BuyRequest.id == request_id,
         BuyRequest.user_id == user.id,
@@ -748,6 +1030,21 @@ def select_quote(
     ).with_for_update().first()
     if not quote:
         raise BizError("报价不存在或已失效", status_code=404)
+    current_revision = matchmaking.latest_revision(db, quote.id)
+    # Legacy app builds sent no body. Keep their first-revision flow working,
+    # but fail closed once negotiation has produced terms they cannot identify.
+    if (
+        data is None
+        and quote.status == "active"
+        and current_revision
+        and current_revision.revision_number > 1
+    ):
+        raise BizError("报价已多次更新，请更新应用后重新确认", status_code=409)
+    if data and (
+        current_revision is None
+        or current_revision.id != data.expected_revision_id
+    ):
+        raise BizError("报价方案已更新，请刷新后重新确认", status_code=409)
     if direct_trade_enabled():
         if item.status not in OPEN_STATUSES:
             raise BizError("该求购当前不能确认合作意向", status_code=409)
@@ -794,6 +1091,7 @@ def supplier_confirm_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -821,6 +1119,7 @@ def supplier_decline_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -849,6 +1148,7 @@ def supplier_submit_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     supplier = _approved_supplier(user, db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
@@ -882,6 +1182,7 @@ def buyer_confirm_delivery(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -907,6 +1208,7 @@ def buyer_report_delivery(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -933,6 +1235,7 @@ def admin_approve_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -958,6 +1261,7 @@ def admin_reject_deal(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -998,6 +1302,7 @@ def admin_release_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)
@@ -1023,6 +1328,7 @@ def admin_reject_credential(
     db: Session = Depends(get_db),
 ):
     require_matchmaking_enabled()
+    _begin_serialized_matchmaking_transaction(db)
     item = db.query(BuyRequest).filter(BuyRequest.id == request_id).with_for_update().first()
     if not item:
         raise BizError("求购不存在", status_code=404)

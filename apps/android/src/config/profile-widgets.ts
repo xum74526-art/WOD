@@ -55,7 +55,6 @@ const SUPPLIER_ACCOUNT_ITEMS: ProfileWidget[] = [
   { key: 'verified', label: '实名认证', icon: 'verified', route: '/pages/verification/index' },
   { key: 'coupon', label: 'coupons', icon: 'coupon', route: '/pages/coupons/index' },
   { key: 'address', label: 'addressManage', icon: 'address', route: '/pages/addresses/index' },
-  { key: 'procurement', label: 'buyRequests', icon: 'search', route: '/pages/buy-request/index' },
   { key: 'account-settings', label: 'accountSettings', icon: 'user', route: '/pages/settings/index' },
   { key: 'online', label: '在线客服', icon: 'online-service', route: '/pages/kefu/index' },
 ]

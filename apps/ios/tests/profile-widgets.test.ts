@@ -55,6 +55,9 @@ test('personal and supplier profiles expose distinct role-aware widget counts', 
   assert.ok(personalBeforeOnboarding.some((item) => item.route === '/pages/supplier/apply'))
   assert.ok(!personalWithMerchantAccess.some((item) => item.route === '/pages/supplier/apply'))
   assert.ok(supplier.some((item) => item.route === '/pages/supplier/stats'))
+  assert.equal(supplier.filter((item) => item.route === '/pages/buy-request/index?view=seller').length, 1)
+  assert.ok(!supplier.some((item) => item.route === '/pages/buy-request/index'))
+  assert.ok(personalWithMerchantAccess.some((item) => item.route === '/pages/buy-request/index'))
   assert.ok(!personalWithMerchantAccess.some((item) => item.route === '/pages/supplier/stats'))
 })
 
@@ -68,9 +71,11 @@ test('supplier operations and shared account tools remain separate groups', () =
   const groups = getProfileWidgetGroups('supplier', true)
 
   assert.deepEqual(groups.map((group) => group.key), ['merchant-operations', 'account-tools'])
-  assert.deepEqual(groups.map((group) => group.items.length), [7, 8])
-  assert.ok(groups[0].items.every((item) => item.route.includes('/pages/supplier/')))
+  assert.deepEqual(groups.map((group) => group.items.length), [8, 7])
+  assert.ok(groups[0].items.every((item) => item.route.includes('/pages/supplier/') || item.route === '/pages/buy-request/index?view=seller'))
   assert.ok(groups[1].items.every((item) => !item.route.includes('/pages/supplier/')))
+  assert.ok(groups[0].items.some((item) => item.route === '/pages/buy-request/index?view=seller'))
+  assert.ok(!groups[1].items.some((item) => item.route.startsWith('/pages/buy-request/index')))
 })
 
 test('role-facing aliases use their own AppIcon paths', () => {

@@ -162,6 +162,21 @@ class BuyRequestVisibilityTests(unittest.TestCase):
         self.assertEqual(buy_request_router._mask_phone("12345"), "****")
         self.assertIsNone(buy_request_router._mask_phone(None))
 
+    def test_invalid_contact_phone_returns_422_without_creating_a_request(self):
+        self.current_user = self.buyer
+        before = self.db.query(BuyRequest).count()
+        response = self.client.post("/api/buy-requests", json={
+            "request_type": "online",
+            "gpu_model": "H100",
+            "quantity": 1,
+            "gpu_hours": 24,
+            "contact": "采购联系人",
+            "phone": "+86-invalid",
+        })
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.db.query(BuyRequest).count(), before)
+
     def test_supplier_list_shows_open_targeted_and_own_but_not_other_target(self):
         rows = self._get("/api/buy-requests?request_type=online&view=seller")
         by_id = {row["id"]: row for row in rows}
@@ -184,6 +199,53 @@ class BuyRequestVisibilityTests(unittest.TestCase):
         self.assertIsNone(by_id[self.targeted_to_me.id]["phone"])
         self.assertIsNone(by_id[self.targeted_to_me.id]["user_id"])
         self.assertIsNone(by_id[self.targeted_to_me.id]["buyer_name"])
+
+    def test_supplier_quoted_only_filters_before_the_result_limit_and_keeps_history(self):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.targeted_to_me.status = "closed"
+        self.targeted_to_me.created_at = now - timedelta(days=2)
+        self.db.add_all([
+            BuyRequestQuote(
+                buy_request_id=self.targeted_to_me.id,
+                supplier_id=self.supplier.id,
+                total_price=Decimal("118.00"),
+                currency="CNY",
+                status="withdrawn",
+            ),
+            BuyRequestQuote(
+                buy_request_id=self.open_request.id,
+                supplier_id=self.other_supplier.id,
+                total_price=Decimal("99.00"),
+                currency="CNY",
+                status="active",
+            ),
+            BuyRequestQuote(
+                buy_request_id=self.own_request.id,
+                supplier_id=self.other_supplier.id,
+                total_price=Decimal("88.00"),
+                currency="CNY",
+                status="active",
+            ),
+        ])
+        for index in range(101):
+            item = self._add_request(self.buyer, f"更新的开放需求 {index}", {})
+            item.created_at = now + timedelta(seconds=index)
+        self.db.commit()
+
+        rows = self._get(
+            "/api/buy-requests?request_type=online&view=seller&quoted_only=true"
+        )
+
+        self.assertEqual([row["id"] for row in rows], [self.targeted_to_me.id])
+        self.assertEqual(rows[0]["quote_count"], 2)
+
+    def test_quoted_only_is_rejected_for_the_buyer_view(self):
+        self.current_user = self.buyer
+
+        response = self.client.get("/api/buy-requests?view=buyer&quoted_only=true")
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["msg"], "我的报价筛选仅适用于商家视图")
 
     def test_supplier_cannot_read_or_quote_request_targeted_elsewhere(self):
         detail = self.client.get(f"/api/buy-requests/{self.targeted_elsewhere.id}")
@@ -310,9 +372,28 @@ class BuyRequestVisibilityTests(unittest.TestCase):
         quote = self.db.query(BuyRequestQuote).filter(
             BuyRequestQuote.buy_request_id == self.targeted_to_me.id,
         ).one()
+        revision = buy_request_router.matchmaking.ensure_initial_revision(
+            self.db,
+            self.targeted_to_me,
+            quote,
+            self.supplier_user.id,
+        )
+        self.db.commit()
+
+        stale = self.client.post(
+            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select",
+            json={"expected_revision_id": revision.id + 1},
+        )
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.db.rollback()
+        self.db.refresh(self.targeted_to_me)
+        self.db.refresh(quote)
+        self.assertEqual(self.targeted_to_me.status, "published")
+        self.assertEqual(quote.status, "active")
 
         response = self.client.post(
-            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select"
+            f"/api/buy-requests/{self.targeted_to_me.id}/quotes/{quote.id}/select",
+            json={"expected_revision_id": revision.id},
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["status"], "quote_selected")

@@ -15,7 +15,7 @@
         <text class="title">{{ t("tabCommunity") }}</text>
         <view class="top-actions" @tap="enterSearch"><AppIcon name="search" :size="40" /></view>
       </view>
-      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="['推荐','关注','最新','视频']" :model-value="tab" @update:model-value="onTab" /></view>
+      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="[t('recommend'), t('follow'), t('latest'), t('video')]" :model-value="tab" @update:model-value="onTab" /></view>
 
       <view v-if="loading && !list.length" class="state">{{ t("loading") }}</view>
       <view v-else-if="loadError && !list.length" class="state error-state">
@@ -23,7 +23,7 @@
         <view class="retry-button" role="button" @tap="load(true)">{{ t('retry') }}</view>
       </view>
       <view v-else-if="!list.length" class="card ph">
-        <EmptyState :text="searching ? '没有找到相关内容' : '暂无动态'" />
+        <EmptyState :text="searching ? t('noResults') : t('noPosts')" />
       </view>
       <view v-for="d in list" :key="d.id" class="card dcard" @tap="goDetail(d.id)">
         <view class="dhead">

@@ -31,13 +31,15 @@ _ENSURE = {
         "dispute_resolution", "dispute_resolution_note", "dispute_resolved_at",
         "dispute_resolved_by", "product_snapshot",
     ],
+    "buy_requests": ["client_request_id"],
     "order_renewals": ["created_platform"],
     "products": [
         "image_url", "region_code", "region_name", "country_code", "city",
         "market_source", "external_product_id", "stock_semantics",
         "source_max_configurable_quantity", "platform_stock_cap",
         "source_price", "source_currency", "exchange_rate", "price_updated_at",
-        "stock", "reliability", "supplier_id",
+        "stock", "version", "reliability", "supplier_id",
+        "client_request_id", "create_request_hash",
     ],
     "posts": [
         "content_en", "topic_en", "origin", "content_type", "source_key",
@@ -125,6 +127,10 @@ def _ensure_columns(db_engine=None):
                     col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
                 elif col == "auth_version":
                     col_type = "INTEGER NOT NULL DEFAULT 0"
+                elif table == "products" and col == "version":
+                    col_type = "INTEGER NOT NULL DEFAULT 1"
+                elif col in {"client_request_id", "create_request_hash"}:
+                    col_type = "VARCHAR(64)"
                 elif col in _DATETIME_COLS:
                     col_type = (
                         "TIMESTAMP WITHOUT TIME ZONE"
@@ -330,26 +336,27 @@ def _migrate_product_market_sources(db_engine=None):
             "UPDATE products SET market_source = CASE "
             "WHEN source_price IS NULL THEN 'wod' "
             "WHEN UPPER(COALESCE(source_currency, '')) = 'USD' THEN 'vast' "
-            "ELSE 'autodl' END "
+            "ELSE 'autodl' END, version = version + 1 "
             "WHERE market_source IS NULL OR TRIM(market_source) = ''"
         ))
         conn.execute(text(
             "UPDATE products SET stock_semantics = CASE "
             "WHEN market_source = 'kai' THEN 'platform_closed_test_manual_fulfillment_allocation' "
             "WHEN market_source IN ('autodl', 'vast') THEN 'reported_available_units' "
-            "ELSE 'supplier_reported_inventory' END "
+            "ELSE 'supplier_reported_inventory' END, version = version + 1 "
             "WHERE stock_semantics IS NULL OR TRIM(stock_semantics) = ''"
         ))
         initial_kai_cap = max(int(settings.KAI_CLOSED_TEST_INITIAL_STOCK), 0)
         conn.execute(text(
             "UPDATE products SET source_max_configurable_quantity = "
-            "CASE WHEN stock > 0 THEN stock ELSE 0 END "
+            "CASE WHEN stock > 0 THEN stock ELSE 0 END, version = version + 1 "
             "WHERE market_source = 'kai' AND source_max_configurable_quantity IS NULL"
         ))
         conn.execute(text(
             "UPDATE products SET platform_stock_cap = "
             "CASE WHEN source_max_configurable_quantity < :initial_cap "
-            "THEN source_max_configurable_quantity ELSE :initial_cap END "
+            "THEN source_max_configurable_quantity ELSE :initial_cap END, "
+            "version = version + 1 "
             "WHERE market_source = 'kai' AND platform_stock_cap IS NULL"
         ), {"initial_cap": initial_kai_cap})
         conn.execute(text(
@@ -357,14 +364,22 @@ def _migrate_product_market_sources(db_engine=None):
             "WHEN stock < 0 THEN 0 "
             "WHEN platform_stock_cap IS NOT NULL AND stock > platform_stock_cap "
             "THEN platform_stock_cap ELSE stock END, "
-            "stock_semantics = 'platform_closed_test_manual_fulfillment_allocation' "
-            "WHERE market_source = 'kai'"
+            "stock_semantics = 'platform_closed_test_manual_fulfillment_allocation', "
+            "version = version + 1 "
+            "WHERE market_source = 'kai' AND ("
+            "stock < 0 OR (platform_stock_cap IS NOT NULL AND stock > platform_stock_cap) OR "
+            "stock_semantics IS NULL OR "
+            "stock_semantics <> 'platform_closed_test_manual_fulfillment_allocation')"
         ))
         if "cycle" in product_columns:
-            conn.execute(text("UPDATE products SET cycle = '[]' WHERE market_source = 'kai'"))
+            conn.execute(text(
+                "UPDATE products SET cycle = '[]', version = version + 1 "
+                "WHERE market_source = 'kai' AND (cycle IS NULL OR CAST(cycle AS TEXT) <> '[]')"
+            ))
         conn.execute(text(
-            "UPDATE products SET status = 'off', stock = 0 "
-            "WHERE market_source IN ('autodl', 'vast')"
+            "UPDATE products SET status = 'off', stock = 0, version = version + 1 "
+            "WHERE market_source IN ('autodl', 'vast') AND ("
+            "status IS NULL OR status <> 'off' OR stock IS NULL OR stock <> 0)"
         ))
         if "market_source_status" in tables:
             conn.execute(text(
@@ -392,6 +407,63 @@ def _migrate_product_market_sources(db_engine=None):
         ))
 
 
+def _migrate_product_create_idempotency(db_engine=None) -> None:
+    """Add durable per-supplier idempotency for manually listed products."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "products" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("products")}
+    missing_columns = {
+        "client_request_id": "VARCHAR(64)",
+        "create_request_hash": "VARCHAR(64)",
+    }
+    for column, column_type in missing_columns.items():
+        if column in columns:
+            continue
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                f"ALTER TABLE products ADD COLUMN {column} {column_type}"
+            ))
+        print(f"[init_db] 补列: products.{column}")
+
+    with target_engine.connect() as conn:
+        duplicate = conn.execute(text(
+            "SELECT supplier_id, client_request_id FROM products "
+            "WHERE supplier_id IS NOT NULL AND client_request_id IS NOT NULL "
+            "GROUP BY supplier_id, client_request_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+    if duplicate:
+        raise RuntimeError(
+            "duplicate per-supplier product request ids detected; resolve before startup"
+        )
+
+    inspector = inspect(target_engine)
+    indexes = inspector.get_indexes("products")
+    constraints = inspector.get_unique_constraints("products")
+    expected_columns = ["supplier_id", "client_request_id"]
+    has_scoped_unique = any(
+        item.get("unique") and item.get("column_names") == expected_columns
+        for item in indexes
+    ) or any(
+        item.get("column_names") == expected_columns
+        for item in constraints
+    )
+    if has_scoped_unique:
+        return
+
+    index_name = "uq_products_supplier_client_request"
+    if any(item.get("name") == index_name for item in indexes + constraints):
+        raise RuntimeError(f"{index_name} exists with an incompatible definition")
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_products_supplier_client_request "
+            "ON products (supplier_id, client_request_id) "
+            "WHERE client_request_id IS NOT NULL"
+        ))
+
+
 def _reconcile_supplier_completed_order_counts(db_engine=None):
     """Backfill the public merchant completed-sale count from settlement facts."""
 
@@ -411,6 +483,63 @@ def _reconcile_supplier_completed_order_counts(db_engine=None):
             "AND merchant_settlements.source_type = 'order' "
             "AND merchant_settlements.status = 'settled'"
             ")"
+        ))
+
+
+def _migrate_buy_request_idempotency(db_engine=None) -> None:
+    """Add durable per-user request idempotency without rewriting legacy rows."""
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "buy_requests" not in inspector.get_table_names():
+        return
+    columns = {item["name"] for item in inspector.get_columns("buy_requests")}
+    if "client_request_id" not in columns:
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE buy_requests ADD COLUMN client_request_id VARCHAR(64)"
+            ))
+        print("[init_db] 补列: buy_requests.client_request_id")
+
+    with target_engine.connect() as conn:
+        duplicate = conn.execute(text(
+            "SELECT user_id, client_request_id FROM buy_requests "
+            "WHERE client_request_id IS NOT NULL "
+            "GROUP BY user_id, client_request_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+    if duplicate:
+        raise RuntimeError(
+            "duplicate per-user buy request ids detected; resolve before startup"
+        )
+
+    inspector = inspect(target_engine)
+    indexes = inspector.get_indexes("buy_requests")
+    constraints = inspector.get_unique_constraints("buy_requests")
+    expected_columns = ["user_id", "client_request_id"]
+    has_scoped_unique = any(
+        item.get("unique") and item.get("column_names") == expected_columns
+        for item in indexes
+    ) or any(
+        item.get("column_names") == expected_columns
+        for item in constraints
+    )
+    if has_scoped_unique:
+        return
+
+    index_name = "uq_buy_requests_user_client_request"
+    name_collision = any(
+        item.get("name") == index_name
+        for item in indexes + constraints
+    )
+    if name_collision:
+        raise RuntimeError(
+            f"{index_name} exists with an incompatible definition"
+        )
+    with target_engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX uq_buy_requests_user_client_request "
+            "ON buy_requests (user_id, client_request_id) "
+            "WHERE client_request_id IS NOT NULL"
         ))
 
 
@@ -1247,9 +1376,11 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 def init():
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
+    _migrate_buy_request_idempotency()
     _migrate_market_candle_resolutions()
     _migrate_order_request_scope()
     _migrate_product_market_sources()
+    _migrate_product_create_idempotency()
     _reconcile_supplier_completed_order_counts()
     _ensure_auth_identity_constraints()
     _migrate_unverified_phone_flags()

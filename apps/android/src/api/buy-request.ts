@@ -2,6 +2,11 @@ import { request } from './request'
 
 export type BuyRequestView = 'buyer' | 'seller'
 
+export interface BuyRequestRequirements extends Record<string, unknown> {
+  note?: unknown
+  remark?: unknown
+}
+
 export interface BuyRequestItem {
   id: number
   user_id: number | null
@@ -16,7 +21,7 @@ export interface BuyRequestItem {
   currency: string
   region?: string
   billing_mode?: string
-  requirements: Record<string, any>
+  requirements: BuyRequestRequirements
   contact?: string | null
   phone?: string | null
   status: string
@@ -54,7 +59,7 @@ export interface BuyRequestQuote {
 }
 
 export interface BuyRequestQuoteRevision {
-  id?: number
+  id: number
   quote_id?: number
   revision_no?: number
   actor_role?: 'buyer' | 'supplier' | string
@@ -129,6 +134,7 @@ export interface BuyRequestCredentialPayload {
 }
 
 export interface BuyRequestPayload {
+  client_request_id?: string
   request_type: 'online' | 'offline'
   gpu_model: string
   gpu_variant?: string
@@ -139,7 +145,7 @@ export interface BuyRequestPayload {
   currency: string
   region?: string
   billing_mode?: string
-  requirements?: Record<string, any>
+  requirements?: BuyRequestRequirements
   contact?: string
   phone?: string
   expires_in_hours: number
@@ -149,8 +155,15 @@ export function getBuyRequestSummary() {
   return request<{ active: number; new_quotes: number; pending_confirmation: number }>({ url: '/buy-requests/summary' })
 }
 
-export function getBuyRequests(requestType: 'online' | 'offline', view: BuyRequestView = 'buyer') {
-  return request<BuyRequestItem[]>({ url: '/buy-requests', data: { request_type: requestType, view } })
+export function getBuyRequests(requestType: 'online' | 'offline', view: BuyRequestView = 'buyer', quotedOnly = false) {
+  return request<BuyRequestItem[]>({
+    url: '/buy-requests',
+    data: {
+      request_type: requestType,
+      view,
+      ...(view === 'seller' && quotedOnly ? { quoted_only: true } : {}),
+    },
+  })
 }
 
 export function createBuyRequest(data: BuyRequestPayload) {
@@ -173,8 +186,12 @@ export function withdrawBuyRequestQuote(requestId: number, quoteId: number) {
   return request<{ request_id: number; quote_id: number; status: string }>({ url: `/buy-requests/${requestId}/quotes/${quoteId}/withdraw`, method: 'POST' })
 }
 
-export function selectBuyRequestQuote(requestId: number, quoteId: number) {
-  return request<{ request_id: number; quote_id: number; status: string }>({ url: `/buy-requests/${requestId}/quotes/${quoteId}/select`, method: 'POST' })
+export function selectBuyRequestQuote(requestId: number, quoteId: number, expectedRevisionId: number) {
+  return request<{ request_id: number; quote_id: number; status: string }>({
+    url: `/buy-requests/${requestId}/quotes/${quoteId}/select`,
+    method: 'POST',
+    data: { expected_revision_id: expectedRevisionId },
+  })
 }
 
 export function confirmBuyRequestDealBySupplier(requestId: number, dealId: number) {

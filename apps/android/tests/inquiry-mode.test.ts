@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { buyRequestAdditionalRequirements } from '../src/utils/buy-request-requirements.ts'
 
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -36,7 +37,7 @@ test('request form is contact-first and contains product attribution without pri
   assert.match(buyRequest, /!form\.contact\.trim\(\) \|\| !form\.phone\.trim\(\)/)
   assert.match(buyRequest, /clearInquiryRequestPrefill\(\)/)
   assert.doesNotMatch(buyRequest, /max_unit_price:|budget:/)
-  assert.match(buyRequest, /selectBuyRequestQuote\(requestId, quote\.id\)/)
+  assert.match(buyRequest, /selectBuyRequestQuote\(requestId, quoteId, expectedRevisionId\)/)
   assert.match(buyRequest, /canBuyerSelectQuote\(\{/)
   assert.match(buyRequest, /matchmakingEnabled: commerce\.matchmakingEnabled/)
   assert.match(buyRequest, /directTradeEnabled: commerce\.directTradeEnabled/)
@@ -65,4 +66,39 @@ test('payment and historical lifecycle pages cannot start new money movement', (
   assert.doesNotMatch(orderDetail, /renewOrder\(/)
   assert.doesNotMatch(assetDetail, /sellAsset\(/)
   assert.doesNotMatch(supplierRevenue, /@tap="onWithdraw"|function onWithdraw/)
+})
+
+test('asset and order follow-up requests preserve attribution and safe duration defaults', () => {
+  assert.match(assetDetail, /source: 'existing_asset'/)
+  assert.match(assetDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
+  assert.match(assetDetail, /quantity: Math\.max\(1, Number\(current\.quantity\) \|\| 1\)/)
+  assert.match(assetDetail, /gpu_hours: 24/)
+  assert.doesNotMatch(assetDetail, /remaining_days[^\n]*\* 24/)
+
+  assert.match(orderDetail, /const originalHours = Number\(current\.duration_hours \?\? current\.purchase_hours\)/)
+  assert.match(orderDetail, /supplier_id: current\.supplier_id/)
+  assert.match(orderDetail, /seller_name: current\.seller_name \|\| current\.supplier_name \|\| undefined/)
+  assert.match(orderDetail, /source: current\.market_source \|\| current\.seller_type \|\| 'existing_order'/)
+  assert.match(orderDetail, /gpu_model: current\.gpu_model \|\| current\.product_name \|\| 'GPU'/)
+  assert.match(orderDetail, /gpu_hours: Number\.isFinite\(originalHours\) && originalHours >= 1 \? originalHours : 24/)
+})
+
+test('Web notes and legacy App remarks remain visible with the GPU variant', () => {
+  assert.equal(buyRequestAdditionalRequirements({ note: 'CUDA 12.4' }), 'CUDA 12.4')
+  assert.equal(buyRequestAdditionalRequirements({ note: '新补充需求', remark: '旧补充需求' }), '新补充需求')
+  assert.equal(buyRequestAdditionalRequirements({ remark: '旧版补充需求' }), '旧版补充需求')
+  assert.equal(buyRequestAdditionalRequirements({ note: '  ', remark: '旧版内容' }), '旧版内容')
+  assert.equal(buyRequestAdditionalRequirements({}), '')
+  assert.match(buyRequest, /gpu_variant: form\.gpu_variant \|\| undefined/)
+  assert.match(buyRequest, /const additionalRequirements = form\.remark\.trim\(\) \|\| undefined/)
+  assert.match(buyRequest, /note: additionalRequirements,[\s\S]*remark: additionalRequirements/)
+  assert.match(buyRequest, /maxlength="1000"/)
+  assert.match(buyRequest, /v-if="detailRequirementNote"[\s\S]*?\{\{ detailRequirementNote \}\}/)
+})
+
+test('supplier withdrawal is capability-gated with an explicit disabled state', () => {
+  assert.match(supplierRevenue, /<DirectTradeSupplierWithdrawalAction v-if="commerce\.withdrawEnabled" \/>/)
+  assert.match(supplierRevenue, /<view v-else class="q-btn disabled">\{\{ t\('withdrawalUnavailableShort'\) \}\}<\/view>/)
+  const disabledState = supplierRevenue.match(/<view v-else class="q-btn disabled">[^<]+<\/view>/)?.[0] || ''
+  assert.doesNotMatch(disabledState, /@tap|onWithdraw/)
 })

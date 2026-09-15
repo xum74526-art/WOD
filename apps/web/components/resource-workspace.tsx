@@ -1,10 +1,16 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Cube, FloppyDisk, Plus, Trash } from "@phosphor-icons/react";
-import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice } from "@/lib/supplier-api";
+import { ApiError } from "@/lib/api";
+import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSupplierDevices, updateMobileSupplierDevice, type MobileSupplierDevice, type MobileSupplierDeviceUpdate } from "@/lib/supplier-api";
 import { errorMessage } from "@/lib/commerce-ui";
 import { displayBusinessReference } from "@/lib/display-reference";
+import {
+  ensureSupplierDeviceIntent,
+  supplierDeviceIntentSignature,
+  type SupplierDeviceIntent,
+} from "@/lib/web-business-contract";
 
 const blank = {
   name: "",
@@ -25,6 +31,8 @@ export function ResourceWorkspace() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const submissionInFlight = useRef(false);
+  const pendingCreateIntent = useRef<SupplierDeviceIntent | null>(null);
 
   const load = useCallback(async (preferredId?: number) => {
     setError("");
@@ -42,12 +50,16 @@ export function ResourceWorkspace() {
   }, [load]);
 
   function startCreate() {
+    if (submissionInFlight.current) return;
+    pendingCreateIntent.current = null;
     setSelected(null);
     setEditing(true);
     setForm(blank);
   }
 
   function startEdit(item: MobileSupplierDevice) {
+    if (submissionInFlight.current) return;
+    pendingCreateIntent.current = null;
     setSelected(item);
     setEditing(true);
     setForm({
@@ -64,19 +76,27 @@ export function ResourceWorkspace() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setBusy(true);
     setError("");
     try {
       let id: number;
       if (selected) {
-        const updated = await updateMobileSupplierDevice(selected.id, {
-          name: form.name,
-          price: Number(form.price),
-          stock: Number(form.stock),
-        });
+        const changes: MobileSupplierDeviceUpdate = {};
+        const price = Number(form.price);
+        const stock = Number(form.stock);
+        if (form.name !== selected.name) changes.name = form.name;
+        if (price !== selected.price) changes.price = price;
+        if (stock !== selected.stock) changes.stock = stock;
+        if (!Object.keys(changes).length) {
+          setEditing(false);
+          return;
+        }
+        const updated = await updateMobileSupplierDevice(selected.id, selected.version, changes);
         id = updated.id;
       } else {
-        const created = await createMobileSupplierDevice({
+        const input = {
           name: form.name,
           gpu_model: form.gpu_model,
           memory: form.memory,
@@ -86,37 +106,57 @@ export function ResourceWorkspace() {
           region_name: form.region_name,
           city: form.city,
           desc: form.desc || "供应商通过 Web 上架",
+        };
+        const intent = ensureSupplierDeviceIntent(
+          pendingCreateIntent.current,
+          supplierDeviceIntentSignature(input),
+          () => crypto.randomUUID(),
+        );
+        pendingCreateIntent.current = intent;
+        const created = await createMobileSupplierDevice({
+          ...input,
+          client_request_id: intent.requestId,
         });
+        pendingCreateIntent.current = null;
         id = created.id;
       }
       setEditing(false);
       await load(id);
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(selected && await refreshAfterConflict(reason, selected.id))) setError(errorMessage(reason));
     } finally {
+      submissionInFlight.current = false;
       setBusy(false);
     }
   }
 
   async function toggle(item: MobileSupplierDevice) {
     try {
-      await updateMobileSupplierDevice(item.id, {
+      await updateMobileSupplierDevice(item.id, item.version, {
         status: item.list_status === "on" ? "off" : "on",
       });
       await load(item.id);
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(await refreshAfterConflict(reason, item.id))) setError(errorMessage(reason));
     }
   }
 
   async function remove(item: MobileSupplierDevice) {
     if (!window.confirm(`确定删除“${item.name}”吗？`)) return;
     try {
-      await deleteMobileSupplierDevice(item.id);
+      await deleteMobileSupplierDevice(item.id, item.version);
       await load();
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (!(await refreshAfterConflict(reason, item.id))) setError(errorMessage(reason));
     }
+  }
+
+  async function refreshAfterConflict(reason: unknown, preferredId?: number) {
+    if (!(reason instanceof ApiError) || reason.status !== 409) return false;
+    setEditing(false);
+    await load(preferredId);
+    setError("商品信息已发生变化，请确认最新库存后重新编辑");
+    return true;
   }
 
   return (
@@ -127,7 +167,7 @@ export function ResourceWorkspace() {
           <h1>算力商品</h1>
           <span>统一管理商品、库存、价格和上下架状态；资源参数与可售库存由商家自行申报。</span>
         </div>
-        <button className="commerce-primary" onClick={startCreate}>
+        <button className="commerce-primary" disabled={busy} onClick={startCreate}>
           <Plus size={16} />
           新增商品
         </button>
@@ -143,9 +183,12 @@ export function ResourceWorkspace() {
             rows.map((item) => (
               <button
                 type="button"
+                disabled={busy}
                 className={selected?.id === item.id && !editing ? "active" : ""}
                 key={item.id}
                 onClick={() => {
+                  if (submissionInFlight.current) return;
+                  pendingCreateIntent.current = null;
                   setSelected(item);
                   setEditing(false);
                 }}
@@ -219,7 +262,11 @@ export function ResourceWorkspace() {
                 )}
               </div>
               <footer>
-                <button type="button" onClick={() => setEditing(false)}>
+                <button type="button" disabled={busy} onClick={() => {
+                  if (submissionInFlight.current) return;
+                  pendingCreateIntent.current = null;
+                  setEditing(false);
+                }}>
                   取消
                 </button>
                 <button className="commerce-primary" disabled={busy}>

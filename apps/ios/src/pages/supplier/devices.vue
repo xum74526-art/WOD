@@ -87,6 +87,7 @@ import {
   type SupplierDeviceItem,
   type SupplierDeviceUpdateInput,
 } from '@/api/supplier'
+import { ApiRequestError } from '@/api/request'
 import AppNavBar from '@/components/AppNavBar.vue'
 import BottomActionBar from '@/components/BottomActionBar.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
@@ -155,12 +156,12 @@ function onToggle(device: SupplierDeviceItem, status: 'on' | 'off') {
     if (busyId.value !== null) return
     busyId.value = device.id
     try {
-      await updateSupplierDevice(device.id, { status })
+      await updateSupplierDevice(device.id, device.version, { status })
       sheet.show = false
       uni.showToast({ title: t(isDelist ? '已下架' : '已上架'), icon: 'success' })
       await load()
     } catch (error) {
-      toastError(error)
+      if (!(await refreshAfterConflict(error))) toastError(error)
     } finally {
       busyId.value = null
     }
@@ -226,13 +227,13 @@ async function onSaveEdit() {
   editSaving.value = true
   busyId.value = editTarget.value.id
   try {
-    await updateSupplierDevice(editTarget.value.id, changes)
+    await updateSupplierDevice(editTarget.value.id, editTarget.value.version, changes)
     editShow.value = false
     editTarget.value = null
     uni.showToast({ title: t('saved'), icon: 'success' })
     await load()
   } catch (error) {
-    toastError(error)
+    if (!(await refreshAfterConflict(error))) toastError(error)
   } finally {
     editSaving.value = false
     busyId.value = null
@@ -251,6 +252,16 @@ function markImageFailed(id: number) {
 
 function toastError(error: unknown) {
   uni.showToast({ title: localizedErrorMessage(error, '操作失败'), icon: 'none' })
+}
+
+async function refreshAfterConflict(error: unknown): Promise<boolean> {
+  if (!(error instanceof ApiRequestError) || error.statusCode !== 409) return false
+  sheet.show = false
+  editShow.value = false
+  editTarget.value = null
+  await load()
+  uni.showToast({ title: t('resourceChangedRefresh'), icon: 'none' })
+  return true
 }
 
 function goAdd() {

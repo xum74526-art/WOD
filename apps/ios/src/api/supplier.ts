@@ -27,9 +27,11 @@ export interface SupplierDeviceItem {
   status: 'online' | 'offline' | string
   list_status: 'on' | 'off' | string
   image_url: string | null
+  version: number
 }
 
 export interface SupplierDeviceCreateInput {
+  client_request_id: string
   name: string
   gpu_model: string
   memory: string
@@ -55,6 +57,7 @@ export interface SupplierDeviceMutationResult {
   name?: string
   status?: 'on' | 'off'
   updated?: boolean
+  version: number
 }
 
 export interface SupplierRegisterInput {
@@ -90,11 +93,11 @@ export function createSupplierDevice(data: SupplierDeviceCreateInput) {
     silent: true,
   })
 }
-export function updateSupplierDevice(id: number, data: SupplierDeviceUpdateInput) {
+export function updateSupplierDevice(id: number, expectedVersion: number, data: SupplierDeviceUpdateInput) {
   return request<SupplierDeviceMutationResult>({
     url: `/supplier/devices/${id}`,
     method: 'PUT',
-    data,
+    data: { ...data, expected_version: expectedVersion },
     silent: true,
   })
 }

@@ -2,23 +2,35 @@ from decimal import Decimal
 import random, string
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.core.config import settings
 from app.core.deps import AuthContext, get_current_auth_context, get_current_user
-from app.core.rate_limit import limit_captcha, limit_login, limit_register
+from app.core.rate_limit import (
+    ensure_register_account_available,
+    limit_captcha,
+    limit_login,
+    limit_register_account,
+    limit_register_request,
+)
+from app.core.request_body_limit import RegistrationBodyLimitRoute
 from app.db.session import get_db
 from app.models.external_identity import ExternalIdentity
 from app.models.ledger import Ledger
 from app.models.user import User
 from app.models.wallet import Wallet
-from app.models.invite import InviteCode, InviteRecord
+from app.models.invite import INVITE_CODE_PREFIX, InviteCode, InviteRecord
 from app.schemas.auth import KaiBindStartIn, KaiStartIn, KaiTicketIn
 from app.schemas.user import LoginIn, RegisterIn, UserOut
-from app.services.auth_session import create_authenticated_session, resolve_client
+from app.services.auth_session import (
+    create_authenticated_session,
+    resolve_client,
+    revoke_current_session,
+)
 from app.utils.response import success, BizError
 from app.utils.captcha import create_captcha, verify_captcha
 from app.services import kai_auth
@@ -30,73 +42,104 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/captcha", dependencies=[Depends(limit_captcha)])
-def get_captcha():
+def get_captcha(response: Response):
     """获取图形验证码"""
+    response.headers["Cache-Control"] = "private, no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return success(create_captcha())
 
 
 def _ensure_invite_code(user_id: int, db: Session) -> str:
-    """自动生成邀请码"""
+    """Stage the user's invite code in the caller-owned transaction."""
     existing = db.query(InviteCode).filter(InviteCode.user_id == user_id).first()
     if existing:
         return existing.code
-    code = "WOD" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    code = INVITE_CODE_PREFIX + "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=6)
+    )
     db.add(InviteCode(user_id=user_id, code=code, invited_count=0))
-    db.commit()
+    db.flush()
     return code
 
 
-@router.post("/register")
 def register(data: RegisterIn, db: Session = Depends(get_db)):
-    limit_register(data.phone)
+    limit_register_request()
+    # Reject an already-full phone bucket before consuming a one-time captcha,
+    # but do not let invalid captcha guesses spend another person's quota.
+    ensure_register_account_available(data.phone)
     platform, client_id = resolve_client(data.client_id)
     # 图形验证码校验
     if not verify_captcha(data.captcha_key, data.captcha_code):
         raise BizError("验证码错误或已过期")
+    limit_register_account(data.phone)
     if db.query(User).filter(User.phone == data.phone).first():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "该手机号已注册")
     # 解析邀请码
-    invite_code = data.invite_code if hasattr(data, 'invite_code') else None
     inviter = None
-    if invite_code:
-        inviter_code = db.query(InviteCode).filter(InviteCode.code == invite_code).first()
-        if inviter_code:
-            inviter = inviter_code
+    if data.invite_code:
+        inviter = db.query(InviteCode).filter(InviteCode.code == data.invite_code).first()
+        if inviter is None:
+            raise BizError("邀请码无效，请检查后重试")
     # Password registration currently has only an image captcha. The phone remains a
     # login identifier and must not be represented as SMS-verified/bound.
-    user = User(
-        username=data.username,
-        phone=data.phone,
-        phone_bound=False,
-        password=hash_password(data.password),
-        created_platform=platform,
-    )
-    if inviter:
-        user.invited_by = inviter.user_id
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    # Persist the relationship for the inviter's records, but keep it
-    # unverified and grant no reward until phone ownership is verified and a
-    # real test order has completed delivery.
-    total = Decimal("0")
-    wallet = Wallet(user_id=user.id, balance=total, frozen=Decimal("0"))
-    db.add(wallet)
-    if inviter:
-        from app.routers.invite import create_invite_relationship
-        create_invite_relationship(user, inviter.user_id, db, platform=platform)
-    db.commit()
-    db.refresh(wallet)
-    # 自动生成自己的邀请码
-    _ensure_invite_code(user.id, db)
-    issued = create_authenticated_session(
-        db,
-        user,
-        platform=platform,
-        client_id=client_id,
-        auth_method="password_register",
-    )
-    return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+    try:
+        user = User(
+            username=data.username,
+            phone=data.phone,
+            phone_bound=False,
+            password=hash_password(data.password),
+            created_platform=platform,
+        )
+        if inviter:
+            user.invited_by = inviter.user_id
+        db.add(user)
+        db.flush()
+
+        # Persist the relationship for the inviter's records, but keep it
+        # unverified and grant no reward until phone ownership is verified and
+        # a real test order has completed delivery.
+        wallet = Wallet(user_id=user.id, balance=INIT_BALANCE, frozen=Decimal("0"))
+        db.add(wallet)
+        if inviter:
+            from app.routers.invite import create_invite_relationship
+            create_invite_relationship(user, inviter.user_id, db, platform=platform)
+        db.flush()
+
+        # The invite code and authentication session belong to the same
+        # registration transaction. The session service performs the single
+        # final commit after the JWT has been generated successfully.
+        _ensure_invite_code(user.id, db)
+        user_payload = UserOut.model_validate(user).model_dump()
+        issued = create_authenticated_session(
+            db,
+            user,
+            platform=platform,
+            client_id=client_id,
+            auth_method="password_register",
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        if db.query(User).filter(User.phone == data.phone).first():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "该手机号已注册") from exc
+        raise BizError("注册信息冲突，请重试", status_code=409) from exc
+    except Exception:
+        db.rollback()
+        raise
+    return success({"token": issued.token, "user": user_payload})
+
+
+router.add_api_route(
+    "/register",
+    register,
+    methods=["POST"],
+    route_class_override=RegistrationBodyLimitRoute,
+    responses={
+        413: {
+            "description": "Registration request body exceeds 16 KiB",
+        },
+    },
+)
 
 
 @router.post("/login")
@@ -114,6 +157,19 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         auth_method="password",
     )
     return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+
+
+@router.post("/logout")
+def logout(
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    revoked = revoke_current_session(
+        db,
+        user_id=context.user.id,
+        session_id=context.session_id,
+    )
+    return success({"logged_out": True, "session_revoked": revoked})
 
 
 @router.get("/kai/config")
@@ -237,15 +293,26 @@ async def kai_callback(
 
 @router.post("/kai/exchange")
 def kai_exchange(data: KaiTicketIn, db: Session = Depends(get_db)):
-    user, platform, client_id = kai_auth.consume_handoff_ticket(db, data.ticket)
-    issued = create_authenticated_session(
-        db,
-        user,
-        platform=platform,
-        client_id=client_id,
-        auth_method="kai_oidc",
-    )
-    return success({"token": issued.token, "user": UserOut.model_validate(user).model_dump()})
+    try:
+        user, platform, client_id = kai_auth.consume_handoff_ticket(
+            db,
+            data.ticket,
+            commit=False,
+        )
+        # Serialize before the final commit so a response-shaping failure does
+        # not consume the one-time ticket without returning a usable session.
+        user_payload = UserOut.model_validate(user).model_dump()
+        issued = create_authenticated_session(
+            db,
+            user,
+            platform=platform,
+            client_id=client_id,
+            auth_method="kai_oidc",
+        )
+    except Exception:
+        db.rollback()
+        raise
+    return success({"token": issued.token, "user": user_payload})
 
 
 @router.post("/kai/bind/exchange")

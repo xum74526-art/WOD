@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.common import OrmModel
 
@@ -9,10 +9,18 @@ class RegisterIn(BaseModel):
     username: str = Field(..., min_length=2, max_length=64)
     phone: str = Field(..., pattern=r"^1\d{10}$")
     password: str = Field(..., min_length=6, max_length=64)
-    invite_code: str | None = None
-    captcha_key: str = Field(..., min_length=1)
-    captcha_code: str = Field(..., min_length=1)
+    invite_code: str | None = Field(default=None, max_length=16)
+    captcha_key: str = Field(..., min_length=1, max_length=64)
+    captcha_code: str = Field(..., min_length=1, max_length=6)
     client_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @field_validator("invite_code", mode="before")
+    @classmethod
+    def normalize_invite_code(cls, value):
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        return normalized or None
 
 
 class LoginIn(BaseModel):

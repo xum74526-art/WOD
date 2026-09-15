@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <AppNavBar :title="t('addDevice')" />
+    <AppNavBar :title="t('addDevice')" :show-back="!submitting" />
     <view class="shell">
       <SectionHeader :title="t('resourceBasics')" />
       <view class="card form">
@@ -54,16 +54,21 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { createSupplierDevice } from '@/api/supplier'
+import { onBackPress } from '@dcloudio/uni-app'
+import { createSupplierDevice, type SupplierDeviceCreateInput } from '@/api/supplier'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizeRegionName } from '@/utils/region-name'
 import { navigateBack } from '@/utils/nav'
+import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 
 const i18n = useI18nStore()
 const { t, localizedErrorMessage } = i18n
 const submitting = ref(false)
+const pendingCreateIntent = ref<ClientRequestIntent | null>(null)
+
+onBackPress(() => submitting.value)
 
 const regions = [
   { name: '华北', code: 'north_china' },
@@ -123,6 +128,17 @@ function toastError(error: unknown) {
   uni.showToast({ title: localizedErrorMessage(error, '操作失败'), icon: 'none' })
 }
 
+function ensureCreateRequestId(
+  payload: Omit<SupplierDeviceCreateInput, 'client_request_id'>,
+): string {
+  pendingCreateIntent.value = ensureClientRequestIntent(
+    pendingCreateIntent.value,
+    payload,
+    () => `supplier-device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+  )
+  return pendingCreateIntent.value.requestId
+}
+
 async function onSubmit() {
   if (submitting.value) return
   const name = form.name.trim()
@@ -150,7 +166,7 @@ async function onSubmit() {
   submitting.value = true
   let listed = false
   try {
-    await createSupplierDevice({
+    const payload: Omit<SupplierDeviceCreateInput, 'client_request_id'> = {
       name,
       gpu_model: gpuModel,
       memory,
@@ -161,7 +177,12 @@ async function onSubmit() {
       region_code: form.region_code,
       region_name: form.region_name,
       city: form.city.trim() || '-',
+    }
+    await createSupplierDevice({
+      ...payload,
+      client_request_id: ensureCreateRequestId(payload),
     })
+    pendingCreateIntent.value = null
     listed = true
     uni.showToast({ title: t('listingSuccess'), icon: 'success' })
     setTimeout(() => navigateBack(), 400)

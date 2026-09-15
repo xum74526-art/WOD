@@ -1,3 +1,6 @@
 import { redirect } from "next/navigation";
+import { legacyRequestCreateHref, type RequestSearchParams } from "@/lib/request-navigation";
 
-export default function NewRequestPage() { redirect("/account/requests?create=1"); }
+export default async function NewRequestPage({ searchParams }: { searchParams: Promise<RequestSearchParams> }) {
+  redirect(legacyRequestCreateHref(await searchParams));
+}

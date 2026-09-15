@@ -7,6 +7,10 @@
           <SegmentedControl :items="viewTabs" :model-value="viewTab" @update:model-value="setViewTab" />
         </view>
 
+        <view v-if="viewMode === 'seller'" class="seller-scope-switch">
+          <SegmentedControl :items="sellerScopeTabs" :model-value="sellerScopeTab" @update:model-value="setSellerScopeTab" />
+        </view>
+
         <view v-if="viewMode === 'buyer'" class="summary-strip">
           <view class="summary-item">
             <text class="summary-value">{{ summary.active }}</text>
@@ -34,8 +38,8 @@
         </view>
         <view v-else-if="!requests.length" class="empty-card">
           <AppIcon name="order" :size="52" />
-          <text class="empty-title">{{ t(viewMode === 'seller' ? 'noAvailableRequests' : 'noBuyRequests') }}</text>
-          <text class="empty-copy">{{ t(viewMode === 'seller' ? 'sellerAvailableRequestHint' : requestType === 'online' ? 'onlineRequestHint' : 'offlineRequestHint') }}</text>
+          <text class="empty-title">{{ t(emptyTitleKey) }}</text>
+          <text class="empty-copy">{{ t(emptyHintKey) }}</text>
           <view v-if="viewMode === 'buyer'" class="empty-action" @tap="openForm">{{ t('postBuyRequest') }}</view>
         </view>
 
@@ -148,13 +152,13 @@
             </view>
             <view class="half">
               <text class="field-label">{{ t('contactPhone') }}</text>
-              <input v-model="form.phone" type="number" class="field-input" :placeholder="t('enterContactPhone')" placeholder-class="placeholder" />
+              <input v-model="form.phone" type="tel" maxlength="32" class="field-input" :placeholder="t('enterContactPhone')" placeholder-class="placeholder" />
             </view>
           </view>
 
           <view class="field">
             <text class="field-label">{{ t('additionalRequirements') }}</text>
-            <textarea v-model="form.remark" class="field-textarea" :placeholder="t('requirementsPlaceholder')" placeholder-class="placeholder" maxlength="500" />
+            <textarea v-model="form.remark" class="field-textarea" :placeholder="t('requirementsPlaceholder')" placeholder-class="placeholder" maxlength="1000" />
           </view>
         </view>
 
@@ -187,7 +191,7 @@
           <view class="detail-cell"><text class="detail-label">{{ t('region') }}</text><text class="detail-value">{{ detail.request.region ? localizeRegionName(detail.request.region, i18n.lang) : t('notLimited') }}</text></view>
             <view v-if="viewMode === 'buyer'" class="detail-cell"><text class="detail-label">{{ t('quotesReceived') }}</text><text class="detail-value">{{ detail.request.quote_count }}</text></view>
           </view>
-          <text v-if="detail.request.requirements?.remark" class="detail-remark">{{ detail.request.requirements.remark }}</text>
+          <text v-if="detailRequirementNote" class="detail-remark">{{ detailRequirementNote }}</text>
 
           <template v-if="viewMode === 'buyer'">
             <text class="section-title">{{ t('receivedQuotes') }}</text>
@@ -327,10 +331,12 @@ import {
   type BuyRequestDetail,
   type BuyRequestItem,
   type BuyRequestQuote,
+  type BuyRequestPayload,
   type BuyRequestQuotePayload,
   type BuyRequestQuoteRevision,
   type BuyRequestView,
 } from '@/api/buy-request'
+import { ApiRequestError } from '@/api/request'
 import { getMarketModels, type MarketModel } from '@/api/market'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
@@ -341,6 +347,9 @@ import { useUserStore } from '@/store/user'
 import { useCommerceStore } from '@/store/commerce'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatQuoteAmount } from '@/utils/quote-currency'
+import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
+import { normalizeBuyRequestContactPhone } from '@/utils/buy-request-contact'
+import { buyRequestAdditionalRequirements } from '@/utils/buy-request-requirements'
 import {
   canBuyerConfirmDelivery as buyerCanConfirmDelivery,
   canBuyerReportDelivery as buyerCanReportDelivery,
@@ -366,6 +375,8 @@ const commerce = useCommerceStore()
 const requestTab = ref(0)
 const viewMode = ref<BuyRequestView>('buyer')
 const requestedInitialView = ref<BuyRequestView>('buyer')
+const sellerScope = ref<'all' | 'quoted'>('all')
+const requestedInitialSellerScope = ref<'all' | 'quoted'>('all')
 const viewInitialized = ref(false)
 const requests = ref<BuyRequestItem[]>([])
 const summary = reactive({ active: 0, new_quotes: 0, pending_confirmation: 0 })
@@ -373,6 +384,7 @@ const loading = ref(false)
 const loadError = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
+const pendingRequestIntent = ref<ClientRequestIntent | null>(null)
 const selectingQuoteId = ref<number | null>(null)
 const actionBusy = ref(false)
 const detailLoading = ref(false)
@@ -402,8 +414,17 @@ const requestTabs = computed(() => [t('onlineRequest'), t('offlineRequest')])
 const sellerViewAvailable = computed(() => userStore.userInfo?.supplier_status === 'approved')
 const viewTabs = computed(() => [t('availableRequests'), t('myBuyRequests')])
 const viewTab = computed(() => viewMode.value === 'seller' ? 0 : 1)
+const sellerScopeTabs = computed(() => [t('allRequests'), t('myQuotes')])
+const sellerScopeTab = computed(() => sellerScope.value === 'quoted' ? 1 : 0)
+const emptyTitleKey = computed(() => viewMode.value === 'seller'
+  ? sellerScope.value === 'quoted' ? 'noQuotedRequests' : 'noAvailableRequests'
+  : 'noBuyRequests')
+const emptyHintKey = computed(() => viewMode.value === 'seller'
+  ? sellerScope.value === 'quoted' ? 'sellerQuotedRequestHint' : 'sellerAvailableRequestHint'
+  : requestType.value === 'online' ? 'onlineRequestHint' : 'offlineRequestHint')
 const modelLabels = computed(() => marketModels.value.map((item) => `${item.gpu_model}${item.gpu_variant ? ` ${item.gpu_variant}` : ''}`))
 const billingLabels = computed(() => [t('onDemand'), t('interruptible'), t('reserved')])
+const detailRequirementNote = computed(() => buyRequestAdditionalRequirements(detail.value?.request.requirements))
 const billingValues = ['ondemand', 'bid', 'reserved']
 const expiryLabels = computed(() => [t('oneHour'), t('sixHours'), t('twentyFourHours'), t('threeDays')])
 const expiryValues = [1, 6, 24, 72]
@@ -480,6 +501,24 @@ function quoteRevisionCount(quote: BuyRequestQuote) {
   return Math.max(1, Number(quote.revision_count || quote.revisions?.length || quote.latest_revision?.revision_no || 1))
 }
 
+function quoteSelectionSnapshot(quote: BuyRequestQuote) {
+  const revisions = quote.revisions || []
+  const revision = quote.latest_revision ?? revisions[revisions.length - 1]
+  const revisionId = Number(revision?.id)
+  if (
+    !revision
+    || !Number.isInteger(revisionId)
+    || revisionId <= 0
+    || (revision.quote_id != null && Number(revision.quote_id) !== quote.id)
+  ) return null
+  return {
+    quoteId: quote.id,
+    revisionId,
+    revisionNo: Math.max(1, Number(revision.revision_no || quoteRevisionCount(quote))),
+    amount: formatQuoteAmount(revision.total_price, revision.currency, t('cardHour')),
+  }
+}
+
 function quoteDeliveryText(quote: BuyRequestQuote) {
   const availableAt = latestQuoteRevision(quote).available_at || quote.available_at
   if (!availableAt) return t('deliveryTimeNegotiable')
@@ -552,7 +591,7 @@ async function load() {
   loadError.value = false
   try {
     if (viewMode.value === 'seller') {
-      requests.value = await getBuyRequests(requestType.value, 'seller')
+      requests.value = await getBuyRequests(requestType.value, 'seller', sellerScope.value === 'quoted')
       Object.assign(summary, { active: 0, new_quotes: 0, pending_confirmation: 0 })
     } else {
       const [items, counts] = await Promise.all([getBuyRequests(requestType.value, 'buyer'), getBuyRequestSummary()])
@@ -588,6 +627,41 @@ function resetForm() {
   billingIndex.value = 0
   expiryIndex.value = 2
 }
+function resetRequestIntent() { pendingRequestIntent.value = null }
+function buildRequestPayload(): Omit<BuyRequestPayload, 'client_request_id'> {
+  const additionalRequirements = form.remark.trim() || undefined
+  return {
+    request_type: requestType.value,
+    gpu_model: form.gpu_model,
+    gpu_variant: form.gpu_variant || undefined,
+    quantity: Number(form.quantity),
+    gpu_hours: requestType.value === 'online' ? Number(form.gpu_hours) : undefined,
+    currency: 'CNY',
+    region: form.region || undefined,
+    billing_mode: requestType.value === 'online' ? billingValues[billingIndex.value] : undefined,
+    requirements: {
+      product_id: inquiryContext.value?.product_id ?? null,
+      supplier_id: inquiryContext.value?.supplier_id ?? null,
+      source: inquiryContext.value?.source || 'direct_request',
+      product_name: inquiryContext.value?.product_name || `${form.gpu_model}${form.gpu_variant ? ` ${form.gpu_variant}` : ''}`,
+      note: additionalRequirements,
+      remark: additionalRequirements,
+      need_hosting: form.need_hosting,
+      invoice_required: form.invoice_required,
+    },
+    contact: form.contact.trim(),
+    phone: form.phone.trim(),
+    expires_in_hours: requestType.value === 'online' ? expiryValues[expiryIndex.value] : 24 * 7,
+  }
+}
+function ensureRequestId(payload: Omit<BuyRequestPayload, 'client_request_id'>): string {
+  pendingRequestIntent.value = ensureClientRequestIntent(
+    pendingRequestIntent.value,
+    payload,
+    () => `buy-request-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+  )
+  return pendingRequestIntent.value.requestId
+}
 function applyInquiryPrefill(prefill: InquiryRequestPrefill) {
   form.gpu_model = prefill.gpu_model
   form.gpu_variant = prefill.gpu_variant || ''
@@ -600,6 +674,7 @@ async function openForm() {
     if (!commerce.matchmakingEnabled) uni.showToast({ title: t('dataUnavailable'), icon: 'none' })
     return
   }
+  resetRequestIntent()
   resetForm()
   inquiryContext.value = readInquiryRequestPrefill()
   if (inquiryContext.value) {
@@ -610,39 +685,20 @@ async function openForm() {
   }
   showForm.value = true
 }
-function closeForm() { showForm.value = false }
+function closeForm() { resetRequestIntent(); showForm.value = false }
 async function submitRequest() {
   if (submitting.value || viewMode.value !== 'buyer' || !commerce.matchmakingEnabled) return
   if (!form.gpu_model || Number(form.quantity) <= 0) { uni.showToast({ title: t('completeRequiredFields'), icon: 'none' }); return }
   if (requestType.value === 'online' && Number(form.gpu_hours) <= 0) { uni.showToast({ title: t('enterGpuHours'), icon: 'none' }); return }
-  const contact = form.contact.trim()
-  const phone = form.phone.trim()
-  if (!contact || !phone) { uni.showToast({ title: t('completeContactInfo'), icon: 'none' }); return }
-  if (!/^\d{6,20}$/.test(phone)) { uni.showToast({ title: t('enterValidContactPhone'), icon: 'none' }); return }
+  if (!form.contact.trim() || !form.phone.trim()) { uni.showToast({ title: t('completeContactInfo'), icon: 'none' }); return }
+  const phone = normalizeBuyRequestContactPhone(form.phone)
+  if (!phone) { uni.showToast({ title: t('enterValidContactPhone'), icon: 'none' }); return }
+  form.phone = phone
   submitting.value = true
   try {
-    await createBuyRequest({
-      request_type: requestType.value,
-      gpu_model: form.gpu_model,
-      gpu_variant: form.gpu_variant || undefined,
-      quantity: Number(form.quantity),
-      gpu_hours: requestType.value === 'online' ? Number(form.gpu_hours) : undefined,
-      currency: 'CNY',
-      region: form.region || undefined,
-      billing_mode: requestType.value === 'online' ? billingValues[billingIndex.value] : undefined,
-      requirements: {
-        product_id: inquiryContext.value?.product_id ?? null,
-        supplier_id: inquiryContext.value?.supplier_id ?? null,
-        source: inquiryContext.value?.source || 'direct_request',
-        product_name: inquiryContext.value?.product_name || `${form.gpu_model}${form.gpu_variant ? ` ${form.gpu_variant}` : ''}`,
-        remark: form.remark,
-        need_hosting: form.need_hosting,
-        invoice_required: form.invoice_required,
-      },
-      contact,
-      phone,
-      expires_in_hours: requestType.value === 'online' ? expiryValues[expiryIndex.value] : 24 * 7,
-    })
+    const payload = buildRequestPayload()
+    await createBuyRequest({ ...payload, client_request_id: ensureRequestId(payload) })
+    resetRequestIntent()
     uni.showToast({ title: t('requestPublished'), icon: 'success' })
     clearInquiryRequestPrefill()
     inquiryContext.value = null
@@ -657,6 +713,14 @@ async function setViewTab(value: number) {
   if (viewMode.value === next) return
   viewMode.value = next
   showForm.value = false
+  detail.value = null
+  requests.value = []
+  await load()
+}
+async function setSellerScopeTab(value: number) {
+  const next = value === 1 ? 'quoted' : 'all'
+  if (sellerScope.value === next) return
+  sellerScope.value = next
   detail.value = null
   requests.value = []
   await load()
@@ -687,26 +751,36 @@ function canBuyerCounter(quote: BuyRequestQuote) {
 }
 function confirmQuoteSelection(quote: BuyRequestQuote) {
   if (!canSelectQuote(quote) || selectingQuoteId.value !== null || !detail.value) return
+  const snapshot = quoteSelectionSnapshot(quote)
+  if (!snapshot) {
+    uni.showToast({ title: t('quoteSelectionStale'), icon: 'none' })
+    void refreshDetail(detail.value.request.id).catch(() => {})
+    return
+  }
   const matchmaking = commerce.matchmakingEnabled
   uni.showModal({
     title: t(matchmaking ? 'requestPlatformCoordinationTitle' : 'confirmQuoteSelection'),
-    content: t(matchmaking ? 'requestPlatformCoordinationHint' : 'quoteSelectionHint'),
+    content: `${t('quoteRevision', { count: snapshot.revisionNo })} · ${snapshot.amount}\n${t(matchmaking ? 'requestPlatformCoordinationHint' : 'quoteSelectionHint')}`,
     confirmText: t(matchmaking ? 'requestPlatformCoordination' : 'selectQuote'),
     success: (result) => {
-      if (result.confirm) void selectQuote(quote, matchmaking)
+      if (result.confirm) void selectQuote(snapshot.quoteId, snapshot.revisionId, matchmaking)
     },
   })
 }
-async function selectQuote(quote: BuyRequestQuote, matchmaking: boolean) {
+async function selectQuote(quoteId: number, expectedRevisionId: number, matchmaking: boolean) {
   const requestId = detail.value?.request.id
-  if (!requestId || !canSelectQuote(quote) || selectingQuoteId.value !== null) return
-  selectingQuoteId.value = quote.id
+  if (!requestId || selectingQuoteId.value !== null) return
+  selectingQuoteId.value = quoteId
   try {
-    await selectBuyRequestQuote(requestId, quote.id)
+    await selectBuyRequestQuote(requestId, quoteId, expectedRevisionId)
     const refreshedDetail = await getBuyRequestDetail(requestId)
     detail.value = refreshedDetail
     await load()
     uni.showToast({ title: t(matchmaking ? 'platformCoordinationRequested' : 'quoteSelected'), icon: 'success' })
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.statusCode === 409) {
+      try { await refreshDetail(requestId) } catch {}
+    }
   } finally {
     selectingQuoteId.value = null
   }
@@ -911,6 +985,8 @@ function closeDetail() {
 onLoad(async (options) => {
   composeRequested.value = String(options?.compose || '') === '1'
   requestedInitialView.value = String(options?.view || '') === 'seller' ? 'seller' : 'buyer'
+  requestedInitialSellerScope.value = requestedInitialView.value === 'seller' && String(options?.scope || '') === 'quoted' ? 'quoted' : 'all'
+  sellerScope.value = requestedInitialSellerScope.value
   if (requestedInitialView.value === 'seller' && !composeRequested.value) {
     if (userStore.isLogin && !userStore.userInfo) {
       try { await userStore.fetchProfile() } catch {}
@@ -951,6 +1027,7 @@ onShow(async () => {
 .page { min-height: 100vh; background: var(--bg); }
 .shell { padding: 0 32rpx calc(80rpx + var(--safe-bottom)); }
 .view-switch { margin-bottom: 18rpx; }
+.seller-scope-switch { margin-bottom: 18rpx; }
 .summary-strip { display: flex; padding: 26rpx 0; margin-bottom: 18rpx; border-bottom: 1rpx solid var(--divider); }
 .summary-item { flex: 1; text-align: center; }
 .summary-item + .summary-item { border-left: 1rpx solid var(--divider); }

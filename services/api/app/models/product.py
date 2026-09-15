@@ -18,6 +18,14 @@ class Product(Base):
             sqlite_where=text("external_product_id IS NOT NULL"),
             postgresql_where=text("external_product_id IS NOT NULL"),
         ),
+        Index(
+            "uq_products_supplier_client_request",
+            "supplier_id",
+            "client_request_id",
+            unique=True,
+            sqlite_where=text("client_request_id IS NOT NULL"),
+            postgresql_where=text("client_request_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -49,7 +57,17 @@ class Product(Base):
     exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     price_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stock: Mapped[int] = mapped_column(default=0)  # 可租数量
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     reliability: Mapped[float] = mapped_column(default=99.5)  # 稳定性
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
+    # Stable create intent scoped to one supplier. The immutable request hash
+    # lets retries remain valid after price, inventory, or status later changes.
+    client_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    create_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="on")  # on/off
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Protect supplier edits from overwriting inventory or product changes made
+    # after the edit screen was opened. SQLAlchemy adds the version predicate
+    # and increments this value for every ORM update of a Product row.
+    __mapper_args__ = {"version_id_col": version}

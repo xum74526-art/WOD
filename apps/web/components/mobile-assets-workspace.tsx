@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowClockwise, CalendarDots, Coins, Cpu, Gauge, ShoppingCart, TrendUp } from "@phosphor-icons/react";
 import { getMobileAssets, sellMobileAsset, type MobileAssetSummary } from "@/lib/mobile-business-api";
 import { errorMessage } from "@/lib/commerce-ui";
+import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 
 const filters = [
@@ -81,7 +82,7 @@ export function MobileAssetsWorkspace() {
         <div className="mobile-asset-name"><i className={item.status === "active" ? "running" : ""}/><span><small>ASSET #{item.id}</small><Link href={`/account/assets/${item.id}`}><strong>{item.product_name || item.gpu_model || `算力资产 ${item.id}`}</strong></Link><em>{item.gpu_model || "GPU 算力"} · {item.quantity || 1} 台</em></span></div>
         <div className="mobile-asset-values"><span><Coins size={15}/>当前价值 <b>{amount(item.current_price ?? item.value)}</b></span><span><TrendUp size={15}/>累计收益 <b>{amount(item.accumulated_revenue)}</b></span>{item.pnl != null && <small className={item.pnl >= 0 ? "positive" : "negative"}>盈亏 {item.pnl >= 0 ? "+" : ""}{amount(item.pnl)}</small>}</div>
         <div className="mobile-asset-period"><span><CalendarDots size={15}/>{item.remaining_days == null ? "未提供到期日" : `剩余 ${item.remaining_days} 天`}</span><small>{item.end_at ? new Date(item.end_at).toLocaleDateString("zh-CN") : "—"}</small></div>
-        <div className="mobile-asset-status"><b className={`status-${item.status}`}><Gauge size={14}/>{statusLabel(item.status)}</b>{item.can_sell && (directTradeEnabled ? <button disabled={busy === item.id} onClick={() => void sell(item.id)}>{busy === item.id ? "处理中" : "出售"}</button> : <Link href={`/account/requests?create=1&gpu_model=${encodeURIComponent(item.gpu_model || item.product_name || "GPU")}&quantity=${Math.max(item.quantity || 1, 1)}`}>提交需求</Link>)}</div>
+        <div className="mobile-asset-status"><b className={`status-${item.status}`}><Gauge size={14}/>{statusLabel(item.status)}</b>{item.can_sell && (directTradeEnabled ? <button disabled={busy === item.id} onClick={() => void sell(item.id)}>{busy === item.id ? "处理中" : "出售"}</button> : <Link href={requestCreateHref({ product_id: item.product_id, source: "existing_asset", product_name: item.product_name, gpu_model: item.gpu_model || item.product_name || "GPU", quantity: Math.max(Number(item.quantity) || 1, 1), gpu_hours: 24 })}>提交需求</Link>)}</div>
       </article>)}
     </div>}
 

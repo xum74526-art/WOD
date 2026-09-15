@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.db.session import get_db
-from app.models.invite import InviteCode, InviteRecord
+from app.models.invite import INVITE_CODE_PREFIX, InviteCode, InviteRecord
 from app.models.order import Order
 from app.models.reward_accrual import RewardAccrual
 from app.models.user import User
@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api/invite", tags=["invite"])
 def _gen_code(db: Session) -> str:
     chars = string.ascii_uppercase + string.digits
     while True:
-        code = "WOD" + "".join(random.choices(chars, k=6))
+        code = INVITE_CODE_PREFIX + "".join(random.choices(chars, k=6))
         if not db.query(InviteCode).filter(InviteCode.code == code).first():
             return code
 

@@ -2,9 +2,14 @@
   <view class="page">
     <AppNavBar :title="t('k_f508a46b')" />
     <scroll-view scroll-y class="body">
-      <view v-if="loading" class="state">{{ t('loading') }}</view>
-      <view v-else-if="!asset" class="state">
-        <EmptyState text="资产不存在">
+      <view v-if="assetLoading" class="state">{{ t('loading') }}</view>
+      <view v-else-if="assetMissing" class="state">
+        <EmptyState :text="t('assetNotFound')">
+          <AppIcon name="gpu" :size="56" />
+        </EmptyState>
+      </view>
+      <view v-else-if="assetLoadFailed || !asset" class="state">
+        <EmptyState :text="t('assetLoadFailedDesc')">
           <AppIcon name="gpu" :size="56" />
         </EmptyState>
       </view>
@@ -48,9 +53,11 @@
           </view>
         </view>
 
-        <SectionHeader v-if="!asset.can_sell && asset.revenue_settlement_enabled" :title="t('k_c4aa2d1d')" />
+        <SectionHeader v-if="!asset.can_sell && asset.revenue_settlement_enabled" :title="t('accountRevenueLast7Days')" />
         <view v-if="!asset.can_sell && asset.revenue_settlement_enabled" class="card chart-card">
-          <Chart :points="chart" value-key="amount" :height="180" />
+          <view v-if="accountRevenueChartLoading" class="chart-state">{{ t('loading') }}</view>
+          <view v-else-if="accountRevenueChartFailed" class="chart-state unavailable">{{ t('accountRevenueChartUnavailable') }}</view>
+          <Chart v-else :points="accountRevenueChart" value-key="amount" :height="180" />
         </view>
 
         <SectionHeader :title="t('k_81aedca2')" />
@@ -85,7 +92,7 @@
     </scroll-view>
     <BottomActionBar v-if="asset">
       <DirectTradeAssetActions v-if="commerce.directTradeEnabled" :asset="asset" />
-      <view v-else-if="commerce.matchmakingEnabled && (asset.can_sell || asset.purchase_type === 'usage')" class="primary-btn" @tap="submitFollowUpRequirement">{{ t('submitRequirement') }}</view>
+      <view v-else-if="commerce.matchmakingEnabled && (asset.can_sell || asset.purchase_type === 'usage')" class="primary-btn" @tap="submitRenewalRequirement">{{ t('submitRequirement') }}</view>
       <view v-else-if="!commerce.available" class="primary-btn disabled">{{ t('dataUnavailable') }}</view>
       <view v-else class="primary-btn disabled">{{ t('holdingTradingUnavailable') }}</view>
     </BottomActionBar>
@@ -96,6 +103,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getAsset, type AssetItem } from '@/api/asset'
+import { ApiRequestError } from '@/api/request'
 import { getRevenueChart, type RevenuePoint } from '@/api/revenue'
 import { formatNumber, fmtCH, fmtCHn, toCardHours, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
@@ -112,28 +120,51 @@ import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
 import { localizeProductName } from '@/utils/localize-content'
 import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
+import { ACCOUNT_REVENUE_RANGE_DAYS, startAssetDetailRequests } from '@/utils/asset-detail-requests'
 
 const i18n = useI18nStore()
 const { t } = i18n
 const commerce = useCommerceStore()
 const asset = ref<AssetItem | null>(null)
-const chart = ref<RevenuePoint[]>([])
-const loading = ref(true)
+const assetLoading = ref(true)
+const assetMissing = ref(false)
+const assetLoadFailed = ref(false)
+const accountRevenueChart = ref<RevenuePoint[]>([])
+const accountRevenueChartLoading = ref(false)
+const accountRevenueChartFailed = ref(false)
 
 onLoad(async (opts) => {
   const id = Number(opts?.id || 0)
   if (!id) {
-    loading.value = false
+    assetMissing.value = true
+    assetLoading.value = false
     return
   }
-  try {
-    const [a, c] = await Promise.all([getAsset(id), getRevenueChart(7)])
-    asset.value = a
-    chart.value = c
-  } catch {
-    /* request 已 toast */
+
+  accountRevenueChartLoading.value = true
+  const requests = startAssetDetailRequests(
+    getAsset(id),
+    getRevenueChart(ACCOUNT_REVENUE_RANGE_DAYS, { silent: true }),
+  )
+
+  void requests.accountRevenueChart.then((result) => {
+    if (result.status === 'fulfilled') {
+      accountRevenueChart.value = result.value
+    } else {
+      accountRevenueChartFailed.value = true
+    }
+    accountRevenueChartLoading.value = false
+  })
+
+  const assetResult = await requests.asset
+  if (assetResult.status === 'fulfilled') {
+    asset.value = assetResult.value
+  } else if (assetResult.reason instanceof ApiRequestError && assetResult.reason.statusCode === 404) {
+    assetMissing.value = true
+  } else {
+    assetLoadFailed.value = true
   }
-  loading.value = false
+  assetLoading.value = false
 })
 
 const badge = computed(() => {
@@ -153,16 +184,16 @@ function goOrder() {
   nav(`/pages/order/detail?id=${oid}`)
 }
 
-function submitFollowUpRequirement() {
+function submitRenewalRequirement() {
   const current = asset.value
   if (!current?.product_id) return
   saveInquiryRequestPrefill({
     product_id: current.product_id,
     source: 'existing_asset',
     gpu_model: current.gpu_model || current.product_name || 'GPU',
-    quantity: Math.max(1, current.quantity || 1),
-    gpu_hours: Math.max(1, Number(current.remaining_days || 1) * 24),
-    product_name: current.product_name,
+    quantity: Math.max(1, Number(current.quantity) || 1),
+    gpu_hours: 24,
+    product_name: current.product_name || undefined,
   })
   nav('/pages/buy-request/index?compose=1')
 }
@@ -187,6 +218,8 @@ function submitFollowUpRequirement() {
 .hg-label { display: block; color: var(--text-sub); font-size: 24rpx; margin-bottom: 12rpx; }
 
 .chart-card { padding: 24rpx 16rpx; }
+.chart-state { min-height: 180rpx; display: flex; align-items: center; justify-content: center; padding: 24rpx; color: var(--text-sub); text-align: center; font-size: 26rpx; line-height: 1.6; }
+.chart-state.unavailable { color: var(--text-dim); }
 .info-card { padding: 4rpx 32rpx; }
 .row { display: flex; justify-content: space-between; align-items: center; padding: 28rpx 0; border-bottom: 1rpx solid var(--divider); }
 .row:last-child { border-bottom: none; }

@@ -90,7 +90,7 @@
         <text>{{ t('dataUnavailable') }}</text>
         <text class="comment-retry" role="button" @tap="loadComments">{{ t('retry') }}</text>
       </view>
-      <view v-else-if="!comments.length" class="card ph"><EmptyState text="暂无评论，快来抢沙发" /></view>
+      <view v-else-if="!comments.length" class="card ph"><EmptyState :text="t('暂无评论，快来抢沙发')" /></view>
       <view v-for="c in comments" :key="c.id" class="card cmt">
         <view class="cavatar">{{ authorInitial(c.author_name) }}</view>
         <view class="cbody">

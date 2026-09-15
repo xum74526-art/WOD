@@ -185,6 +185,81 @@ class CommunityMediaTests(unittest.TestCase):
         self.assertEqual(partial.content, self.standardized_video[4:12])
         self.assertTrue(partial.headers["content-range"].startswith("bytes 4-11/"))
 
+        invalid = self.client.get(
+            "/api" + media_url,
+            headers={"Range": f"bytes={len(self.standardized_video)}-"},
+        )
+        self.assertEqual(invalid.status_code, 416)
+        self.assertEqual(
+            invalid.headers["content-range"],
+            f"bytes */{len(self.standardized_video)}",
+        )
+
+    def test_video_upload_releases_authentication_transaction_before_transcoding(self):
+        self.db.query(User.id).filter(User.id == self.user.id).scalar()
+        self.assertTrue(self.db.in_transaction())
+        transaction_states: list[bool] = []
+
+        async def observed_to_thread(function, *args, **kwargs):
+            transaction_states.append(self.db.in_transaction())
+            return function(*args, **kwargs)
+
+        with patch.object(community_router.asyncio, "to_thread", new=observed_to_thread):
+            response = self.upload("clip.mp4", minimal_mp4_bytes(), "video/mp4")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(transaction_states, [False])
+
+    def test_upload_final_account_fence_fails_before_publishing_media(self):
+        with patch(
+            "app.services.account_lifecycle.lock_active_user",
+            side_effect=BizError("账号已注销或正在注销", status_code=401),
+        ):
+            response = self.upload("photo.png", image_bytes(), "image/png")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(list(Path(self.temp_dir.name).rglob("*.*")), [])
+
+    def test_public_video_releases_database_dependency_before_streaming(self):
+        uploaded = self.upload("clip.mp4", minimal_mp4_bytes(), "video/mp4")
+        media_url = uploaded.json()["data"]["url"]
+        events: list[str] = []
+        original_file_range = community_router._file_range
+
+        def observed_file_range(*args, **kwargs):
+            events.append("stream_started")
+            yield from original_file_range(*args, **kwargs)
+
+        def observed_db_override():
+            try:
+                yield self.db
+            finally:
+                events.append("db_released")
+
+        self.client.app.dependency_overrides[get_db] = observed_db_override
+        with patch.object(community_router, "_file_range", observed_file_range):
+            response = self.client.get(
+                "/api" + media_url,
+                headers={"Range": "bytes=4-11"},
+            )
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, self.standardized_video[4:12])
+        self.assertEqual(events, ["db_released", "stream_started"])
+
+    def test_public_media_stays_hidden_after_account_deletion(self):
+        uploaded = self.upload("photo.png", image_bytes(), "image/png")
+        media_url = uploaded.json()["data"]["url"]
+        stored = Path(self.temp_dir.name) / str(self.user.id) / Path(media_url).name
+        self.assertTrue(stored.is_file())
+
+        self.user.account_status = "deleted"
+        self.db.commit()
+
+        response = self.client.get("/api" + media_url)
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(stored.is_file())
+
     def test_valid_webm_is_standardized_to_public_mp4(self):
         uploaded = self.upload("clip.webm", minimal_webm_bytes(), "video/webm")
         self.assertEqual(uploaded.status_code, 200)

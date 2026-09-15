@@ -180,7 +180,7 @@ test('deletion endpoints use the canonical client and submit/status do not attac
   assert.match(api, /\/submit', method: 'POST', data: \{ ticket, confirm: true \}, auth: 'none'/)
   assert.match(api, /\/status', method: 'POST', data: \{ ticket \}, auth: 'none'/)
   assert.match(request, /options.auth === 'none' \? '' : getToken\(\)/)
-  assert.match(request, /if \(options.auth === 'none'\) \{\s+reject\(new ApiRequestError[\s\S]+?return\s+\}\s+expireSession/)
+  assert.match(request, /if \(options.auth === 'none' \|\| options.unauthorized === 'reject'\) \{\s+reject\(new ApiRequestError[\s\S]+?return\s+\}\s+expireSession/)
 })
 
 test('expired deletion capability rejects inline without bearer auth, session clearing or login redirect', async () => {
@@ -188,10 +188,12 @@ test('expired deletion capability rejects inline without bearer auth, session cl
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText
   let cleared = 0
   let redirects = 0
+  let staged = 0
   const headers: Array<Record<string, string>> = []
   const exports: Record<string, any> = {}
   const requireMock = (name: string) => {
     if (name === '@/utils/auth') return { getToken: () => 'ordinary-session-token', clearAuth: () => { cleared += 1 } }
+    if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => { staged += 1 } }
     if (name === '@/utils/config') return { API_BASE: 'https://example.invalid/api' }
     if (name === '@/store/i18n') return { useI18nStore: () => ({ lang: 'zh', t: (key: string) => key, tr: (value: string) => value }) }
     throw new Error(`Unexpected dependency: ${name}`)
@@ -204,11 +206,13 @@ test('expired deletion capability rejects inline without bearer auth, session cl
   assert.equal(headers[0].Authorization, undefined)
   assert.equal(cleared, 0)
   assert.equal(redirects, 0)
+  assert.equal(staged, 0)
   // Default behavior remains exactly the existing session-auth flow.
   await assert.rejects(exports.request({ url: '/user/profile' }))
   assert.equal(headers[1].Authorization, 'Bearer ordinary-session-token')
   assert.equal(cleared, 1)
   assert.equal(redirects, 1)
+  assert.equal(staged, 1)
 })
 
 test('late blockers during processing stay visible without being treated as completion', async () => {

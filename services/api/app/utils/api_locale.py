@@ -62,6 +62,16 @@ _MESSAGES: dict[str, dict[ApiLocale, str]] = {
         "zh-Hans": "请求错误",
         "en": "Invalid request.",
     },
+    "注册信息过长，请缩短后重试": {
+        "zh-Hant": "註冊資料過長，請縮短後再試",
+        "zh-Hans": "注册信息过长，请缩短后重试",
+        "en": "The registration details are too long. Shorten them and try again.",
+    },
+    "邀请码无效，请检查后重试": {
+        "zh-Hant": "邀請碼無效，請檢查後重試",
+        "zh-Hans": "邀请码无效，请检查后重试",
+        "en": "The invitation code is invalid. Check it and try again.",
+    },
     "找回请求参数无效，请检查后重试": {
         "zh-Hant": "帳號找回請求參數無效，請檢查後重試",
         "zh-Hans": "找回请求参数无效，请检查后重试",

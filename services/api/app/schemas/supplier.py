@@ -48,6 +48,12 @@ class SupplierOut(OrmModel):
 
 
 class SupplierDeviceCreateIn(BaseModel):
+    client_request_id: str | None = Field(
+        default=None,
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
     name: str = Field(..., min_length=2, max_length=128)
     gpu_model: str = Field(..., min_length=2, max_length=64)
     memory: str = Field(default="-", min_length=1, max_length=32)
@@ -66,9 +72,12 @@ class SupplierDeviceUpdateIn(BaseModel):
     stock: int | None = Field(default=None, ge=0, le=100000)
     name: str | None = Field(default=None, min_length=2, max_length=128)
     status: Literal["on", "off"] | None = None
+    # Optional during the rollout so already-installed clients keep working.
+    # Current clients always send the version returned by the device list.
+    expected_version: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def require_change(self):
-        if not self.model_fields_set:
+        if not self.model_fields_set.difference({"expected_version"}):
             raise ValueError("至少提供一个需要更新的字段")
         return self

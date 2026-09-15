@@ -1,59 +1,76 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import ts from 'typescript'
 
 const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-test('iOS binds or replaces an email through canonical authenticated APIs', () => {
-  const api = readSource('../src/api/user.ts')
+test('recovery email API is owned by the canonical account-recovery module', async () => {
+  const source = readSource('../src/api/account-recovery.ts')
+  const userApi = readSource('../src/api/user.ts')
+  assert.match(source, /import \{ request \} from '\.\/request'/)
+  assert.doesNotMatch(source, /uni\.request|fetch\(|axios|API_BASE/)
+  assert.doesNotMatch(userApi, /getRecoveryEmailStatus|requestRecoveryEmailVerification|interface RecoveryEmailStatus/)
+
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText
+  const calls: Array<Record<string, unknown>> = []
+  const exports: Record<string, any> = {}
+  new Function('require', 'exports', compiled)(
+    (name: string) => {
+      assert.equal(name, './request')
+      return { request: async (options: Record<string, unknown>) => { calls.push(options); return { accepted: true, already_verified: false } } }
+    },
+    exports,
+  )
+
+  await exports.getRecoveryEmailStatus()
+  await exports.getAccountRecoveryConfig()
+  await exports.requestRecoveryEmailVerification('owner@example.com', 'current-password')
+  assert.deepEqual(calls, [
+    { url: '/user/recovery-email', silent: true },
+    { url: '/auth/recovery/config', auth: 'none', silent: true },
+    {
+      url: '/user/recovery-email/request-verification',
+      method: 'POST',
+      data: { email: 'owner@example.com', current_password: 'current-password' },
+      silent: true,
+    },
+  ])
+})
+
+test('binding page separates status and capability failures without presenting failure as unbound', () => {
   const page = readSource('../src/pages/recovery-email/index.vue')
+
+  assert.match(page, /const \[emailStatus, recoveryConfig\] = await Promise\.allSettled/)
+  assert.match(page, /emailStatus\.status === 'fulfilled'[\s\S]*?else \{\s+status\.value = null\s+loadFailed\.value = true/)
+  assert.match(page, /recoveryConfig\.status === 'fulfilled'[\s\S]*?else \{\s+config\.value = null\s+configFailed\.value = true/)
+  assert.match(page, /v-else-if="!loading && !loadFailed" class="status-badge"/)
+  assert.match(page, /<template v-else-if="loadFailed">[\s\S]*?recoveryEmailLoadFailed[\s\S]*?<text v-else-if="status\?\.verified && status\.email"/)
+  assert.match(page, /v-else-if="configFailed"[\s\S]*?@tap="reloadPage"[\s\S]*?recoveryEmailRetry/)
+  assert.match(page, /v-if="requestError" class="request-error" role="alert"/)
+  assert.doesNotMatch(page, /setStorageSync|getStorageSync|resolvePublicWebUrl|openExternalLink|sms/i)
+})
+
+test('binding page clears credentials and cancels late responses on hide or unload', () => {
+  const page = readSource('../src/pages/recovery-email/index.vue')
+
+  assert.match(page, /const submittedPassword = currentPassword\.value\s+currentPassword\.value = ''\s+requestError\.value = ''\s+submitting\.value = true[\s\S]*?requestRecoveryEmailVerification\(normalizedEmail, submittedPassword\)/)
+  assert.match(page, /if \(!active \|\| generation !== pageGeneration\) return/)
+  assert.match(page, /if \(active && generation === pageGeneration\) requestError\.value = requestErrorMessage\(cause\)/)
+  assert.match(page, /function leavePage\(\) \{[\s\S]*?active = false[\s\S]*?pageGeneration \+= 1[\s\S]*?requestError\.value = ''[\s\S]*?clearSensitiveFields\(\)/)
+  assert.match(page, /function clearSensitiveFields\(\) \{\s+email\.value = ''\s+currentPassword\.value = ''/)
+  assert.match(page, /onHide\(leavePage\)/)
+  assert.match(page, /onUnload\(leavePage\)/)
+  assert.match(page, /recoveryEmailPrivacyHint/)
+})
+
+test('settings rejects stale email status after account changes and distinguishes read failure', () => {
   const settings = readSource('../src/pages/settings/index.vue')
   const pages = JSON.parse(readSource('../src/pages.json'))
 
-  assert.match(api, /url: '\/user\/recovery-email'/)
-  assert.match(api, /url: '\/user\/recovery-email\/request-verification'/)
-  assert.match(api, /url: '\/auth\/recovery\/config'[\s\S]*?auth: 'none'[\s\S]*?silent: true/)
-  assert.match(api, /data: \{ email, current_password: currentPassword \}/)
-  assert.match(page, /getRecoveryEmailStatus/)
-  assert.match(page, /requestRecoveryEmailVerification\(email, form\.currentPassword\)/)
-  assert.match(page, /status\?\.verified/)
-  assert.match(page, /result\.already_verified/)
-  assert.match(page, /emailEnabled\.value !== true/)
-  assert.match(page, /generation !== loadGeneration/)
-  assert.match(page, /onHide\(\(\) => \{[\s\S]*?active = false[\s\S]*?loadGeneration \+= 1/)
-  assert.match(page, /if \(!active \|\| generation !== submitGeneration\) return/)
-  assert.match(settings, /nav\('\/pages\/recovery-email\/index'\)/)
-  assert.ok(pages.pages.some((item: { path: string }) => item.path === 'pages/recovery-email/index'))
-})
-
-test('email-binding form keeps credentials transient and explains verification', () => {
-  const page = readSource('../src/pages/recovery-email/index.vue')
-  const locale = readSource('../src/store/i18n.ts')
-
-  assert.match(page, /finally \{\s+if \(generation === submitGeneration\) \{\s+form\.currentPassword = ''/)
-  assert.match(page, /onHide\(\(\) => \{[\s\S]*?form\.email = ''\s+form\.currentPassword = ''/)
-  assert.match(page, /onUnmounted\(\(\) => \{[\s\S]*?form\.email = ''\s+form\.currentPassword = ''/)
-  assert.doesNotMatch(page, /setStorageSync|getStorageSync|console\./)
-  assert.match(locale, /recoveryEmail: '绑定邮箱'/)
-  assert.match(locale, /recoveryEmail: 'Email binding'/)
-  assert.match(locale, /recoveryEmailBound: '已绑定邮箱'/)
-  assert.match(locale, /recoveryEmailUnbound: '未绑定邮箱'/)
-  assert.match(locale, /recoveryEmailSentHint: '请前往新邮箱点击邮件中的链接完成验证。验证完成前，当前绑定邮箱不会改变。'/)
-  assert.match(locale, /recoveryEmailSentHint: 'Open the link in the new email to finish verification\. Your current bound email remains unchanged until then\.'/)
-  assert.equal((locale.match(/recoveryEmailPrivacyHint: /g) || []).length, 2)
-  for (const message of [
-    '当前密码错误',
-    '邮箱找回服务尚未配置',
-    '邮箱服务尚未配置',
-    '找回请求参数无效，请检查后重试',
-    '请求过于频繁，请稍后再试',
-  ]) assert.match(locale, new RegExp(`'${message}':`))
-})
-
-test('settings ignores stale email-status responses and distinguishes read failures from unbound state', () => {
-  const settings = readSource('../src/pages/settings/index.vue')
-  const locale = readSource('../src/store/i18n.ts')
-
+  assert.match(settings, /getRecoveryEmailStatus, type RecoveryEmailStatus \} from '@\/api\/account-recovery'/)
   assert.match(settings, /const sessionToken = userStore\.token/)
   assert.match(settings, /const sessionUserId = userStore\.userInfo\?\.id \?\? null/)
   assert.match(settings, /generation === recoveryEmailGeneration/)
@@ -61,11 +78,32 @@ test('settings ignores stale email-status responses and distinguishes read failu
   assert.match(settings, /sessionUserId === null \|\| \(userStore\.userInfo\?\.id \?\? null\) === sessionUserId/)
   assert.match(settings, /if \(!isCurrentRequest\(\)\) return\s+recoveryEmail\.value = nextStatus/)
   assert.match(settings, /catch \{\s+if \(!isCurrentRequest\(\)\) return\s+recoveryEmail\.value = null\s+recoveryEmailLoadFailed\.value = true/)
+  assert.match(settings, /if \(recoveryEmailLoadFailed\.value\) return 'recoveryEmailStatusUnavailable'/)
+  assert.match(settings, /recoveryEmail\.value\?\.verified \? 'recoveryEmailVerified' : 'recoveryEmailNotBound'/)
   assert.match(settings, /onHide\(deactivateRecoveryEmail\)/)
   assert.match(settings, /function deactivateRecoveryEmail\(\) \{[\s\S]*?recoveryEmailActive = false[\s\S]*?recoveryEmailGeneration \+= 1/)
+  assert.match(settings, /function onSessionChanged\(\) \{[\s\S]*?recoveryEmailGeneration \+= 1[\s\S]*?recoveryEmail\.value = null[\s\S]*?refreshRecoveryEmail\(\)/)
   assert.match(settings, /uni\.\$on\('wod-session-changed', onSessionChanged\)/)
-  assert.match(settings, /recoveryEmailLoadFailed\.value\s+\? 'recoveryEmailLoadFailed'/)
-  assert.match(settings, /if \(recoveryEmailLoadFailed\.value\) return 'recoveryEmailStatusUnavailable'/)
+  assert.match(settings, /nav\('\/pages\/recovery-email\/index'\)/)
+  assert.ok(pages.pages.some((item: { path: string }) => item.path === 'pages/recovery-email/index'))
+})
+
+test('binding page has matching Chinese and English semantic copy', () => {
+  const locale = readSource('../src/store/i18n.ts')
+  for (const key of [
+    'recoveryEmailTitle',
+    'recoveryEmailVerified',
+    'recoveryEmailVerifiedHint',
+    'recoveryEmailNotBound',
+    'recoveryEmailStatusUnavailable',
+    'recoveryEmailCurrentPassword',
+    'recoveryEmailPrivacyHint',
+    'recoveryEmailSentMessage',
+  ]) {
+    assert.equal((locale.match(new RegExp(`${key}:`, 'g')) || []).length, 2, `${key} must exist in both dictionaries`)
+  }
+  assert.match(locale, /recoveryEmailTitle: '绑定邮箱'/)
+  assert.match(locale, /recoveryEmailTitle: 'Bind email'/)
   assert.match(locale, /recoveryEmailStatusUnavailable: '状态暂不可用'/)
   assert.match(locale, /recoveryEmailStatusUnavailable: 'Status unavailable'/)
 })

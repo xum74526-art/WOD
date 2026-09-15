@@ -13,6 +13,105 @@ export function hourlyOrderBody(hours: number, clientRequestId: string) {
   return { hours, client_request_id: clientRequestId };
 }
 
-export function webRequestId(kind: "order" | "renew", uuid: string) {
+export function webRequestId(kind: "order" | "renew" | "buy-request" | "supplier-device", uuid: string) {
   return `web-${kind}-${uuid}`.slice(0, 64);
+}
+
+export type RenewalIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function renewalIntentSignature(orderId: number, hours: number) {
+  return JSON.stringify([orderId, hours]);
+}
+
+export function ensureRenewalIntent(
+  current: RenewalIntent | null,
+  signature: string,
+  createUuid: () => string,
+): RenewalIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("renew", createUuid()) };
+}
+
+export type DirectOrderIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function directOrderIntentSignature(input: {
+  product_id: number;
+  quantity: number;
+  hours: number;
+  purchase_type: "usage";
+  expected_unit_price_card_hours: number;
+}) {
+  return JSON.stringify([
+    input.product_id,
+    input.quantity,
+    input.hours,
+    input.purchase_type,
+    input.expected_unit_price_card_hours,
+  ]);
+}
+
+export function ensureDirectOrderIntent(
+  current: DirectOrderIntent | null,
+  signature: string,
+  createUuid: () => string,
+): DirectOrderIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("order", createUuid()) };
+}
+
+export type BuyRequestIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function buyRequestIntentSignature(input: Readonly<Record<string, unknown>>) {
+  return JSON.stringify(input);
+}
+
+export function ensureBuyRequestIntent(
+  current: BuyRequestIntent | null,
+  signature: string,
+  createUuid: () => string,
+): BuyRequestIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("buy-request", createUuid()) };
+}
+
+export type SupplierDeviceIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function supplierDeviceIntentSignature(input: Readonly<Record<string, unknown>>) {
+  return JSON.stringify(input);
+}
+
+export function ensureSupplierDeviceIntent(
+  current: SupplierDeviceIntent | null,
+  signature: string,
+  createUuid: () => string,
+): SupplierDeviceIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("supplier-device", createUuid()) };
+}
+
+export function normalizeBuyRequestContactPhone(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length > 32 || !/^[+0-9 ()-]+$/.test(trimmed)) return null;
+  const normalized = trimmed.replace(/[ ()-]/g, "");
+  return /^(?:[0-9]{6,20}|\+[1-9][0-9]{5,14})$/.test(normalized) ? normalized : null;
+}
+
+export function buyRequestAdditionalRequirements(
+  requirements: Readonly<Record<string, unknown>> | null | undefined,
+) {
+  const note = typeof requirements?.note === "string" ? requirements.note.trim() : "";
+  if (note) return note;
+  return typeof requirements?.remark === "string" ? requirements.remark.trim() : "";
 }

@@ -1,6 +1,7 @@
 import { getToken, clearAuth } from '@/utils/auth'
 import { API_BASE } from '@/utils/config'
 import { useI18nStore } from '@/store/i18n'
+import { stageAuthReturnPath } from '@/utils/auth-return-path'
 
 export interface ApiResponse<T = unknown> {
   code: number
@@ -19,20 +20,26 @@ export class ApiRequestError extends Error {
   }
 }
 
-let redirecting = false
+let expiringToken: string | null = null
 
 function responseBody<T>(value: unknown): Partial<ApiResponse<T>> {
   return value && typeof value === 'object' ? value as Partial<ApiResponse<T>> : {}
 }
 
-function expireSession(i18n: ReturnType<typeof useI18nStore>) {
+function expireSession(i18n: ReturnType<typeof useI18nStore>, requestToken: string) {
+  // A response belongs to the token captured when the request started. An old
+  // request may finish after the user has signed in again, so it must never
+  // clear the newer session.
+  if (getToken() !== requestToken || expiringToken === requestToken) return
+  expiringToken = requestToken
+  stageAuthReturnPath()
   clearAuth()
   uni.$emit('wod-auth-expired')
-  if (redirecting) return
-  redirecting = true
   uni.reLaunch({
     url: '/pages/login/index',
-    complete: () => { redirecting = false },
+    complete: () => {
+      if (expiringToken === requestToken) expiringToken = null
+    },
   })
 }
 
@@ -41,8 +48,9 @@ function errorMessage(
   body: Partial<ApiResponse<unknown>>,
   fallback: string,
 ) {
-  const detail = typeof body.detail === 'string' ? body.detail : ''
-  return i18n.tr(body.msg || detail || i18n.t(fallback))
+  const message = typeof body.msg === 'string' ? body.msg.trim() : ''
+  const detail = typeof body.detail === 'string' ? body.detail.trim() : ''
+  return i18n.tr(message || detail || i18n.t(fallback))
 }
 
 export function request<T = unknown>(options: {
@@ -52,10 +60,11 @@ export function request<T = unknown>(options: {
   silent?: boolean
   /** Only credential-independent endpoints, such as deletion capability receipts. */
   auth?: 'session' | 'none'
+  /** Explicit logout handles an invalid bearer locally without a second redirect. */
+  unauthorized?: 'expire-session' | 'reject'
 }): Promise<T> {
   const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
-  const localize = (message: unknown, fallback = '请求失败') => i18n.tr(message || i18n.t(fallback))
   return new Promise((resolve, reject) => {
     uni.request({
       url: API_BASE + options.url,
@@ -70,23 +79,23 @@ export function request<T = unknown>(options: {
       success: (res) => {
         const body = responseBody<T>(res.data)
         if (res.statusCode === 401 || body.code === 401) {
-          if (options.auth === 'none') {
+          if (options.auth === 'none' || options.unauthorized === 'reject') {
             reject(new ApiRequestError(errorMessage(i18n, body, '请求失败'), 401))
             return
           }
-          expireSession(i18n)
+          expireSession(i18n, token)
           reject(new Error(i18n.t('未登录')))
           return
         }
         if (res.statusCode >= 400) {
-          const msg = localize(body.msg || body.detail, '请求失败')
-            || `${i18n.t('请求失败')} (${res.statusCode})`
+          const fallback = res.statusCode === 422 ? 'requestValidationFailed' : '请求失败'
+          const msg = errorMessage(i18n, body, fallback)
           if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
           reject(new ApiRequestError(msg, res.statusCode))
           return
         }
         if (body.code !== 0 || !('data' in body)) {
-          const msg = localize(body.msg)
+          const msg = errorMessage(i18n, body, '请求失败')
           if (!options.silent) uni.showToast({ title: msg, icon: 'none' })
           reject(new Error(msg))
           return
@@ -133,7 +142,7 @@ export function upload<T = unknown>(options: {
           body = {}
         }
         if (res.statusCode === 401 || body?.code === 401) {
-          expireSession(i18n)
+          expireSession(i18n, token)
           reject(new Error(i18n.t('未登录')))
           return
         }

@@ -132,6 +132,11 @@ async def upload_community_media(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = int(user.id)
+    # Authentication and this route share the same cached Session. End its
+    # read-only transaction before file IO and potentially long video
+    # transcoding; the final account fence below safely reuses the Session.
+    db.rollback()
     requested_extension = _requested_extension(media.filename)
     is_image = requested_extension in IMAGE_EXTENSIONS
     max_bytes = settings.COMMUNITY_IMAGE_MAX_BYTES if is_image else settings.COMMUNITY_VIDEO_MAX_BYTES
@@ -162,9 +167,9 @@ async def upload_community_media(
         standardized_duration = standardized.duration_seconds
 
     from app.services.account_lifecycle import lock_active_user
-    lock_active_user(db, user.id)
+    lock_active_user(db, user_id)
 
-    user_dir = COMMUNITY_DIR / str(user.id)
+    user_dir = COMMUNITY_DIR / str(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid.uuid4().hex}.{detected_extension}"
     destination = user_dir / filename
@@ -184,7 +189,7 @@ async def upload_community_media(
             os.unlink(temp_name)
 
     return success({
-        "url": f"/uploads/community/{user.id}/{filename}",
+        "url": f"/uploads/community/{user_id}/{filename}",
         "kind": "image" if is_image else "video",
         "content_type": MEDIA_TYPES[detected_extension],
         "size": len(content),
@@ -220,7 +225,12 @@ def _file_range(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024)
 
 
 @public_router.get("/{user_id}/{filename}", include_in_schema=False)
-def public_community_media(user_id: int, filename: str, request: Request, db: Session = Depends(get_db)):
+def public_community_media(
+    user_id: int,
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db, scope="function"),
+):
     from app.services.account_lifecycle import active_user_exists
     if not active_user_exists(db, user_id):
         raise HTTPException(status_code=404, detail="社区媒体不存在")

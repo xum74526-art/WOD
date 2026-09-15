@@ -30,18 +30,18 @@
         <view v-if="authMethod === 'phone'" class="phone-form">
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_819767ad') }}</text>
-            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" />
+            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" maxlength="64" />
           </view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_1dfb714c') }}</text>
-            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" />
+            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" maxlength="16" />
           </view>
           <view class="field" v-if="mode === 'register'">
             <text class="flabel">{{ t('k_b19c3a24') }}</text>
             <view class="captcha-row">
               <input class="finput captcha-input" v-model="form.captcha_code" :placeholder="t('k_8001cfd7')" placeholder-class="ph" maxlength="6" />
-              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha" mode="aspectFit" />
-              <view v-else class="captcha-placeholder" @tap="refreshCaptcha">{{ t('k_3ca790b3') }}</view>
+              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha()" mode="aspectFit" />
+              <view v-else class="captcha-placeholder" @tap="refreshCaptcha()">{{ t('k_3ca790b3') }}</view>
             </view>
           </view>
           <view class="field">
@@ -50,7 +50,7 @@
           </view>
           <view class="field">
             <text class="flabel">{{ t('k_a8105204') }}</text>
-            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" />
+            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" maxlength="64" />
             <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
           </view>
           <view v-if="mode === 'login'" class="account-recovery-row">
@@ -90,7 +90,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { request } from '@/api/request'
 import { getKaiAuthConfig, startKaiAuth } from '@/api/user'
@@ -103,6 +103,7 @@ import {
   type KaiAuthCallback,
 } from '@/utils/kai-auth-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
+import { consumeAuthReturnPath } from '@/utils/auth-return-path'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
 
@@ -116,6 +117,14 @@ const authMethod = ref<'phone' | 'kai'>('phone')
 const form = reactive({ username: '', phone: '', password: '', invite_code: '', captcha_code: '' })
 const captchaImg = ref('')
 const captchaKey = ref('')
+// The server keeps challenges for 300 seconds; expire locally 30 seconds early.
+const CAPTCHA_FRESHNESS_MS = 270_000
+let captchaExpiresAt = 0
+let captchaExpiryTimer: ReturnType<typeof setTimeout> | null = null
+let captchaRefreshPromise: Promise<boolean> | null = null
+let captchaReplacementNoticePromise: Promise<boolean> | null = null
+let captchaFailureNoticeRequested = false
+let captchaPageVisible = true
 const showPwd = ref(false)
 const agree = ref(false)
 const submitting = ref(false)
@@ -131,12 +140,12 @@ const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 function setMode(value: 'login' | 'register') {
   mode.value = value
   if (value === 'register') authMethod.value = 'phone'
-  if (value === 'register' && authMethod.value === 'phone' && !captchaImg.value) refreshCaptcha()
+  syncCaptchaLifecycle(false)
 }
 
 function setAuthMethod(value: 'phone' | 'kai') {
   authMethod.value = value
-  if (value === 'phone' && mode.value === 'register' && !captchaImg.value) refreshCaptcha()
+  syncCaptchaLifecycle(false)
 }
 
 function goAgreement(type: string) {
@@ -147,12 +156,90 @@ function openAccountRecovery() {
   uni.navigateTo({ url: '/pages/forgot-password/index' })
 }
 
-async function refreshCaptcha() {
-  try {
-    const res = await request<{ key: string; image: string }>({ url: '/auth/captcha' })
-    captchaKey.value = res.key
-    captchaImg.value = res.image
-  } catch {}
+function isPhoneRegistration() {
+  return mode.value === 'register' && authMethod.value === 'phone'
+}
+
+function stopCaptchaExpiryTimer() {
+  if (captchaExpiryTimer) clearTimeout(captchaExpiryTimer)
+  captchaExpiryTimer = null
+}
+
+function hasFreshCaptcha(now = Date.now()) {
+  const remaining = captchaExpiresAt - now
+  return !!captchaKey.value && !!captchaImg.value && remaining > 0 && remaining <= CAPTCHA_FRESHNESS_MS
+}
+
+function scheduleCaptchaExpiry() {
+  stopCaptchaExpiryTimer()
+  if (!captchaPageVisible || !isPhoneRegistration() || !hasFreshCaptcha()) return
+  captchaExpiryTimer = setTimeout(() => {
+    captchaExpiryTimer = null
+    if (!captchaPageVisible || !isPhoneRegistration()) return
+    if (hasFreshCaptcha()) {
+      scheduleCaptchaExpiry()
+      return
+    }
+    syncCaptchaLifecycle(true)
+  }, Math.max(0, captchaExpiresAt - Date.now()))
+}
+
+function syncCaptchaLifecycle(silent: boolean) {
+  stopCaptchaExpiryTimer()
+  if (!isPhoneRegistration()) return
+  if (!hasFreshCaptcha()) {
+    if (form.captcha_code) void refreshCaptchaWithNotice(false)
+    else void refreshCaptcha(silent)
+    return
+  }
+  scheduleCaptchaExpiry()
+}
+
+async function refreshCaptcha(silent = false): Promise<boolean> {
+  if (captchaRefreshPromise) return captchaRefreshPromise
+  stopCaptchaExpiryTimer()
+  captchaExpiresAt = 0
+  captchaKey.value = ''
+  captchaImg.value = ''
+  form.captcha_code = ''
+  captchaRefreshPromise = (async () => {
+    try {
+      const res = await request<{ key: string; image: string }>({ url: '/auth/captcha', silent })
+      captchaKey.value = res.key
+      captchaImg.value = res.image
+      captchaExpiresAt = Date.now() + CAPTCHA_FRESHNESS_MS
+      scheduleCaptchaExpiry()
+      return true
+    } catch {
+      // Keep the captcha empty so an old or uncertain challenge cannot be submitted.
+      return false
+    } finally {
+      captchaRefreshPromise = null
+    }
+  })()
+  return captchaRefreshPromise
+}
+
+function refreshCaptchaWithNotice(showFailure: boolean): Promise<boolean> {
+  captchaFailureNoticeRequested = captchaFailureNoticeRequested || showFailure
+  if (captchaReplacementNoticePromise) return captchaReplacementNoticePromise
+  captchaReplacementNoticePromise = (async () => {
+    try {
+      const refreshed = await refreshCaptcha(true)
+      if (captchaPageVisible && isPhoneRegistration()) {
+        if (refreshed) {
+          uni.showToast({ title: t('registrationCaptchaRefreshed'), icon: 'none' })
+        } else if (captchaFailureNoticeRequested) {
+          uni.showToast({ title: t('registrationCaptchaLoadFailed'), icon: 'none' })
+        }
+      }
+      return refreshed
+    } finally {
+      captchaReplacementNoticePromise = null
+      captchaFailureNoticeRequested = false
+    }
+  })()
+  return captchaReplacementNoticePromise
 }
 
 async function checkKaiConfig() {
@@ -228,7 +315,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
       if (callback.error === 'identity_not_bound' && pendingKaiIntent === 'register') {
         mode.value = 'register'
         authMethod.value = 'phone'
-        if (!captchaImg.value) void refreshCaptcha()
+        syncCaptchaLifecycle(true)
         uni.showToast({ title: t('kaiRegisterContinuePhone'), icon: 'none', duration: 2600 })
         return true
       }
@@ -257,9 +344,21 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   }
 }
 
+let authenticatedNavigationStarted = false
+
 function enterAuthenticatedApp() {
+  if (authenticatedNavigationStarted) return
+  authenticatedNavigationStarted = true
+  const returnPath = consumeAuthReturnPath()
   if (hasInquiryRequestPrefill()) {
     uni.reLaunch({ url: '/pages/buy-request/index?compose=1' })
+    return
+  }
+  if (returnPath) {
+    uni.reLaunch({
+      url: returnPath,
+      fail: () => uni.reLaunch({ url: '/pages/index/index' }),
+    })
     return
   }
   uni.switchTab({
@@ -340,16 +439,31 @@ async function submit() {
   if (submitting.value) return
   if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
   if (authMethod.value === 'kai') { await submitKai(); return }
-  if (!form.phone || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
-  if (mode.value === 'register' && !form.username) { uni.showToast({ title: t('k_08b1fa13'), icon: 'none' }); return }
-  if (mode.value === 'register' && !form.captcha_code) { uni.showToast({ title: t('请输入验证码'), icon: 'none' }); return }
+  const isRegistration = mode.value === 'register'
+  const normalizedPhone = form.phone.trim()
+  const registrationUsername = form.username.trim()
+  const registrationInviteCode = form.invite_code.trim().toUpperCase()
+  if (!normalizedPhone || !form.password) { uni.showToast({ title: t('pleaseComplete'), icon: 'none' }); return }
+  if (!/^1\d{10}$/.test(normalizedPhone)) { uni.showToast({ title: t('请输入正确手机号'), icon: 'none' }); return }
+  if (isRegistration && (registrationUsername.length < 2 || registrationUsername.length > 64)) { uni.showToast({ title: t('registrationUsernameLength'), icon: 'none' }); return }
+  if (isRegistration && (form.password.length < 6 || form.password.length > 64)) { uni.showToast({ title: t('registrationPasswordLength'), icon: 'none' }); return }
+  if (isRegistration && registrationInviteCode.length > 16) { uni.showToast({ title: t('registrationInviteCodeLength'), icon: 'none' }); return }
+  if (isRegistration && !hasFreshCaptcha()) {
+    submitting.value = true
+    await refreshCaptchaWithNotice(true)
+    submitting.value = false
+    return
+  }
+  if (isRegistration && !form.captcha_code) { uni.showToast({ title: t('请输入验证码'), icon: 'none' }); return }
   submitting.value = true
   try {
-    if (mode.value === 'login') await userStore.login(form.phone, form.password)
-    else await userStore.register(form.username, form.phone, form.password, form.invite_code || undefined, captchaKey.value, form.captcha_code)
+    if (!isRegistration) await userStore.login(normalizedPhone, form.password)
+    else await userStore.register(registrationUsername, normalizedPhone, form.password, registrationInviteCode || undefined, captchaKey.value, form.captcha_code)
     uni.showToast({ title: t('success'), icon: 'success' })
     setTimeout(enterAuthenticatedApp, 500)
-  } catch { /* request toast */ }
+  } catch {
+    if (isRegistration) await refreshCaptcha(true)
+  }
   submitting.value = false
 }
 
@@ -358,11 +472,19 @@ onLoad((options) => {
 })
 
 onShow(() => {
+  captchaPageVisible = true
   if (userStore.isLogin) {
+    stopCaptchaExpiryTimer()
     setTimeout(enterAuthenticatedApp, 800)
     return
   }
+  syncCaptchaLifecycle(true)
   probeKaiReturnCallback()
+})
+
+onHide(() => {
+  captchaPageVisible = false
+  stopCaptchaExpiryTimer()
 })
 
 onMounted(() => {
@@ -370,6 +492,8 @@ onMounted(() => {
   void checkKaiConfig()
 })
 onUnmounted(() => {
+  captchaPageVisible = false
+  stopCaptchaExpiryTimer()
   unregisterKaiRuntimeListener()
   stopKaiReturnProbe()
 })

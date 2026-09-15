@@ -44,8 +44,8 @@ async function onSubmit() {
   submitting.value = true
   try {
     await userApi.changePassword(form.old_password, form.new_password)
+    void userStore.signOut()
     uni.showToast({ title: t('修改成功'), icon: 'success' })
-    userStore.logout()
     setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 800)
   } catch { /* */ }
   submitting.value = false

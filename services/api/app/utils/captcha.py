@@ -1,99 +1,176 @@
-"""图形验证码：生成base64图片 + 存储验证码"""
-import random
-import string
+"""图形验证码：生成不可直接读取文本节点的 PNG 图片并存储答案。"""
 import base64
 import io
+import secrets
 import time
-import hashlib
-import os
+from threading import Lock
 
-# 简易图形验证码生成（纯Python，不依赖PIL）
-# 生成SVG格式的验证码图片，转base64
+from PIL import Image, ImageDraw, ImageFont
 
-CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire}
+CAPTCHA_STORE: dict[str, dict] = {}  # key -> {code, expire, failures}
 CAPTCHA_EXPIRE = 300  # 5分钟过期
+CAPTCHA_MAX_FAILURES = 5
+CAPTCHA_KEY_INPUT_MAX_LENGTH = 64
+CAPTCHA_CODE_INPUT_MAX_LENGTH = 6
+_CAPTCHA_LOCK = Lock()
+_RNG = secrets.SystemRandom()
+_CAPTCHA_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+_IMAGE_SIZE = (120, 50)
+_RENDER_SCALE = 2
 
 
 def _generate_code(length: int = 4) -> str:
     """生成4位验证码（字母+数字，排除易混淆字符）"""
-    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return "".join(random.choices(chars, k=length))
+    return "".join(secrets.choice(_CAPTCHA_CHARS) for _ in range(length))
 
 
-def _make_svg(code: str) -> str:
-    """生成SVG验证码图片"""
-    w, h = 120, 50
-    # 背景色
-    bg_r = random.randint(230, 245)
-    bg_g = random.randint(230, 245)
-    bg_b = random.randint(230, 245)
-    # 干扰线
-    lines = []
+def _scaled(value: int) -> int:
+    return value * _RENDER_SCALE
+
+
+def _random_color(low: int, high: int) -> tuple[int, int, int]:
+    return tuple(_RNG.randint(low, high) for _ in range(3))
+
+
+def _fit_layer_position(
+    x: int,
+    y: int,
+    layer: Image.Image,
+    canvas_size: tuple[int, int],
+) -> tuple[int, int]:
+    """把图层的不透明像素限制在画布内，透明边距仍可越界。"""
+    opaque_bounds = layer.getchannel("A").getbbox()
+    if not opaque_bounds:
+        return x, y
+    left, top, right, bottom = opaque_bounds
+    canvas_width, canvas_height = canvas_size
+    return (
+        min(max(x, -left), canvas_width - right),
+        min(max(y, -top), canvas_height - bottom),
+    )
+
+
+def _make_png(code: str) -> bytes:
+    """把验证码栅格化为 PNG；返回内容不再含可正则提取的文本节点。"""
+    width, height = (_scaled(value) for value in _IMAGE_SIZE)
+    image = Image.new("RGB", (width, height), _random_color(235, 248))
+    draw = ImageDraw.Draw(image)
+
+    # 先画浅色干扰线，避免遮住主体字符。
     for _ in range(4):
-        x1, y1 = random.randint(0, w), random.randint(0, h)
-        x2, y2 = random.randint(0, w), random.randint(0, h)
-        r, g, b = random.randint(100, 180), random.randint(100, 180), random.randint(100, 180)
-        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="rgb({r},{g},{b})" stroke-width="1.5"/>')
-    # 干扰点
-    dots = []
-    for _ in range(20):
-        x, y = random.randint(0, w), random.randint(0, h)
-        dots.append(f'<circle cx="{x}" cy="{y}" r="1" fill="rgb({random.randint(100,200)},{random.randint(100,200)},{random.randint(100,200)})"/>')
-    # 文字（每个字符不同颜色和旋转）
-    texts = []
-    total_w = 0
-    char_w = 26
-    start_x = (w - char_w * len(code)) // 2 + 8
-    for i, ch in enumerate(code):
-        x = start_x + i * char_w
-        y = random.randint(28, 38)
-        rot = random.randint(-15, 15)
-        r = random.randint(20, 80)
-        g = random.randint(20, 80)
-        b = random.randint(20, 80)
-        texts.append(f'<text x="{x}" y="{y}" font-size="28" font-weight="bold" fill="rgb({r},{g},{b})" transform="rotate({rot} {x} {y})" font-family="Arial">{ch}</text>')
+        draw.line(
+            (
+                _RNG.randint(0, width - 1),
+                _RNG.randint(0, height - 1),
+                _RNG.randint(0, width - 1),
+                _RNG.randint(0, height - 1),
+            ),
+            fill=_random_color(135, 200),
+            width=_scaled(_RNG.randint(1, 2)),
+        )
 
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}">
-<rect width="{w}" height="{h}" fill="rgb({bg_r},{bg_g},{bg_b})"/>
-{"".join(lines)}
-{"".join(dots)}
-{"".join(texts)}
-</svg>'''
-    return svg
+    font = ImageFont.load_default(size=_scaled(28))
+    slot_width = width / max(len(code), 1)
+    for index, character in enumerate(code):
+        glyph = Image.new("RGBA", (_scaled(38), _scaled(44)), (0, 0, 0, 0))
+        glyph_draw = ImageDraw.Draw(glyph)
+        bounds = glyph_draw.textbbox((0, 0), character, font=font)
+        glyph_width = bounds[2] - bounds[0]
+        glyph_height = bounds[3] - bounds[1]
+        glyph_draw.text(
+            (
+                (glyph.width - glyph_width) / 2 - bounds[0],
+                (glyph.height - glyph_height) / 2 - bounds[1],
+            ),
+            character,
+            font=font,
+            fill=(*_random_color(15, 90), 255),
+        )
+        rotated = glyph.rotate(
+            _RNG.randint(-14, 14),
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+        )
+        center_x = int(slot_width * (index + 0.5))
+        x = center_x - rotated.width // 2 + _scaled(_RNG.randint(-2, 2))
+        y = (height - rotated.height) // 2 + _scaled(_RNG.randint(-2, 2))
+        x, y = _fit_layer_position(x, y, rotated, (width, height))
+        image.paste(rotated, (x, y), rotated)
+
+    # 少量点和细线叠在字符上，增加自动识别成本但保持肉眼清晰。
+    draw = ImageDraw.Draw(image)
+    for _ in range(45):
+        x = _RNG.randint(0, width - 1)
+        y = _RNG.randint(0, height - 1)
+        radius = _RNG.randint(1, _scaled(1))
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=_random_color(100, 190))
+    for _ in range(2):
+        draw.line(
+            (
+                0,
+                _RNG.randint(_scaled(8), height - _scaled(8)),
+                width - 1,
+                _RNG.randint(_scaled(8), height - _scaled(8)),
+            ),
+            fill=_random_color(100, 175),
+            width=_scaled(1),
+        )
+
+    image = image.resize(_IMAGE_SIZE, Image.Resampling.LANCZOS)
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=True, compress_level=9)
+    return output.getvalue()
 
 
 def create_captcha() -> dict:
-    """生成验证码，返回 {key, image_base64}"""
+    """生成验证码，返回兼容原客户端的 {key, image}。"""
     code = _generate_code()
-    key = hashlib.md5((code + str(time.time()) + os.urandom(8).hex()).encode()).hexdigest()[:24]
-    svg = _make_svg(code)
-    svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("utf-8")
-    # 存储
-    CAPTCHA_STORE[key] = {"code": code, "expire": time.time() + CAPTCHA_EXPIRE}
-    # 清理过期
-    _cleanup()
-    return {"key": key, "image": f"data:image/svg+xml;base64,{svg_b64}"}
+    key = secrets.token_hex(12)
+    image_b64 = base64.b64encode(_make_png(code)).decode("ascii")
+    now = time.time()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(now)
+        CAPTCHA_STORE[key] = {
+            "code": code,
+            "expire": now + CAPTCHA_EXPIRE,
+            "failures": 0,
+        }
+    return {"key": key, "image": f"data:image/png;base64,{image_b64}"}
 
 
 def verify_captcha(key: str, code: str) -> bool:
-    """验证验证码"""
-    _cleanup()
-    item = CAPTCHA_STORE.get(key)
-    if not item:
+    """验证验证码，并限制同一个挑战可承受的错误次数。"""
+    if (
+        not key
+        or len(key) > CAPTCHA_KEY_INPUT_MAX_LENGTH
+        or not code
+        or len(code) > CAPTCHA_CODE_INPUT_MAX_LENGTH
+    ):
         return False
-    if time.time() > item["expire"]:
+    normalized_code = code.upper().strip()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(time.time())
+        item = CAPTCHA_STORE.get(key)
+        if not item:
+            return False
+        # 不区分大小写；正确验证码仅允许被消费一次。
+        if item["code"].upper() != normalized_code:
+            item["failures"] = int(item.get("failures", 0)) + 1
+            if item["failures"] >= CAPTCHA_MAX_FAILURES:
+                CAPTCHA_STORE.pop(key, None)
+            return False
         del CAPTCHA_STORE[key]
-        return False
-    # 不区分大小写
-    if item["code"].upper() == code.upper().strip():
-        del CAPTCHA_STORE[key]  # 验证后删除
         return True
-    return False
 
 
 def _cleanup():
     """清理过期验证码"""
-    now = time.time()
+    with _CAPTCHA_LOCK:
+        _cleanup_locked(time.time())
+
+
+def _cleanup_locked(now: float) -> None:
+    """在持有验证码锁时清理过期记录。"""
     expired = [k for k, v in CAPTCHA_STORE.items() if now > v["expire"]]
     for k in expired:
-        del CAPTCHA_STORE[k]
+        CAPTCHA_STORE.pop(k, None)

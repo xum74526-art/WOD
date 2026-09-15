@@ -15,9 +15,9 @@ export type MobileBuyRequest = {
   currency: string;
   region?: string;
   billing_mode?: string;
-  requirements: Record<string, unknown>;
+  requirements: MobileBuyRequestRequirements;
   contact?: string;
-  phone?: string;
+  phone?: string | null;
   status: string;
   quote_count: number;
   is_own?: boolean;
@@ -27,6 +27,11 @@ export type MobileBuyRequest = {
   created_at?: string;
   updated_at?: string;
   legacy: boolean;
+};
+
+export type MobileBuyRequestRequirements = Record<string, unknown> & {
+  note?: unknown;
+  remark?: unknown;
 };
 
 export type MobileBuyQuoteRevision = {
@@ -127,19 +132,24 @@ export type MobileBuyQuoteInput = {
 
 export type MobileBuyRequestSummary = { active: number; new_quotes: number; pending_confirmation: number };
 
+export type MobileBuyRequestInput = Record<string, unknown> & {
+  client_request_id: string;
+};
+
 export function getMobileBuyRequestSummary() {
   return apiRequest<MobileBuyRequestSummary>(path("/buy-requests/summary"));
 }
 
-export function listMobileBuyRequests(type: "online" | "offline", view: "buyer" | "seller") {
-  return apiRequest<MobileBuyRequest[]>(path(`/buy-requests?request_type=${type}&view=${view}`));
+export function listMobileBuyRequests(type: "online" | "offline", view: "buyer" | "seller", quotedOnly = false) {
+  const quotedQuery = view === "seller" && quotedOnly ? "&quoted_only=true" : "";
+  return apiRequest<MobileBuyRequest[]>(path(`/buy-requests?request_type=${type}&view=${view}${quotedQuery}`));
 }
 
 export function getMobileBuyRequest(id: number) {
   return apiRequest<MobileBuyRequestDetail>(path(`/buy-requests/${id}`));
 }
 
-export function createMobileBuyRequest(input: Record<string, unknown>) {
+export function createMobileBuyRequest(input: MobileBuyRequestInput) {
   return apiRequest<MobileBuyRequest>(path("/buy-requests"), { method: "POST", body: JSON.stringify(input) });
 }
 
@@ -155,8 +165,11 @@ export function withdrawMobileBuyQuote(requestId: number, quoteId: number) {
   return apiRequest<{ request_id: number; quote_id: number; status: string }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/withdraw`), { method: "POST" });
 }
 
-export function selectMobileBuyQuote(requestId: number, quoteId: number) {
-  return apiRequest<{ request_id: number; quote_id: number; deal_id?: number; deal?: MobileBuyRequestDeal; status: string; quote_status: string; commerce_mode: "direct_trade" | "matchmaking" | "history_only" }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/select`), { method: "POST" });
+export function selectMobileBuyQuote(requestId: number, quoteId: number, expectedRevisionId: number) {
+  return apiRequest<{ request_id: number; quote_id: number; deal_id?: number; deal?: MobileBuyRequestDeal; status: string; quote_status: string; commerce_mode: "direct_trade" | "matchmaking" | "history_only" }>(path(`/buy-requests/${requestId}/quotes/${quoteId}/select`), {
+    method: "POST",
+    body: JSON.stringify({ expected_revision_id: expectedRevisionId }),
+  });
 }
 
 export function confirmMobileBuyRequestDeal(requestId: number, dealId: number) {

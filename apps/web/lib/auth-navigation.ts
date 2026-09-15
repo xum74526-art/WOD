@@ -25,3 +25,10 @@ export function safeReturnPath(value: unknown): string {
 export function loginHref(returnTo: string) {
   return `/login?return_to=${encodeURIComponent(safeReturnPath(returnTo))}`;
 }
+
+export function locationReturnPath(location: {
+  pathname: string;
+  search: string;
+}) {
+  return safeReturnPath(`${location.pathname}${location.search}`);
+}

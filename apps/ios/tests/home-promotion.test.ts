@@ -39,13 +39,26 @@ test('iOS homepage app promotions use approved local assets and real internal ro
 })
 
 test('iOS matching promotion replaces wallet messaging and opens request composition', () => {
+  const hourlyPromotion = HOME_PROMOTIONS[0]
   const requestPromotion = HOME_PROMOTIONS[2]
+  assert.equal(hourlyPromotion?.titleKey, 'homePromoHourlyTitle')
+  assert.equal(hourlyPromotion?.descriptionKey, 'homePromoHourlyDescription')
+  assert.equal(HOME_NOTICES[0]?.textKey, 'homeNoticeHourly')
   assert.equal(requestPromotion?.route, '/pages/buy-request/index?compose=1')
   assert.equal(requestPromotion?.titleKey, 'homePromoRequestTitle')
   assert.match(i18n, /homePromoRequestKicker: 'ZTW MATCHING'/)
   assert.match(i18n, /homePromoRequestTitle: '发布算力需求'/)
   assert.match(i18n, /homePromoRequestAction: '提交需求'/)
   assert.match(i18n, /homePromoRequestTitle: 'Post Compute Request'/)
+  assert.match(i18n, /homePromoHourlyTitle: '按小时询价算力'/)
+  assert.match(i18n, /homePromoHourlyDescription: '填写数量与时长，提交需求后沟通方案'/)
+  assert.match(i18n, /homeNoticeHourly: '可提交按小时算力需求'/)
+  assert.match(i18n, /homePromoHourlyTitle: 'Request Hourly Compute'/)
+  assert.match(i18n, /homePromoHourlyDescription: 'Choose quantity and duration, then submit your requirements\.'/)
+  assert.match(i18n, /homeNoticeHourly: 'Hourly compute requests are available'/)
+  assert.doesNotMatch(i18n, /homePromoHourlyTitle: '(?:按小时购买算力|Buy Compute by the Hour)'/)
+  assert.doesNotMatch(i18n, /homePromoHourlyDescription: '(?:新 KAI 商品按小时计费|New KAI listings are billed hourly\.)'/)
+  assert.doesNotMatch(i18n, /homeNoticeHourly: '(?:新 KAI 商品按小时购买|New KAI products are available by the hour)'/)
   assert.doesNotMatch(i18n, /homePromoWallet(?:Kicker|Title|Description|Action|ImageAlt)/)
 })
 

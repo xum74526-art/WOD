@@ -61,6 +61,7 @@
         </view>
 
         <text class="verification-notice">{{ t('recoveryEmailVerificationNotice') }}</text>
+        <text class="privacy-hint">{{ t('recoveryEmailPrivacyHint') }}</text>
         <view v-if="requestError" class="request-error" role="alert">{{ requestError }}</view>
         <button class="submit" :loading="submitting" :disabled="!canSubmit" @tap="submitVerification">
           {{ t(submitting ? 'recoveryEmailSending' : status?.verified ? 'recoveryEmailChangeAction' : 'recoveryEmailSendAction') }}
@@ -210,7 +211,7 @@ onUnload(leavePage)
 .status-badge.verified { color: var(--up); background: var(--up-soft); }
 .status-copy, .verified-email { display: block; margin-top: 24rpx; font-size: 28rpx; line-height: 1.55; }
 .verified-email { color: var(--text); font-weight: 600; word-break: break-all; }
-.muted, .form-hint, .verification-notice { color: var(--text-sub); }
+.muted, .form-hint, .verification-notice, .privacy-hint { color: var(--text-sub); }
 .error-copy { color: var(--down); }
 .retry { width: auto; margin: 20rpx 0 0; padding: 12rpx 24rpx; color: var(--primary); background: var(--primary-soft); border-radius: 999rpx; font-size: 24rpx; line-height: 1.4; }
 .retry::after, .submit::after { border: none; }
@@ -225,6 +226,7 @@ onUnload(leavePage)
 .field-input { box-sizing: border-box; width: 100%; height: 88rpx; padding: 0 24rpx; color: var(--text); background: var(--bg); border: 1rpx solid var(--border); border-radius: 14rpx; font-size: 28rpx; }
 .placeholder { color: var(--text-dim); }
 .verification-notice { display: block; margin-top: 24rpx; font-size: 23rpx; line-height: 1.65; }
+.privacy-hint { display: block; margin-top: 12rpx; color: var(--text-dim); font-size: 21rpx; line-height: 1.55; }
 .submit { margin-top: 28rpx; padding: 25rpx; color: #fff; background: var(--primary); border-radius: 16rpx; font-size: 28rpx; font-weight: 600; line-height: 1.4; }
 .submit[disabled] { opacity: .45; }
 </style>
