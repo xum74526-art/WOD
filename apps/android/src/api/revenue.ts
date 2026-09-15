@@ -23,12 +23,16 @@ export interface RevenueRecord {
   created_at?: string
 }
 
+export interface RevenueChartOptions {
+  silent?: boolean
+}
+
 export function getRevenueSummary() {
   return request<RevenueSummary>({ url: '/revenue' })
 }
 
-export function getRevenueChart(rangeDays: RevenueRange | number = 30) {
-  return request<RevenuePoint[]>({ url: '/revenue/chart', data: { range_days: rangeDays } })
+export function getRevenueChart(rangeDays: RevenueRange | number = 30, options: RevenueChartOptions = {}) {
+  return request<RevenuePoint[]>({ url: '/revenue/chart', data: { range_days: rangeDays }, silent: options.silent })
 }
 
 export function getRevenueRecords() {

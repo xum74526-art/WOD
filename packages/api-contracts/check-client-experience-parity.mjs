@@ -374,6 +374,10 @@ const mirroredMobileFiles = [
   'src/config/home-promotions.ts',
   'src/components/HomePromoCarousel.vue',
   'src/utils/buy-request-requirements.ts',
+  'src/api/revenue.ts',
+  'src/pages/asset/detail.vue',
+  'src/utils/asset-detail-requests.ts',
+  'tests/asset-detail-resilience.test.ts',
 ]
 for (const relative of mirroredMobileFiles) {
   const android = source(path.join('apps/android', relative)).replaceAll('\r\n', '\n')
