@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getProducts } from '@/api/gpu'
 import { getMarketRanking, type MarketRankingItem } from '@/api/market'
@@ -195,9 +195,13 @@ const regions = [
   { code: 'northwest_china', name: 'northwest' },
   { code: 'southwest_china', name: 'southwest' },
 ]
-const sorts = [
-  { key: 'default', label: 'hotSort' },
-]
+const sorts = computed(() => commerce.directTradeEnabled
+  ? [
+      { key: 'default', label: 'hotSort' },
+      { key: 'price_asc', label: 'sortPriceUp' },
+      { key: 'price_desc', label: 'sortPriceDown' },
+    ]
+  : [{ key: 'default', label: 'hotSort' }])
 
 async function load(reset = false) {
   if (!reset && (loading.value || finished.value)) return
@@ -243,6 +247,10 @@ onShow(() => {
   i18n.updateTabBar()
   const storedKeyword = uni.getStorageSync('wod-market-keyword')
   let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= 30_000
+  if (!commerce.directTradeEnabled && sort.value !== 'default') {
+    sort.value = 'default'
+    shouldReload = true
+  }
   if (storedKeyword) {
     keyword.value = String(storedKeyword)
     uni.removeStorageSync('wod-market-keyword')

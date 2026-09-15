@@ -377,6 +377,32 @@ const commonCapabilities = [
       },
     ],
   },
+  {
+    name: 'mobile market sort options',
+    evidence: ['android', 'ios'].map(client => ({
+      client,
+      file: `apps/${client}/src/pages/market/index.vue`,
+      patterns: [
+        'const sorts = computed(() => commerce.directTradeEnabled',
+        "{ key: 'price_asc', label: 'sortPriceUp' }",
+        "{ key: 'price_desc', label: 'sortPriceDown' }",
+        "if (!commerce.directTradeEnabled && sort.value !== 'default')",
+      ],
+    })),
+  },
+  {
+    name: 'mobile product inquiry login continuation',
+    evidence: ['android', 'ios'].map(client => ({
+      client,
+      file: `apps/${client}/src/pages/product/detail.vue`,
+      patterns: [
+        "source: current.market_source || current.seller_type || 'wod'",
+        "region: current.region_code || current.region_name || current.city || ''",
+        "const target = userStore.isLogin ? '/pages/buy-request/index?compose=1' : '/pages/login/index'",
+        'nav(target)',
+      ],
+    })),
+  },
 ]
 
 const violations = []
