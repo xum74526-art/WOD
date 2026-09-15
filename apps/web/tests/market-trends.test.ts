@@ -22,12 +22,12 @@ test("trend dashboard renders server data without an immediate duplicate catalog
 
   assert.match(panel, /initialData \? "ready" : "loading"/);
   assert.match(panel, /if \(!initialData\) void load\(false, true\)/);
-  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 60_000/);
+  assert.match(panel, /MARKET_CATALOG_REFRESH_MS = 300_000/);
   assert.match(panel, /if \(showLoading\) setStatus\("loading"\)/);
   assert.match(serverData, /export async function getInitialMarketDashboard/);
   assert.match(serverData, /unstable_cache\(/);
-  assert.match(serverData, /"ztw-public-market-dashboard-v3"/);
-  assert.match(serverData, /revalidate: 30/);
+  assert.match(serverData, /"ztw-public-market-dashboard-v4"/);
+  assert.match(serverData, /revalidate: 300/);
   assert.match(serverData, /tags: \["public-market-dashboard"\]/);
   assert.match(serverData, /initialMarketDashboardBuildsInFlight/);
   assert.match(serverData, /buildInitialMarketDashboardSingleFlight/);
@@ -35,8 +35,8 @@ test("trend dashboard renders server data without an immediate duplicate catalog
   assert.match(serverData, /initialMarketDashboardBuildsInFlight\.delete\(apiOrigin\)/);
   assert.match(serverData, /unstable_cache\(\s*buildInitialMarketDashboardSingleFlight/);
   assert.match(serverData, /readCachedInitialMarketDashboard\(resolveApiOrigin\(\)\)/);
-  assert.match(serverData, /INITIAL_MARKET_HISTORY_TTL_MS = 120_000/);
-  assert.match(serverData, /INITIAL_MARKET_HISTORY_STALE_MS = 300_000/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_TTL_MS = 300_000/);
+  assert.match(serverData, /INITIAL_MARKET_HISTORY_STALE_MS = 600_000/);
   assert.match(serverData, /INITIAL_MARKET_HISTORY_RETRY_DELAY_MS = 5_000/);
   assert.match(serverData, /INITIAL_MARKET_HISTORY_CACHE_LIMIT = 256/);
   assert.match(serverData, /createStaleTtlCache<\[string, string, string\], MarketHistoryPoint\[]>/);
@@ -57,7 +57,7 @@ test("trend dashboard renders server data without an immediate duplicate catalog
   assert.match(serverData, /compactMarketHistories\(data\.map\(\(item\) => item\.history\)\)/);
   assert.match(serverData, /history_dates: compactHistories\.historyDates/);
   assert.match(panel, /expandMarketHistory\(initialData\?\.history_dates \?\? \[\], historyValues\)/);
-  assert.match(serverData, /cachedCanonicalData\("\/api\/market\/ranking", 30, apiOrigin\)/);
+  assert.match(serverData, /cachedCanonicalData\("\/api\/market\/ranking", 300, apiOrigin\)/);
   assert.match(serverData, /uncachedCanonicalData\(`\/api\/market\/prices\/candles\?\$\{query\}`, apiOrigin\)/);
 });
 
@@ -75,8 +75,8 @@ test("public market summary coalesces refreshes without caching incomplete histo
   const source = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
   const summaryBuilder = source.slice(source.indexOf("async function buildMarketSummary"), source.indexOf("const readPublicMarketSummary"));
 
-  assert.match(source, /PUBLIC_MARKET_SUMMARY_TTL_MS = 60_000/);
-  assert.match(source, /PUBLIC_MARKET_SUMMARY_STALE_MS = 120_000/);
+  assert.match(source, /PUBLIC_MARKET_SUMMARY_TTL_MS = 300_000/);
+  assert.match(source, /PUBLIC_MARKET_SUMMARY_STALE_MS = 600_000/);
   assert.match(source, /PUBLIC_MARKET_SUMMARY_RETRY_DELAY_MS = 5_000/);
   assert.match(source, /createStaleTtlCache<\s*\[NextRequest, string, string\]/);
   assert.match(source, /JSON\.stringify\(\[apiOrigin, locale\]\)/);
@@ -88,7 +88,7 @@ test("public market summary coalesces refreshes without caching incomplete histo
   assert.match(source, /text\(candleData\.range\) !== "90d"/);
   assert.match(source, /if \(history\.length !== candleRows\.length\) complete = false/);
   assert.match(source, /shouldStore: \(payload\) => payload\.complete/);
-  assert.match(source, /return publicApiSuccess\(payload\.data, payload\.meta\)/);
+  assert.match(source, /return publicApiSuccess\(payload\.data, payload\.meta, 300\)/);
   assert.match(summaryBuilder, /upstream\(request, "\/api\/market\/ranking", \{ auth: false \}\)/);
   assert.match(summaryBuilder, /upstream\(request, "\/api\/market\/prices\/candles", \{ query, auth: false \}\)/);
   assert.doesNotMatch(summaryBuilder, /revalidate:/);

@@ -70,9 +70,9 @@ const RANGE_OPTIONS: Array<{ value: MarketChartRange }> = [
   { value: "30d" },
   { value: "90d" },
 ];
-const LATEST_REFRESH_MS = 10_000;
+const LATEST_REFRESH_MS = 300_000;
 const HISTORY_REFRESH_MS: Record<MarketChartRange, number> = {
-  "24h": 30_000,
+  "24h": 300_000,
   "7d": 300_000,
   "30d": 300_000,
   "90d": 300_000,
@@ -343,7 +343,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
     [historicalCandles, payloadReference],
   );
 
-  // The independently polled endpoint owns the page-level 10-second quote,
+  // The independently polled endpoint owns the current publication quote,
   // but may become this chart's display baseline only when OHLC is absent.
   // Comparability never transfers between the two responses.
   const references = useMemo(

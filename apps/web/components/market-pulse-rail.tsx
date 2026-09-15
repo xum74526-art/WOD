@@ -30,7 +30,7 @@ export function MarketPulseRail({ initialData = null }: { initialData?: PublicMa
   useEffect(() => {
     if (initialMarkets.length) return;
     let active = true;
-    publicApiEnvelopeRequest<PulseResponse["data"], NonNullable<PulseResponse["meta"]>>("/api/v1/public/market/ranking", 30_000)
+    publicApiEnvelopeRequest<PulseResponse["data"], NonNullable<PulseResponse["meta"]>>("/api/v1/public/market/ranking", 300_000)
       .then((payload) => {
         if (!active) return;
         const available = (payload.data ?? []).filter((item) => item.median_price_card_hours > 0).slice(0, 4);

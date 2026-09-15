@@ -193,7 +193,7 @@ function dashboardSource(value: unknown) {
 
 export async function getInitialMarketRanking(): Promise<PublicMarketRanking | null> {
   try {
-    const raw = object(await cachedCanonicalData("/api/market/ranking", 30));
+    const raw = object(await cachedCanonicalData("/api/market/ranking", 300));
     const data = array(raw.items).map(rankingItem);
     return { data, meta: { observed_at: text(raw.server_time), count: data.length, source: "canonical-api" } };
   } catch {
@@ -203,7 +203,7 @@ export async function getInitialMarketRanking(): Promise<PublicMarketRanking | n
 
 export async function getInitialPublicProducts(): Promise<PublicProduct[] | null> {
   const results = await Promise.allSettled([
-    cachedCanonicalData("/api/products?page=1&page_size=100&market_source=kai&representative=true", 15),
+    cachedCanonicalData("/api/products?page=1&page_size=100&market_source=kai&representative=true", 300),
     cachedCanonicalData("/api/products?page=1&page_size=100&market_source=wod", 15),
   ]);
   const available = results
@@ -225,7 +225,7 @@ export async function getInitialGpuTrend(ranking: PublicMarketRanking | null): P
       billing_mode: "ondemand",
       sources: "kai",
     });
-    const raw = object(await cachedCanonicalData(`/api/market/prices/candles?${query}`, 120));
+    const raw = object(await cachedCanonicalData(`/api/market/prices/candles?${query}`, 300));
     const history = array(raw.candles).map((point) => ({
       date: text(point.start_time),
       median: number(point.close_price_card_hours),
@@ -278,8 +278,8 @@ async function loadInitialMarketHistory(
   return history;
 }
 
-const INITIAL_MARKET_HISTORY_TTL_MS = 120_000;
-const INITIAL_MARKET_HISTORY_STALE_MS = 300_000;
+const INITIAL_MARKET_HISTORY_TTL_MS = 300_000;
+const INITIAL_MARKET_HISTORY_STALE_MS = 600_000;
 const INITIAL_MARKET_HISTORY_RETRY_DELAY_MS = 5_000;
 const INITIAL_MARKET_HISTORY_CACHE_LIMIT = 256;
 const readInitialMarketHistory = createStaleTtlCache<[string, string, string], MarketHistoryPoint[]>({
@@ -293,8 +293,8 @@ const readInitialMarketHistory = createStaleTtlCache<[string, string, string], M
 
 async function buildInitialMarketDashboard(apiOrigin: string): Promise<InitialMarketDashboard> {
   const [rankingValue, modelsValue, sourcesValue] = await Promise.all([
-    cachedCanonicalData("/api/market/ranking", 30, apiOrigin),
-    cachedCanonicalData("/api/market/models", 30, apiOrigin),
+    cachedCanonicalData("/api/market/ranking", 300, apiOrigin),
+    cachedCanonicalData("/api/market/models", 300, apiOrigin),
     cachedCanonicalData("/api/market/sources/status", 30, apiOrigin).catch(() => ({ items: [] })),
   ]);
   const ranking = object(rankingValue);
@@ -353,8 +353,8 @@ async function buildInitialMarketDashboardSingleFlight(apiOrigin: string): Promi
 
 const readCachedInitialMarketDashboard = unstable_cache(
   buildInitialMarketDashboardSingleFlight,
-  ["ztw-public-market-dashboard-v3"],
-  { revalidate: 30, tags: ["public-market-dashboard"] },
+  ["ztw-public-market-dashboard-v4"],
+  { revalidate: 300, tags: ["public-market-dashboard"] },
 );
 
 export async function getInitialMarketDashboard(): Promise<InitialMarketDashboard | null> {

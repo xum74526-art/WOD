@@ -44,7 +44,7 @@ const ranges: { value: RangeDays; key: string; label: string }[] = [
   { value: 90, key: "trends.range.3Months", label: "3个月" },
 ];
 const PAGE_SIZE = 15;
-const MARKET_CATALOG_REFRESH_MS = 60_000;
+const MARKET_CATALOG_REFRESH_MS = 300_000;
 
 function validHistory(item: MarketSummary) {
   return item.history.filter((point) => point.median > 0);
@@ -277,7 +277,7 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     if (showLoading) setStatus("loading");
     try {
       const [payload, modelsPayload, sourcesPayload] = await Promise.all([
-        publicApiEnvelopeRequest<MarketSummary[], MarketMeta>("/api/v1/public/market/summary", 60_000, force) as Promise<MarketResponse>,
+        publicApiEnvelopeRequest<MarketSummary[], MarketMeta>("/api/v1/public/market/summary", MARKET_CATALOG_REFRESH_MS, force) as Promise<MarketResponse>,
         getMobileMarketModels(),
         getMobileMarketSources(),
       ]);
