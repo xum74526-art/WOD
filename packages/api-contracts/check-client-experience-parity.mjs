@@ -433,6 +433,46 @@ const commonCapabilities = [
           "t('personalPurchaseRebateCardHint'",
         ],
       },
+      {
+        client,
+        file: `apps/${client}/src/pages/rebate/index.vue`,
+        patterns: [
+          "t('personalPurchaseRebateRuleBasis')",
+          "t('personalPurchaseRebateRuleConfirm')",
+          "t('personalPurchaseRebateRulePayout')",
+          "t('personalPurchaseRebateRuleExclusions')",
+          "t('monthlyRebateCapRule'",
+        ],
+      },
+    ]),
+  },
+  {
+    name: 'mobile native video playback',
+    evidence: ['android', 'ios'].flatMap(client => [
+      {
+        client,
+        file: `apps/${client}/src/utils/community-video.ts`,
+        patterns: [
+          'resolveCommunityVideoStreamUrl',
+          'runtime.video.createVideoPlayer',
+          'COMMUNITY_VIDEO_PLAYBACK_RATES',
+          'video?.playbackRate(rate)',
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/community/detail.vue`,
+        patterns: [
+          'requestTrustedPublicJson',
+          'await openCommunityVideo',
+          "uni.showLoading({ title: t('loading'), mask: true })",
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/manifest.json`,
+        patterns: ['"VideoPlayer"'],
+      },
     ]),
   },
 ]
@@ -467,7 +507,14 @@ const mirroredMobileFiles = [
   'src/pages/profile/index.vue',
   'src/pages/supplier/dashboard.vue',
   'src/pages/supplier/rebate.vue',
+  'src/pages/rebate/index.vue',
   'tests/rebate-presentation.test.ts',
+  'src/pages/index/index.vue',
+  'src/pages/market/index.vue',
+  'src/pages/product/detail.vue',
+  'src/pages/community/detail.vue',
+  'src/utils/community-video.ts',
+  'tests/community-video-playback.test.ts',
   'src/config/home-promotions.ts',
   'src/components/HomePromoCarousel.vue',
   'src/utils/buy-request-requirements.ts',

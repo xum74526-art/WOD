@@ -75,7 +75,7 @@
               </template>
               <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
                 <view class="hourly-price"><text class="pp">{{ t('inquiry') }}</text></view>
-                <text class="price-cny">{{ t('inquiryPriceHint') }}</text>
+                <text class="price-cny">{{ t('inquiryContactHintShort') }}</text>
               </template>
               <template v-else>
                 <view class="hourly-price"><text class="pp unavailable-price">{{ t('viewDetail') }}</text></view>
@@ -388,6 +388,6 @@ function markImageFailed(id: number) {
 .pbot { display: flex; justify-content: space-between; align-items: flex-end; gap: 18rpx; }
 .pp { color: var(--up); font-size: 40rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pu { color: var(--text-sub); font-size: 24rpx; }
-.buy { flex-shrink: 0; color: var(--primary); font-size: 26rpx; border: 1rpx solid var(--primary); padding: 12rpx 32rpx; border-radius: var(--radius); }
+.buy { color: var(--primary); font-size: 26rpx; border: 1rpx solid var(--primary); padding: 12rpx 32rpx; border-radius: var(--radius); }
 .buy.disabled { color: var(--text-dim); border-color: var(--border); }
 </style>

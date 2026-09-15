@@ -9,6 +9,9 @@
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
+        "modules" : {
+            "VideoPlayer" : {}
+        },
         "darkmode" : true,
         "safearea" : {
             "background" : "#FFFFFF",

@@ -63,12 +63,12 @@
         </template>
         <template v-else-if="commerce.matchmakingEnabled">
           <view class="q-item" @tap="go('/pages/buy-request/index?compose=1')">
-            <view class="q-icon"><AppIcon name="search" :size="36" /></view>
+            <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
             <text class="q-text">{{ t('submitRequirement') }}</text>
           </view>
           <view class="q-item" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myBuyRequests') }}</text>
+            <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
         <template v-else>
@@ -78,7 +78,7 @@
           </view>
           <view class="q-item" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myBuyRequests') }}</text>
+            <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
         <view class="q-item" @tap="goTab('/pages/market/index')">
@@ -202,6 +202,7 @@
             </template>
             <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
               <text class="pp">{{ t('inquiry') }}</text>
+              <text class="pu">{{ t('inquiryContactHintShort') }}</text>
               <text class="p-buy">{{ t('submitRequirement') }}</text>
             </template>
             <template v-else>

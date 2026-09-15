@@ -40,7 +40,12 @@
             "ios" : {
                 "appid" : "com.kai.wod",
                 "dSYMs" : false,
-                "urltypes" : "kai"
+                "urltypes" : "kai",
+                "privacyDescription" : {
+                    "NSPhotoLibraryUsageDescription" : "用于选择头像、身份认证资料以及要发布到算力社区的图片或视频。",
+                    "NSCameraUsageDescription" : "用于拍摄头像、身份认证资料以及要发布到算力社区的图片或视频。",
+                    "NSMicrophoneUsageDescription" : "用于录制并发布带声音的算力社区视频。"
+                }
             }
         }
     },

@@ -27,20 +27,20 @@
             <text class="pu">{{ t('perGpuHour') }}</text>
           </view>
           <view v-else class="price-primary">
-            <text class="pp merchant-price">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }}</text>
+            <text class="pp">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }}</text>
             <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
           </view>
           <text v-if="isKaiProduct" class="daily muted">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHourPerGpuHour') }}</text>
           <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
         </template>
         <template v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false">
-          <text class="price-label">{{ t('inquiryResource') }}</text>
-          <view class="price-primary"><text class="pp merchant-price">{{ t('inquiry') }}</text></view>
-          <text class="daily muted">{{ t('inquiryPriceHint') }}</text>
+          <text class="price-label">{{ t('servicePrice') }}</text>
+          <text class="pp inquiry-price">{{ t('inquiry') }}</text>
+          <text class="daily muted">{{ t('inquiryContactHint') }}</text>
         </template>
         <template v-else>
           <text class="price-label">{{ t('operationTemporarilyUnavailable') }}</text>
-          <view class="price-primary"><text class="pp merchant-price unavailable-price">{{ t('viewDetail') }}</text></view>
+          <text class="pp inquiry-price unavailable-price">{{ t('viewDetail') }}</text>
           <text class="daily muted">{{ t('dataUnavailable') }}</text>
         </template>
       </view>
@@ -135,7 +135,7 @@
         <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseQuantity' : 'requiredQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
         <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseDurationHours' : 'requiredDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
         <view v-if="commerce.directTradeEnabled" class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(directTradeCardHoursPerGpuHour(product) * hours * quantity) }} {{ t('cardHour') }}</text></view>
-        <view v-else class="row"><text class="sk">{{ t('inquiry') }}</text><text class="sv inquiry-value">{{ t('inquiryPriceHint') }}</text></view>
+        <view v-else class="row"><text class="sk">{{ t('servicePrice') }}</text><text class="sv inquiry-value">{{ t('inquiry') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ deliveryLabel }}</text></view>
       </view>
       <view v-if="canConfigure" class="risk">{{ t(commerce.directTradeEnabled ? 'usageRisk' : 'inquiryRiskHint') }}</view>
@@ -149,7 +149,7 @@
         :disabled="!canBuy"
         :unavailable-message="purchaseUnavailableText"
       />
-      <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="buy-btn" :class="{ disabled: submitting || !canSubmitInquiry }" @tap="submitInquiry">{{ t(submitting ? '处理中...' : 'submitRequirement') }}</view>
+      <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="buy-btn" :class="{ disabled: submitting || !canInquire }" @tap="submitInquiry">{{ t(submitting ? 'submitting' : 'submitRequirement') }}</view>
       <view v-else class="buy-btn disabled">{{ t('operationTemporarilyUnavailable') }}</view>
     </BottomActionBar>
   </view>
@@ -236,12 +236,12 @@ const maxQuantity = computed(() => {
   return Math.min(remaining, 99)
 })
 const canBuy = computed(() => Boolean(product.value?.purchasable === true && maxQuantity.value > 0))
-const canSubmitInquiry = computed(() => Boolean(
+const canInquire = computed(() => Boolean(
   commerce.matchmakingEnabled
   && product.value
   && product.value.inquiry_available !== false,
 ))
-const canConfigure = computed(() => commerce.directTradeEnabled ? canBuy.value : canSubmitInquiry.value)
+const canConfigure = computed(() => commerce.directTradeEnabled ? canBuy.value : canInquire.value)
 const quantityLimit = computed(() => commerce.directTradeEnabled ? Math.max(maxQuantity.value, 1) : MAX_INQUIRY_QUANTITY)
 const purchaseUnavailableText = computed(() => {
   if (!commerce.available) return t('dataUnavailable')
@@ -414,7 +414,7 @@ function quantityUnits(count: number) {
 
 function submitInquiry() {
   const current = product.value
-  if (!current || submitting.value || !canSubmitInquiry.value) return
+  if (submitting.value || !current || !canInquire.value) return
   submitting.value = true
   saveInquiryRequestPrefill({
     product_id: current.id,
@@ -459,10 +459,11 @@ function goStore() {
 .trend-card { padding: 12rpx 12rpx 4rpx; overflow: hidden; }
 .history-empty { padding: 72rpx 28rpx; color: var(--text-sub); font-size: 24rpx; text-align: center; }
 .price-box { padding: 40rpx 32rpx; margin-bottom: 24rpx; background: var(--card); border: none; box-shadow: 0 4rpx 24rpx var(--card-border); }
-.price-label { display: block; margin-bottom: 10rpx; color: var(--text-sub); font-size: 22rpx; }
+.price-label { display: block; color: var(--text-sub); font-size: 23rpx; margin-bottom: 10rpx; }
 .price-primary { display: flex; align-items: baseline; gap: 8rpx; }
 .currency { color: var(--text-sub); font-size: 28rpx; font-weight: 700; }
 .pp { color: var(--text); font-size: 56rpx; font-weight: 800; font-variant-numeric: tabular-nums; }
+.inquiry-price, .inquiry-value { color: var(--primary); }
 .merchant-price { color: var(--up); }
 .pu { color: var(--text-sub); font-size: 26rpx; }
 .daily { display: block; color: var(--up); font-size: 26rpx; margin-top: 12rpx; }
@@ -472,7 +473,6 @@ function goStore() {
 .row:last-child { border-bottom: none; }
 .sk { color: var(--text-sub); font-size: 28rpx; }
 .sv { color: var(--text); font-size: 28rpx; font-variant-numeric: tabular-nums; }
-.inquiry-value { max-width: 64%; text-align: right; line-height: 1.45; }
 .sv.stale { color: var(--down); }
 .seller-link { color: var(--primary); }
 .assurance-value { max-width: 62%; text-align: right; line-height: 1.45; }
@@ -507,7 +507,7 @@ function goStore() {
 .mode-card.active .mode-title { color: var(--primary); }
 .mode-desc { color: var(--text-sub); font-size: 22rpx; line-height: 1.5; }
 .fee { padding: 8rpx 32rpx; margin-bottom: 24rpx; }
-.rebate-estimate-hint { display: block; padding: 4rpx 0 24rpx; color: var(--text-sub); font-size: 22rpx; line-height: 1.55; }
+.rebate-estimate-note { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.55; padding: 0 8rpx 8rpx; }
 .risk { color: var(--text-dim); font-size: 24rpx; padding: 16rpx 8rpx; line-height: 1.6; }
 .buy-btn { background: var(--primary); color: #fff; text-align: center; padding: 28rpx 0; border-radius: var(--radius); font-size: 32rpx; font-weight: 600; }
 .buy-btn.disabled { opacity: 0.5; }
