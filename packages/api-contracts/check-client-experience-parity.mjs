@@ -403,6 +403,38 @@ const commonCapabilities = [
       ],
     })),
   },
+  {
+    name: 'mobile rebate presentation',
+    evidence: ['android', 'ios'].flatMap(client => [
+      {
+        client,
+        file: `apps/${client}/src/pages/supplier/dashboard.vue`,
+        patterns: ["t('supplierSalesRebateTitle')", "t('supplierSalesRebateCardHint'"],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/supplier/rebate.vue`,
+        patterns: [
+          "t('supplierSalesRebateRuleBasis')",
+          "t('supplierSalesRebateRuleTarget')",
+          "t('supplierSalesRebateRuleTopUp')",
+          "t('supplierSalesRebateRuleExclusions')",
+          "t('supplierBuyerRebateIndependent')",
+          "t('monthlyRebateCapRule'",
+        ],
+      },
+      {
+        client,
+        file: `apps/${client}/src/pages/profile/index.vue`,
+        patterns: [
+          "t('supplierSalesRebateTitle')",
+          "t('supplierSalesRebateCardHint'",
+          "t('personalPurchaseRebateTitle')",
+          "t('personalPurchaseRebateCardHint'",
+        ],
+      },
+    ]),
+  },
 ]
 
 const violations = []
@@ -432,6 +464,10 @@ const mirroredMobileFiles = [
   'tests/recovery-email-binding.test.ts',
   'src/config/profile-widgets.ts',
   'tests/profile-widgets.test.ts',
+  'src/pages/profile/index.vue',
+  'src/pages/supplier/dashboard.vue',
+  'src/pages/supplier/rebate.vue',
+  'tests/rebate-presentation.test.ts',
   'src/config/home-promotions.ts',
   'src/components/HomePromoCarousel.vue',
   'src/utils/buy-request-requirements.ts',

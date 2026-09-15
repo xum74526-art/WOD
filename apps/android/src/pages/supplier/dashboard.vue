@@ -28,33 +28,10 @@
         </view>
       </view>
 
-      <!-- 同一账号的个人购买返佣，与商家销售返佣分开统计。 -->
-      <view v-if="personalRebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
-        <view class="rb-title-row">
-          <text class="rb-title">{{ t('personalPurchaseRebate') }}</text>
-          <text v-if="personalRebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
-        </view>
-        <view class="rb-row">
-          <view class="rb-item">
-            <text class="rb-v up">{{ fmtCHn(personalRebate.pending_rebate) }}</text>
-            <text class="rb-l">{{ t('pendingExpiryRebate') }}</text>
-          </view>
-          <view class="rb-item">
-            <text class="rb-v">{{ formatNumber(personalRebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('personalPurchaseRebateTier') }}</text>
-          </view>
-          <view class="rb-item">
-            <text class="rb-v">{{ fmtCHn(personalRebate.month_spent) }}</text>
-            <text class="rb-l">{{ t('confirmedUsagePurchasesThisMonth') }}</text>
-          </view>
-        </view>
-        <text class="rb-hint">{{ tr(personalRebate.next_tier_hint) }}</text>
-      </view>
-
-      <!-- 商家销售返佣卡片 -->
+      <!-- 商家返佣卡片 -->
       <view v-if="rebate" class="card rebate-card" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('merchantSalesRebate') }}</text>
+          <text class="rb-title">{{ t('supplierSalesRebateTitle') }}</text>
           <text v-if="rebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -64,14 +41,15 @@
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ formatNumber(rebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('merchantSalesRebateTier') }}</text>
+            <text class="rb-l">{{ t('当前返还比例') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ fmtCHn(rebate.month_sales) }}</text>
-            <text class="rb-l">{{ t('confirmedSalesThisMonth') }}</text>
+            <text class="rb-l">{{ t('本月销售额') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
+        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatNumber(rebate.monthly_cap) }) }}</text>
       </view>
 
       <!-- 5模块入口 -->
@@ -138,7 +116,6 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getDashboard, getSupplierRebate, type SupplierRebate } from '@/api/supplier'
-import { getRebateSummary, type RebateSummary } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { formatNumber, fmtCH, fmtCHr, fmtCHn, toCardHours } from '@/utils/format'
 import { navigateTo as go } from '@/utils/nav'
@@ -154,20 +131,14 @@ const { t, tr } = i18n
 const userStore = useUserStore()
 const dash = ref<Awaited<ReturnType<typeof getDashboard>> | null>(null)
 const rebate = ref<SupplierRebate | null>(null)
-const personalRebate = ref<RebateSummary | null>(null)
 const loadError = ref(false)
 
 async function load() {
   loadError.value = false
-  const [dashboardResult, rebateResult, personalRebateResult] = await Promise.allSettled([
-    getDashboard(),
-    getSupplierRebate(),
-    getRebateSummary(),
-  ])
+  const [dashboardResult, rebateResult] = await Promise.allSettled([getDashboard(), getSupplierRebate()])
   dash.value = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null
   rebate.value = rebateResult.status === 'fulfilled' ? rebateResult.value : null
-  personalRebate.value = personalRebateResult.status === 'fulfilled' ? personalRebateResult.value : null
-  loadError.value = [dashboardResult, rebateResult, personalRebateResult].some((result) => result.status === 'rejected')
+  loadError.value = dashboardResult.status === 'rejected' || rebateResult.status === 'rejected'
 }
 onShow(() => load())
 async function switchBack() {
@@ -196,9 +167,9 @@ async function switchBack() {
 .hg-v { color: var(--text); font-size: 28rpx; font-weight: 700; display: block; margin-top: 4rpx; }
 .up { color: var(--up); }
 .rebate-card { padding: 28rpx 32rpx; margin: 20rpx 0; }
-.rb-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-bottom: 20rpx; }
-.rb-title { color: var(--text); font-size: 26rpx; font-weight: 700; }
-.rb-mode { color: var(--primary); background: var(--card-border); border-radius: 999rpx; padding: 6rpx 14rpx; font-size: 19rpx; }
+.rb-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-bottom: 18rpx; }
+.rb-title { color: var(--text); font-size: 28rpx; font-weight: 700; }
+.rb-mode { display: block; width: fit-content; color: var(--primary); background: var(--card-border); border-radius: 999rpx; padding: 6rpx 14rpx; font-size: 19rpx; }
 .rb-row { display: flex; }
 .rb-item { flex: 1; text-align: center; }
 .rb-item + .rb-item { border-left: 1rpx solid var(--card-border); }
@@ -206,6 +177,7 @@ async function switchBack() {
 .rb-v.up { color: var(--up); }
 .rb-l { display: block; color: var(--text-sub); font-size: 20rpx; margin-top: 6rpx; }
 .rb-hint { display: block; color: var(--primary); font-size: 22rpx; margin-top: 16rpx; text-align: center; }
+.rb-explain { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.5; margin-top: 12rpx; text-align: center; }
 .modules { display: flex; flex-wrap: wrap; gap: 16rpx; margin: 24rpx 0; }
 .mod-item { width: 31%; display: flex; flex-direction: column; align-items: center; padding: 28rpx 0; background: var(--card); border-radius: var(--radius); border: 1rpx solid var(--card-border); }
 .mod-icon { width: 80rpx; height: 80rpx; border-radius: 40rpx; background: var(--primary-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 12rpx; }

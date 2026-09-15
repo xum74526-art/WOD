@@ -62,10 +62,10 @@
         </view>
       </view>
 
-      <!-- 商家模式同时显示销售返佣和同一账号的个人购买返佣。 -->
+      <!-- 商家销售返佣：按已确认销售卡时累计，和购买返佣独立。 -->
       <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('merchantSalesRebate') }}</text>
+          <text class="rb-title">{{ t('supplierSalesRebateTitle') }}</text>
           <text v-if="supplierRebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -75,20 +75,21 @@
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ formatNumber(supplierRebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('merchantSalesRebateTier') }}</text>
+            <text class="rb-l">{{ t('k_cfc752a6') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ fmtCHn(supplierRebate.month_sales) }}</text>
-            <text class="rb-l">{{ t('confirmedSalesThisMonth') }}</text>
+            <text class="rb-l">{{ t('k_e1e32957') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(supplierRebate.next_tier_hint) }}</text>
+        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatNumber(supplierRebate.monthly_cap) }) }}</text>
       </view>
 
-      <!-- 个人购买返佣属于共享账号，个人与商家模式都可查看。 -->
+      <!-- 个人购买返佣：商家作为买家时同样适用。 -->
       <view v-if="rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
         <view class="rb-title-row">
-          <text class="rb-title">{{ t('personalPurchaseRebate') }}</text>
+          <text class="rb-title">{{ t('personalPurchaseRebateTitle') }}</text>
           <text v-if="rebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
         </view>
         <view class="rb-row">
@@ -98,14 +99,15 @@
           </view>
           <view class="rb-item">
             <text class="rb-v up">{{ formatNumber(rebate.current_rate) }}%</text>
-            <text class="rb-l">{{ t('personalPurchaseRebateTier') }}</text>
+            <text class="rb-l">{{ t('k_5bfd670e') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ fmtCHn(rebate.pending_rebate) }}</text>
-            <text class="rb-l">{{ t('pendingExpiryRebate') }}</text>
+            <text class="rb-l">{{ t('k_ec4f52f4') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
+        <text class="rb-explain">{{ t('personalPurchaseRebateCardHint', { cap: formatNumber(rebate.monthly_cap) }) }}</text>
       </view>
 
       <view v-for="group in widgetGroups" :key="group.key" class="card widget-card">
@@ -268,6 +270,7 @@ async function onSwitchRole() {
 .rb-v.up { color: var(--up); }
 .rb-l { display: block; color: var(--text-sub); font-size: 20rpx; margin-top: 6rpx; }
 .rb-hint { display: block; color: var(--primary); font-size: 22rpx; margin-top: 16rpx; text-align: center; }
+.rb-explain { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.5; margin-top: 12rpx; text-align: center; }
 .g-item { width: 25%; display: flex; flex-direction: column; align-items: center; padding: 24rpx 0; color: var(--primary); }
 .g-icon { margin-bottom: 14rpx; }
 .g-text { color: var(--text); font-size: 24rpx; text-align: center; }
