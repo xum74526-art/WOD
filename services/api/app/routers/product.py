@@ -22,7 +22,7 @@ from app.services.purchase_cycles import (
 from app.services.market_freshness import CURRENT_SOURCE_STATES, product_market_source, product_market_state, source_state
 from app.services.market_sync import utcnow
 from app.services.offer_sync import KAI_PRODUCT_DESCRIPTION
-from app.services.product_purchase import product_purchase_availability
+from app.services.product_purchase import configured_platform_fulfiller_ids, product_purchase_availability
 from app.services.product_provider import product_provider_info
 from app.services.trade_mode import (
     INQUIRY_ONLY_MESSAGE,
@@ -96,7 +96,14 @@ def _current_product_query(
     )
 
 
-def _product_out(p: Product, db: Session = None, source_states: dict[str, str] | None = None) -> dict:
+def _product_out(
+    p: Product,
+    db: Session = None,
+    source_states: dict[str, str] | None = None,
+    *,
+    platform_fulfiller_ids: set[int] | None = None,
+    suppliers: dict[int, Supplier] | None = None,
+) -> dict:
     out = ProductOut.model_validate(p).model_dump()
     # A product price is a rental quote, not evidence of compute revenue.
     # Keep revenue blank until a verified metering/settlement source is wired.
@@ -179,12 +186,20 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
         reliability = 0
     out["stability"] = round(reliability, 1) if reliability > 0 else None
     out["tags"] = []
-    out.update(product_provider_info(p, db))
+    out.update(product_provider_info(p, db, suppliers))
     interaction_mode = commerce_mode()
     inquiry_available = matchmaking_enabled()
     out["interaction_mode"] = interaction_mode
     out["inquiry_available"] = inquiry_available
-    purchasable, unavailable_reason = product_purchase_availability(p, db) if db else (False, None)
+    purchasable, unavailable_reason = (
+        product_purchase_availability(
+            p,
+            db,
+            platform_fulfiller_ids=platform_fulfiller_ids,
+            suppliers=suppliers,
+        )
+        if db else (False, None)
+    )
     effective_purchase_capacity = reported_stock
     if source == "kai":
         effective_purchase_capacity = min(
@@ -210,15 +225,47 @@ def _product_out(p: Product, db: Session = None, source_states: dict[str, str] |
     return out
 
 
+def _product_serialization_context(
+    products: list[Product],
+    db: Session,
+) -> tuple[set[int], dict[int, Supplier]]:
+    """Resolve list-wide purchase and provider facts with bounded queries."""
+
+    sources = {product_market_source(product) for product in products}
+    platform_fulfiller_ids = (
+        configured_platform_fulfiller_ids(db) if "kai" in sources else set()
+    )
+    supplier_ids = {
+        int(product.supplier_id)
+        for product in products
+        if product_market_source(product) == "wod" and product.supplier_id
+    }
+    suppliers = (
+        {
+            int(supplier.id): supplier
+            for supplier in db.query(Supplier).filter(Supplier.id.in_(supplier_ids)).all()
+        }
+        if supplier_ids else {}
+    )
+    return platform_fulfiller_ids, suppliers
+
+
 def _representative_products(
     products: list[Product],
     db: Session,
     source_states: dict[str, str],
 ) -> list[dict]:
     """Return one purchasable, lowest-price card per exact GPU/VRAM identity."""
+    platform_fulfiller_ids, suppliers = _product_serialization_context(products, db)
     representatives: dict[str, dict] = {}
     for product in products:
-        item = _product_out(product, db, source_states)
+        item = _product_out(
+            product,
+            db,
+            source_states,
+            platform_fulfiller_ids=platform_fulfiller_ids,
+            suppliers=suppliers,
+        )
         # KAI is a quote catalogue, so one lowest-price representative per
         # exact GPU/VRAM identity is useful.  Every merchant listing is an
         # independent seller offer and must remain visible even when hardware
@@ -306,8 +353,19 @@ def list_products(
         return success({"items": items[start:start + page_size], "total": total, "page": page, "page_size": page_size})
 
     total = q.count()
-    items = q.offset((page - 1) * page_size).limit(page_size).all()
-    return success({"items": [_product_out(p, db, source_states) for p in items], "total": total, "page": page, "page_size": page_size})
+    products = q.offset((page - 1) * page_size).limit(page_size).all()
+    platform_fulfiller_ids, suppliers = _product_serialization_context(products, db)
+    items = [
+        _product_out(
+            product,
+            db,
+            source_states,
+            platform_fulfiller_ids=platform_fulfiller_ids,
+            suppliers=suppliers,
+        )
+        for product in products
+    ]
+    return success({"items": items, "total": total, "page": page, "page_size": page_size})
 
 
 @router.get("/filters")

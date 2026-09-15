@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sqlalchemy.orm import Session
 
 from app.models.supplier import Supplier
@@ -23,7 +25,11 @@ UNVERIFIED_MERCHANT_ASSURANCE_DESCRIPTION = (
 )
 
 
-def product_provider_info(product, db: Session | None = None) -> dict:
+def product_provider_info(
+    product,
+    db: Session | None = None,
+    suppliers: Mapping[int, Supplier] | None = None,
+) -> dict:
     """Return public seller and fulfilment facts for a product.
 
     Merchant approval records a review of onboarding materials only.  It must
@@ -63,7 +69,9 @@ def product_provider_info(product, db: Session | None = None) -> dict:
 
     supplier = None
     supplier_id = getattr(product, "supplier_id", None)
-    if supplier_id and db is not None:
+    if supplier_id and suppliers is not None:
+        supplier = suppliers.get(int(supplier_id))
+    elif supplier_id and db is not None:
         supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     approved = bool(supplier and supplier.status == "approved")
     supplier_name = supplier.company_name if supplier else None
