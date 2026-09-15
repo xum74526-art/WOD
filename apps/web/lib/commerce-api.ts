@@ -1,5 +1,5 @@
 import { apiEnvelopeRequest, apiRequest, publicApiEnvelopeRequest, type ApiEnvelope } from "@/lib/api";
-import { hourlyOrderBody, webRequestId } from "@/lib/web-business-contract";
+import { hourlyOrderBody } from "@/lib/web-business-contract";
 
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
@@ -370,8 +370,7 @@ export function startOrderDelivery(id: number, version: number, note?: string) {
 export function markOrderDelivered(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/supplier/orders/${id}/mark-delivered`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function completeOrder(id: number, version: number, note?: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/complete`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 export function disputeOrder(id: number, reason: string) { return apiRequest<Order>(`/api/v1/account/orders/${id}/dispute`, { method: "POST", body: JSON.stringify({ reason }) }); }
-export function renewOrder(id: number, hours: number) {
-  const clientRequestId = webRequestId("renew", crypto.randomUUID());
+export function renewOrder(id: number, hours: number, clientRequestId: string) {
   return apiRequest<Order>(`/api/v1/account/orders/${id}/renew`, {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },

@@ -8,10 +8,12 @@ import {
   directOrderIntentSignature,
   ensureBuyRequestIntent,
   ensureDirectOrderIntent,
+  ensureRenewalIntent,
   ensureSupplierDeviceIntent,
   hourlyOrderBody,
   kaiPricingQuery,
   normalizeBuyRequestContactPhone,
+  renewalIntentSignature,
   supplierDeviceIntentSignature,
   webRequestId,
 } from "../lib/web-business-contract.ts";
@@ -77,6 +79,48 @@ test("new and renewal orders use integer hours plus a Web request id", () => {
   assert.equal("cycle_days" in hourlyOrderBody(24, requestId), false);
   assert.throws(() => hourlyOrderBody(1.5, requestId), /整数小时/);
   assert.throws(() => hourlyOrderBody(721, requestId), /1 至 720/);
+});
+
+test("renewal retries reuse one request id until the order or hours change or confirmation is cancelled", () => {
+  let sequence = 0;
+  const createUuid = () => `12345678-1234-1234-1234-${String(++sequence).padStart(12, "0")}`;
+  const signature = renewalIntentSignature(17, 24);
+  const first = ensureRenewalIntent(null, signature, createUuid);
+  const retry = ensureRenewalIntent(first, signature, createUuid);
+
+  assert.equal(signature, JSON.stringify([17, 24]));
+  assert.equal(retry.requestId, first.requestId);
+  assert.equal(sequence, 1);
+
+  const changedHours = ensureRenewalIntent(retry, renewalIntentSignature(17, 48), createUuid);
+  assert.notEqual(changedHours.requestId, first.requestId);
+
+  const changedOrder = ensureRenewalIntent(changedHours, renewalIntentSignature(18, 48), createUuid);
+  assert.notEqual(changedOrder.requestId, changedHours.requestId);
+
+  const afterCancel = ensureRenewalIntent(null, signature, createUuid);
+  assert.notEqual(afterCancel.requestId, first.requestId);
+  assert.equal(sequence, 4);
+});
+
+test("Web renewal submission keeps the same explicit id through retries", () => {
+  const api = fs.readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+  const workspace = fs.readFileSync(new URL("../components/order-workspace.tsx", import.meta.url), "utf8");
+  const renewal = api.slice(api.indexOf("export function renewOrder"), api.indexOf("export function createDirectOrder"));
+  const renewalAction = workspace.slice(workspace.indexOf("function submitRenewal"), workspace.indexOf("function deliveryNote"));
+
+  assert.match(renewal, /renewOrder\(id: number, hours: number, clientRequestId: string\)/);
+  assert.match(renewal, /"Idempotency-Key": clientRequestId/);
+  assert.match(renewal, /hourlyOrderBody\(hours, clientRequestId\)/);
+  assert.doesNotMatch(renewal, /randomUUID/);
+  assert.match(renewalAction, /const orderId = detail\.id;\s+const hours = renewalHour;/);
+  assert.match(renewalAction, /if \(!detail \|\| busy \|\| renewalSubmissionInFlight\.current\) return;/);
+  assert.match(renewalAction, /ensureRenewalIntent\(\s+pendingRenewalIntent\.current,\s+renewalIntentSignature\(orderId, hours\)/);
+  assert.match(renewalAction, /pendingRenewalIntent\.current = intent;/);
+  assert.match(renewalAction, /if \(!window\.confirm[\s\S]*?pendingRenewalIntent\.current = null;\s+return;/);
+  assert.match(renewalAction, /renewalSubmissionInFlight\.current = true;/);
+  assert.match(renewalAction, /await renewOrder\(orderId, hours, intent\.requestId\);\s+pendingRenewalIntent\.current = null;[\s\S]*?renewalSubmissionInFlight\.current = false;/);
+  assert.equal(renewalAction.match(/pendingRenewalIntent\.current = null/g)?.length, 2);
 });
 
 test("Web asset and order follow-up links preserve shared request context", () => {

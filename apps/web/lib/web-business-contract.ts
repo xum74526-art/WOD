@@ -17,6 +17,24 @@ export function webRequestId(kind: "order" | "renew" | "buy-request" | "supplier
   return `web-${kind}-${uuid}`.slice(0, 64);
 }
 
+export type RenewalIntent = Readonly<{
+  signature: string;
+  requestId: string;
+}>;
+
+export function renewalIntentSignature(orderId: number, hours: number) {
+  return JSON.stringify([orderId, hours]);
+}
+
+export function ensureRenewalIntent(
+  current: RenewalIntent | null,
+  signature: string,
+  createUuid: () => string,
+): RenewalIntent {
+  if (current?.signature === signature) return current;
+  return { signature, requestId: webRequestId("renew", createUuid()) };
+}
+
 export type DirectOrderIntent = Readonly<{
   signature: string;
   requestId: string;
