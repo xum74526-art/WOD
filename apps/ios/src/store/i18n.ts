@@ -10,6 +10,7 @@ import {
   type AppLanguage,
 } from '@/utils/language'
 import { toTraditionalChinese } from '@/utils/traditional-chinese'
+import { translateDynamicEnglishText } from '@/utils/dynamic-text'
 
 type Lang = AppLanguage
 
@@ -3963,24 +3964,6 @@ function interpolate(text: string, params?: Params): string {
   )
 }
 
-function translateDynamicText(source: string): string | null {
-  let match = source.match(/^再消费\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/)
-  if (match) return `Spend ${match[1]} more CH to reach a ${match[2]}% rebate`
-
-  match = source.match(/^再销售\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/)
-  if (match) return `Sell ${match[1]} more CH to reach a ${match[2]}% rebate`
-
-  match = source.match(/^已达最高返佣等级\s*([\d.]+)%$/)
-  if (match) return `Highest rebate tier reached: ${match[1]}%`
-
-  match = source.match(/^再邀请\s*([\d,.]+)\s*人升级至\s*([\d.]+)%\s*返利$/)
-  if (match) return `Invite ${match[1]} more people to reach a ${match[2]}% reward rate`
-
-  if (source === '已达最高返利等级') return 'Highest invitation reward tier reached'
-
-  return null
-}
-
 export const useI18nStore = defineStore('i18n', () => {
   const saved = uni.getStorageSync('xod-lang')
   const lang = ref<Lang>(normalizeStoredLanguage(saved))
@@ -4049,7 +4032,7 @@ export const useI18nStore = defineStore('i18n', () => {
     if (lang.value === 'zh-Hant') return toTraditionalChinese(source)
     const exact = t(source)
     if (exact !== source) return exact
-    const dynamic = translateDynamicText(source)
+    const dynamic = translateDynamicEnglishText(source)
     if (dynamic) return dynamic
     return PARTIAL_EN.reduce(
       (result, [zh, en]) => result.includes(zh) ? result.split(zh).join(en) : result,

@@ -89,7 +89,7 @@ export function localizeRebateHint(value: string | null | undefined, locale: Kai
   if (locale === "zh-Hant") return toTraditionalChinese(source);
   if (locale !== "en" || !source) return source;
 
-  let match = source.match(/^再消费\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/);
+  let match = source.match(/^再(?:消费|购买)\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/);
   if (match) return `Spend ${match[1]} more card hours to reach the ${match[2]}% personal purchase rebate tier.`;
   match = source.match(/^再销售\s*([\d,.]+)\s*卡时可升至\s*([\d.]+)%\s*返佣$/);
   if (match) return `Confirm ${match[1]} more card hours in sales to reach the ${match[2]}% supplier sales rebate tier.`;

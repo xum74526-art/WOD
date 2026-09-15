@@ -24,6 +24,7 @@ import {
   type CommunityCommentIntent,
 } from "@/lib/web-business-contract";
 import { useI18n } from "@/components/locale-root";
+import { localizePersonName } from "@/lib/person-name";
 import {
   COMMUNITY_POST_MAX_LENGTH,
   COMMUNITY_MEDIA_LIMIT_TEXT,
@@ -162,17 +163,20 @@ type CommunityCardProps = {
 };
 
 function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShare, onShowComments, onSubmitComment }: CommunityCardProps) {
-  const { t, dateLocale } = useI18n();
+  const { t, dateLocale, locale } = useI18n();
   const externalVideo = !row.video && (row.content_type === "video" || Boolean(row.video_url));
   const sourceName = communityDisplayText(row.source_name || row.source_author, row.source_key);
-  const authorName = communityDisplayText(row.author_name || row.source_author || row.source_name, row.source_key) || t("community.feed.userFallback", "社区用户");
+  const authorName = localizePersonName(
+    communityDisplayText(row.author_name || row.source_author || row.source_name, row.source_key),
+    locale,
+  ) || t("community.feed.userFallback", "社区用户");
   const content = communityDisplayText(row.content, row.source_key);
   const summary = communityDisplayText(row.summary, row.source_key);
   return (
     <article className={`community-post-card${featured ? " community-post-card--featured" : ""}${externalVideo ? " community-post-card--video" : ""}`}>
       <header className="community-post-card__author">
         <div className="community-user-avatar" data-i18n-skip>
-          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : communityDisplayText(row.author_name || t("community.feed.avatarFallback", "匿"), row.source_key).slice(0, 1)}
+          {row.author_avatar ? <img src={row.author_avatar.startsWith("/user/avatars/") ? `/api/v1/canonical${row.author_avatar}` : row.author_avatar} alt="" /> : authorName.slice(0, 1)}
         </div>
         <span><strong data-i18n-skip>{authorName}</strong><small>{formatDate(row.source_published_at || row.created_at, dateLocale)}{row.topic ? <> · <span data-i18n-skip>{row.topic}</span></> : ""}</small></span>
         {!row.is_own && <button className={row.is_following ? "following" : ""} disabled={busy.has(`follow-${row.user_id}`)} onClick={() => onFollow(row)}><UserPlus size={15} />{row.is_following ? t("community.feed.following", "已关注") : t("community.feed.follow", "关注")}</button>}
@@ -198,7 +202,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
       </footer>
 
       {openComments === row.id && <section className="community-comments">
-        {comments[row.id]?.length ? comments[row.id].map((item) => <article key={item.id}><strong data-i18n-skip>{item.author_name || t("community.feed.userFallback", "社区用户")}</strong><p data-i18n-skip>{item.content}</p><time>{formatDate(item.created_at, dateLocale)}</time></article>) : <p className="community-comments__empty">{t("community.feed.comments.empty", "还没有评论，写下第一条。")}</p>}
+        {comments[row.id]?.length ? comments[row.id].map((item) => <article key={item.id}><strong data-i18n-skip>{localizePersonName(item.author_name, locale) || t("community.feed.userFallback", "社区用户")}</strong><p data-i18n-skip>{item.content}</p><time>{formatDate(item.created_at, dateLocale)}</time></article>) : <p className="community-comments__empty">{t("community.feed.comments.empty", "还没有评论，写下第一条。")}</p>}
         <form onSubmit={(event) => onSubmitComment(event, row.id)}><input maxLength={500} value={comment} onChange={(event) => onCommentChange(event.target.value)} placeholder={t("community.feed.comments.placeholder", "写下评论…")} /><button disabled={busy.has(`comment-${row.id}`)}>{t("community.feed.comments.send", "发送")}</button></form>
       </section>}
     </article>

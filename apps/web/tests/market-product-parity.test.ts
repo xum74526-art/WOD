@@ -51,6 +51,7 @@ test("hour purchases estimate expiry rebates from the authenticated personal tie
   assert.deepEqual(estimateProductExpiryRebate(100, "usage", { ...policy, rewards_enabled: false }), { amount: 0, ratePercent: 0 });
   assert.deepEqual(estimateProductExpiryRebate(100, "usage", { ...policy, cap_remaining: Number.NaN }), { amount: 0, ratePercent: 0 });
   assert.equal(localizeRebateHint("再消费 100 卡时可升至 5% 返佣", "en"), "Spend 100 more card hours to reach the 5% personal purchase rebate tier.");
+  assert.equal(localizeRebateHint("再购买 10,000.01 卡时可升至 5% 返佣", "en"), "Spend 10,000.01 more card hours to reach the 5% personal purchase rebate tier.");
   assert.equal(localizeRebateHint("再销售 200 卡时可升至 8% 返佣", "en"), "Confirm 200 more card hours in sales to reach the 8% supplier sales rebate tier.");
 });
 

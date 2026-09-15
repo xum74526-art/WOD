@@ -5,7 +5,11 @@ import { toTraditionalChinese } from './traditional-chinese.ts'
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
   'WOD资讯': 'ZTW News',
+  'ZTW资讯': 'ZTW News',
+  'ZTW資訊': 'ZTW News',
 }
+
+const PLATFORM_NEWS_NAMES = new Set(['WOD资讯', 'ZTW资讯', 'ZTW資訊'])
 
 const COMMUNITY_EN: Record<string, string> = {
   'H100测评': 'H100 Review',
@@ -197,7 +201,7 @@ function translateGeneratedPost(source: string): string | null {
 
 export function localizePersonName(value: string, lang: AppLanguage): string {
   if (!value) return value
-  if (value === 'WOD资讯') return lang === 'en' ? PERSON_EN[value] : lang === 'zh-Hant' ? 'ZTW資訊' : 'ZTW资讯'
+  if (PLATFORM_NEWS_NAMES.has(value)) return lang === 'en' ? 'ZTW News' : lang === 'zh-Hant' ? 'ZTW資訊' : 'ZTW资讯'
   if (lang === 'zh-Hans') return value
   if (lang === 'zh-Hant') return value === '体验用户' ? toTraditionalChinese(value) : value
   if (PERSON_EN[value]) return PERSON_EN[value]
