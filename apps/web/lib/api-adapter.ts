@@ -3,6 +3,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeStoredLocale } from "@/lib/language";
 import { isValidMarketLatestPayload } from "@/lib/market-latest-payload";
+import { notificationActionPath } from "@/lib/notification-navigation";
 import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
@@ -428,7 +429,7 @@ function notice(value: unknown) {
     category: text(item.type, "system"),
     title: text(item.title),
     body: text(item.content),
-    action_path: text(item.action_url) || null,
+    action_path: notificationActionPath(item.action_url),
     is_read: Boolean(item.is_read),
     read_at: null,
     created_at: text(item.created_at),
