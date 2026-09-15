@@ -182,6 +182,7 @@ import {
   marketObservedDayCount,
   marketSourceDisplayName,
 } from '@/utils/market-history'
+import { MARKET_PUBLICATION_MS } from '@/utils/market-polling'
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
@@ -384,7 +385,7 @@ async function refreshCandles(silent = true) {
 
 function startCandleTimer() {
   stopCandleTimer()
-  candleTimer = setInterval(() => refreshCandles(true), 10000)
+  candleTimer = setInterval(() => refreshCandles(true), MARKET_PUBLICATION_MS)
 }
 
 function stopCandleTimer() {

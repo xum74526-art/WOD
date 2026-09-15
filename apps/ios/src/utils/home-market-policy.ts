@@ -1,6 +1,8 @@
+import { MARKET_PUBLICATION_MS } from './market-polling.ts'
+
 export const HOME_TREND_LIMIT = 4
-export const HOME_RANKING_REFRESH_MS = 10_000
-export const HOME_CANDLE_REFRESH_MS = 5 * 60_000
+export const HOME_RANKING_REFRESH_MS = MARKET_PUBLICATION_MS
+export const HOME_CANDLE_REFRESH_MS = MARKET_PUBLICATION_MS
 
 type TrendCandidate = {
   gpu_model: string

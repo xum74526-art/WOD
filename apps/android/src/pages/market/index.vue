@@ -116,6 +116,7 @@ import { localizePersonName, localizeProductName } from '@/utils/localize-conten
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { marketSourceDisplayName } from '@/utils/market-history'
+import { MARKET_PUBLICATION_MS } from '@/utils/market-polling'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import {
   buildMarketRangeMap,
@@ -158,7 +159,7 @@ const sourceTabs: Array<{ key: MarketSourceFilter; label: string; hint: string }
 ]
 
 async function loadQuote() {
-  if (Date.now() - quoteLoadedAt < 30_000) return
+  if (Date.now() - quoteLoadedAt < MARKET_PUBLICATION_MS) return
   if (quoteInFlight) return quoteInFlight
   quoteInFlight = (async () => {
     try {
@@ -246,7 +247,7 @@ async function load(reset = false) {
 onShow(() => {
   i18n.updateTabBar()
   const storedKeyword = uni.getStorageSync('wod-market-keyword')
-  let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= 30_000
+  let shouldReload = !list.value.length || Date.now() - productsLoadedAt >= MARKET_PUBLICATION_MS
   if (!commerce.directTradeEnabled && sort.value !== 'default') {
     sort.value = 'default'
     shouldReload = true
