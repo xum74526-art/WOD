@@ -39,7 +39,9 @@ test("high-visibility pages derive metadata from the locale cookie helper", () =
     "../app/reset-password/page.tsx",
     "../app/account/settings/page.tsx",
     "../app/contact/page.tsx",
+    "../app/privacy/page.tsx",
     "../app/support/page.tsx",
+    "../app/terms/page.tsx",
     "../app/trend/page.tsx",
   ];
 

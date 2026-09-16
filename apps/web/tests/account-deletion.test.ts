@@ -153,16 +153,20 @@ test("public deletion entry, actual settings link and privacy notice are present
   const page = readFileSync(new URL("../app/account-deletion/page.tsx", import.meta.url), "utf8");
   const settings = readFileSync(new URL("../components/mobile-account-settings.tsx", import.meta.url), "utf8");
   const privacy = readFileSync(new URL("../app/privacy/page.tsx", import.meta.url), "utf8");
+  const legal = readFileSync(new URL("../components/legal-document.tsx", import.meta.url), "utf8");
   assert.match(page, /<AccountDeletion\s*\/>/);
   assert.doesNotMatch(page, /redirect|requireAuth|AuthGuard/);
   assert.match(settings, /href="\/account-deletion"/);
-  assert.match(privacy, /href="\/account-deletion"/);
+  assert.match(privacy, /accountDeletionLink/);
+  assert.match(legal, /href="\/account-deletion"/);
 });
 
-test("deletion and privacy keep their scoped disclosures without a customer phone entry", () => {
+test("deletion UI stays scoped while the privacy policy publishes the rights-request phone", () => {
   const ui = readFileSync(new URL("../components/account-deletion.tsx", import.meta.url), "utf8");
   const privacy = readFileSync(new URL("../app/privacy/page.tsx", import.meta.url), "utf8");
-  for (const source of [ui, privacy]) assert.doesNotMatch(source, /tel:\+864001082026|\+86 4001082026/);
+  const legal = readFileSync(new URL("../components/legal-document.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(ui, /tel:\+864001082026|\+86 4001082026/);
+  assert.match(privacy + legal, /tel:\+864001082026|\+86 4001082026/);
   assert.doesNotMatch(ui, /href="\/support"|Unable to verify your account or resolve an item\?/);
 });
 

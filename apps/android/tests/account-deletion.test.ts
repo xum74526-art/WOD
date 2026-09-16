@@ -242,15 +242,16 @@ test('mobile entry, consent, password wiping and bounded status recovery are pre
   assert.doesNotMatch(page, /clearStorage|setStorageSync\([^)]*password|console\./)
 })
 
-test('deletion and privacy pages do not expose phone entries after contact relocation', () => {
+test('deletion stays scoped while the privacy policy publishes the approved contact', () => {
   const page = readFileSync(new URL('../src/pages/account-deletion/index.vue', import.meta.url), 'utf8')
   const privacy = readFileSync(new URL('../src/pages/agreement/index.vue', import.meta.url), 'utf8')
+  const legalDocuments = readFileSync(new URL('../src/config/legal-documents.ts', import.meta.url), 'utf8')
   assert.match(page, /<scroll-view scroll-y class="body">\s+<view v-if="receiptView"/)
   assert.doesNotMatch(page, /\/pages\/kefu\/index|deletionResolveHelp/)
-  for (const source of [page, privacy]) {
-    assert.doesNotMatch(source, /callContactPhone|platformContactNumber|platformContactLink|deletion-contact|4001082026/)
-  }
-  assert.match(privacy, /<template v-for="paragraph in section.paragraphs" :key="paragraph">/)
+  assert.doesNotMatch(page, /callContactPhone|platformContactNumber|platformContactLink|deletion-contact|4001082026/)
+  assert.match(privacy, /v-for="paragraph in section.paragraphs"/)
+  assert.match(legalDocuments, /LEGAL_CONTACT_PHONE = '\+86 4001082026'/)
+  assert.match(legalDocuments, /联系我们：\$\{LEGAL_CONTACT_PHONE\}/)
 })
 
 test('the relocated shared contact helper still requires explicit activation with the exact international number', () => {

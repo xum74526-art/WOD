@@ -12,7 +12,7 @@ const marketPage = source('../src/pages/market/index.vue')
 const productPage = source('../src/pages/product/detail.vue')
 const orderPage = source('../src/pages/order/detail.vue')
 const i18n = source('../src/store/i18n.ts')
-const agreementPage = source('../src/pages/agreement/index.vue')
+const agreementPage = [source('../src/pages/agreement/index.vue'), source('../src/config/legal-documents.ts')].join('\n')
 
 test('frontend contract prefers neutral KAI manual-fulfillment semantics and reads legacy responses', () => {
   assert.match(gpuApi, /'platform_manual_fulfillment_allocation'/)

@@ -689,9 +689,14 @@ const allowedMobileDrift = new Set([
   'package-lock.json',
   'vite.config.ts',
   'src/manifest.json',
+  // DCloud's native Android privacy gate runs before the WebView/JS lifecycle.
+  // iOS does not consume androidPrivacy.json, so its config and regression test
+  // are intentionally Android-only platform assets.
+  'src/androidPrivacy.json',
   'src/utils/client-platform.ts',
   'src/static/logo/logo-1024.png',
   'tests/manifest-permissions.test.ts',
+  'tests/privacy-startup.test.ts',
 ])
 const ignoredMobileNames = new Set(['node_modules', 'dist', '.DS_Store', '.env.local'])
 

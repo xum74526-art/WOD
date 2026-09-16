@@ -63,7 +63,8 @@ test("help and support metadata have complete English copy without release place
   assert.match(help, /same KAI account/);
   assert.doesNotMatch(help, /认证服务完成后|will be published here|北斗 kai account/);
   assert.match(support, /KAI Help & Support/);
-  assert.match(simple, /locale === "en" \? "KAI \/ INFORMATION" : "北斗 kai \/ INFORMATION"/);
+  assert.match(simple, />ZTW \/ INFORMATION</);
+  assert.match(simple, /locale === "zh-Hant" \? toTraditionalChinese\(simplified\) : simplified/);
   assert.match(brand, /locale === "en" \? <b>KAI<\/b> : <>北斗 <b>kai<\/b><\/>/);
   assert.doesNotMatch(locale, /"support\.assistant": "北斗|"footer\.about": "About 北斗|"auth\.already": "Already have a 北斗/);
 });

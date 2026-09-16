@@ -1,0 +1,75 @@
+{
+  "version": "1",
+  "prompt": "template",
+  "title": "服務協議與隱私政策",
+  "titleLocales": {
+    "zh-Hans": "服务协议与隐私政策",
+    "zh-Hant": "服務協議與隱私政策",
+    "en": "Terms and Privacy Policy"
+  },
+  "message": "歡迎使用 ZTW。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」表示您已閱讀並同意上述內容。",
+  "messageLocales": {
+    "zh-Hans": "欢迎使用 ZTW。为向您提供账号登录、算力行情、资源撮合、资讯社区与客服服务，我们会按照政策处理必要的账号资料、设备与网络信息，以及您主动提交的内容。请在使用前阅读<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>。点击“同意并继续”表示您已阅读并同意上述内容。",
+    "zh-Hant": "歡迎使用 ZTW。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」表示您已閱讀並同意上述內容。",
+    "en": "Welcome to ZTW. To provide account access, compute pricing, resource matching, community content, and support, we process necessary account data, device and network information, and content you submit. Before continuing, please read the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a>. Tap Accept and Continue only if you agree."
+  },
+  "buttonAccept": "同意並繼續",
+  "buttonAcceptLocales": {
+    "zh-Hans": "同意并继续",
+    "zh-Hant": "同意並繼續",
+    "en": "Accept and Continue"
+  },
+  "buttonRefuse": "暫不同意",
+  "buttonRefuseLocales": {
+    "zh-Hans": "暂不同意",
+    "zh-Hant": "暫不同意",
+    "en": "Not Now"
+  },
+  "hrefLoader": "system",
+  "backToExit": "true",
+  "second": {
+    "title": "確認提示",
+    "titleLocales": {
+      "zh-Hans": "确认提示",
+      "zh-Hant": "確認提示",
+      "en": "Confirmation"
+    },
+    "message": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入 ZTW。若您仍不同意，應用將退出。",
+    "messageLocales": {
+      "zh-Hans": "您需要先同意<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>才能进入 ZTW。若您仍不同意，应用将退出。",
+      "zh-Hant": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入 ZTW。若您仍不同意，應用將退出。",
+      "en": "You must accept the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a> before entering ZTW. If you still do not agree, the app will exit."
+    },
+    "buttonAccept": "同意並繼續",
+    "buttonAcceptLocales": {
+      "zh-Hans": "同意并继续",
+      "zh-Hant": "同意並繼續",
+      "en": "Accept and Continue"
+    },
+    "buttonRefuse": "退出應用",
+    "buttonRefuseLocales": {
+      "zh-Hans": "退出应用",
+      "zh-Hant": "退出應用",
+      "en": "Exit App"
+    }
+  },
+  "disagreeMode": {
+    "support": false,
+    "loadNativePlugins": false,
+    "visitorEntry": false,
+    "showAlways": false
+  },
+  "styles": {
+    "backgroundColor": "#FFFFFF",
+    "borderRadius": "16px",
+    "title": {
+      "color": "#102E32"
+    },
+    "buttonAccept": {
+      "color": "#12838B"
+    },
+    "buttonRefuse": {
+      "color": "#64767A"
+    }
+  }
+}

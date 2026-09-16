@@ -31,6 +31,9 @@ test('settings has one labeled contact row before deletion and logout controls',
   assert.ok(page.indexOf('class="menu-item contact-link"') < page.indexOf('@tap="showLogout = true"'))
   assert.doesNotMatch(page, /class="contact-phone"/)
   assert.match(page, /nav\('\/pages\/account-deletion\/index'\)/)
+  assert.match(page, /nav\('\/pages\/agreement\/index\?type=agreement'\)/)
+  assert.match(page, /nav\('\/pages\/agreement\/index\?type=privacy'\)/)
+  assert.ok(page.indexOf("nav('/pages/agreement/index?type=agreement')") < page.indexOf("nav('/pages/agreement/index?type=privacy')"))
   assert.match(page, /@confirm="onLogout"/)
   assert.match(page, /function onLogout\(\) \{\s+showLogout.value = false\s+void userStore.signOut\(\)\s+uni.reLaunch\(\{ url: '\/pages\/login\/index' \}\)/)
 })
@@ -76,6 +79,12 @@ test('contact translations render the approved number with the requested contact
   assert.deepEqual(labels.map(label => label.replace('{phone}', '+86 4001082026')), [
     '联系我们：+86 4001082026', 'Contact us: +86 4001082026',
   ])
+})
+
+test('the legal documents use the same approved public phone and do not publish an email', () => {
+  const legalDocuments = readSource('../src/config/legal-documents.ts')
+  assert.match(legalDocuments, /LEGAL_CONTACT_PHONE = '\+86 4001082026'/)
+  assert.doesNotMatch(legalDocuments, /access@kai\.com|mailto:|客服邮箱|support email/i)
 })
 
 test('the shared contact helper only invokes the dialer after explicit activation', () => {

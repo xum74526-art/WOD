@@ -11,7 +11,10 @@ const homeSource = source('../src/pages/index/index.vue')
 const marketSource = source('../src/pages/market/index.vue')
 const productSource = source('../src/pages/product/detail.vue')
 const buyRequestSource = source('../src/pages/buy-request/index.vue')
-const agreementSource = source('../src/pages/agreement/index.vue')
+const agreementSource = [
+  source('../src/pages/agreement/index.vue'),
+  source('../src/config/legal-documents.ts'),
+].join('\n')
 const gpuApiSource = source('../src/api/gpu.ts')
 const orderApiSource = source('../src/api/order.ts')
 const marketApiSource = source('../src/api/market.ts')
@@ -70,8 +73,8 @@ test('legacy protocol types remain readable while the agreement describes separa
   assert.ok(kaiColor)
   assert.ok(vastColor)
   assert.notEqual(kaiColor, vastColor)
-  assert.match(agreementSource, /算力市场分为 KAI 自营和入驻资料已审核商家资源/)
-  assert.match(agreementSource, /compute market separates KAI Direct resources from offers by merchants with reviewed onboarding materials/)
+  assert.match(agreementSource, /届时算力市场可分为 KAI 自营和入驻资料已审核商家资源/)
+  assert.match(agreementSource, /market may then distinguish KAI Direct resources from offers by merchants with reviewed onboarding materials/)
   assert.match(agreementSource, /算力订单仅按整数小时购买/)
   assert.match(i18nSource, /kaiPricingSource: 'KAI 算力价格'/)
   assert.match(i18nSource, /kaiPricingSource: 'KAI Pricing'/)

@@ -86,6 +86,20 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
+        <view class="menu-item" @tap="nav('/pages/agreement/index?type=agreement')">
+          <view class="mi-left">
+            <AppIcon name="shield" :size="40" />
+            <text class="mi-text">{{ t('用户协议') }}</text>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
+        <view class="menu-item" @tap="nav('/pages/agreement/index?type=privacy')">
+          <view class="mi-left">
+            <AppIcon name="verified" :size="40" />
+            <text class="mi-text">{{ t('隐私政策') }}</text>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
       </view>
 
       <SectionHeader :title="t('kaiIdentityBinding')" />
