@@ -3,14 +3,14 @@ import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
 from cryptography.fernet import Fernet
 from PIL import Image
 from fastapi import HTTPException
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -35,13 +35,15 @@ from app.routers import finance as finance_router
 from app.routers import supplier as supplier_router
 from app.routers import wallet as wallet_router
 from app.schemas.bank_card import BankCardIn
-from app.schemas.withdrawal import FinanceReviewIn
+from app.schemas.withdrawal import FinanceReviewIn, PayoutPaidAt
 from app.services.manual_payout import (
     approve_withdrawal,
     cancel_withdrawal,
     create_withdrawal,
     fail_withdrawal,
     mark_paid,
+    normalize_paid_at,
+    order_out,
     persist_receipt,
     reject_withdrawal,
     utc_now,
@@ -156,6 +158,24 @@ class ManualPayoutTests(unittest.TestCase):
         return finance_router.payment_instructions(
             order.id, True, actor or self.admin, self.db,
         )["data"]
+
+    def test_paid_at_requires_timezone_and_withdrawal_timestamps_are_utc_explicit(self):
+        paid_at = TypeAdapter(PayoutPaidAt).validate_python("2026-09-16T16:30:00+08:00")
+        self.assertEqual(normalize_paid_at(paid_at), datetime(2026, 9, 16, 8, 30, 0))
+        with self.assertRaises(ValidationError):
+            TypeAdapter(PayoutPaidAt).validate_python("2026-09-16T16:30:00")
+        with self.assertRaisesRegex(BizError, "时区偏移或 Z"):
+            normalize_paid_at(datetime(2026, 9, 16, 8, 30, 0))
+
+        order = self._create()
+        order.created_at = datetime(2026, 9, 16, 8, 0, 0)
+        order.updated_at = datetime(2026, 9, 16, 8, 15, 0)
+        order.paid_at = datetime(2026, 9, 16, 16, 30, 0, tzinfo=timezone(timedelta(hours=8)))
+        output = order_out(self.db, order)
+
+        self.assertEqual(output["created_at"], "2026-09-16T08:00:00Z")
+        self.assertEqual(output["updated_at"], "2026-09-16T08:15:00Z")
+        self.assertEqual(output["paid_at"], "2026-09-16T08:30:00Z")
 
     def test_spendable_excludes_withdrawable_bucket(self):
         self.assertEqual(spendable_wallet_balance(self.wallet, self.db), Decimal("5"))
@@ -433,7 +453,7 @@ class ManualPayoutTests(unittest.TestCase):
                 sha256=digest,
                 bank_reference="BANKREF-TEST-0001",
                 paid_amount_cny=Decimal("2.00"),
-                paid_at=utc_now(),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=False,
                 reveal_token=revealed["reveal_token"],
             )
@@ -449,7 +469,7 @@ class ManualPayoutTests(unittest.TestCase):
                 sha256=digest,
                 bank_reference="BANKREF-TEST-0001",
                 paid_amount_cny=Decimal("2.00"),
-                paid_at=utc_now(),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=True,
                 reveal_token="fabricated-client-assertion",
             )
@@ -465,7 +485,7 @@ class ManualPayoutTests(unittest.TestCase):
                 sha256=digest,
                 bank_reference="BANKREF-TEST-0001",
                 paid_amount_cny=Decimal("2.00"),
-                paid_at=utc_now(),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=True,
                 reveal_token=revealed["reveal_token"],
             )
@@ -483,7 +503,7 @@ class ManualPayoutTests(unittest.TestCase):
                 sha256=digest,
                 bank_reference="BANKREF-TEST-0001",
                 paid_amount_cny=Decimal("2.00"),
-                paid_at=utc_now(),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=True,
                 reveal_token=revealed["reveal_token"],
             )
@@ -507,7 +527,7 @@ class ManualPayoutTests(unittest.TestCase):
                 sha256=digest,
                 bank_reference="BANKREF-TEST-0001",
                 paid_amount_cny=Decimal("2.00"),
-                paid_at=utc_now(),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=True,
                 reveal_token=expired_reveal["reveal_token"],
             )
@@ -523,7 +543,7 @@ class ManualPayoutTests(unittest.TestCase):
             sha256=digest,
             bank_reference="BANKREF-TEST-0001",
             paid_amount_cny=Decimal("2.00"),
-            paid_at=utc_now(),
+            paid_at=utc_now().replace(tzinfo=timezone.utc),
             payee_confirmed=True,
             reveal_token=final_reveal["reveal_token"],
         )
@@ -570,7 +590,7 @@ class ManualPayoutTests(unittest.TestCase):
             self.db, first, self.admin,
             receipt_path=path, original_name="one.png", content_type=mime,
             size_bytes=len(content), sha256=digest,
-            bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now(),
+            bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now().replace(tzinfo=timezone.utc),
             payee_confirmed=True,
             reveal_token=first_reveal["reveal_token"],
         )
@@ -584,7 +604,7 @@ class ManualPayoutTests(unittest.TestCase):
                 self.db, second, self.admin,
                 receipt_path=path2, original_name="two.png", content_type=mime,
                 size_bytes=len(content), sha256=digest2,
-                bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now(),
+                bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now().replace(tzinfo=timezone.utc),
                 payee_confirmed=True,
                 reveal_token=second_reveal["reveal_token"],
             )

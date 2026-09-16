@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowClockwise, Receipt, ShieldCheck } from "@phosphor-icons/react";
 import { initiateAdminRefund, listAdminRefunds, type RefundRequest } from "@/lib/commerce-api";
+import { normalizeAdminReviewPrompt } from "@/lib/admin-review-prompt";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 
 const labels: Record<RefundRequest["status"], string> = {
@@ -27,7 +28,8 @@ export function AdminRefundWorkspace() {
 
   async function initiate(row: RefundRequest) {
     if (!window.confirm(`确认通过 Ping++ 向买家原路退款 ${row.currency} ${row.amount}？提交后请勿重复操作。`)) return;
-    const note = window.prompt("处理备注（可选）", "管理员审核通过，发起原路退款") || undefined;
+    const note = normalizeAdminReviewPrompt(window.prompt("处理备注（可选）", "管理员审核通过，发起原路退款"), false);
+    if (note === null) return;
     setBusy(row.id); setError("");
     try { await initiateAdminRefund(row.id, row.version, note); await load(); }
     catch (reason) { setError(errorMessage(reason)); }

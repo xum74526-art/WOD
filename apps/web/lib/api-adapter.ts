@@ -10,6 +10,8 @@ import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeleti
 import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
 import { safeReturnPath } from "@/lib/auth-navigation";
 import { DELETION_SESSION_COOKIE, deletionMarkerMatchesTicket, deletionMayClearSession, deletionSessionMarker } from "@/lib/server/account-deletion-session";
+import { proxyAuthenticatedBinary } from "@/lib/server/authenticated-binary-proxy";
+import { PAYOUT_RECEIPT_ACCEPT, PAYOUT_RECEIPT_MIME_TYPES } from "@/lib/payout-receipt";
 import {
   readBoundedJsonBody,
   REGISTRATION_BODY_MAX_BYTES,
@@ -263,6 +265,22 @@ async function proxyCommunityMedia(request: NextRequest, userId: string, filenam
   const outgoing = new Headers({ "Content-Type": response.headers.get("content-type") || "application/octet-stream", "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
   for (const name of ["accept-ranges", "content-range", "content-length"]) { const value = response.headers.get(name); if (value) outgoing.set(name, value); }
   return new NextResponse(response.body, { status: response.status, headers: outgoing });
+}
+
+async function proxyWithdrawalReceipt(request: NextRequest, orderId: string) {
+  const token = request.cookies.get(TOKEN_COOKIE)?.value;
+  if (!token) return apiError("未登录", 401);
+  const result = await proxyAuthenticatedBinary({
+    url: `${resolveApiOrigin()}/api/finance/withdrawals/${orderId}/receipt`,
+    token,
+    accept: PAYOUT_RECEIPT_ACCEPT,
+    allowedContentTypes: PAYOUT_RECEIPT_MIME_TYPES,
+    downloadId: Number(orderId),
+  });
+  if (!result.ok) {
+    return apiError(result.unavailable ? "打款凭证暂时无法读取" : "打款凭证无法读取", result.status);
+  }
+  return result.response;
 }
 
 async function proxyCheckout(request: NextRequest, provider: "mapay" | "qixiang", token: string) {
@@ -770,6 +788,8 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     if (!response.ok) return apiError("证件照片无法读取", response.status);
     return new NextResponse(response.body, { status: response.status, headers: { "Content-Type": response.headers.get("content-type") || "image/jpeg", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   }
+  const withdrawalReceipt = path.match(/^canonical\/finance\/withdrawals\/([1-9]\d*)\/receipt$/);
+  if (withdrawalReceipt && request.method === "GET") return proxyWithdrawalReceipt(request, withdrawalReceipt[1]);
   if (path === "canonical/verification/upload" && request.method === "POST") {
     const result = await upstreamMultipart(request, "/api/verification/upload", ["front", "back"], "身份证照片上传失败，请稍后重试");
     return result.ok ? apiSuccess(result.body.data, { source: "canonical-api" }) : upstreamFailure(result);

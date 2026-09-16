@@ -194,13 +194,24 @@ def order_out(db: Session, order: WithdrawalOrder) -> dict:
         "failure_reason": order.failure_reason,
         "bank_reference": order.bank_reference,
         "paid_amount_cny": float(order.paid_amount_cny) if order.paid_amount_cny is not None else None,
-        "paid_at": order.paid_at,
+        "paid_at": _utc_timestamp(order.paid_at),
         "receipt_available": receipt is not None,
         "created_platform": order.created_platform or "legacy",
         "last_modified_platform": order.last_modified_platform or "legacy",
-        "created_at": order.created_at,
-        "updated_at": order.updated_at,
+        "created_at": _utc_timestamp(order.created_at),
+        "updated_at": _utc_timestamp(order.updated_at),
     }
+
+
+def _utc_timestamp(value: datetime | None) -> str | None:
+    """Serialize both legacy naive and aware values as an explicit UTC instant."""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def _payment_instruction_ttl_seconds() -> int:
@@ -507,9 +518,9 @@ def cancel_withdrawal(
 
 
 def normalize_paid_at(value: datetime) -> datetime:
-    if value.tzinfo is not None:
-        value = value.astimezone(timezone.utc).replace(tzinfo=None)
-    return value
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise BizError("付款时间必须包含时区偏移或 Z")
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def mark_paid(

@@ -1,7 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
+
+
+# The manual-payout database columns intentionally remain naive UTC DateTime
+# values for compatibility with existing rows. Incoming payment attestations
+# must nevertheless identify an instant unambiguously before the service
+# converts them to that storage representation.
+PayoutPaidAt = AwareDatetime
 
 
 class WithdrawalCreateIn(BaseModel):

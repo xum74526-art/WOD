@@ -23,6 +23,7 @@ from app.schemas.withdrawal import (
     ApproveWithdrawalIn,
     FailedWithdrawalIn,
     FinanceReviewIn,
+    PayoutPaidAt,
     RejectWithdrawalIn,
 )
 from app.services.manual_payout import (
@@ -514,7 +515,10 @@ async def withdrawal_mark_paid(
     receipt: UploadFile = File(...),
     bank_reference: str = Form(...),
     paid_amount_cny: str = Form(...),
-    paid_at: datetime = Form(...),
+    paid_at: PayoutPaidAt = Form(
+        ...,
+        description="ISO 8601 payment time with an explicit UTC offset or Z, for example 2026-09-16T10:30:00Z.",
+    ),
     payee_confirmed: bool = Form(...),
     reveal_token: str = Form(...),
     actor: User = Depends(require_admin),

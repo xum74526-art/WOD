@@ -380,6 +380,7 @@
             "type": "string"
           },
           "paid_at": {
+            "description": "ISO 8601 payment time with an explicit UTC offset or Z, for example 2026-09-16T10:30:00Z.",
             "format": "date-time",
             "title": "Paid At",
             "type": "string"
