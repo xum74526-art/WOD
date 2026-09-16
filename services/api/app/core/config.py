@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     # Public native-app release metadata. Update these values only after the
     # corresponding package is available at the trusted HTTPS address.
     APP_ANDROID_RELEASE_ENABLED: bool = True
-    APP_ANDROID_LATEST_VERSION_NAME: str = "1.2.0"
-    APP_ANDROID_LATEST_VERSION_CODE: int = 120
+    APP_ANDROID_LATEST_VERSION_NAME: str = "1.2.1"
+    APP_ANDROID_LATEST_VERSION_CODE: int = 121
     APP_ANDROID_UPDATE_URL: str = "https://wod.kai.com/download/wod.apk"
     APP_ANDROID_RELEASE_NOTES_ZH: str = ""
     APP_ANDROID_RELEASE_NOTES_EN: str = ""

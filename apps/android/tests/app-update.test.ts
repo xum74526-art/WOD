@@ -24,11 +24,11 @@ test('version comparison uses the native numeric code and handles dotted fallbac
   assert.equal(normalizeVersionCode('0'), null)
   assert.equal(compareVersionNames('1.2.0', '1.1.10'), 1)
   assert.equal(compareVersionNames('1.1.9', '1.1.9.0'), 0)
-  assert.equal(isNewerRelease('1.2.0', 120, {
+  assert.equal(isNewerRelease('1.2.1', 121, {
     platform: CLIENT_PLATFORM,
     available: true,
-    latest_version_name: '1.2.1',
-    latest_version_code: 121,
+    latest_version_name: '1.2.2',
+    latest_version_code: 122,
     update_url: updateUrls[CLIENT_PLATFORM],
   }), true)
 })
@@ -47,8 +47,8 @@ test('release metadata must match the requesting platform', () => {
   const release = {
     platform: CLIENT_PLATFORM,
     available: true,
-    latest_version_name: '1.2.0',
-    latest_version_code: 120,
+    latest_version_name: '1.2.1',
+    latest_version_code: 121,
     update_url: updateUrls[CLIENT_PLATFORM],
   }
   const otherPlatform = CLIENT_PLATFORM === 'ios' ? 'android' : 'ios'
@@ -64,10 +64,10 @@ test('the app wires automatic and manual update checks through its platform adap
   const update = readFileSync(resolve(appRoot, 'src/utils/app-update.ts'), 'utf8')
   const api = readFileSync(resolve(appRoot, 'src/api/platform.ts'), 'utf8')
 
-  assert.equal(manifest.versionName, '1.2.0')
-  assert.equal(manifest.versionCode, '120')
-  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.0'/)
-  assert.match(update, /APP_FALLBACK_VERSION_CODE = 120/)
+  assert.equal(manifest.versionName, '1.2.1')
+  assert.equal(manifest.versionCode, '121')
+  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.1'/)
+  assert.match(update, /APP_FALLBACK_VERSION_CODE = 121/)
   assert.match(app, /checkForAppUpdate\(CLIENT_PLATFORM\)/)
   assert.match(settings, /checkForAppUpdate\(CLIENT_PLATFORM, \{ manual: true \}\)/)
   assert.match(settings, /appUpdateCheck/)
