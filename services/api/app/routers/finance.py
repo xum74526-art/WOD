@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import finance_admin_user_ids, get_current_platform, get_current_user, require_finance_admin
+from app.core.deps import get_current_platform, get_current_user, require_admin
 from app.core.sensitive import (
     mask_id_card,
     reveal as reveal_sensitive_value,
@@ -53,7 +53,7 @@ def _utcnow() -> datetime:
 
 def _assert_not_self(actor: User, owner_user_id: int) -> None:
     if actor.id == owner_user_id:
-        raise BizError("财务管理员不能审核或打款自己的资料/申请", status_code=403)
+        raise BizError("管理员不能审核或打款自己的资料/申请", status_code=403)
 
 
 def _page(page: int, page_size: int) -> None:
@@ -63,8 +63,12 @@ def _page(page: int, page_size: int) -> None:
 
 @router.get("/me")
 def finance_me(user: User = Depends(get_current_user)):
+    is_admin = user.role == "admin"
     return success({
-        "is_finance_admin": user.id in finance_admin_user_ids(),
+        "is_admin": is_admin,
+        # Compatibility for already-installed clients. Finance access is now
+        # derived only from the single administrator role, not an allow-list.
+        "is_finance_admin": is_admin,
         "manual_bank_card_enabled": sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED),
         "manual_payout_enabled": withdrawal_enabled(),
     })
@@ -75,7 +79,7 @@ def audit_logs(
     action_filter: str | None = None,
     page: int = 1,
     page_size: int = 20,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     _page(page, page_size)
@@ -134,7 +138,7 @@ def verification_list(
     page: int = 1,
     page_size: int = 20,
     platform: AuditPlatform | None = None,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     _page(page, page_size)
@@ -164,7 +168,7 @@ def _verification(db: Session, verification_id: int) -> Verification:
 @router.get("/verifications/{verification_id}")
 def verification_detail(
     verification_id: int,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     row = _verification(db, verification_id)
@@ -177,7 +181,7 @@ def verification_detail(
 def verification_review(
     verification_id: int,
     data: FinanceReviewIn,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -220,7 +224,7 @@ def verification_review(
 def verification_photo(
     verification_id: int,
     side: str,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     row = _verification(db, verification_id)
@@ -280,7 +284,7 @@ def bank_card_list(
     page: int = 1,
     page_size: int = 20,
     platform: AuditPlatform | None = None,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     _page(page, page_size)
@@ -307,7 +311,7 @@ def bank_card_list(
 def bank_card_review(
     card_id: int,
     data: FinanceReviewIn,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -376,7 +380,7 @@ def withdrawal_list(
     page: int = 1,
     page_size: int = 20,
     platform: AuditPlatform | None = None,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     _page(page, page_size)
@@ -399,7 +403,7 @@ def withdrawal_list(
 @router.get("/withdrawals/{order_id}")
 def withdrawal_detail(
     order_id: int,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     order = _withdrawal(db, order_id)
@@ -412,7 +416,7 @@ def withdrawal_detail(
 def withdrawal_approve(
     order_id: int,
     data: ApproveWithdrawalIn,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -427,7 +431,7 @@ def withdrawal_approve(
 def withdrawal_reject(
     order_id: int,
     data: RejectWithdrawalIn,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -442,7 +446,7 @@ def withdrawal_reject(
 def withdrawal_failed(
     order_id: int,
     data: FailedWithdrawalIn,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -457,7 +461,7 @@ def withdrawal_failed(
 def payment_instructions(
     order_id: int,
     reveal_card: bool = Query(False, alias="reveal"),
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     # Accept the documented ?reveal=true while retaining a non-reserved Python
@@ -513,7 +517,7 @@ async def withdrawal_mark_paid(
     paid_at: datetime = Form(...),
     payee_confirmed: bool = Form(...),
     reveal_token: str = Form(...),
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
@@ -554,7 +558,7 @@ async def withdrawal_mark_paid(
 @router.get("/withdrawals/{order_id}/receipt")
 def withdrawal_receipt(
     order_id: int,
-    actor: User = Depends(require_finance_admin),
+    actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     order = _withdrawal(db, order_id)

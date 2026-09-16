@@ -62,7 +62,8 @@ class Settings(BaseSettings):
     UPLOAD_ROOT: str = ""
     ID_PHOTO_MAX_BYTES: int = 5 * 1024 * 1024
     # Local ID-card text recognition is an OCR pre-check only.  It never marks
-    # an account verified; a finance operator must still review the documents.
+    # an account verified; a platform administrator must still review the
+    # documents.
     # Keep disabled until the server image contains Tesseract with chi_sim.
     ID_OCR_ENABLED: bool = False
     ID_OCR_TESSERACT_CMD: str = "tesseract"
@@ -106,9 +107,6 @@ class Settings(BaseSettings):
     # enabling wallet recharge.
     MANUAL_BANK_CARD_ENABLED: bool = False
     MANUAL_PAYOUT_ENABLED: bool = False
-    # Finance operators are explicit user IDs, never inferred from the supplier
-    # role or the order-fulfilment allow-list.
-    FINANCE_ADMIN_USER_IDS: str = ""
     PAYOUT_CARD_HOUR_RMB_RATE: float = 1.002
     PAYOUT_FEE_RATE: float = 0.0
     PAYOUT_MIN_CARD_HOURS: float = 10.0

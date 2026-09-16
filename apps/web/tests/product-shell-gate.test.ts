@@ -21,3 +21,14 @@ test("workspace authentication failures stop loading and offer a forced retry", 
   assert.match(errorState, /重新加载/);
   assert.ok(shell.indexOf("if (gateFailed)") < shell.indexOf("if (!ready || !user)"));
 });
+
+test("the single platform administrator role gates the complete admin console", () => {
+  const shell = fs.readFileSync(new URL("../components/product-shell.tsx", import.meta.url), "utf8");
+
+  assert.match(shell, /variant === "admin" && current\.role !== "admin"/);
+  assert.match(shell, /href: "\/admin\/kyc"/);
+  assert.match(shell, /href: "\/admin\/bank-cards"/);
+  assert.match(shell, /href: "\/admin\/withdrawals"/);
+  assert.match(shell, /variant === "admin" \? "PLATFORM ADMIN"/);
+  assert.doesNotMatch(shell, /FINANCE ADMIN|独立财务管理员|财务管理员白名单/);
+});

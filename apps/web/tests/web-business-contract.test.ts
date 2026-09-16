@@ -428,6 +428,9 @@ test("Web exposes real merchant operations and keeps admission separate from ide
   assert.match(shell, /href: "\/supplier\/resources"/);
   assert.match(shell, /href: "\/admin\/suppliers"/);
   assert.match(shell, /href: "\/admin\/disputes"/);
+  assert.match(shell, /href: "\/admin\/kyc"/);
+  assert.match(shell, /href: "\/admin\/bank-cards"/);
+  assert.match(shell, /href: "\/admin\/withdrawals"/);
   assert.match(apply, /入驻资料和主体实名认证分别提交、分别审核/);
   assert.match(apply, /可以先提交入驻资料/);
   assert.doesNotMatch(apply, /先完成主体实名认证，再提交商家入驻申请/);
@@ -438,6 +441,8 @@ test("Web exposes real merchant operations and keeps admission separate from ide
   assert.match(oldSupplierServers, /redirect\("\/supplier\/resources"\)/);
   assert.match(oldAdminResources, /redirect\("\/admin\/suppliers"\)/);
   assert.doesNotMatch(adminDashboard, /SERVER VERIFIED/);
+  assert.match(adminDashboard, /管理员统一处理需求、用户、订单、充值、实名、银行卡和提现/);
+  assert.doesNotMatch(`${shell}\n${adminDashboard}`, /FINANCE ADMIN|独立财务管理员|财务管理员白名单/);
 });
 
 test("Web market chart and pulse consistently render KAI prices in card hours", () => {

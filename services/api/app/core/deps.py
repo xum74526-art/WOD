@@ -8,7 +8,6 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.auth_session import AuthSession
 from app.models.user import User
-from app.core.config import settings
 from app.services.auth_session import utcnow
 from app.services.account_lifecycle import ensure_active_user
 
@@ -86,30 +85,8 @@ def get_current_platform(context: AuthContext = Depends(get_current_auth_context
     return context.platform
 
 
-def finance_admin_user_ids() -> set[int]:
-    """Return the independent finance allow-list, ignoring malformed entries."""
-    result: set[int] = set()
-    for raw in settings.FINANCE_ADMIN_USER_IDS.split(","):
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            value = int(raw)
-        except ValueError:
-            continue
-        if value > 0:
-            result.add(value)
-    return result
-
-
-def require_finance_admin(user: User = Depends(get_current_user)) -> User:
-    if user.id not in finance_admin_user_ids():
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "无财务审核权限")
-    return user
-
-
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Require the platform administrator role for non-finance admin APIs."""
+    """Require the single platform administrator role for all admin APIs."""
     if user.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "无管理员权限")
     return user

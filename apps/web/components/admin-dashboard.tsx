@@ -18,6 +18,6 @@ export function AdminDashboard() {
     <div className="role-overview-grid">{queues.map(({ eyebrow, title, description, href, label, icon: Icon }) => <Link href={href} key={href}>
       <header><Icon size={22} /><small>{eyebrow}</small></header><h2>{title}</h2><p>{description}</p><footer>{label}<ArrowRight size={16} /></footer>
     </Link>)}</div>
-    <div className="workspace-service-note">需求、用户、订单和充值统一查看；实名、银行卡和提现仍需独立财务管理员权限。</div>
+    <div className="workspace-service-note">管理员统一处理需求、用户、订单、充值、实名、银行卡和提现；敏感操作均保留审计记录。</div>
   </section>;
 }

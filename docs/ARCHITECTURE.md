@@ -132,7 +132,8 @@ npm run check:contracts
   会话来源。管理员可通过 `/api/admin/overview`、`/users`、`/orders`、`/recharge-orders`
   以及财务列表的 `platform` 参数进行审计筛选。
 - 平台来源只用于统计、排障和审计，不是授权边界。公开 Web/App 的 `client_id` 可以被复制，任何
-  管理操作仍必须校验用户角色或独立财务白名单。若将来需要证明是真实安装包或设备，应另行接入
+  管理操作仍必须校验平台管理员角色；财务审核不使用独立账号或白名单。若将来需要证明是真实
+  安装包或设备，应另行接入
   Apple App Attest / DeviceCheck 和 Google Play Integrity，并在服务端完成证明校验。
 - 当前支付路由是 `/api/payments/qixiang/*`，支付状态最终以服务端验签后的回调或主动查单为准，
   不能以客户端跳转成功作为入账依据。

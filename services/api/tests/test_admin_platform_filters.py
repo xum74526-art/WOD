@@ -40,7 +40,6 @@ class AdminPlatformFilterTests(unittest.TestCase):
         Base.metadata.create_all(engine)
         self.db = sessionmaker(bind=engine)()
         self.original_secret = settings.SECRET_KEY
-        self.original_finance_admins = settings.FINANCE_ADMIN_USER_IDS
         settings.SECRET_KEY = "admin-platform-filter-test-secret"
 
         self.admin = User(
@@ -60,11 +59,11 @@ class AdminPlatformFilterTests(unittest.TestCase):
             phone="13900000003",
             username="Android 用户",
             password="!",
+            role="supplier",
             created_platform="android",
         )
         self.db.add_all([self.admin, self.web_user, self.android_user])
         self.db.flush()
-        settings.FINANCE_ADMIN_USER_IDS = str(self.admin.id)
 
         product = Product(
             name="测试 GPU",
@@ -164,6 +163,20 @@ class AdminPlatformFilterTests(unittest.TestCase):
             client_id="admin",
             auth_method="test",
         )
+        personal_issued = create_authenticated_session(
+            self.db,
+            self.web_user,
+            platform="web",
+            client_id="web",
+            auth_method="test",
+        )
+        supplier_issued = create_authenticated_session(
+            self.db,
+            self.android_user,
+            platform="android",
+            client_id="android",
+            auth_method="test",
+        )
         app = FastAPI()
 
         @app.exception_handler(BizError)
@@ -182,11 +195,14 @@ class AdminPlatformFilterTests(unittest.TestCase):
         app.dependency_overrides[get_db] = db_override
         self.client = TestClient(app)
         self.headers = {"Authorization": f"Bearer {issued.token}"}
+        self.non_admin_headers = (
+            {"Authorization": f"Bearer {personal_issued.token}"},
+            {"Authorization": f"Bearer {supplier_issued.token}"},
+        )
 
     def tearDown(self):
         self.client.close()
         settings.SECRET_KEY = self.original_secret
-        settings.FINANCE_ADMIN_USER_IDS = self.original_finance_admins
         self.db.close()
 
     def _items(self, path: str) -> list[dict]:
@@ -222,6 +238,18 @@ class AdminPlatformFilterTests(unittest.TestCase):
             items = self._items(path)
             self.assertEqual(len(items), 1, path)
             self.assertEqual(items[0]["created_platform"], "web", path)
+
+    def test_only_platform_admin_can_access_finance_reviews(self):
+        admin_access = self.client.get("/api/finance/me", headers=self.headers)
+        self.assertEqual(admin_access.status_code, 200, admin_access.text)
+        self.assertTrue(admin_access.json()["data"]["is_admin"])
+
+        for headers in self.non_admin_headers:
+            access = self.client.get("/api/finance/me", headers=headers)
+            self.assertEqual(access.status_code, 200, access.text)
+            self.assertFalse(access.json()["data"]["is_admin"])
+            response = self.client.get("/api/finance/verifications", headers=headers)
+            self.assertEqual(response.status_code, 403, response.text)
 
     def test_unknown_or_system_platform_filter_is_rejected(self):
         for platform in ("system", "forged"):

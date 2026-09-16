@@ -27,7 +27,7 @@ class User(Base):
     phone_bound: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     password: Mapped[str] = mapped_column(String(255))
     avatar: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    role: Mapped[str] = mapped_column(String(16), default="personal")  # personal / supplier
+    role: Mapped[str] = mapped_column(String(16), default="personal")  # personal / supplier / admin
     supplier_status: Mapped[str] = mapped_column(String(16), default="none")  # none / pending / approved / rejected
     invited_by: Mapped[int | None] = mapped_column(nullable=True)  # 邀请人 user_id
     # Immutable audit origin captured from the authenticated/registered client.

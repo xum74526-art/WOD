@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
-from app.core.deps import finance_admin_user_ids, require_finance_admin
+from app.core.deps import require_admin
 from app.core.sensitive import reveal
 from app.db.base import Base
 from app.models import (
@@ -74,7 +74,12 @@ class ManualPayoutTests(unittest.TestCase):
         self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
         self.db = self.Session()
         self.user = User(phone="13900001001", username="提现用户", password="!")
-        self.admin = User(phone="13900001002", username="财务用户", password="!")
+        self.admin = User(
+            phone="13900001002",
+            username="平台管理员",
+            password="!",
+            role="admin",
+        )
         self.db.add_all([self.user, self.admin])
         self.db.flush()
         self.wallet = Wallet(
@@ -111,7 +116,7 @@ class ManualPayoutTests(unittest.TestCase):
             name: getattr(settings, name)
             for name in (
                 "DIRECT_TRADE_ENABLED", "MANUAL_BANK_CARD_ENABLED", "MANUAL_PAYOUT_ENABLED",
-                "FINANCE_ADMIN_USER_IDS", "PAYOUT_CARD_HOUR_RMB_RATE",
+                "PAYOUT_CARD_HOUR_RMB_RATE",
                 "PAYOUT_FEE_RATE", "PAYOUT_MIN_CARD_HOURS",
                 "PAYOUT_MAX_CARD_HOURS", "PAYOUT_RECEIPT_MAX_BYTES", "UPLOAD_ROOT",
                 "REVENUE_SETTLEMENT_ENABLED", "REWARD_SERVICE_ENABLED",
@@ -123,7 +128,6 @@ class ManualPayoutTests(unittest.TestCase):
         settings.DIRECT_TRADE_ENABLED = True
         settings.MANUAL_BANK_CARD_ENABLED = True
         settings.MANUAL_PAYOUT_ENABLED = True
-        settings.FINANCE_ADMIN_USER_IDS = str(self.admin.id)
         settings.PAYOUT_CARD_HOUR_RMB_RATE = 1.002
         settings.PAYOUT_FEE_RATE = 0
         settings.PAYOUT_MIN_CARD_HOURS = 1
@@ -238,12 +242,15 @@ class ManualPayoutTests(unittest.TestCase):
         self.assertEqual(reveal(row.phone), "13900001003")
         self.assertNotIn("13900001003", str(result))
 
-    def test_finance_admin_is_independent_and_cannot_self_review(self):
-        self.assertEqual(finance_admin_user_ids(), {self.admin.id})
-        self.assertIs(require_finance_admin(self.admin), self.admin)
+    def test_admin_manages_finance_but_cannot_self_review(self):
+        self.assertIs(require_admin(self.admin), self.admin)
         with self.assertRaises(HTTPException) as unauthorized:
-            require_finance_admin(self.user)
+            require_admin(self.user)
         self.assertEqual(unauthorized.exception.status_code, 403)
+        access = finance_router.finance_me(self.admin)["data"]
+        self.assertTrue(access["is_admin"])
+        self.assertTrue(access["is_finance_admin"])
+        self.assertFalse(finance_router.finance_me(self.user)["data"]["is_admin"])
         own_verification = Verification(
             user_id=self.admin.id,
             real_name="王五",

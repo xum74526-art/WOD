@@ -187,7 +187,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
 
   const navigation = variant === "admin" ? adminNav : variant === "supplier" ? supplierNav : user.role === "supplier" ? supplierAccountNav : buyerNav;
   const workspaceName = variant === "admin" ? t("workspace.admin", "管理控制台") : variant === "supplier" ? t("workspace.supplier", "商家后台") : user.role === "supplier" ? (locale === "en" ? "Account Center" : "账户中心") : t("workspace.buyer", "买家中心");
-  const roleName = variant === "admin" ? "FINANCE ADMIN" : variant === "supplier" ? "APPROVED SUPPLIER" : user.role === "supplier" ? "SUPPLIER ACCOUNT" : "COMPUTE BUYER";
+  const roleName = variant === "admin" ? "PLATFORM ADMIN" : variant === "supplier" ? "APPROVED SUPPLIER" : user.role === "supplier" ? "SUPPLIER ACCOUNT" : "COMPUTE BUYER";
   const isActive = (href: string) => pathname === href || (!["/account", "/supplier", "/admin"].includes(href) && pathname.startsWith(`${href}/`));
 
   return (
