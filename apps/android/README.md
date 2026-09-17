@@ -1,6 +1,6 @@
-# KAI Android
+# 算力星图 Android
 
-这是 KAI 的 Android 客户端源码，正式 applicationId 为 `com.kai.wod`。
+这是“算力星图”的 Android 客户端源码，正式 applicationId 为 `com.kai.ztwstarmap`。
 
 ## 共享客户端功能
 
@@ -30,10 +30,15 @@ npm run build:android
 
 ## 打包要求
 
-- DCloud AppID 在发布环境配置，不写入仓库；
-- Android 包名固定为 `com.kai.wod`；
+- DCloud AppID 沿用 `__UNI__47CF9D3`，更换 applicationId 不得新建或替换现有 AppID；
+- Android 包名固定为 `com.kai.ztwstarmap`；
 - KAI OAuth 回跳 scheme 为 `kai://auth`；
 - keystore、别名、密码、APK/AAB、`.env.local` 和 `dist/` 不得提交；
 - 正式签名由项目所有者保管，不能使用旧版测试包签名缓存。
 
-旧项目中的 `WOD-Android-Package` 是编译产物，不属于本目录源码。
+applicationId 变更后，发布负责人还必须在 DCloud 云打包和 KAI OAuth/开放平台配置中登记
+`com.kai.ztwstarmap` 以及最终正式签名对应的公钥/证书 MD5。客户端回跳仍为
+`kai://auth`；只有在服务端白名单、Android 和 iOS 同一版本一起迁移时才允许更换 scheme。
+
+旧项目中的 `WOD-Android-Package` 是编译产物，不属于本目录源码。历史域名、数据键和
+业务记录中的 `wod` 标识用于兼容线上数据，不等同于当前用户可见应用名称。

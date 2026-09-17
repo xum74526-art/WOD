@@ -8,7 +8,7 @@ import { errorMessage, formatDate } from "@/lib/commerce-ui";
 const DISPUTE_PAGE_SIZE = 30;
 
 function sellerName(order: AdminOrderItem) {
-  return order.seller_name || (order.seller_type === "kai_self_operated" ? "KAI 自营" : "第三方商家");
+  return order.seller_name || (order.seller_type === "kai_self_operated" ? "算力星图自营" : "第三方商家");
 }
 
 function fulfillmentName(order: AdminOrderItem) {

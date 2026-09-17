@@ -1,7 +1,7 @@
 """社区每日资讯任务。
 
 只读取代码内白名单中的官方 Feed/API，保存标题、短摘要和原链接；视频仅保存
-Bilibili 官方账号页面、缩略图和官方播放器地址。外部候选不足时使用 ZTW 自有行情摘要补位。
+Bilibili 官方账号页面、缩略图和官方播放器地址。外部候选不足时使用算力星图自有行情摘要补位。
 """
 from __future__ import annotations
 
@@ -37,10 +37,10 @@ BILIBILI_VIDEO_PROVIDER = "bilibili"
 PLAYABLE_VIDEO_PROVIDERS = (BILIBILI_VIDEO_PROVIDER,)
 BILIBILI_VIDEO_ID_RE = re.compile(r"^BV[0-9A-Za-z]{10}$")
 INTERNAL_SOURCE_KEY = "wod-market"
-INTERNAL_SOURCE_NAME = "ZTW 算力行情"
-INTERNAL_SOURCE_AUTHOR = "ZTW"
+INTERNAL_SOURCE_NAME = "算力星图算力行情"
+INTERNAL_SOURCE_AUTHOR = "算力星图"
 INTERNAL_SYSTEM_PHONE = "wod-community"
-INTERNAL_SYSTEM_USERNAME = "ZTW资讯"
+INTERNAL_SYSTEM_USERNAME = "算力星图资讯"
 BILIBILI_OFFICIAL_OWNER_ID = "1320140761"
 BILIBILI_SEARCH_QUERIES = (
     "NVIDIA英伟达",
@@ -708,7 +708,16 @@ def _backfill_internal_branding(db: Session) -> int:
         changed = False
         for field in ("content", "content_en"):
             value = getattr(post, field)
-            branded = re.sub(r"(?<![A-Z0-9_-])WOD(?![A-Z0-9_-])", "ZTW", value) if value else value
+            branded = value
+            if branded:
+                replacement = "算力星图" if field == "content" else "Compute Star Map"
+                branded = re.sub(
+                    r"(?<![A-Z0-9_-])(?:WOD|ZTW)(?![A-Z0-9_-])",
+                    replacement,
+                    branded,
+                )
+                if field == "content":
+                    branded = branded.replace("来自 算力星图 最新", "来自算力星图最新")
             if value != branded:
                 setattr(post, field, branded)
                 changed = True
@@ -863,13 +872,13 @@ def _internal_candidates(db: Session, batch: str, count: int, start_index: int =
             region = product.region_name or "平台"
             price = f"{float(product.price):.2f}"
             stock = product.stock or 0
-            content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自 ZTW 最新站内行情，实际下单前请再次确认。"
-            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region} is {price} CH/h, with {stock} units available. Price and availability come from the latest ZTW market data; confirm again before ordering."
+            content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自算力星图最新站内行情，实际下单前请再次确认。"
+            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region} is {price} CH/h, with {stock} units available. Price and availability come from the latest Compute Star Map market data; confirm again before ordering."
             title = f"{name} {batch} compute snapshot {index}"
         else:
             content_zh = f"今日算力使用提示 #{index + 1}\n\n开始训练前先确认显存、CUDA 版本和预计运行时长，可减少环境不匹配和闲置成本。"
             content_en = f"Daily Compute Tip #{index + 1}\n\nCheck VRAM, the CUDA version, and expected runtime before training to reduce environment mismatches and idle cost."
-            title = f"ZTW compute tip {batch} {index}"
+            title = f"Compute Star Map tip {batch} {index}"
         result.append(Candidate(
             source_key=INTERNAL_SOURCE_KEY,
             source_name=INTERNAL_SOURCE_NAME,

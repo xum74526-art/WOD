@@ -15,10 +15,10 @@ function stringLeaves(value: unknown): string[] {
   return Object.values(value).flatMap(stringLeaves)
 }
 
-test('native package identity and icon paths use the ZTW Vue 3 source tree', () => {
-  assert.equal(manifest.name, 'ZTW')
+test('native package identity and icon paths use the 算力星图 Vue 3 source tree', () => {
+  assert.equal(manifest.name, '算力星图')
   assert.equal(manifest.description, '算力资源撮合平台 App')
-  assert.equal(manifest.h5.title, 'ZTW')
+  assert.equal(manifest.h5.title, '算力星图')
   assert.equal(manifest.versionName, '1.2.1')
   assert.equal(manifest.versionCode, '121')
   assert.equal(manifest.vueVersion, '3')
@@ -26,7 +26,8 @@ test('native package identity and icon paths use the ZTW Vue 3 source tree', () 
 
   const platformConfig = manifest['app-plus'].distribute[CLIENT_PLATFORM]
   const packageId = CLIENT_PLATFORM === 'ios' ? platformConfig.appid : platformConfig.packagename
-  assert.equal(packageId, 'com.kai.wod')
+  assert.equal(packageId, 'com.kai.ztwstarmap')
+  assert.equal(manifest['app-plus'].distribute.ios.urltypes, 'kai')
 
   const iconPaths = stringLeaves(manifest['app-plus'].distribute.icons[CLIENT_PLATFORM])
   assert.ok(iconPaths.length >= 4)
@@ -37,7 +38,7 @@ test('native package identity and icon paths use the ZTW Vue 3 source tree', () 
   assert.equal(existsSync(resolve(appRoot, 'assets/branding/app-icon-master.png')), true)
 })
 
-test('login, registration and the native icon present the ZTW brand', () => {
+test('login, registration and the native icon present the 算力星图 brand', () => {
   if (CLIENT_PLATFORM === 'ios') {
     const iconPath = manifest['app-plus'].distribute.icons.ios.appstore
     const icon = readFileSync(resolve(appRoot, iconPath))
@@ -51,6 +52,6 @@ test('login, registration and the native icon present the ZTW brand', () => {
   assert.match(loginPage, /src="\/static\/logo\/logo\.png"/)
   assert.match(loginPage, /t\('appName'\)/)
   assert.match(loginPage, /t\('算力资源撮合平台'\)/)
-  assert.equal([...i18n.matchAll(/appName: 'ZTW'/g)].length, 2)
+  assert.equal([...i18n.matchAll(/appName: '算力星图'/g)].length, 2)
   assert.doesNotMatch(i18n, /appName: 'KAI'/)
 })

@@ -60,7 +60,7 @@ API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collec
 3. 使用新 API 镜像运行 `python migrate_account_recovery.py --check`。首次检查报告缺失项并
    返回非零是预期结果；除预期的账号找回增量外，出现任何不兼容结构都必须停止发布；
 4. 运行 `python migrate_account_recovery.py`，随后再次运行 `--check`，必须显示 schema ready；
-5. 确认 `https://wod.kai.com/reset-password` 已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；
+5. 在 KAI/OIDC 控制台登记 `https://wod.kai.com/api/auth/kai/callback`，并确认 `https://wod.kai.com/login`、`https://wod.kai.com/reset-password`、`https://wod.kai.com/account/settings` 与原生端 `kai://auth` 均已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；更换移动包名不等于更换 OAuth 回跳，除非 KAI 服务端和两个客户端在同一版本同时迁移，否则保持 `kai://auth`；
 6. 再启动候选 API，检查 `/health`、找回能力配置接口和近期日志，最后才切换正式流量。
 
 Docker 镜像必须包含 `migrate_account_recovery.py`，便于通过 `--entrypoint python` 在与正式服务
@@ -89,6 +89,22 @@ Git、发布记录或命令行。
 `REWARD_SETTLEMENT_ENABLED` 暂停入账，待问题确认后再恢复。
 
 Web standalone 必须在 Linux 上构建，不要把 macOS 产生的原生 Node 依赖直接上传到 Linux。
+
+### 移动端包名迁移与更新接口
+
+- 新 Android/iOS 标识统一为 `com.kai.ztwstarmap`，原生回跳继续使用 `kai://auth`；
+- 新 Android 客户端请求 `/api/platform/app-release` 时必须携带
+  `application_id=com.kai.ztwstarmap`，并只接收 `suanlixingtu.apk`；
+- 未携带 `application_id` 或显式携带 `com.kai.wod` 的旧 Android 客户端只能读取
+  `APP_ANDROID_LEGACY_*` 和 `wod.apk`，不能被引导安装新包作为“原位更新”；
+- 上传并校验新 APK 后，才可启用/更新 `APP_ANDROID_*`；旧包不再维护时应关闭
+  `APP_ANDROID_LEGACY_RELEASE_ENABLED`，不要把 legacy URL 改成新包；
+- Web 构建前用新签名 APK 的实际值填写 `NEXT_PUBLIC_KAI_ANDROID_APK_SIZE` 与
+  `NEXT_PUBLIC_KAI_ANDROID_APK_SHA256`；未打包时保持为空，官网会显示“待重新打包”，
+  不得沿用旧 APK 的大小或摘要；
+- iOS 仅在正式 App Store 页面存在后启用 `APP_IOS_RELEASE_ENABLED`，更新地址不得使用
+  Android APK 或任意第三方下载页；未携带 `application_id` 的旧 iOS 客户端只读取
+  `APP_IOS_LEGACY_*`，不会被引导安装不同 Bundle ID 的新应用。
 
 ## 验收命令
 

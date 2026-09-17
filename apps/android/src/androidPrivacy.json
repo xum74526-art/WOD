@@ -7,11 +7,11 @@
     "zh-Hant": "服務協議與隱私政策",
     "en": "Terms and Privacy Policy"
   },
-  "message": "歡迎使用 ZTW。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」表示您已閱讀並同意上述內容。",
+  "message": "歡迎使用算力星图。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」，即表示您已閱讀並同意。",
   "messageLocales": {
-    "zh-Hans": "欢迎使用 ZTW。为向您提供账号登录、算力行情、资源撮合、资讯社区与客服服务，我们会按照政策处理必要的账号资料、设备与网络信息，以及您主动提交的内容。请在使用前阅读<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>。点击“同意并继续”表示您已阅读并同意上述内容。",
-    "zh-Hant": "歡迎使用 ZTW。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」表示您已閱讀並同意上述內容。",
-    "en": "Welcome to ZTW. To provide account access, compute pricing, resource matching, community content, and support, we process necessary account data, device and network information, and content you submit. Before continuing, please read the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a>. Tap Accept and Continue only if you agree."
+    "zh-Hans": "欢迎使用算力星图。为向您提供账号登录、算力行情、资源撮合、资讯社区与客服服务，我们会按照政策处理必要的账号资料、设备与网络信息，以及您主动提交的内容。请在使用前阅读<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>。点击“同意并继续”，即表示您已阅读并同意。",
+    "zh-Hant": "歡迎使用算力星图。為向您提供帳號登入、算力行情、資源撮合、資訊社區與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」，即表示您已閱讀並同意。",
+    "en": "Welcome to 算力星图. To provide account access, compute pricing, resource matching, community content, and support, we process necessary account data, device and network information, and content you submit. Before continuing, please read the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a>. Tap Accept and Continue only if you agree."
   },
   "buttonAccept": "同意並繼續",
   "buttonAcceptLocales": {
@@ -34,11 +34,11 @@
       "zh-Hant": "確認提示",
       "en": "Confirmation"
     },
-    "message": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入 ZTW。若您仍不同意，應用將退出。",
+    "message": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入算力星图。若您仍不同意，應用將退出。",
     "messageLocales": {
-      "zh-Hans": "您需要先同意<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>才能进入 ZTW。若您仍不同意，应用将退出。",
-      "zh-Hant": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入 ZTW。若您仍不同意，應用將退出。",
-      "en": "You must accept the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a> before entering ZTW. If you still do not agree, the app will exit."
+      "zh-Hans": "您需要先同意<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>才能进入算力星图。若您仍不同意，应用将退出。",
+      "zh-Hant": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入算力星图。若您仍不同意，應用將退出。",
+      "en": "You must accept the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a> before entering 算力星图. If you still do not agree, the app will exit."
     },
     "buttonAccept": "同意並繼續",
     "buttonAcceptLocales": {

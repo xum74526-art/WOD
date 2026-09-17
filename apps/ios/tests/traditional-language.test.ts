@@ -49,6 +49,10 @@ test('the mobile converter covers fixed and runtime business terminology', () =>
     toTraditionalChinese('设置、视频上传、账号注销、资产、卡时、联系我们'),
     '設置、視頻上傳、賬號註銷、資產、卡時、聯繫我們',
   )
+  assert.equal(
+    toTraditionalChinese('欢迎使用算力星图移动客户端'),
+    '歡迎使用算力星图移動客戶端',
+  )
 })
 
 test('mobile entry points apply Traditional Chinese throughout the app', () => {
@@ -75,8 +79,8 @@ test('mobile entry points apply Traditional Chinese throughout the app', () => {
 
   assert.equal(manifest.locale, 'zh-Hant')
   assert.match(htmlEntry, /<html lang="zh-Hant">/)
-  assert.match(htmlEntry, /<title>ZTW<\/title>/)
-  assert.equal(nativeLocale['app.name'], 'ZTW')
+  assert.match(htmlEntry, /<title>算力星图<\/title>/)
+  assert.equal(nativeLocale['app.name'], '算力星图')
   assert.equal(nativeLocale['tab.home'], '首頁')
   assert.equal(nativeLocale['tab.community'], '資訊')
   assert.equal(uniLocale.common?.['uni.showModal.confirm'], '確定')

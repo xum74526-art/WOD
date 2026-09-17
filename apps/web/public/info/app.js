@@ -3,7 +3,7 @@ document.documentElement.classList.toggle("showcase-layout", showcaseMode);
 
 const showcaseTextMap = new Map([
   ["算力资源信息", "算力资源信息"],
-  ["ZTW 算力资源信息", "ZTW 算力资源信息"],
+  ["算力星图算力资源信息", "算力星图算力资源信息"],
   ["资源信息", "资源信息"],
   ["服务记录", "服务记录"],
   ["方案适配", "方案适配"],
@@ -68,8 +68,8 @@ const showcaseTextMap = new Map([
   ["同意合作信息在正式展示前接受审核与确认", "同意合作信息在正式展示前接受审核与确认"],
   ["提交后仅显示本地成功反馈，不会向外部系统发送数据。", "提交后仅显示本地成功反馈，不会向外部系统发送数据。"],
   ["提交合作申请", "提交合作申请"],
-  ["了解 ZTW 的服务定位、资源范围与需求服务流程。", "了解 ZTW 的服务定位、资源范围与需求服务流程。"],
-  ["ZTW 面向资源需求企业与资源合作方，提供 GPU 资源信息、需求登记、服务记录和合作申请等统一服务入口。", "ZTW 面向资源需求企业与资源合作方，提供 GPU 资源信息、需求登记、服务记录和合作申请等统一服务入口。"],
+  ["了解算力星图的服务定位、资源范围与需求服务流程。", "了解算力星图的服务定位、资源范围与需求服务流程。"],
+  ["算力星图面向资源需求企业与资源合作方，提供 GPU 资源信息、需求登记、服务记录和合作申请等统一服务入口。", "算力星图面向资源需求企业与资源合作方，提供 GPU 资源信息、需求登记、服务记录和合作申请等统一服务入口。"],
   ["平台围绕算力产品、使用地区、使用时长和服务方式组织信息，帮助企业清楚表达需求，也让合作方能够按统一字段登记资源信息。", "平台围绕算力产品、使用地区、使用时长和服务方式组织信息，帮助企业清楚表达需求，也让合作方能够按统一字段登记资源信息。"],
   ["资源需求企业与资源合作方", "资源需求企业与资源合作方"],
   ["GPU 计算、模型运行与设备资源服务", "GPU 计算、模型运行与设备资源服务"],
@@ -143,7 +143,7 @@ const showcaseResourceCopy = {
   "model-inference": {
     tag: "模型运行支持",
     name: "按需模型运行支持",
-    specs: [["资源", "ZTW GPU 资源"], ["方式", "方案沟通确认"], ["管理", "统一服务记录"]],
+    specs: [["资源", "算力星图 GPU 资源"], ["方式", "方案沟通确认"], ["管理", "统一服务记录"]],
     status: "服务条件可咨询",
   },
   "gpu-hosting": {
@@ -197,7 +197,7 @@ const resources = [
     tag: "模型运行支持",
     className: "ai",
     name: "按需模型运行支持",
-    specs: [["资源", "ZTW GPU 资源"], ["方式", "方案沟通确认"], ["管理", "统一服务记录"]],
+    specs: [["资源", "算力星图 GPU 资源"], ["方式", "方案沟通确认"], ["管理", "统一服务记录"]],
     status: "服务方案可咨询",
   },
   {
@@ -261,9 +261,9 @@ function createElement(tag, className, text) {
 function applyShowcaseCopy() {
   if (!showcaseMode) return;
 
-  document.title = "ZTW 算力资源信息";
+  document.title = "算力星图算力资源信息";
   const description = document.querySelector('meta[name="description"]');
-  if (description) description.content = "ZTW 算力资源信息静态页，提供资源信息展示、需求咨询、服务记录和合作申请演示。";
+  if (description) description.content = "算力星图算力资源信息静态页，提供资源信息展示、需求咨询、服务记录和合作申请演示。";
 
   document.querySelector(".brand")?.setAttribute("aria-label", "打开资源信息");
   document.querySelector(".hero-brief")?.setAttribute("aria-label", "资源信息概览");
@@ -279,8 +279,6 @@ function applyShowcaseCopy() {
     if (replacement) node.nodeValue = source.replace(trimmed, replacement);
   });
 
-  const contact = document.querySelector('.footer-links [data-toast]');
-  if (contact) contact.dataset.toast = "联系方式将在正式资料确认后补充。";
 }
 
 applyShowcaseCopy();
@@ -612,7 +610,7 @@ quoteForm.addEventListener("submit", (event) => {
   if (!resource) return;
 
   const order = {
-    id: `ZTW-${Date.now().toString(36).toUpperCase()}`,
+    id: `SLXT-${Date.now().toString(36).toUpperCase()}`,
     resourceId: resource.id,
     resourceName: displayResource(resource).name,
     region: String(formData.get("region")),

@@ -63,7 +63,7 @@ export function LegalDocument({ sections, accountDeletionLink = false }: LegalDo
           <p>{localize(`网站 ICP 备案：${LEGAL_ICP_FILING}`, `Website ICP filing: ${LEGAL_ICP_FILING}`)}</p>
         </div>
         <a href="tel:+864001082026">{localize("联系我们：+86 4001082026", "Contact us: +86 4001082026")}</a>
-        {accountDeletionLink ? <Link href="/account-deletion">{localize("申请注销 ZTW 账号", "Request ZTW account deletion")}</Link> : null}
+        {accountDeletionLink ? <Link href="/account-deletion">{localize("申请注销算力星图账号", "Request 算力星图 account deletion")}</Link> : null}
       </footer>
     </article>
   );

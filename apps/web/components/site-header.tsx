@@ -19,8 +19,15 @@ const navigation = [
   { key: "nav.download", label: "下载 App", href: "/download" },
 ];
 
-const androidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "/download/wod.apk";
-const mobileDownloadUrl = androidApkUrl || "https://wod.kai.com/download";
+const configuredAndroidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "";
+const configuredAndroidApkSize = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_SIZE?.trim() || "";
+const configuredAndroidApkSha256 = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_SHA256?.trim().toUpperCase() || "";
+const androidApkUrl = /^(?:https:\/\/wod\.kai\.com)?\/download\/suanlixingtu\.apk$/.test(configuredAndroidApkUrl)
+  && Boolean(configuredAndroidApkSize)
+  && /^[A-F0-9]{64}$/.test(configuredAndroidApkSha256)
+  ? configuredAndroidApkUrl
+  : "";
+const mobileDownloadUrl = "https://wod.kai.com/download";
 
 function isNavigationActive(pathname: string, href: string) {
   if (pathname === href) return true;
@@ -144,7 +151,7 @@ export function SiteHeader({ authMode = "auto" }: { authMode?: "auto" | "guest" 
             >
               <DownloadSimple size={16}/>{t(item.key, item.label)}
             </Link>
-            {downloadOpen && <section className="download-popover" role="dialog" aria-label={locale === "en" ? "Download KAI App" : "下载北斗 kai App"} onMouseEnter={openDownloadPopover}>
+            {downloadOpen && <section className="download-popover" role="dialog" aria-label={locale === "en" ? "Download 算力星图 App" : "下载算力星图 App"} onMouseEnter={openDownloadPopover}>
               <div className="download-popover__scan">
                 <header><Phone size={21}/><strong>{locale === "en" ? "Mobile" : "手机版"}</strong></header>
                 <p>{locale === "en" ? "Scan to open the download page" : "扫码打开手机下载页"}</p>

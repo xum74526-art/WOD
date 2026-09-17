@@ -107,7 +107,7 @@ export function MobileSupportWorkspace() {
                   <span>{item.role === "user" ? <UserCircle size={18} /> : <ChatCircleDots size={18} />}</span>
                   <div>
                     <small>
-                      {item.role === "user" ? t("support.me", "我") : t("support.assistant", "北斗 kai 自助客服")} · {formatDate(item.created_at, dateLocale)}
+                      {item.role === "user" ? t("support.me", "我") : t("support.assistant", "算力星图自助客服")} · {formatDate(item.created_at, dateLocale)}
                     </small>
                     <p>{item.content}</p>
                     {item.can_create_ticket && (

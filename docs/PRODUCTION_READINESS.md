@@ -39,7 +39,7 @@ git diff --check
 以下不能由仓库自动生成；未完成时不应宣布 App Store 或应用商店正式上线：
 
 1. 配置正式 DCloud AppID、iOS Bundle ID、Apple 开发者证书和 Provisioning Profile；
-2. 确认源码中的正式标识 `com.kai.wod` 已在 Android 与 Apple 发布账户登记，并使用长期稳定的签名；
+2. 确认源码中的正式标识 `com.kai.ztwstarmap` 已在 Android 与 Apple 发布账户登记，并使用长期稳定的签名；
 3. 完成手机号短信归属验证，并让用户协议、隐私政策与实际认证、支付和数据处理流程一致；
 4. 配置正式客服和个人信息处理联系方式，完成隐私/支付合规审核；
 5. 在支付商户沙箱或经授权的小额真实交易中，验证下单、回调、查单、超时和重复回调；

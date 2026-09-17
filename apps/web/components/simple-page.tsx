@@ -33,7 +33,7 @@ export function SimplePage({ title, description, titleEn, descriptionEn, body, b
     <div className="site-page public-v2 information-page">
       <SiteHeader />
       <main className="public-data-page kai-simple-page">
-        <header><p className="hero-eyebrow">ZTW / INFORMATION</p><h1>{localize(title, titleEn)}</h1><p>{localize(description, descriptionEn)}</p></header>
+        <header><p className="hero-eyebrow">算力星图 / INFORMATION</p><h1>{localize(title, titleEn)}</h1><p>{localize(description, descriptionEn)}</p></header>
         <section>{hasBody ? <p>{localize(body || "", bodyEn)}</p> : children ? null : <p>{fallbackBody}</p>}{children}<Link className="outline-link" href="/"><ArrowLeft size={16}/>{localize("返回首页", "Back to home")}</Link></section>
       </main>
       <SiteFooter />

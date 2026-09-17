@@ -20,8 +20,9 @@ import {
 import { communityDisplayText } from "../lib/community-ui.ts";
 
 test("legacy community brand values are renamed for display without changing backend identifiers", () => {
-  assert.equal(communityDisplayText("WOD资讯", "wod-market"), "ZTW资讯");
-  assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "ZTW 算力行情");
+  assert.equal(communityDisplayText("WOD资讯", "wod-market"), "算力星图资讯");
+  assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "算力星图 算力行情");
+  assert.equal(communityDisplayText("ZTW 算力行情", "wod-market"), "算力星图 算力行情");
   assert.equal(communityDisplayText("WOD 行情更新", "user-post"), "WOD 行情更新");
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 

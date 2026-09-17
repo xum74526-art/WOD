@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class AppReleaseInfo(BaseModel):
     platform: Literal["android", "ios"]
+    application_id: str | None = None
     available: bool
     latest_version_name: str | None = None
     latest_version_code: int | None = None

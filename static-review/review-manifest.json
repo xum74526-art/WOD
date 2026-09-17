@@ -1,5 +1,5 @@
 {
-  "name": "ZTW 算力资源信息",
+  "name": "算力星图",
   "label": "静态审核",
   "entry": "index.html",
   "type": "static",
@@ -9,5 +9,5 @@
   "canonicalUrl": "https://wod.kai.com/info",
   "reviewUrl": "https://static-review.vercel.app",
   "deploymentProvider": "vercel",
-  "preparedAt": "2026-08-26"
+  "preparedAt": "2026-09-17"
 }

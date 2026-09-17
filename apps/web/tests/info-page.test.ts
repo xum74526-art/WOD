@@ -13,7 +13,7 @@ test("/info is an isolated static page with production metadata and assets", () 
   assert.match(nextConfig, /connect-src 'none'/);
   assert.match(html, /<meta name="robots" content="index, follow" \/>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/wod\.kai\.com\/info" \/>/);
-  assert.match(html, /<title>ZTW 算力资源信息<\/title>/);
+  assert.match(html, /<title>算力星图算力资源信息<\/title>/);
   assert.match(html, /href="\/info\/styles\.css"/);
   assert.match(html, /href="\/info\/showcase\.css"/);
   assert.match(html, /src="\/info\/app\.js"/);
@@ -27,15 +27,16 @@ test("/info always uses the approved second layout without preview-port coupling
   assert.doesNotMatch(html + script + styles + showcaseStyles, /9103|document\.baseURI|location\.port/);
   assert.match(script, /wod\.info\.requests\.v1/);
   assert.match(html, /企业算力资源信息服务/);
-  assert.match(html, /粤ICP备案号待提供/);
-  assert.match(html, /粤公网安备号待提供/);
-  assert.match(html, /<span aria-hidden="true">\|<\/span>/);
+  assert.match(html, /沪ICP备2026046279号-1/);
+  assert.match(html, /https:\/\/beian\.miit\.gov\.cn\//);
+  assert.match(html, /联系我们：\+86 4001082026/);
+  assert.doesNotMatch(html, /备案号待提供|联系方式将在正式资料确认后补充/);
 });
 
 test("/info remains browser-only and does not call application or external services", () => {
   const combined = html + script;
   assert.doesNotMatch(combined, /\bfetch\s*\(|XMLHttpRequest|axios|WebSocket|EventSource|sendBeacon/);
-  assert.doesNotMatch(html, /<form[^>]+action=|https?:\/\/(?!wod\.kai\.com\/info)/);
+  assert.doesNotMatch(html, /<form[^>]+action=|https?:\/\/(?!wod\.kai\.com\/info|beian\.miit\.gov\.cn\/)/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /form-action 'none'/);
 });

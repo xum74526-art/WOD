@@ -6,16 +6,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "隱私政策 | ZTW",
-      description: "了解 ZTW 如何處理和保護個人信息，以及如何行使個人信息權利。",
+      title: "隱私政策 | 算力星图",
+      description: "了解算力星图如何處理和保護個人信息，以及如何行使個人信息權利。",
     },
     "zh-Hans": {
-      title: "隐私政策 | ZTW",
-      description: "了解 ZTW 如何处理和保护个人信息，以及如何行使个人信息权利。",
+      title: "隐私政策 | 算力星图",
+      description: "了解算力星图如何处理和保护个人信息，以及如何行使个人信息权利。",
     },
     en: {
-      title: "Privacy Policy | ZTW",
-      description: "How ZTW processes and protects personal information and how to exercise privacy rights.",
+      title: "Privacy Policy | 算力星图",
+      description: "How 算力星图 processes and protects personal information and how to exercise privacy rights.",
     },
   });
 }
@@ -26,8 +26,8 @@ const privacySections: LegalSection[] = [
     title: { zh: "适用范围与个人信息处理者", en: "Scope and data controller" },
     paragraphs: [
       {
-        zh: "本政策适用于 ZTW 网站、Android 与 iOS 客户端以及与账号、算力行情、需求撮合、商家协作、社区资讯和客服相关的服务。个人信息处理者为锆芯期算人工智能科技（上海）有限公司。",
-        en: "This policy applies to the ZTW website, Android and iOS apps, and related account, compute-market, request-matching, supplier, community and support services. The data controller is Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd.",
+        zh: "本政策适用于算力星图网站、Android 与 iOS 客户端以及与账号、算力行情、需求撮合、商家协作、社区资讯和客服相关的服务。个人信息处理者为锆芯期算人工智能科技（上海）有限公司。",
+        en: "This policy applies to the 算力星图 website, Android and iOS apps, and related account, compute-market, request-matching, supplier, community and support services. The data controller is Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd.",
       },
       {
         zh: "我们遵循合法、正当、必要和诚信原则，仅为本政策列明的目的处理所需信息。不同功能实际处理的信息取决于你是否启用和使用该功能。",
@@ -108,8 +108,8 @@ const privacySections: LegalSection[] = [
         en: "Camera, photo-library, image or video access is requested only when you take a photo, choose an avatar, upload a document or publish media. Microphone access is used only when you record a video with sound. Refusal affects only the relevant upload or recording feature.",
       },
       {
-        zh: "ZTW 当前不以提供核心服务为由申请通讯录或精确位置权限。你可在系统设置中关闭已授予权限。",
-        en: "ZTW does not request contacts or precise location as a condition of its core service. You can revoke granted permissions in system settings.",
+        zh: "算力星图当前不以提供核心服务为由申请通讯录或精确位置权限。你可在系统设置中关闭已授予权限。",
+        en: "算力星图 does not request contacts or precise location as a condition of its core service. You can revoke granted permissions in system settings.",
       },
     ],
   },
@@ -168,8 +168,8 @@ const privacySections: LegalSection[] = [
     title: { zh: "存储地点与跨境处理", en: "Storage location and cross-border processing" },
     paragraphs: [
       {
-        zh: "当前 ZTW 核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。当中国大陆用户使用服务时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。",
-        en: "ZTW's core API, database and uploaded files are currently deployed in Alibaba Cloud's Hong Kong region (cn-hongkong). When a user in mainland China uses the service, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfilment, security, troubleshooting and legally required retention.",
+        zh: "当前算力星图核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。当中国大陆用户使用服务时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。",
+        en: "算力星图's core API, database and uploaded files are currently deployed in Alibaba Cloud's Hong Kong region (cn-hongkong). When a user in mainland China uses the service, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfilment, security, troubleshooting and legally required retention.",
       },
       {
         zh: "该中国香港服务环境由本政策所列运营主体控制，云基础设施服务商为阿里云；处理目的、方式和信息种类限于本政策所列范围。你可通过账号功能或“联系我们：+86 4001082026”向运营主体行使查询、更正、复制、删除、限制处理和撤回同意等权利。对于依法构成向境外提供个人信息的场景，我们将在传输前完成适用的个人信息保护影响评估和其他法定程序，并通过独立勾选或弹窗取得单独同意；本政策的一般同意不替代该单独同意。",
@@ -222,8 +222,8 @@ const privacySections: LegalSection[] = [
         en: "In account settings and the relevant service page, you can access, correct or supplement data and manage your recovery email, addresses, bank cards, KAI identity link and system permissions. You may delete your own deletable content, withdraw revocable consent, or request a copy or deletion of personal information. Withdrawal does not affect the lawfulness of earlier processing.",
       },
       {
-        zh: "你可通过账号注销页面检查未结事项并申请注销。注销完成后，ZTW 登录会话和 KAI 登录关联失效，并清理可删除资料；注销 ZTW 不会注销外部 KAI 账号。若页面暂时无法完成请求，可通过本政策所列电话联系我们。我们通常在核验身份后 15 个工作日内答复。",
-        en: "You can review outstanding items and request deletion on the account-deletion page. Once completed, ZTW sessions and the KAI sign-in link are disabled and deletable data is cleared. Deleting ZTW does not delete the external KAI account. If the page cannot complete your request, contact us by the telephone number in this policy. We normally respond within 15 working days after identity verification.",
+        zh: "你可通过账号注销页面检查未结事项并申请注销。注销完成后，算力星图登录会话和 KAI 登录关联失效，并清理可删除资料；注销算力星图不会注销外部 KAI 账号。若页面暂时无法完成请求，可通过本政策所列电话联系我们。我们通常在核验身份后 15 个工作日内答复。",
+        en: "You can review outstanding items and request deletion on the account-deletion page. Once completed, 算力星图 sessions and the KAI sign-in link are disabled and deletable data is cleared. Deleting 算力星图 does not delete the external KAI account. If the page cannot complete your request, contact us by the telephone number in this policy. We normally respond within 15 working days after identity verification.",
       },
     ],
   },
@@ -232,8 +232,8 @@ const privacySections: LegalSection[] = [
     title: { zh: "自动化决策与行情说明", en: "Automated decisions and market data" },
     paragraphs: [
       {
-        zh: "ZTW 可使用规则进行登录风控、重复请求识别和内容安全检查，但不会仅凭自动化决策对你作出具有重大影响且无法申诉的决定。需要人工审核的实名、商家、交付、争议或账户事项由授权人员处理。",
-        en: "ZTW may use rules for sign-in risk control, duplicate-request detection and content-safety checks, but does not make solely automated decisions that significantly affect you without a way to appeal. Identity, supplier, fulfilment, dispute and account matters requiring human review are handled by authorised personnel.",
+        zh: "算力星图可使用规则进行登录风控、重复请求识别和内容安全检查，但不会仅凭自动化决策对你作出具有重大影响且无法申诉的决定。需要人工审核的实名、商家、交付、争议或账户事项由授权人员处理。",
+        en: "算力星图 may use rules for sign-in risk control, duplicate-request detection and content-safety checks, but does not make solely automated decisions that significantly affect you without a way to appeal. Identity, supplier, fulfilment, dispute and account matters requiring human review are handled by authorised personnel.",
       },
       {
         zh: "算力报价、K 线和市场统计用于信息展示和撮合参考，不代表个人画像、投资建议、即时库存或必然成交结果。",
@@ -246,8 +246,8 @@ const privacySections: LegalSection[] = [
     title: { zh: "未成年人保护", en: "Minors" },
     paragraphs: [
       {
-        zh: "ZTW 面向具有完全民事行为能力的成年人，不向未满 18 周岁的人提供注册和交易服务。未满 18 周岁请勿注册、提交实名资料或使用撮合服务；如我们发现误收集，将在核实后依法删除或采取其他必要措施。",
-        en: "ZTW is intended for adults with full civil capacity and does not offer registration or transaction services to anyone under 18. If you are under 18, do not register, submit identity data or use matching services. If we learn that data was collected in error, we will delete it or take other necessary measures after verification.",
+        zh: "算力星图面向具有完全民事行为能力的成年人，不向未满 18 周岁的人提供注册和交易服务。未满 18 周岁请勿注册、提交实名资料或使用撮合服务；如我们发现误收集，将在核实后依法删除或采取其他必要措施。",
+        en: "算力星图 is intended for adults with full civil capacity and does not offer registration or transaction services to anyone under 18. If you are under 18, do not register, submit identity data or use matching services. If we learn that data was collected in error, we will delete it or take other necessary measures after verification.",
       },
     ],
   },
@@ -272,8 +272,8 @@ export default function PrivacyPage() {
     <SimplePage
       title="隐私政策"
       titleEn="Privacy Policy"
-      description="说明 ZTW 如何收集、使用、共享、保存和保护个人信息，以及你可以如何行使相关权利。"
-      descriptionEn="How ZTW collects, uses, shares, retains and protects personal information, and how you can exercise your rights."
+      description="说明算力星图如何收集、使用、共享、保存和保护个人信息，以及你可以如何行使相关权利。"
+      descriptionEn="How 算力星图 collects, uses, shares, retains and protects personal information, and how you can exercise your rights."
     >
       <LegalDocument sections={privacySections} accountDeletionLink />
     </SimplePage>

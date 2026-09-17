@@ -2,10 +2,16 @@ export type MobilePlatform = 'android' | 'ios'
 
 export interface ComparableRelease {
   platform: MobilePlatform
+  application_id: string | null
   available: boolean
   latest_version_name: string | null
   latest_version_code: number | null
   update_url: string | null
+}
+
+const EXPECTED_APPLICATION_ID: Record<MobilePlatform, string> = {
+  android: 'com.kai.ztwstarmap',
+  ios: 'com.kai.ztwstarmap',
 }
 
 export function normalizeVersionCode(value: unknown): number | null {
@@ -43,6 +49,7 @@ export function isValidRelease(release: unknown, platform: MobilePlatform): rele
   if (!release || typeof release !== 'object') return false
   const value = release as Partial<ComparableRelease>
   return value.platform === platform
+    && value.application_id === EXPECTED_APPLICATION_ID[platform]
     && value.available === true
     && typeof value.latest_version_name === 'string'
     && Boolean(value.latest_version_name.trim())

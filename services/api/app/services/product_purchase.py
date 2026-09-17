@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.market_freshness import product_market_source
 
 
-UNVERIFIED_SUPPLIER_REASON = "该资源尚未关联入驻资料已审核的 ZTW 商家，暂不可下单"
+UNVERIFIED_SUPPLIER_REASON = "该资源尚未关联入驻资料已审核的算力星图商家，暂不可下单"
 UNAVAILABLE_LISTING_REASON = "该资源已下架或暂不可购买"
 RETIRED_MARKET_SOURCE_REASON = "该行情来源已停用，仅保留历史记录"
 PLATFORM_FULFILLMENT_UNAVAILABLE_REASON = "平台履约暂未配置，当前不可下单"

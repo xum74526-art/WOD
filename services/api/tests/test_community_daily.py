@@ -52,16 +52,16 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertFalse(_is_playable_video_reference("bilibili", "BV1Ab411C7De&autoplay=1"))
         self.assertFalse(_is_playable_video_reference("bilibili", ""))
 
-    def test_internal_fallback_uses_ztw_display_name_and_legacy_source_key(self):
+    def test_internal_fallback_uses_current_display_name_and_legacy_source_key(self):
         db = MagicMock()
         db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
 
         candidate = _internal_candidates(db, "2026-09-09", 1)[0]
 
         self.assertEqual(candidate.source_key, "wod-market")
-        self.assertEqual(candidate.source_name, "ZTW 算力行情")
-        self.assertEqual(candidate.author, "ZTW")
-        self.assertTrue(candidate.title.startswith("ZTW compute tip"))
+        self.assertEqual(candidate.source_name, "算力星图算力行情")
+        self.assertEqual(candidate.author, "算力星图")
+        self.assertTrue(candidate.title.startswith("Compute Star Map tip"))
 
     def test_internal_brand_backfill_keeps_legacy_source_key(self):
         post = MagicMock(
@@ -74,10 +74,10 @@ class CommunityDailyTests(unittest.TestCase):
         db.query.return_value.filter.return_value.all.return_value = [post]
 
         self.assertEqual(_backfill_internal_branding(db), 1)
-        self.assertEqual(post.content, "价格来自 ZTW 最新站内行情，优惠码 WOD10 继续有效")
-        self.assertEqual(post.content_en, "Latest ZTW market data")
-        self.assertEqual(post.source_name, "ZTW 算力行情")
-        self.assertEqual(post.source_author, "ZTW")
+        self.assertEqual(post.content, "价格来自算力星图最新站内行情，优惠码 WOD10 继续有效")
+        self.assertEqual(post.content_en, "Latest Compute Star Map market data")
+        self.assertEqual(post.source_name, "算力星图算力行情")
+        self.assertEqual(post.source_author, "算力星图")
 
     def test_existing_internal_author_is_renamed_without_changing_identity(self):
         user = SimpleNamespace(username="WOD资讯", phone="wod-community")
@@ -85,7 +85,7 @@ class CommunityDailyTests(unittest.TestCase):
         db.query.return_value.filter.return_value.first.return_value = user
 
         self.assertIs(_get_system_user(db), user)
-        self.assertEqual(user.username, "ZTW资讯")
+        self.assertEqual(user.username, "算力星图资讯")
         self.assertEqual(user.phone, "wod-community")
         db.flush.assert_called_once_with()
 

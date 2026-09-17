@@ -10,7 +10,7 @@ KAI-main/
 ├── apps/
 │   ├── web/          # Next.js Web、BFF、完整业务与管理界面
 │   ├── ios/          # uni-app iOS 客户端
-│   └── android/      # uni-app Android 客户端，包名 com.kai.wod
+│   └── android/      # uni-app Android 客户端，包名 com.kai.ztwstarmap
 ├── services/
 │   └── api/          # 唯一 FastAPI 业务后端和数据库所有者
 ├── packages/

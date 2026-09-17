@@ -1,5 +1,5 @@
 {
-    "name" : "ZTW",
+    "name" : "算力星图",
     "appid" : "__UNI__47CF9D3",
     "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hant",
@@ -26,7 +26,7 @@
         },
         "distribute" : {
             "android" : {
-                "packagename" : "com.kai.wod",
+                "packagename" : "com.kai.ztwstarmap",
                 "schemes" : "kai",
                 "minSdkVersion" : 23,
                 "targetSdkVersion" : 36,
@@ -55,7 +55,7 @@
         }
     },
     "h5" : {
-        "title" : "ZTW",
+        "title" : "算力星图",
         "darkmode" : true,
         "themeLocation" : "theme.json",
         "router" : {

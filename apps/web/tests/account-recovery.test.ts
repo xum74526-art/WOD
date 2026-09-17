@@ -81,7 +81,7 @@ test("recovery UI distinguishes linked-email settings from email recovery and ne
   assert.doesNotMatch(verifyPage, /searchParams|token=/);
 });
 
-test("account recovery and verification UI ship complete English copy under the ZTW brand", () => {
+test("account recovery and verification UI ship complete English copy under the 算力星图 brand", () => {
   const recovery = read("../components/password-recovery-panel.tsx");
   const verification = read("../components/email-verification-result.tsx");
   const localeRoot = read("../components/locale-root.tsx");
@@ -92,8 +92,8 @@ test("account recovery and verification UI ship complete English copy under the 
   );
   assert.ok(referencedKeys.size >= 40, "expected all recovery states and actions to be localized");
   for (const key of referencedKeys) assert.match(localeRoot, new RegExp(`"${key.replaceAll(".", "\\.")}"\\s*:`));
-  assert.match(localeRoot, /"auth\.intro\.forgot": "Recover your ZTW account"/);
-  assert.doesNotMatch(localeRoot, /"auth\.intro\.forgot": "Recover your KAI account"/);
+  assert.match(localeRoot, /"auth\.intro\.forgot": "Recover your 算力星图 account"/);
+  assert.doesNotMatch(localeRoot, /"auth\.intro\.forgot": "Recover your (?:ZTW|KAI) account"/);
   assert.match(localeRoot, /"settings\.recoveryEmail": "Email binding"/);
   assert.match(localeRoot, /"settings\.recoveryEmailVerified": "Linked email"/);
   assert.match(localeRoot, /"auth\.recovery\.emailMethod": "Email recovery"/);

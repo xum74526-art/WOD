@@ -11,7 +11,7 @@ const manifest = JSON.parse(read("./review-manifest.json"));
 const vercelConfig = JSON.parse(read("./vercel.json"));
 
 test("package is explicitly marked for static review", () => {
-  assert.equal(manifest.name, "ZTW 算力资源信息");
+  assert.equal(manifest.name, "算力星图");
   assert.equal(manifest.label, "静态审核");
   assert.equal(manifest.type, "static");
   assert.equal(manifest.backendRequired, false);
@@ -44,9 +44,9 @@ test("static review package never contacts a backend or external service", () =>
 test("approved production layout and safe copy are fixed in the package", () => {
   const combined = html + script + styles + showcaseStyles;
   assert.match(script, /^const showcaseMode = true;/);
-  assert.match(html, /粤ICP备案号待提供/);
-  assert.match(html, /粤公网安备号待提供/);
-  assert.match(html, /<span aria-hidden="true">\|<\/span>/);
+  assert.match(html, /联系我们：\+86 4001082026/);
+  assert.match(html, /沪ICP备2026046279号-1/);
+  assert.doesNotMatch(combined, /待提供|正式资料确认后补充|粤ICP备|粤公网安备/);
   assert.doesNotMatch(combined, /9103|noindex|XXXXXXXX|备案信息将在核准后公示|KAI Pricing|订购|订单|购买|供应商|结算/);
   assert.equal((html.match(/id="view-/g) ?? []).length, 6);
   assert.equal((script.match(/^    id: "/gm) ?? []).length, 6);

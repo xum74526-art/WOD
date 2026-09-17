@@ -5,16 +5,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "重設密碼 | 北斗 kai",
-      description: "使用安全連結為 ZTW 帳號設定新密碼。",
+      title: "重設密碼 | 算力星图",
+      description: "使用安全連結為算力星图帳號設定新密碼。",
     },
     "zh-Hans": {
-      title: "重置密码 | 北斗 kai",
-      description: "使用安全链接为 ZTW 账号设置新密码。",
+      title: "重置密码 | 算力星图",
+      description: "使用安全链接为算力星图账号设置新密码。",
     },
     en: {
-      title: "Reset password | KAI",
-      description: "Use a secure link to set a new password for your ZTW account.",
+      title: "Reset password | 算力星图",
+      description: "Use a secure link to set a new password for your 算力星图 account.",
     },
   }, { robots: { index: false, follow: false } });
 }

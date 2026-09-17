@@ -695,6 +695,10 @@ const allowedMobileDrift = new Set([
   'src/androidPrivacy.json',
   'src/utils/client-platform.ts',
   'src/static/logo/logo-1024.png',
+  // Each manifest uses the same public identity but stores the callback scheme
+  // under a platform-specific DCloud field; the matching regression assertion
+  // therefore cannot be byte-for-byte identical.
+  'tests/manifest-branding.test.ts',
   'tests/manifest-permissions.test.ts',
   'tests/privacy-startup.test.ts',
 ])

@@ -63,12 +63,12 @@ test("terms describe the live matchmaking mode without inventing enabled payment
   assert.doesNotMatch(terms, /正式用户协议需要|The formal terms must|access@kai\.com|mailto:/);
 });
 
-test("public legal shell and contact surface use ZTW and expose no public email", () => {
+test("public legal shell and contact surface use 算力星图 and expose no public email", () => {
   const simple = read("../components/simple-page.tsx");
   const contact = read("../app/contact/page.tsx");
   const footer = read("../components/site-footer.tsx");
-  assert.match(simple, />ZTW \/ INFORMATION</);
-  assert.doesNotMatch(simple, /北斗 kai \/ INFORMATION|KAI \/ INFORMATION/);
+  assert.match(simple, />算力星图 \/ INFORMATION</);
+  assert.doesNotMatch(simple, /北斗 kai \/ INFORMATION|ZTW \/ INFORMATION|KAI \/ INFORMATION/);
   assert.match(contact, /<ContactPhone\s*\/>/);
   for (const source of [contact, footer]) assert.doesNotMatch(source, /access@kai\.com|mailto:/);
 });

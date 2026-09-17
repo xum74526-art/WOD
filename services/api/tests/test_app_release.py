@@ -9,18 +9,34 @@ from app.routers.platform import router as platform_router
 
 class AppReleaseTests(unittest.TestCase):
     _FIELDS = (
+        "APP_ANDROID_APPLICATION_ID",
         "APP_ANDROID_RELEASE_ENABLED",
         "APP_ANDROID_LATEST_VERSION_NAME",
         "APP_ANDROID_LATEST_VERSION_CODE",
         "APP_ANDROID_UPDATE_URL",
         "APP_ANDROID_RELEASE_NOTES_ZH",
         "APP_ANDROID_RELEASE_NOTES_EN",
+        "APP_ANDROID_LEGACY_APPLICATION_ID",
+        "APP_ANDROID_LEGACY_RELEASE_ENABLED",
+        "APP_ANDROID_LEGACY_LATEST_VERSION_NAME",
+        "APP_ANDROID_LEGACY_LATEST_VERSION_CODE",
+        "APP_ANDROID_LEGACY_UPDATE_URL",
+        "APP_ANDROID_LEGACY_RELEASE_NOTES_ZH",
+        "APP_ANDROID_LEGACY_RELEASE_NOTES_EN",
+        "APP_IOS_APPLICATION_ID",
         "APP_IOS_RELEASE_ENABLED",
         "APP_IOS_LATEST_VERSION_NAME",
         "APP_IOS_LATEST_VERSION_CODE",
         "APP_IOS_UPDATE_URL",
         "APP_IOS_RELEASE_NOTES_ZH",
         "APP_IOS_RELEASE_NOTES_EN",
+        "APP_IOS_LEGACY_APPLICATION_ID",
+        "APP_IOS_LEGACY_RELEASE_ENABLED",
+        "APP_IOS_LEGACY_LATEST_VERSION_NAME",
+        "APP_IOS_LEGACY_LATEST_VERSION_CODE",
+        "APP_IOS_LEGACY_UPDATE_URL",
+        "APP_IOS_LEGACY_RELEASE_NOTES_ZH",
+        "APP_IOS_LEGACY_RELEASE_NOTES_EN",
     )
 
     def setUp(self):
@@ -28,31 +44,78 @@ class AppReleaseTests(unittest.TestCase):
         app = FastAPI()
         app.include_router(platform_router)
         self.client = TestClient(app)
+        settings.APP_ANDROID_RELEASE_ENABLED = True
+        settings.APP_ANDROID_LEGACY_RELEASE_ENABLED = True
 
     def tearDown(self):
         self.client.close()
         for name, value in self.original.items():
             setattr(settings, name, value)
 
-    def test_android_release_is_public_and_matches_the_published_package(self):
+    def test_legacy_android_without_application_id_stays_on_legacy_package(self):
         response = self.client.get("/api/platform/app-release", params={"platform": "android"})
 
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()["data"]
         self.assertEqual(data["platform"], "android")
+        self.assertEqual(data["application_id"], "com.kai.wod")
         self.assertTrue(data["available"])
         self.assertEqual(data["latest_version_name"], "1.2.1")
         self.assertEqual(data["latest_version_code"], 121)
         self.assertEqual(data["update_url"], "https://wod.kai.com/download/wod.apk")
 
-    def test_ios_update_is_unavailable_until_an_app_store_page_is_configured(self):
-        response = self.client.get("/api/platform/app-release", params={"platform": "ios"})
+    def test_renamed_android_receives_only_its_matching_package(self):
+        response = self.client.get(
+            "/api/platform/app-release",
+            params={"platform": "android", "application_id": "com.kai.ztwstarmap"},
+        )
 
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()["data"]
+        self.assertEqual(data["application_id"], "com.kai.ztwstarmap")
+        self.assertTrue(data["available"])
+        self.assertEqual(
+            data["update_url"],
+            "https://wod.kai.com/download/suanlixingtu.apk",
+        )
+
+    def test_unknown_application_id_fails_closed(self):
+        data = self.client.get(
+            "/api/platform/app-release",
+            params={"platform": "android", "application_id": "com.example.other"},
+        ).json()["data"]
+
+        self.assertFalse(data["available"])
+        self.assertIsNone(data["application_id"])
+        self.assertIsNone(data["update_url"])
+
+    def test_ios_update_is_unavailable_until_an_app_store_page_is_configured(self):
+        response = self.client.get(
+            "/api/platform/app-release",
+            params={"platform": "ios", "application_id": "com.kai.ztwstarmap"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+        self.assertEqual(data["application_id"], "com.kai.ztwstarmap")
         self.assertFalse(data["available"])
         self.assertIsNone(data["update_url"])
         self.assertIsNone(data["latest_version_code"])
+
+    def test_legacy_ios_without_application_id_cannot_receive_the_new_bundle(self):
+        settings.APP_IOS_RELEASE_ENABLED = True
+        settings.APP_IOS_LATEST_VERSION_NAME = "1.2.1"
+        settings.APP_IOS_LATEST_VERSION_CODE = 121
+        settings.APP_IOS_UPDATE_URL = "https://apps.apple.com/cn/app/id123456789"
+
+        data = self.client.get(
+            "/api/platform/app-release",
+            params={"platform": "ios"},
+        ).json()["data"]
+
+        self.assertEqual(data["application_id"], "com.kai.wod")
+        self.assertFalse(data["available"])
+        self.assertIsNone(data["update_url"])
 
     def test_untrusted_or_malformed_release_configuration_fails_closed(self):
         for url in (
@@ -64,7 +127,8 @@ class AppReleaseTests(unittest.TestCase):
             with self.subTest(url=url):
                 settings.APP_ANDROID_UPDATE_URL = url
                 data = self.client.get(
-                    "/api/platform/app-release", params={"platform": "android"}
+                    "/api/platform/app-release",
+                    params={"platform": "android", "application_id": "com.kai.ztwstarmap"},
                 ).json()["data"]
                 self.assertFalse(data["available"])
                 self.assertIsNone(data["update_url"])
@@ -76,7 +140,8 @@ class AppReleaseTests(unittest.TestCase):
         settings.APP_IOS_UPDATE_URL = "https://apps.apple.com/cn/app/ztw/id123456789"
 
         data = self.client.get(
-            "/api/platform/app-release", params={"platform": "ios"}
+            "/api/platform/app-release",
+            params={"platform": "ios", "application_id": "com.kai.ztwstarmap"},
         ).json()["data"]
 
         self.assertTrue(data["available"])
@@ -87,7 +152,8 @@ class AppReleaseTests(unittest.TestCase):
         settings.APP_ANDROID_RELEASE_NOTES_EN = "Login fix|Update prompt|Stability"
 
         data = self.client.get(
-            "/api/platform/app-release", params={"platform": "android"}
+            "/api/platform/app-release",
+            params={"platform": "android", "application_id": "com.kai.ztwstarmap"},
         ).json()["data"]
 
         self.assertEqual(data["release_notes_zh"], ["修复登录", "优化更新提示", "提升稳定性"])

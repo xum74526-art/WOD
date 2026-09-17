@@ -4,8 +4,8 @@ import { toTraditionalChinese } from "./traditional-chinese.ts";
 
 const PERSON_EN: Record<string, string> = {
   "体验用户": "Demo User",
-  "WOD资讯": "ZTW News",
-  "ZTW资讯": "ZTW News",
+  "WOD资讯": "算力星图 News",
+  "ZTW资讯": "算力星图 News",
 };
 
 /**
@@ -15,8 +15,8 @@ const PERSON_EN: Record<string, string> = {
  */
 export function localizePersonName(value: string | null | undefined, locale: KaiLocale) {
   const source = String(value ?? "").trim();
-  if (source === "WOD资讯" && locale === "zh-Hans") return "ZTW资讯";
-  if (source === "WOD资讯" && locale === "zh-Hant") return "ZTW資訊";
+  if ((source === "WOD资讯" || source === "ZTW资讯") && locale === "zh-Hans") return "算力星图资讯";
+  if ((source === "WOD资讯" || source === "ZTW资讯") && locale === "zh-Hant") return "算力星图資訊";
   if (source && locale === "zh-Hant") return toTraditionalChinese(source);
   if (!source || locale !== "en") return source;
   if (PERSON_EN[source]) return PERSON_EN[source];

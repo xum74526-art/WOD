@@ -338,7 +338,7 @@ function product(value: unknown) {
     : "kai_self_operated";
   const supplierId = sellerType === "merchant" && rawSupplierId != null && rawSupplierId > 0 ? rawSupplierId : null;
   const supplierName = text(item.supplier_name) || null;
-  const sellerName = text(item.seller_name) || supplierName || (sellerType === "kai_self_operated" ? "KAI 自营" : "第三方商家");
+  const sellerName = text(item.seller_name) || supplierName || (sellerType === "kai_self_operated" ? "算力星图自营" : "第三方商家");
   const fulfillmentMode = text(
     item.fulfillment_mode,
     sellerType === "kai_self_operated" ? "platform_manual" : "merchant_manual",
@@ -369,11 +369,11 @@ function product(value: unknown) {
     seller_name: sellerName,
     fulfillment_mode: fulfillmentMode,
     resource_claim_source: resourceClaimSource,
-    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "KAI 自营 · 平台人工交付" : "商家发布 · 商家人工交付"),
+    assurance_label: text(item.assurance_label, sellerType === "kai_self_operated" ? "算力星图自营 · 平台人工交付" : "商家发布 · 商家人工交付"),
     assurance_description: text(
       item.assurance_description,
       sellerType === "kai_self_operated"
-        ? "价格与商品由 KAI 发布，平台安排人工交付。"
+        ? "价格与商品由算力星图发布，平台安排人工交付。"
         : "商品配置与库存由商家自行申报，并由该商家负责人工交付；平台记录订单、验收与争议状态。",
     ),
     name: text(item.name),
@@ -462,7 +462,7 @@ function order(value: unknown, supplierView = false) {
     ? (item.purchase_unit === "hour" && item.duration_hours != null ? number(item.duration_hours) : null)
     : number(item.purchase_hours);
   const canonicalStatus = text(item.status);
-  const supplierName = text(item.supplier_name, "北斗 kai 商家");
+  const supplierName = text(item.supplier_name, "算力星图商家");
   const sellerType = text(item.seller_type, text(item.market_source) === "kai" ? "kai_self_operated" : "merchant") === "kai_self_operated"
     ? "kai_self_operated"
     : "merchant";

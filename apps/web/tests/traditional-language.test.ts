@@ -49,7 +49,7 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   const settings = fs.readFileSync(new URL("../components/ui-settings.tsx", import.meta.url), "utf8");
 
   assert.match(layout, /normalizeStoredLocale\(storedLocale\)/);
-  assert.match(layout, /default: "北斗 kai 算力市場"/);
+  assert.match(layout, /default: "算力星图算力市場"/);
   assert.match(localeRoot, /locale === "zh-Hant" \? toTraditionalChinese\(fallback\)/);
   assert.match(localeRoot, /locale === "zh-Hant"\) return toTraditionalChinese\(raw\)/);
   for (const key of [

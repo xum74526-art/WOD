@@ -109,7 +109,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 ### 账号找回上线
 
-账号找回使用 ZTW 内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到 ZTW 账号。KAI 找回只认已经绑定的 `issuer + subject`。
+账号找回使用算力星图内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到算力星图账号。KAI 找回只认已经绑定的 `issuer + subject`。
 
 对已有数据库，先在备份副本执行只读检查，再运行范围受限的迁移：
 
@@ -120,7 +120,7 @@ python migrate_account_recovery.py
 python migrate_account_recovery.py --check
 ```
 
-生产启用邮箱找回前，需要在私有环境文件中填写 `ACCOUNT_RECOVERY_SMTP_*`，确认发信域名的 SPF、DKIM、DMARC，并把 `https://wod.kai.com/reset-password` 加入 `KAI_AUTH_ALLOWED_RETURN_URLS`。`ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN` 必须是固定 HTTPS 站点来源，不能从请求头动态生成。
+生产启用邮箱找回前，需要在私有环境文件中填写 `ACCOUNT_RECOVERY_SMTP_*`，确认发信域名的 SPF、DKIM、DMARC。KAI/OIDC 控制台回调应为 `https://wod.kai.com/api/auth/kai/callback`，`KAI_AUTH_ALLOWED_RETURN_URLS` 必须精确包含登录、重置密码、账户设置绑定和 `kai://auth` 四类正式返回地址。`ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN` 必须是固定 HTTPS 站点来源，不能从请求头动态生成。
 
 重置链接的票据位于 URL fragment，恢复票据表只保存票据摘要；待发邮件通过同一数据库事务写入持久 outbox，收件地址和待发票据均使用敏感字段密钥加密。API 定时 worker 按 `ACCOUNT_RECOVERY_MAIL_*` 的批量、租约与指数退避参数投递，成功、过期或最终失败后立即清空加密 payload；已消费或过期的恢复票据会清除邮箱副本，并在短期运维保留窗口后删除。公开请求不再依赖进程内 `BackgroundTasks`。重置成功后会撤销该账号的全部 Web、iOS 和 Android 登录会话，用户必须重新登录。历史账号不会自动拥有找回邮箱，需要登录后在账户设置中主动绑定并完成邮件验证。
 

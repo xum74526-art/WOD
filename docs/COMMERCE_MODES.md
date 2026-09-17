@@ -1,6 +1,6 @@
 # Commerce modes
 
-ZTW ships one codebase with two independently controlled release modes. The
+算力星图 ships one codebase with two independently controlled release modes. The
 current App Store review build is a matchmaking product. The future qualified
 build can enable direct wallet transactions without restoring deleted code.
 

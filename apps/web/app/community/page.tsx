@@ -18,7 +18,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Se
       <main className="public-data-page community-page">
         <header className="community-hero">
           <div className="community-hero__copy">
-            <p className="hero-eyebrow">北斗 kai COMPUTE COMMUNITY</p>
+            <p className="hero-eyebrow">算力星图 COMPUTE COMMUNITY</p>
             <h1><I18nText id="community.title" zh="看懂算力，再做选择"/></h1>
             <p><I18nText id="community.description" zh="聚合 GPU 价格、硬件、基础设施与产业动态，为服务器采购和租用提供更清晰的判断依据。"/></p>
           </div>

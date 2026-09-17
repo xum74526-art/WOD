@@ -45,7 +45,7 @@ export async function uploadCommunityMediaBatch<T>(
 export function communityDisplayText(value?: string | null, sourceKey?: string | null) {
   const source = String(value || "");
   if (sourceKey !== "wod-market") return source;
-  return source.replace(/(^|[^A-Z0-9_-])WOD(?=$|[^A-Z0-9_-])/g, "$1ZTW");
+  return source.replace(/(^|[^A-Z0-9_-])(?:WOD|ZTW)(?=$|[^A-Z0-9_-])/g, "$1算力星图");
 }
 
 export function communityShareText(post: {

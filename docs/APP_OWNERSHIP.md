@@ -50,7 +50,7 @@
 1. API 变化先修改 `services/api`，重新导出 OpenAPI，再更新三个客户端。
 2. 已审核商家可在 iOS/Android 新增、编辑、上架或下架自己的算力资源；商家资料修改、SSH 交付、财务和平台审核写操作仍只在 Web 端提供。
 3. iOS/Android 若实现相同功能，应保持相同 API 契约和测试用例；平台差异仅限回跳、权限、签名和系统能力。
-4. 正式 Android applicationId 固定为 `com.kai.wod`；签名材料不进入仓库。
+4. 正式 Android applicationId 固定为 `com.kai.ztwstarmap`；旧 `com.kai.wod` 仅作为历史包保留，签名材料不进入仓库。
 5. 支付密钥只存在于云端 API 环境，任何客户端都不得包含商户密钥。
 
 ## 当前移动端一致性基线

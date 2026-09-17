@@ -20,8 +20,9 @@
 
 ## 平台差异
 
-- Android 包名为 `com.kai.wod`，分发产物是 APK/AAB；iOS Bundle ID 为
-  `com.kai.wod`，分发产物是归档或 IPA。
+- Android 包名为 `com.kai.ztwstarmap`，分发产物是 APK/AAB；iOS Bundle ID 为
+  `com.kai.ztwstarmap`，分发产物是归档或 IPA。旧 Android 包 `com.kai.wod`
+  不能覆盖安装新包，只使用独立的历史更新元数据。
 - Android 更新可由受控 APK 渠道处理；iOS 正式更新必须遵守 Apple 分发渠道。
 - iOS 的相册、相机和麦克风用途说明位于 `apps/ios/src/manifest.json`；Android 权限由
   构建清单和所用模块生成，并明确排除安装包和电话状态权限。

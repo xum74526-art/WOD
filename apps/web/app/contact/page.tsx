@@ -8,23 +8,23 @@ import styles from "./page.module.css";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "聯絡我們 | ZTW",
-      description: "聯絡 ZTW，諮詢算力需求與機構接入。",
+      title: "聯絡我們 | 算力星图",
+      description: "聯絡算力星图，諮詢算力需求與機構接入。",
     },
     "zh-Hans": {
-      title: "联系我们 | ZTW",
-      description: "联系 ZTW，咨询算力需求与机构接入。",
+      title: "联系我们 | 算力星图",
+      description: "联系算力星图，咨询算力需求与机构接入。",
     },
     en: {
-      title: "Contact Us | ZTW",
-      description: "Contact ZTW about compute requirements and institutional access.",
+      title: "Contact Us | 算力星图",
+      description: "Contact 算力星图 about compute requirements and institutional access.",
     },
   });
 }
 
 export default function ContactPage() {
   return <div className="site-page public-v2 kai-company-page"><SiteHeader/><main>
-    <header className="kai-company-hero kai-contact-hero"><p className="hero-eyebrow">CONTACT / INSTITUTIONAL ACCESS</p><h1>规划下一段<br/>算力容量。</h1><div className={styles.details}><ContactPhone /><p>如贵机构正为指定模型、区域或时段规划容量，请联系 ZTW。我们将根据需求与可用容量安排后续接入。</p></div></header>
+    <header className="kai-company-hero kai-contact-hero"><p className="hero-eyebrow">CONTACT / INSTITUTIONAL ACCESS</p><h1>规划下一段<br/>算力容量。</h1><div className={styles.details}><ContactPhone /><p>如贵机构正为指定模型、区域或时段规划容量，请联系算力星图。我们将根据需求与可用容量安排后续接入。</p></div></header>
     <section className="kai-contact-notes"><header><p className="hero-eyebrow">BEFORE CONTACT</p><h2>建议一并说明</h2></header><ol><li><span>01</span><p><strong>模型与版本</strong>计划使用的模型和版本要求。</p></li><li><span>02</span><p><strong>区域与时段</strong>服务区域、时区和计划使用时段。</p></li><li><span>03</span><p><strong>容量需求</strong>预期容量单位及服务目标。</p></li></ol></section>
   </main><SiteFooter/></div>;
 }

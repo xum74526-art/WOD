@@ -25,7 +25,7 @@ function tokenFromParameters(parameters: string) {
   return ''
 }
 
-/** Accept only ZTW-owned reset callbacks, never a token embedded in an arbitrary URL. */
+/** Accept only application-owned reset callbacks, never a token embedded in an arbitrary URL. */
 export function parsePasswordResetUrl(input: unknown): PasswordResetCallback | null {
   if (typeof input !== 'string') return null
   const raw = input.trim()

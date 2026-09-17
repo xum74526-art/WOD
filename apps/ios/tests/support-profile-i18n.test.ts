@@ -25,7 +25,7 @@ test('support cards keep the positive service state without negative configurati
   assert.match(i18n, /supportTicketPendingNotice: 'Your ticket has been saved and queued\. The support team will handle it in order\.'/)
   assert.match(supportPage, /displayBusinessReference\(ticket\.ticket_no\)/)
   assert.match(supportPage, /displayBusinessReference\(message\.ticket\.ticket_no\)/)
-  assert.equal(displayBusinessReference('WOD-20260910-4E9F8B'), 'ZTW-20260910-4E9F8B')
+  assert.equal(displayBusinessReference('WOD-20260910-4E9F8B'), '算力星图-20260910-4E9F8B')
 })
 
 test('English profile display localizes an untouched Chinese nickname without saving the display value', () => {
@@ -47,15 +47,16 @@ test('an edited nickname is displayed and submitted exactly as entered', () => {
   assert.equal(profileUsernameDisplayValue(original, original, false, 'zh-Hans'), original)
 })
 
-test('legacy WOD news account is presented with the ZTW brand without changing stored data', () => {
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), 'ZTW资讯')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), 'ZTW資訊')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'ZTW News')
-  assert.equal(profileUsernameSubmissionValue('WOD资讯', 'ZTW资讯', false), 'WOD资讯')
+test('legacy WOD news account is presented with the 算力星图 brand without changing stored data', () => {
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), '算力星图资讯')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), '算力星图資訊')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), '算力星图 News')
+  assert.equal(profileUsernameSubmissionValue('WOD资讯', '算力星图资讯', false), 'WOD资讯')
 })
 
-test('only historical first-party news copy receives the ZTW display brand', () => {
-  assert.equal(localizeInternalBrandText('WOD 算力行情由 WOD平台发布', 'wod-market'), 'ZTW 算力行情由 ZTW平台发布')
+test('only historical first-party news copy receives the 算力星图 display brand', () => {
+  assert.equal(localizeInternalBrandText('WOD 算力行情由 WOD平台发布', 'wod-market'), '算力星图 算力行情由 算力星图平台发布')
+  assert.equal(localizeInternalBrandText('ZTW 算力行情', 'wod-market'), '算力星图 算力行情')
   assert.equal(localizeInternalBrandText('WOD 算力行情', 'user-post'), 'WOD 算力行情')
   assert.equal(localizeInternalBrandText('兑换码 WOD10', 'wod-market'), '兑换码 WOD10')
 })

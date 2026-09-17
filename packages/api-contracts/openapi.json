@@ -151,6 +151,17 @@
       },
       "AppReleaseInfo": {
         "properties": {
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
           "available": {
             "title": "Available",
             "type": "boolean"
@@ -10337,6 +10348,24 @@
               ],
               "title": "Platform",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "application_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "minLength": 3,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Application Id"
             }
           }
         ],

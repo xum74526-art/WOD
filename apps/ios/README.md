@@ -1,6 +1,6 @@
-# KAI iOS
+# 算力星图 iOS
 
-这是 KAI 的 iOS 客户端源码，正式 Bundle ID 为 `com.kai.wod`。
+这是算力星图的 iOS 客户端源码，正式 Bundle ID 为 `com.kai.ztwstarmap`。
 
 ## 共享客户端功能
 
@@ -33,7 +33,11 @@ npm run build:ios
 
 ## 打包要求
 
-- DCloud AppID 在发布环境配置，不写入仓库；
-- iOS Bundle ID 固定为 `com.kai.wod`；
+- DCloud AppID 沿用 `__UNI__47CF9D3`，更换 Bundle ID 不得新建或替换现有 AppID；
+- iOS Bundle ID 固定为 `com.kai.ztwstarmap`；
 - KAI OAuth 回跳 scheme 为 `kai://auth`；
 - Apple 证书、Provisioning Profile、密码、安装包、`.env.local` 和 `dist/` 不得提交。
+
+Bundle ID 变更后，发布负责人还必须在 Apple Developer 与 App Store Connect 登记
+`com.kai.ztwstarmap`，生成匹配的新 Provisioning Profile，并在 DCloud 云打包配置中绑定
+该 Bundle ID 与对应 Apple 证书。KAI OAuth 的 `kai://auth` 回跳白名单保持不变。

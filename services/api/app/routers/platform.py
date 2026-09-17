@@ -19,7 +19,10 @@ def capabilities():
 
 
 @router.get("/app-release", response_model=AppReleaseResponse)
-def release(platform: Literal["android", "ios"] = Query(...)):
+def release(
+    platform: Literal["android", "ios"] = Query(...),
+    application_id: str | None = Query(default=None, min_length=3, max_length=255),
+):
     """Return trusted public release metadata without requiring a session."""
 
-    return success(app_release(platform))
+    return success(app_release(platform, application_id=application_id))

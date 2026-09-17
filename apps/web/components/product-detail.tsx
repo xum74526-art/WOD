@@ -186,13 +186,13 @@ export function ProductDetail({ productId }: { productId: string }) {
   const fulfillmentLabel = product.fulfillment_mode === "merchant_manual" ? "商家人工交付 SSH" : "平台人工交付 SSH";
   const resourceClaimLabel = product.resource_claim_source === "merchant_declared" || (!product.resource_claim_source && !kaiSelfOperated)
     ? t("market.claim.merchant", "配置与库存由商家自行申报")
-    : t("market.claim.kai", "商品信息由 KAI 发布");
+    : t("market.claim.kai", "商品信息由算力星图发布");
   const sellerFacts = !kaiSelfOperated
     ? [product.supplier_id != null ? `ID ${product.supplier_id}` : "", product.supplier_rating != null ? t("market.rating", "评分 {rating}", { rating: product.supplier_rating.toFixed(1) }) : "", product.supplier_order_count != null ? t("market.completedOrders", "已完成 {count} 单", { count: product.supplier_order_count }) : ""].filter(Boolean).join(" · ")
     : "";
-  const assuranceLabel = product.assurance_label || (kaiSelfOperated ? "KAI 自营 · 平台人工交付" : "商家发布 · 商家人工交付");
+  const assuranceLabel = product.assurance_label || (kaiSelfOperated ? "算力星图自营 · 平台人工交付" : "商家发布 · 商家人工交付");
   const assuranceDescription = (kaiSelfOperated
-    ? directTradeEnabled ? "商品与价格由 KAI 发布，平台安排人工交付。" : "商品信息由 KAI 发布，提交需求后由平台人工联系确认方案。"
+    ? directTradeEnabled ? "商品与价格由算力星图发布，平台安排人工交付。" : "商品信息由算力星图发布，提交需求后由平台人工联系确认方案。"
     : directTradeEnabled ? "商品配置与库存由商家自行申报，并由该商家负责人工交付。" : "商品配置与库存由商家自行申报，提交需求后由对应商家人工联系确认方案。"
   );
   const purchaseHourOptions = product.purchase_hour_options.filter((hours) => Number.isInteger(hours) && hours >= 1 && hours <= 720);
@@ -209,19 +209,19 @@ export function ProductDetail({ productId }: { productId: string }) {
     <section className="product-detail-main">
       <Link className="dossier-back" href="/market">返回算力市场</Link>
       <ProductImage className="product-detail-image" imageUrl={product.image_url} gpuModel={product.gpu_model} eager/>
-      <p className="hero-eyebrow">{kaiSelfOperated ? "KAI SELF-OPERATED" : "MERCHANT LISTING"}</p>
+      <p className="hero-eyebrow">{kaiSelfOperated ? "算力星图 SELF-OPERATED" : "MERCHANT LISTING"}</p>
       <h1>{product.gpu_model} <small>{product.memory}</small></h1>
       <p>{product.name} · {product.region} · {resourceStatus}</p>
       <div className="product-source"><ShieldCheck size={19}/><span>{kaiSelfOperated ? "卖方" : "商家"}：{product.supplier_id && !kaiSelfOperated ? <Link href={`/stores/${product.supplier_id}`}>{sellerName}</Link> : sellerName}{sellerFacts && <small>{sellerFacts}</small>}<small>{resourceClaimLabel} · {assuranceDescription}</small></span></div>
       <div className="direct-product-specs"><article><Cpu size={20}/><small>GPU</small><strong>{product.gpu_model} / {product.memory}</strong></article><article><HardDrives size={20}/><small>可用库存</small><strong>{product.available_quantity} 台</strong></article><article><TerminalWindow size={20}/><small>交付方式</small><strong>{fulfillmentLabel}</strong></article></div>
-      <section className="direct-product-description"><h2>资源与使用说明</h2><p>{product.description || (kaiSelfOperated ? "KAI 暂未补充资源说明。" : "商家暂未补充资源说明。")}</p></section>
+      <section className="direct-product-description"><h2>资源与使用说明</h2><p>{product.description || (kaiSelfOperated ? "算力星图暂未补充资源说明。" : "商家暂未补充资源说明。")}</p></section>
       {directTradeEnabled
         ? <div className="sandbox-disclosure"><ShieldCheck size={20}/><div><strong>{assuranceLabel} · 统一担保流程</strong><span>钱包卡时下单后先冻结；{kaiSelfOperated ? "平台履约人员" : "对应商家"}提交有效 SSH 信息，买家验收后结算。资源参数以交付验收结果为准，异常可在订单中发起争议。</span></div></div>
         : <div className="sandbox-disclosure"><ShieldCheck size={20}/><div><strong>{assuranceLabel} · 人工确认方案</strong><span>提交需求不会扣除卡时，也不会自动生成订单。工作人员将联系你确认资源配置、服务价格、交付时间与后续流程。</span></div></div>}
     </section>
     <aside className="purchase-panel direct-purchase-panel">
       <div><span>{directTradeEnabled ? "GPU 每小时价格" : "服务价格"}</span><strong>{directTradeEnabled ? `${product.unit_price_ch.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 卡时 / GPU·小时` : "询价"}</strong></div>
-      <label>{directTradeEnabled ? "购买时长（小时）" : "预计使用时长（小时）"}<span className="product-hour-input"><button type="button" aria-label="减少一小时" disabled={purchaseHours <= 1} onClick={() => setPurchaseHours((value) => clampPurchaseHours(value - 1))}>−</button><input type="number" inputMode="numeric" min={1} max={720} step={1} value={purchaseHours} onChange={(event) => setPurchaseHours(Number(event.target.value))} onBlur={() => normalizeHours()} aria-label={`${directTradeEnabled ? "购买" : "预计使用"}时长，单位小时`}/><button type="button" aria-label="增加一小时" disabled={purchaseHours >= 720} onClick={() => setPurchaseHours((value) => clampPurchaseHours(value + 1))}>+</button></span><span className="cycle-grid">{hourPresets.map((hours) => <button className={purchaseHours === hours ? "active" : ""} type="button" onClick={() => setPurchaseHours(clampPurchaseHours(hours))} key={hours}>{hours} 小时</button>)}</span><small className="product-hour-hint">{directTradeEnabled ? "KAI 自营与商家新商品均按整数小时购买，可输入 1–720 小时。" : "填写预计需求即可，最终资源、时长和服务价格由人工联系确认。"}</small></label>
+      <label>{directTradeEnabled ? "购买时长（小时）" : "预计使用时长（小时）"}<span className="product-hour-input"><button type="button" aria-label="减少一小时" disabled={purchaseHours <= 1} onClick={() => setPurchaseHours((value) => clampPurchaseHours(value - 1))}>−</button><input type="number" inputMode="numeric" min={1} max={720} step={1} value={purchaseHours} onChange={(event) => setPurchaseHours(Number(event.target.value))} onBlur={() => normalizeHours()} aria-label={`${directTradeEnabled ? "购买" : "预计使用"}时长，单位小时`}/><button type="button" aria-label="增加一小时" disabled={purchaseHours >= 720} onClick={() => setPurchaseHours((value) => clampPurchaseHours(value + 1))}>+</button></span><span className="cycle-grid">{hourPresets.map((hours) => <button className={purchaseHours === hours ? "active" : ""} type="button" onClick={() => setPurchaseHours(clampPurchaseHours(hours))} key={hours}>{hours} 小时</button>)}</span><small className="product-hour-hint">{directTradeEnabled ? "算力星图自营与商家新商品均按整数小时购买，可输入 1–720 小时。" : "填写预计需求即可，最终资源、时长和服务价格由人工联系确认。"}</small></label>
       <label>{directTradeEnabled ? "数量" : "需求数量"}<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>{Array.from({ length: directTradeEnabled ? Math.min(Math.max(product.available_quantity, 1), 10) : 10 }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value} 台</option>)}</select></label>
       <label>{directTradeEnabled ? "购买模式" : "服务方式"}<select value={directTradeEnabled ? purchaseType : "hourly"} disabled aria-label="当前服务方式"><option value={directTradeEnabled ? purchaseType : "hourly"}>{directTradeEnabled ? "使用（当前支持）" : "按小时算力服务"}</option></select><small className="product-hour-hint">{directTradeEnabled ? "持有资产与二级交易暂未开放，不会创建无法履约的订单。" : "当前仅收集需求，不在线支付、不自动扣款。"}</small></label>
       {directTradeEnabled && <><div className="purchase-total"><span>预计钱包扣款</span><strong>{walletTotal.toFixed(4)} 卡时</strong></div><div className="product-rebate-estimate"><span>{t("product.rebate.label", "预计到期个人购买返佣")}</span><strong>{rebateAmountText}</strong><small>{rebatePolicyText}</small></div></>}

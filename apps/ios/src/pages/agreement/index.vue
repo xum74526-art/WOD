@@ -5,7 +5,7 @@
       <view class="content">
         <text class="h1">{{ document.title }}</text>
 
-        <view class="metadata" aria-label="legal document metadata">
+        <view class="metadata" :aria-label="document.title">
           <view v-for="item in document.metadata" :key="item.label" class="metadata-row">
             <text class="metadata-label">{{ item.label }}</text>
             <text class="metadata-value">{{ item.value }}</text>

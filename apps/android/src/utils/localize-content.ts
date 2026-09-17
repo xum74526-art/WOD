@@ -4,12 +4,20 @@ import { toTraditionalChinese } from './traditional-chinese.ts'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
-  'WOD资讯': 'ZTW News',
-  'ZTW资讯': 'ZTW News',
-  'ZTW資訊': 'ZTW News',
+  'WOD资讯': '算力星图 News',
+  'ZTW资讯': '算力星图 News',
+  'ZTW資訊': '算力星图 News',
+  '算力星图资讯': '算力星图 News',
+  '算力星图資訊': '算力星图 News',
 }
 
-const PLATFORM_NEWS_NAMES = new Set(['WOD资讯', 'ZTW资讯', 'ZTW資訊'])
+const PLATFORM_NEWS_NAMES = new Set([
+  'WOD资讯',
+  'ZTW资讯',
+  'ZTW資訊',
+  '算力星图资讯',
+  '算力星图資訊',
+])
 
 const COMMUNITY_EN: Record<string, string> = {
   'H100测评': 'H100 Review',
@@ -201,7 +209,9 @@ function translateGeneratedPost(source: string): string | null {
 
 export function localizePersonName(value: string, lang: AppLanguage): string {
   if (!value) return value
-  if (PLATFORM_NEWS_NAMES.has(value)) return lang === 'en' ? 'ZTW News' : lang === 'zh-Hant' ? 'ZTW資訊' : 'ZTW资讯'
+  if (PLATFORM_NEWS_NAMES.has(value)) {
+    return lang === 'en' ? '算力星图 News' : lang === 'zh-Hant' ? '算力星图資訊' : '算力星图资讯'
+  }
   if (lang === 'zh-Hans') return value
   if (lang === 'zh-Hant') return value === '体验用户' ? toTraditionalChinese(value) : value
   if (PERSON_EN[value]) return PERSON_EN[value]
@@ -247,7 +257,7 @@ export function localizeCommunityText(value: string, lang: AppLanguage): string 
 /** Rename only historical first-party news copy; never rewrite user-authored content. */
 export function localizeInternalBrandText(value: string, sourceKey?: string | null): string {
   if (!value || sourceKey !== 'wod-market') return value
-  return value.replace(/WOD(?![A-Z0-9_-])/g, 'ZTW')
+  return value.replace(/(?:WOD|ZTW)(?![A-Z0-9_-])/g, '算力星图')
 }
 
 export function localizeProductName(value: string | null | undefined, lang: AppLanguage): string {

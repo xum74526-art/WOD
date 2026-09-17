@@ -18,7 +18,7 @@ type RecoveryMethod = "email" | "kai";
 
 const kaiErrors: Record<string, { key: string; zh: string }> = {
   access_denied: { key: "auth.recovery.kaiError.accessDenied", zh: "已取消 KAI 身份验证" },
-  identity_not_bound: { key: "auth.recovery.kaiError.identityNotBound", zh: "该 KAI 身份尚未绑定当前 ZTW 账号，无法用于找回" },
+  identity_not_bound: { key: "auth.recovery.kaiError.identityNotBound", zh: "该 KAI 身份尚未绑定当前算力星图账号，无法用于找回" },
   missing_code: { key: "auth.recovery.kaiError.missingCode", zh: "KAI 未返回有效授权信息" },
   invalid_issuer: { key: "auth.recovery.kaiError.invalidIssuer", zh: "KAI 身份签发方无效" },
   authorization_failed: { key: "auth.recovery.kaiError.authorizationFailed", zh: "KAI 身份验证失败，请重新授权" },
@@ -114,7 +114,7 @@ export function PasswordRecoveryPanel({ mode }: { mode: "forgot" | "reset" }) {
     <section className="auth-panel" aria-labelledby="recovery-title">
       <div className="auth-panel__heading">
         <p className="auth-eyebrow">ACCOUNT RECOVERY / SECURE PROOF</p>
-        <h1 id="recovery-title">{isReset ? t("auth.recovery.resetTitle", "设置新密码") : t("auth.recovery.title", "找回 ZTW 账号")}</h1>
+        <h1 id="recovery-title">{isReset ? t("auth.recovery.resetTitle", "设置新密码") : t("auth.recovery.title", "找回算力星图账号")}</h1>
         <p>{isReset
           ? t("auth.recovery.resetDescription", "新密码生效后，其他设备上的旧会话会立即退出。")
           : t("auth.recovery.description", "通过已绑定邮箱或已绑定的 KAI 身份找回账号，不提供短信找回。")}</p>
@@ -177,8 +177,8 @@ export function PasswordRecoveryPanel({ mode }: { mode: "forgot" | "reset" }) {
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
             <h2>{t("auth.recovery.kaiTitle", "使用已绑定的 KAI 身份找回")}</h2>
-            <p>{t("auth.recovery.kaiDescription", "前往 KAI 完成一次新的身份验证。ZTW 不会读取或保存你的 KAI 密码。")}</p>
-            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{t("auth.recovery.kaiScope", "只有已经与当前 ZTW 账号绑定的 KAI 身份才能重置密码。")}</span></div>
+            <p>{t("auth.recovery.kaiDescription", "前往 KAI 完成一次新的身份验证。算力星图不会读取或保存你的 KAI 密码。")}</p>
+            <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{t("auth.recovery.kaiScope", "只有已经与当前算力星图账号绑定的 KAI 身份才能重置密码。")}</span></div>
           </div>
           <Button className="auth-submit" type="button" size="3" disabled={kaiUnavailable} onClick={startKaiRecovery}>
             {kaiUnavailable

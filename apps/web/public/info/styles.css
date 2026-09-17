@@ -1097,21 +1097,30 @@ footer {
   gap: 20px;
 }
 
-.footer-links button {
+.footer-links button,
+.footer-links a {
   padding: 0;
   border: 0;
   color: var(--muted);
   background: transparent;
   font-size: 13px;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.footer-links button:hover {
+.footer-links button:hover,
+.footer-links a:hover,
+.icp a:hover {
   color: var(--brand);
 }
 
 .icp {
   gap: 16px;
+}
+
+.icp a {
+  color: var(--muted);
+  text-decoration: none;
 }
 
 .toast {

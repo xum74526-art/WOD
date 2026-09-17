@@ -188,7 +188,7 @@ def get_deletion_blockers(db: Session, user: User) -> list[dict]:
 def get_automatic_actions(db: Session, user: User) -> list[str]:
     """Effects explicitly confirmed by the deletion UI, not extra blockers."""
     suppliers, _, _ = _scope(db, user)
-    actions = ["退出全部设备并解除 ZTW 的 KAI 身份绑定", "清理个人资料、实名材料、社区内容与上传附件", "保留受限访问的必要交易及财务凭证"]
+    actions = ["退出全部设备并解除算力星图的 KAI 身份绑定", "清理个人资料、实名材料、社区内容与上传附件", "保留受限访问的必要交易及财务凭证"]
     if db.query(BuyRequest.id).filter(BuyRequest.user_id == user.id, BuyRequest.status.in_(OPEN_REQUEST_STATUSES)).first():
         actions.append("撤回尚未成交的需求及其未选中报价")
     if db.query(BuyRequestQuote.id).filter(BuyRequestQuote.supplier_id.in_(suppliers), BuyRequestQuote.status == "active").first():

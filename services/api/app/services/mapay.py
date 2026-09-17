@@ -365,12 +365,12 @@ def checkout_html(db: Session, token: str) -> str:
     if not order:
         raise BizError("支付链接无效", status_code=404)
     if order.credited_at:
-        return "<!doctype html><meta charset='utf-8'><title>ZTW</title><p>支付已确认，可返回 ZTW 查看余额。</p>"
+        return "<!doctype html><meta charset='utf-8'><title>算力星图</title><p>支付已确认，可返回算力星图查看余额。</p>"
     if order.expires_at <= utc_now():
         _persist_order_expiry(db, order)
-        raise BizError("支付链接已过期，请返回 ZTW 重新发起", status_code=410)
+        raise BizError("支付链接已过期，请返回算力星图重新发起", status_code=410)
     if order.status != "pending":
-        raise BizError("该充值订单已停止支付，请返回 ZTW 查询状态", status_code=410)
+        raise BizError("该充值订单已停止支付，请返回算力星图查询状态", status_code=410)
     if not provider_configured():
         raise BizError("支付服务暂不可用", status_code=503)
     channel = _require_payment_type(order.channel)
@@ -380,7 +380,7 @@ def checkout_html(db: Session, token: str) -> str:
         "type": channel,
         "out_trade_no": order.order_no,
         "notify_url": settings.MAPAY_NOTIFY_URL,
-        "name": "ZTW钱包卡时充值",
+        "name": "算力星图钱包卡时充值",
         "money": f"{order.amount_cny:.2f}",
         "param": order.order_no,
         "device": "mobile",

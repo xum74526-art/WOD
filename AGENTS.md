@@ -38,7 +38,7 @@
 | HTTP 接口 | `services/api/app/routers` | OpenAPI 快照、Web/Mobile 调用方 |
 | Web 页面或 BFF | `apps/web` | 同源 Cookie、canonical 路径、Web 测试 |
 | iOS | `apps/ios` | iOS 回跳、权限、App 测试 |
-| Android | `apps/android` | `com.kai.wod`、Android 回跳、App 测试 |
+| Android | `apps/android` | `com.kai.ztwstarmap`、Android 回跳、App 测试 |
 | 反向代理或服务 | `infra` | `systemd-analyze verify`、nginx 检查、部署文档 |
 | 契约检查 | `packages/api-contracts` | 重新导出 OpenAPI，不手改快照 |
 

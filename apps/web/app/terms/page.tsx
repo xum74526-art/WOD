@@ -6,16 +6,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "用戶協議 | ZTW",
-      description: "ZTW 撮合服務、賬號、商家、內容和爭議處理的使用規則。",
+      title: "用戶協議 | 算力星图",
+      description: "算力星图撮合服務、賬號、商家、內容和爭議處理的使用規則。",
     },
     "zh-Hans": {
-      title: "用户协议 | ZTW",
-      description: "ZTW 撮合服务、账号、商家、内容和争议处理的使用规则。",
+      title: "用户协议 | 算力星图",
+      description: "算力星图撮合服务、账号、商家、内容和争议处理的使用规则。",
     },
     en: {
-      title: "Terms of Service | ZTW",
-      description: "Rules for ZTW matching services, accounts, suppliers, content and dispute handling.",
+      title: "Terms of Service | 算力星图",
+      description: "Rules for 算力星图 matching services, accounts, suppliers, content and dispute handling.",
     },
   });
 }
@@ -26,8 +26,8 @@ const termsSections: LegalSection[] = [
     title: { zh: "协议主体与接受", en: "Parties and acceptance" },
     paragraphs: [
       {
-        zh: "本协议由你与 ZTW 运营主体锆芯期算人工智能科技（上海）有限公司共同订立，适用于 ZTW 网站、Android 和 iOS 客户端及相关服务。注册、登录、点击同意或继续使用服务，即表示你已阅读并同意本协议及与具体功能相关的有效规则。",
-        en: "This agreement is between you and the ZTW operator, Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd., and applies to the ZTW website, Android and iOS apps and related services. By registering, signing in, accepting, or continuing to use the service, you confirm that you have read and agree to this agreement and the effective rules for the feature used.",
+        zh: "本协议由你与算力星图运营主体锆芯期算人工智能科技（上海）有限公司共同订立，适用于算力星图网站、Android 和 iOS 客户端及相关服务。注册、登录、点击同意或继续使用服务，即表示你已阅读并同意本协议及与具体功能相关的有效规则。",
+        en: "This agreement is between you and the 算力星图 operator, Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd., and applies to the 算力星图 website, Android and iOS apps and related services. By registering, signing in, accepting, or continuing to use the service, you confirm that you have read and agree to this agreement and the effective rules for the feature used.",
       },
       {
         zh: "如你代表企业或其他组织使用服务，你确认已获得充分授权并有权使该主体受本协议约束。未满 18 周岁或不具备相应民事行为能力的人不得注册或使用交易和撮合服务。",
@@ -40,12 +40,12 @@ const termsSections: LegalSection[] = [
     title: { zh: "服务范围与当前模式", en: "Service scope and current mode" },
     paragraphs: [
       {
-        zh: "ZTW 提供算力行情与资讯展示、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
-        en: "ZTW provides compute-market and news displays, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, community and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
+        zh: "算力星图提供算力行情与资讯展示、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
+        en: "算力星图 provides compute-market and news displays, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, community and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
       },
       {
-        zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由 ZTW 自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
-        en: "Unless a separate written service document expressly states otherwise, a platform listing is not a sale, instant transaction or a promise that ZTW itself supplies all compute. The final confirmed order, proposal or contract governs the service, provider, price, term, acceptance, refund and responsibility.",
+        zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由算力星图自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
+        en: "Unless a separate written service document expressly states otherwise, a platform listing is not a sale, instant transaction or a promise that 算力星图 itself supplies all compute. The final confirmed order, proposal or contract governs the service, provider, price, term, acceptance, refund and responsibility.",
       },
     ],
   },
@@ -62,8 +62,8 @@ const termsSections: LegalSection[] = [
         en: "Identity, company or supplier verification means only that submitted materials were reviewed under the rules then in effect; it does not guarantee credit, fulfilment capacity, resource quality or continuing compliance. You must not impersonate another person, lend, rent, sell or mass-register accounts.",
       },
       {
-        zh: "KAI 身份为可选的外部关联身份。绑定或登录成功不代表创建另一套业务账户；解绑或注销 ZTW 不会自动注销外部 KAI 账号。你不得向 ZTW 提交外部 KAI 密码。",
-        en: "KAI identity is an optional linked external identity. Successful linking or sign-in does not create a separate business account. Unlinking or deleting ZTW does not automatically delete the external KAI account. Do not submit an external KAI password to ZTW.",
+        zh: "KAI 身份为可选的外部关联身份。绑定或登录成功不代表创建另一套业务账户；解绑或注销算力星图不会自动注销外部 KAI 账号。你不得向算力星图提交外部 KAI 密码。",
+        en: "KAI identity is an optional linked external identity. Successful linking or sign-in does not create a separate business account. Unlinking or deleting 算力星图 does not automatically delete the external KAI account. Do not submit an external KAI password to 算力星图.",
       },
     ],
   },
@@ -118,16 +118,16 @@ const termsSections: LegalSection[] = [
     title: { zh: "社区、资讯与用户内容", en: "Community, news and user content" },
     paragraphs: [
       {
-        zh: "你保留对原创内容依法享有的权利，并授予 ZTW 在提供、展示、审核、转码、备份和推广相应服务所需范围内的非独占许可。你确认有权发布所提交的文字、图片和视频，并对其真实性、合法性和授权负责。",
-        en: "You retain lawful rights in original content and grant ZTW a non-exclusive licence limited to providing, displaying, moderating, transcoding, backing up and promoting the relevant service. You confirm that you have the right to publish submitted text, images and videos and are responsible for their accuracy, legality and authorisation.",
+        zh: "你保留对原创内容依法享有的权利，并授予算力星图在提供、展示、审核、转码、备份和推广相应服务所需范围内的非独占许可。你确认有权发布所提交的文字、图片和视频，并对其真实性、合法性和授权负责。",
+        en: "You retain lawful rights in original content and grant 算力星图 a non-exclusive licence limited to providing, displaying, moderating, transcoding, backing up and promoting the relevant service. You confirm that you have the right to publish submitted text, images and videos and are responsible for their accuracy, legality and authorisation.",
       },
       {
         zh: "不得发布违法违规、诈骗、侵权、恶意营销、仇恨骚扰、淫秽暴力、恶意代码，或泄露身份证件、银行卡、密码、SSH 私钥及他人隐私的内容。平台可依法采取限流、隐藏、删除、暂停发布、保全证据或报告等措施，并为误判提供申诉渠道。",
-        en: "Do not publish unlawful, fraudulent, infringing, maliciously promotional, hateful, harassing, obscene, violent or malicious-code content, or expose identity documents, bank cards, passwords, SSH private keys or another person's privacy. ZTW may lawfully limit reach, hide or remove content, suspend publishing, preserve evidence or report a matter, with an appeal channel for mistakes.",
+        en: "Do not publish unlawful, fraudulent, infringing, maliciously promotional, hateful, harassing, obscene, violent or malicious-code content, or expose identity documents, bank cards, passwords, SSH private keys or another person's privacy. 算力星图 may lawfully limit reach, hide or remove content, suspend publishing, preserve evidence or report a matter, with an appeal channel for mistakes.",
       },
       {
-        zh: "第三方资讯和视频可能适用来源平台的额外条款。来源链接、播放可用性和评论数据可能由第三方变化，ZTW 不取得其内容所有权，也不保证第三方服务永久可用。",
-        en: "Third-party news and video may be subject to the source platform's additional terms. Source links, playback availability and comment data may change at the third party. ZTW does not acquire ownership of that content or guarantee permanent third-party availability.",
+        zh: "第三方资讯和视频可能适用来源平台的额外条款。来源链接、播放可用性和评论数据可能由第三方变化，算力星图不取得其内容所有权，也不保证第三方服务永久可用。",
+        en: "Third-party news and video may be subject to the source platform's additional terms. Source links, playback availability and comment data may change at the third party. 算力星图 does not acquire ownership of that content or guarantee permanent third-party availability.",
       },
     ],
   },
@@ -151,7 +151,7 @@ const termsSections: LegalSection[] = [
     items: [
       {
         zh: "不得利用服务实施违法计算、网络攻击、恶意扫描、侵入、传播恶意软件、洗钱、诈骗、侵权、绕过监管或其他损害国家安全、公共利益、平台或第三方权益的行为。",
-        en: "Do not use the service for unlawful computing, cyberattacks, malicious scanning, intrusion, malware distribution, money laundering, fraud, infringement, regulatory evasion, or conduct harming national security, the public interest, ZTW or a third party.",
+        en: "Do not use the service for unlawful computing, cyberattacks, malicious scanning, intrusion, malware distribution, money laundering, fraud, infringement, regulatory evasion, or conduct harming national security, the public interest, 算力星图 or a third party.",
       },
       {
         zh: "不得破坏接口、爬取非公开数据、绕过访问控制或能力开关、伪造请求来源、干扰行情和交易状态、批量占用资源、操纵评价或帮助他人规避限制。",
@@ -169,7 +169,7 @@ const termsSections: LegalSection[] = [
       },
       {
         zh: "一方因违反协议、故意或过失造成损失，应依法承担相应责任。任何免责或责任限制均不排除法律不得排除的消费者权益、人身损害责任，以及因故意或重大过失造成的责任。对商家与用户之间的独立履约争议，平台将依据记录协助协调，但不因此当然承担资源提供方的全部责任。",
-        en: "A party that causes loss through breach, intent or negligence bears responsibility under law. No disclaimer excludes mandatory consumer rights, liability for personal injury, or liability arising from intent or gross negligence. ZTW may assist with an independent fulfilment dispute between a supplier and user based on platform records, but does not thereby assume all responsibility of the resource provider.",
+        en: "A party that causes loss through breach, intent or negligence bears responsibility under law. No disclaimer excludes mandatory consumer rights, liability for personal injury, or liability arising from intent or gross negligence. 算力星图 may assist with an independent fulfilment dispute between a supplier and user based on platform records, but does not thereby assume all responsibility of the resource provider.",
       },
     ],
   },
@@ -182,8 +182,8 @@ const termsSections: LegalSection[] = [
         en: "Where there is a security risk, illegality, material breach, false data, a long-unresolved anomaly or an authority request, we may take necessary measures such as verification, feature restriction, suspension or termination and, where law permits, explain the reason and offer an appeal. Outstanding fulfilment, accounting, disputes and legal obligations do not automatically end when an account is disabled.",
       },
       {
-        zh: "你可停止使用或通过账号注销页面申请注销。系统会先提示需要处理的未结事项；注销完成后，账号不能继续登录，可删除资料按隐私政策清理，依法或为未结事项确需保留的记录仅在必要范围内受限保存。注销 ZTW 不会注销外部 KAI 账号。",
-        en: "You may stop using the service or request deletion on the account-deletion page. The system first identifies outstanding matters. After completion, the account can no longer sign in, deletable data is cleared under the privacy policy, and records required by law or an unresolved matter are retained only as necessary with restricted access. Deleting ZTW does not delete the external KAI account.",
+        zh: "你可停止使用或通过账号注销页面申请注销。系统会先提示需要处理的未结事项；注销完成后，账号不能继续登录，可删除资料按隐私政策清理，依法或为未结事项确需保留的记录仅在必要范围内受限保存。注销算力星图不会注销外部 KAI 账号。",
+        en: "You may stop using the service or request deletion on the account-deletion page. The system first identifies outstanding matters. After completion, the account can no longer sign in, deletable data is cleared under the privacy policy, and records required by law or an unresolved matter are retained only as necessary with restricted access. Deleting 算力星图 does not delete the external KAI account.",
       },
     ],
   },
@@ -218,8 +218,8 @@ export default function TermsPage() {
     <SimplePage
       title="用户协议"
       titleEn="Terms of Service"
-      description="本协议说明 ZTW 当前撮合服务的使用规则、用户与商家责任，以及账号、内容和争议处理安排。"
-      descriptionEn="These terms govern ZTW's current matching service, user and supplier responsibilities, accounts, content and dispute handling."
+      description="本协议说明算力星图当前撮合服务的使用规则、用户与商家责任，以及账号、内容和争议处理安排。"
+      descriptionEn="These terms govern 算力星图's current matching service, user and supplier responsibilities, accounts, content and dispute handling."
     >
       <LegalDocument sections={termsSections} accountDeletionLink />
     </SimplePage>

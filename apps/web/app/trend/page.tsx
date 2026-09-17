@@ -8,15 +8,15 @@ import { getInitialMarketDashboard } from "@/lib/server/public-page-data";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "算力行情 | 北斗 kai",
+      title: "算力行情 | 算力星图",
       description: "查看不同 GPU 型號的卡時價格變化與目前市場區間。",
     },
     "zh-Hans": {
-      title: "算力行情 | 北斗 kai",
+      title: "算力行情 | 算力星图",
       description: "查看不同 GPU 型号的卡时价格变化与当前市场区间。",
     },
     en: {
-      title: "GPU Compute Market Trends | KAI",
+      title: "GPU Compute Market Trends | 算力星图",
       description: "Compare card-hour price movements and current market ranges across GPU models.",
     },
   });

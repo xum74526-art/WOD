@@ -70,7 +70,7 @@ class AccountDeletionTests(unittest.TestCase):
         self.assertFalse(service.deletion_status(self.db, ticket)["blockers"])
 
     def test_bad_password_does_not_issue_capability(self):
-        with self.assertRaisesRegex(BizError, "ZTW 账号密码"):
+        with self.assertRaisesRegex(BizError, "算力星图账号密码"):
             service.verify_deletion_password(self.db, self.user, "incorrect")
         self.assertEqual(self.db.query(AccountDeletionRequest).count(), 0)
 

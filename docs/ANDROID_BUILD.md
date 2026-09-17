@@ -1,6 +1,6 @@
 # Android 开发、预览与打包
 
-Android 客户端位于 `apps/android`，正式 applicationId 为 `com.kai.wod`。它与 iOS 使用同一 OpenAPI 和业务状态，但拥有独立的 Android manifest、回跳和发布配置。
+Android 客户端位于 `apps/android`，正式 applicationId 为 `com.kai.ztwstarmap`。它与 iOS 使用同一 OpenAPI 和业务状态，但拥有独立的 Android manifest、回跳和发布配置。旧 `com.kai.wod` 不能原位升级到新包，只保留独立历史更新通道。
 
 ## 本机已经安装的环境
 
@@ -69,11 +69,13 @@ HTTP 用作真机地址。
 
 目前仓库刻意未保存发布身份材料，因此只能运行调试基座。正式打包前由项目所有者登录自己的 DCloud 账号，并提供和配置：
 
-1. DCloud AppID；
-2. 唯一且长期不变的 Android applicationId：`com.kai.wod`；
-3. 自有 keystore、别名和密码；
-4. 正式 HTTPS API；
-5. 版本名与递增的 versionCode。
+1. 沿用 DCloud AppID `__UNI__47CF9D3`；
+2. 唯一且长期不变的 Android applicationId：`com.kai.ztwstarmap`；
+3. DCloud 云打包与 KAI OAuth/开放平台均已登记该 applicationId 和最终正式签名的公钥/证书 MD5；
+4. 原生回跳 scheme 仍为 `kai://auth`，并存在于后端精确白名单；
+5. 自有 keystore、别名和密码；
+6. 正式 HTTPS API；
+7. 版本名与递增的 versionCode。
 
 然后在 HBuilderX 中选择“发行 → 原生 App 云打包”，选择 Android、自有证书和 APK/AAB。keystore、密码、APK/AAB、`.env.local` 与 `dist` 都不得提交到 Git。
 

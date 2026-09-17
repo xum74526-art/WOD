@@ -1,7 +1,7 @@
 # GPU image attribution
 
 The following product photographs were downloaded from Wikimedia Commons and
-cropped/resized for the ZTW product cards. Trademark names identify the
+cropped/resized for the 算力星图 product cards. Trademark names identify the
 depicted hardware only and do not imply endorsement.
 
 | Local file | Source / author | License | Modification |

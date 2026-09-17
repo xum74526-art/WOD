@@ -309,7 +309,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
             <h2>{isRegister ? t("auth.kai.createTitle", "创建 KAI 身份") : t("auth.kai.signInTitle", "使用已绑定的 KAI 身份登录")}</h2>
-            <p>{t("auth.kai.privacyDescription", "ZTW 只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
+            <p>{t("auth.kai.privacyDescription", "算力星图只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
             <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false
               ? t("auth.kai.credentialsMissing", "管理员尚未配置 KAI 客户端凭据")
               : isRegister
@@ -338,7 +338,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       </form>
 
       <div className="auth-panel__footer">
-        <p>{isRegister ? t("auth.already", "已经有北斗 kai 账号？") : t("auth.new", "第一次使用北斗 kai？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
+        <p>{isRegister ? t("auth.already", "已经有算力星图账号？") : t("auth.new", "第一次使用算力星图？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
         <div><Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link><Link href="/terms">{t("footer.terms", "用户协议")}</Link><Link href="/help">{t("auth.help", "登录帮助")}</Link></div>
         <ContactPhone />
       </div>

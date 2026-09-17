@@ -1,18 +1,18 @@
-# ZTW / KAI Monorepo
+# 算力星图 / KAI Monorepo
 
-ZTW 是面向算力资源信息、需求撮合与商家协作的多端平台。本仓库同时维护 FastAPI 业务后端、独立数据采集服务、Next.js Web、iOS/Android 客户端、OpenAPI 契约以及静态审核页面。
+算力星图是面向算力资源信息、需求撮合与商家协作的多端平台。本仓库同时维护 FastAPI 业务后端、独立数据采集服务、Next.js Web、iOS/Android 客户端、OpenAPI 契约以及静态审核页面。
 
 ## 命名说明
 
-- **ZTW**：用户看到的 App 与平台名称。
+- **算力星图**：用户看到的 App 与平台名称。
 - **KAI**：仓库内部、服务前缀、统一身份以及 KAI Pricing 行情源沿用的名称。
-- KAI Pricing 是行情与商品数据来源之一，不等同于 ZTW 自营资源或第三方商家。
+- KAI Pricing 是行情与商品数据来源之一，不等同于算力星图自营资源或第三方商家。
 
-本次更名只改用户可见品牌。为保持已发布客户端、云端数据和历史业务记录兼容，生产域名 `wod.kai.com`、移动端包名 `com.kai.wod`、DCloud AppID、API 路径、数据源键、本地存储键以及已有订单/工单/邀请码前缀保持不变。这些是技术兼容标识，不是对外展示的平台名称，不得做全局替换。
+正式 Android applicationId 与 iOS Bundle ID 统一为 `com.kai.ztwstarmap`。生产域名 `wod.kai.com`、DCloud AppID、API 路径、数据源键、本地存储键以及已有订单/工单/邀请码前缀仍是兼容标识，不是对外品牌，不得做全局替换。旧 Android 包 `com.kai.wod` 仅保留独立的历史更新通道；由于 Android 不允许不同 applicationId 原位覆盖，它不能指向新的算力星图 APK。
 
 ## 当前发布模式
 
-ZTW 当前面向审核和资质准备的构建采用**撮合模式**：保留行情、曲线、资讯、需求提交、商家报价、双方合作确认、平台协调交付和历史记录查询；新直接交易、充值、提现和支付能力默认关闭。
+算力星图当前面向审核和资质准备的构建采用**撮合模式**：保留行情、曲线、资讯、需求提交、商家报价、双方合作确认、平台协调交付和历史记录查询；新直接交易、充值、提现和支付能力默认关闭。
 
 相关代码、接口和账务模型没有删除，而是由服务端能力开关与移动端构建开关共同控制。只有资质、支付回调、对账、退款和运营流程全部验证后，才可发布启用直接交易的新版本。完整规则见 [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md)。
 
@@ -57,7 +57,7 @@ KAI Pricing
 |---|---|
 | `apps/web` | Next.js Web 与同源 BFF；开发端口 9100 |
 | `apps/ios` | uni-app iOS 客户端；H5 预览端口 9000 |
-| `apps/android` | uni-app Android 客户端；H5 预览端口 9001，正式包名 `com.kai.wod` |
+| `apps/android` | uni-app Android 客户端；H5 预览端口 9001，正式包名 `com.kai.ztwstarmap` |
 | `services/api` | 唯一 FastAPI 业务后端和数据库访问者 |
 | `services/collector` | 外部数据采集与标准化，只通过内部 API 提交 |
 | `packages/api-contracts` | FastAPI OpenAPI 快照及客户端边界检查 |
@@ -173,7 +173,7 @@ npm run check:all
 - keystore、证书、Provisioning Profile、密码、APK/AAB/IPA、DCloud 缓存和签名目录不得进入 Git。
 - 移动端共同业务修改必须同步检查 iOS 与 Android；manifest、回跳、权限和签名配置保留平台差异。
 - Android 和 iOS 的具体构建要求分别见 [`apps/android/README.md`](apps/android/README.md)、[`docs/ANDROID_BUILD.md`](docs/ANDROID_BUILD.md) 和 [`apps/ios/README.md`](apps/ios/README.md)。
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 的服务器发布只更新 API 与 Web，不会自动更新已签名 APK/IPA。新 Android 包需单独上传到兼容下载位，同步更新下载页的版本、大小和 SHA-256，并验证公网下载文件哈希。
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 的服务器发布只更新 API 与 Web，不会自动更新已签名 APK/IPA。新 Android 包需单独上传为 `suanlixingtu.apk`，同步更新下载页的版本、大小和 SHA-256，并验证公网下载文件哈希；旧 `wod.apk` 只能继续承载 `com.kai.wod`。
 
 ## 静态审核页面
 

@@ -15,7 +15,7 @@ import { CLIENT_PLATFORM } from '../src/utils/client-platform.ts'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const updateUrls = {
-  android: 'https://wod.kai.com/download/wod.apk',
+  android: 'https://wod.kai.com/download/suanlixingtu.apk',
   ios: 'https://apps.apple.com/cn/app/ztw/id123456789',
 } as const
 
@@ -26,6 +26,7 @@ test('version comparison uses the native numeric code and handles dotted fallbac
   assert.equal(compareVersionNames('1.1.9', '1.1.9.0'), 0)
   assert.equal(isNewerRelease('1.2.1', 121, {
     platform: CLIENT_PLATFORM,
+    application_id: 'com.kai.ztwstarmap',
     available: true,
     latest_version_name: '1.2.2',
     latest_version_code: 122,
@@ -46,6 +47,7 @@ test('each platform accepts only its documented HTTPS update channel', () => {
 test('release metadata must match the requesting platform', () => {
   const release = {
     platform: CLIENT_PLATFORM,
+    application_id: 'com.kai.ztwstarmap',
     available: true,
     latest_version_name: '1.2.1',
     latest_version_code: 121,
@@ -53,6 +55,7 @@ test('release metadata must match the requesting platform', () => {
   }
   const otherPlatform = CLIENT_PLATFORM === 'ios' ? 'android' : 'ios'
   assert.equal(isValidRelease(release, CLIENT_PLATFORM), true)
+  assert.equal(isValidRelease({ ...release, application_id: 'com.kai.wod' }, CLIENT_PLATFORM), false)
   assert.equal(isValidRelease(release, otherPlatform), false)
   assert.equal(isValidRelease(undefined, CLIENT_PLATFORM), false)
 })
@@ -72,5 +75,8 @@ test('the app wires automatic and manual update checks through its platform adap
   assert.match(settings, /checkForAppUpdate\(CLIENT_PLATFORM, \{ manual: true \}\)/)
   assert.match(settings, /appUpdateCheck/)
   assert.match(api, /url: '\/platform\/app-release'/)
+  assert.match(api, /MOBILE_APPLICATION_ID = 'com\.kai\.ztwstarmap'/)
+  assert.match(api, /application_id: string \| null/)
+  assert.match(api, /data: \{ platform, application_id: MOBILE_APPLICATION_ID \}/)
   assert.match(api, /auth: 'none'/)
 })

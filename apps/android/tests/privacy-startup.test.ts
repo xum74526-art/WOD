@@ -9,6 +9,10 @@ const privacyConfig = JSON.parse(
   prompt?: string
   title?: string
   message?: string
+  messageLocales?: {
+    'zh-Hans'?: string
+    'zh-Hant'?: string
+  }
   buttonAccept?: string
   buttonRefuse?: string
   hrefLoader?: string
@@ -42,7 +46,7 @@ test('Android uses the blocking native privacy template before app startup', () 
   assert.equal(privacyConfig.disagreeMode?.visitorEntry, false)
 })
 
-test('the startup prompt links to the public ZTW agreement and privacy policy', () => {
+test('the startup prompt links to the public 算力星图 agreement and privacy policy', () => {
   const expected = [
     'https://wod.kai.com/terms',
     'https://wod.kai.com/privacy',
@@ -57,4 +61,12 @@ test('the startup prompt links to the public ZTW agreement and privacy policy', 
     assert.equal(url.protocol, 'https:')
     assert.equal(url.hostname, 'wod.kai.com')
   }
+})
+
+test('the startup prompt keeps Chinese consent punctuation with a short final sentence', () => {
+  assert.match(privacyConfig.message || '', /點擊「同意並繼續」，即表示您已閱讀並同意。$/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /点击“同意并继续”，即表示您已阅读并同意。$/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /點擊「同意並繼續」，即表示您已閱讀並同意。$/)
+  assert.doesNotMatch(privacyConfig.message || '', /上述內容。$/)
+  assert.doesNotMatch(privacyConfig.messageLocales?.['zh-Hans'] || '', /上述内容。$/)
 })

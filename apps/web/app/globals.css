@@ -4406,7 +4406,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .pingxx-checkout__card > footer a { color: var(--accent); }
 @media (max-width: 620px) { .pingxx-checkout__body { padding: 40px 22px 32px; } .pingxx-checkout__card > header, .pingxx-checkout__card > footer { padding-inline: 20px; } .pingxx-checkout__card > header span { letter-spacing: .08em; } }
 
-/* Mobile parity workspaces — ZTW data arranged as a desktop operations ledger. */
+/* Mobile parity workspaces — 算力星图 data arranged as a desktop operations ledger. */
 .workspace-sidebar nav { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .mobile-assets-workspace,
 .mobile-account-service,

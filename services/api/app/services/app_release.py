@@ -34,8 +34,52 @@ def _trusted_update_url(platform: MobilePlatform, value: str) -> bool:
     )
 
 
-def app_release(platform: MobilePlatform) -> dict:
-    prefix = f"APP_{platform.upper()}"
+def _unavailable(platform: MobilePlatform, application_id: str | None = None) -> dict:
+    return {
+        "platform": platform,
+        "application_id": application_id,
+        "available": False,
+        "latest_version_name": None,
+        "latest_version_code": None,
+        "update_url": None,
+        "release_notes_zh": [],
+        "release_notes_en": [],
+    }
+
+
+def _release_prefix(
+    platform: MobilePlatform,
+    application_id: str | None,
+) -> tuple[str, str] | None:
+    requested = (application_id or "").strip()
+    if platform == "android":
+        current_id = settings.APP_ANDROID_APPLICATION_ID.strip()
+        legacy_id = settings.APP_ANDROID_LEGACY_APPLICATION_ID.strip()
+        if requested == current_id:
+            return "APP_ANDROID", current_id
+        # Android clients released before the package rename did not send an
+        # application_id. Keep them on the legacy artifact so they are never
+        # told that a different package is an in-place update.
+        if not requested or requested == legacy_id:
+            return "APP_ANDROID_LEGACY", legacy_id
+        return None
+
+    current_id = settings.APP_IOS_APPLICATION_ID.strip()
+    legacy_id = settings.APP_IOS_LEGACY_APPLICATION_ID.strip()
+    if requested == current_id:
+        return "APP_IOS", current_id
+    # Older iOS builds also omitted application_id. Keep them isolated from a
+    # future App Store listing that uses a different Bundle ID.
+    if not requested or requested == legacy_id:
+        return "APP_IOS_LEGACY", legacy_id
+    return None
+
+
+def app_release(platform: MobilePlatform, *, application_id: str | None = None) -> dict:
+    selected = _release_prefix(platform, application_id)
+    if selected is None:
+        return _unavailable(platform)
+    prefix, selected_application_id = selected
     enabled = bool(getattr(settings, f"{prefix}_RELEASE_ENABLED"))
     version_name = str(getattr(settings, f"{prefix}_LATEST_VERSION_NAME")).strip()
     version_code = int(getattr(settings, f"{prefix}_LATEST_VERSION_CODE"))
@@ -48,18 +92,11 @@ def app_release(platform: MobilePlatform) -> dict:
         and _trusted_update_url(platform, update_url)
     )
     if not available:
-        return {
-            "platform": platform,
-            "available": False,
-            "latest_version_name": None,
-            "latest_version_code": None,
-            "update_url": None,
-            "release_notes_zh": [],
-            "release_notes_en": [],
-        }
+        return _unavailable(platform, selected_application_id)
 
     return {
         "platform": platform,
+        "application_id": selected_application_id,
         "available": True,
         "latest_version_name": version_name,
         "latest_version_code": version_code,

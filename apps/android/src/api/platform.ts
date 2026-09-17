@@ -15,9 +15,11 @@ export interface PlatformCapabilities {
 }
 
 export type MobilePlatform = 'android' | 'ios'
+export const MOBILE_APPLICATION_ID = 'com.kai.ztwstarmap'
 
 export interface AppReleaseInfo {
   platform: MobilePlatform
+  application_id: string | null
   available: boolean
   latest_version_name: string | null
   latest_version_code: number | null
@@ -36,7 +38,7 @@ export function getPlatformCapabilities() {
 export function getAppRelease(platform: MobilePlatform) {
   return request<AppReleaseInfo>({
     url: '/platform/app-release',
-    data: { platform },
+    data: { platform, application_id: MOBILE_APPLICATION_ID },
     silent: true,
     auth: 'none',
   })

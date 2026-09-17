@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
-    # ZTW-owned recovery email. This remains fail-closed until the private
+    # 算力星图-owned recovery email. This remains fail-closed until the private
     # deployment supplies encrypted-field and SMTP configuration.
     ACCOUNT_RECOVERY_EMAIL_ENABLED: bool = False
     ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN: str = "https://wod.kai.com"
@@ -39,20 +39,38 @@ class Settings(BaseSettings):
     # identifiers remain "legacy" during the installed-client transition.
     AUTH_CLIENT_PLATFORM_MAP: str = "web=web,ios=ios,android=android,admin=admin"
     # Public native-app release metadata. Update these values only after the
-    # corresponding package is available at the trusted HTTPS address.
-    APP_ANDROID_RELEASE_ENABLED: bool = True
+    # corresponding package is available at the trusted HTTPS address. Android
+    # keeps a separate legacy channel because changing applicationId creates a
+    # second app instead of an in-place update.
+    APP_ANDROID_APPLICATION_ID: str = "com.kai.ztwstarmap"
+    APP_ANDROID_RELEASE_ENABLED: bool = False
     APP_ANDROID_LATEST_VERSION_NAME: str = "1.2.1"
     APP_ANDROID_LATEST_VERSION_CODE: int = 121
-    APP_ANDROID_UPDATE_URL: str = "https://wod.kai.com/download/wod.apk"
+    APP_ANDROID_UPDATE_URL: str = "https://wod.kai.com/download/suanlixingtu.apk"
     APP_ANDROID_RELEASE_NOTES_ZH: str = ""
     APP_ANDROID_RELEASE_NOTES_EN: str = ""
+    APP_ANDROID_LEGACY_APPLICATION_ID: str = "com.kai.wod"
+    APP_ANDROID_LEGACY_RELEASE_ENABLED: bool = True
+    APP_ANDROID_LEGACY_LATEST_VERSION_NAME: str = "1.2.1"
+    APP_ANDROID_LEGACY_LATEST_VERSION_CODE: int = 121
+    APP_ANDROID_LEGACY_UPDATE_URL: str = "https://wod.kai.com/download/wod.apk"
+    APP_ANDROID_LEGACY_RELEASE_NOTES_ZH: str = ""
+    APP_ANDROID_LEGACY_RELEASE_NOTES_EN: str = ""
     # iOS stays unavailable until an official App Store page exists.
+    APP_IOS_APPLICATION_ID: str = "com.kai.ztwstarmap"
     APP_IOS_RELEASE_ENABLED: bool = False
     APP_IOS_LATEST_VERSION_NAME: str = ""
     APP_IOS_LATEST_VERSION_CODE: int = 0
     APP_IOS_UPDATE_URL: str = ""
     APP_IOS_RELEASE_NOTES_ZH: str = ""
     APP_IOS_RELEASE_NOTES_EN: str = ""
+    APP_IOS_LEGACY_APPLICATION_ID: str = "com.kai.wod"
+    APP_IOS_LEGACY_RELEASE_ENABLED: bool = False
+    APP_IOS_LEGACY_LATEST_VERSION_NAME: str = ""
+    APP_IOS_LEGACY_LATEST_VERSION_CODE: int = 0
+    APP_IOS_LEGACY_UPDATE_URL: str = ""
+    APP_IOS_LEGACY_RELEASE_NOTES_ZH: str = ""
+    APP_IOS_LEGACY_RELEASE_NOTES_EN: str = ""
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:9000"
     # Sensitive fields are encrypted at rest. Set a dedicated Fernet key in
     # production; local development falls back to a key derived from SECRET_KEY.
