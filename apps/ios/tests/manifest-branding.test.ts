@@ -38,6 +38,10 @@ test('native package identity and icon paths use the 算力星图 Vue 3 source t
   assert.equal(existsSync(resolve(appRoot, 'assets/branding/app-icon-master.png')), true)
 })
 
+test('native transport refuses untrusted TLS certificates', () => {
+  assert.deepEqual(manifest['app-plus'].ssl, { untrustedca: 'refuse' })
+})
+
 test('login, registration and the native icon present the 算力星图 brand', () => {
   if (CLIENT_PLATFORM === 'ios') {
     const iconPath = manifest['app-plus'].distribute.icons.ios.appstore

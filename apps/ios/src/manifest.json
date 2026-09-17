@@ -9,6 +9,9 @@
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
+        "ssl" : {
+            "untrustedca" : "refuse"
+        },
         "modules" : {
             "Invocation" : {},
             "VideoPlayer" : {}
