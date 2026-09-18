@@ -1973,6 +1973,11 @@
               }
             ],
             "title": "Return Url"
+          },
+          "terms_accepted": {
+            "default": false,
+            "title": "Terms Accepted",
+            "type": "boolean"
           }
         },
         "title": "KaiStartIn",
@@ -3151,6 +3156,27 @@
         "title": "PasswordResetRequestIn",
         "type": "object"
       },
+      "PhoneLoginSetupIn": {
+        "properties": {
+          "password": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "phone": {
+            "pattern": "^1\\d{10}$",
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "password"
+        ],
+        "title": "PhoneLoginSetupIn",
+        "type": "object"
+      },
       "PostCreateIn": {
         "properties": {
           "content": {
@@ -3860,10 +3886,17 @@
       "RecoveryEmailVerificationRequestIn": {
         "properties": {
           "current_password": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Current Password",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
           },
           "email": {
             "maxLength": 320,
@@ -3873,8 +3906,7 @@
           }
         },
         "required": [
-          "email",
-          "current_password"
+          "email"
         ],
         "title": "RecoveryEmailVerificationRequestIn",
         "type": "object"
@@ -12963,6 +12995,72 @@
           }
         ],
         "summary": "Upload Avatar",
+        "tags": [
+          "user"
+        ]
+      }
+    },
+    "/api/user/login-phone": {
+      "get": {
+        "operationId": "get_login_phone_status_api_user_login_phone_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Login Phone Status",
+        "tags": [
+          "user"
+        ]
+      },
+      "post": {
+        "operationId": "setup_login_phone_api_user_login_phone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneLoginSetupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Setup Login Phone",
         "tags": [
           "user"
         ]

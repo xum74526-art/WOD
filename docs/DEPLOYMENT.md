@@ -61,11 +61,16 @@ API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collec
    返回非零是预期结果；除预期的账号找回增量外，出现任何不兼容结构都必须停止发布；
 4. 运行 `python migrate_account_recovery.py`，随后再次运行 `--check`，必须显示 schema ready；
 5. 在 KAI/OIDC 控制台登记 `https://wod.kai.com/api/auth/kai/callback`，并确认 `https://wod.kai.com/login`、`https://wod.kai.com/reset-password`、`https://wod.kai.com/account-deletion`、`https://wod.kai.com/account/settings` 与原生端 `kai://auth` 均已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；更换移动包名不等于更换 OAuth 回跳，除非 KAI 服务端和两个客户端在同一版本同时迁移，否则保持 `kai://auth`；
+   KAI 当前元数据中的签发方是 `https://auth.kai.com`，而 OAuth/JWKS/UserInfo 接口位于
+   `https://auth.kai.com/api/auth`。生产环境必须分别填写 `KAI_AUTH_ISSUER` 与
+   `KAI_AUTH_ENDPOINT_BASE`，不能把接口路径当成令牌签发方；
 6. 再启动候选 API，检查 `/health`、找回能力配置接口和近期日志，最后才切换正式流量。
 
 Docker 镜像必须包含 `migrate_account_recovery.py`，便于通过 `--entrypoint python` 在与正式服务
-相同的依赖环境中运行。迁移只允许增加账号找回所需结构，不从 KAI 身份或其他资料自动回填
-历史邮箱。容器和 systemd 启动入口会在通用 `init_db.py` 前检查该专用 schema；全新空库应先在
+相同的依赖环境中运行。账号找回迁移只允许增加找回所需结构，不从 KAI 身份或其他资料自动回填
+历史邮箱。KAI 首次登录创建账号所需的 `users.password_set` 兼容列由通用 `init_db.py` 以旧账号
+默认已设置密码的方式补齐；它不得把 KAI 返回的邮箱、手机号或昵称回填或合并到任何历史账号。
+容器和 systemd 启动入口会在通用 `init_db.py` 前检查该专用 schema；全新空库应先在
 受控初始化步骤执行 `init_db.py`，再通过专用 `--check` 后启动服务。SMTP 授权码不得写入镜像、
 Git、发布记录或命令行。
 

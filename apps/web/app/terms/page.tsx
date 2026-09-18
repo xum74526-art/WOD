@@ -62,8 +62,8 @@ const termsSections: LegalSection[] = [
         en: "Identity, company or supplier verification means only that submitted materials were reviewed under the rules then in effect; it does not guarantee credit, fulfilment capacity, resource quality or continuing compliance. You must not impersonate another person, lend, rent, sell or mass-register accounts.",
       },
       {
-        zh: "KAI 身份为可选的外部关联身份。绑定或登录成功不代表创建另一套业务账户；解绑或注销算力星图不会自动注销外部 KAI 账号。你不得向算力星图提交外部 KAI 密码。",
-        en: "KAI identity is an optional linked external identity. Successful linking or sign-in does not create a separate business account. Unlinking or deleting 算力星图 does not automatically delete the external KAI account. Do not submit an external KAI password to 算力星图.",
+        zh: "KAI 身份为外部统一身份。首次成功的 KAI 登录或注册会仅按 KAI 签发方和主体标识创建一个本地平台账号；不会按 KAI 返回的邮箱、手机号、昵称或头像自动合并既有账号。你可随后自愿设置本地手机号登录标识和密码；未接入短信验证时，该手机号不代表归属核验。找回邮箱仍须通过邮件验证码验证；首次 KAI 账号尚未设置本地密码时，可由近期 KAI 登录授权首次绑定邮箱。解绑或注销算力星图不会自动注销外部 KAI 账号。你不得向算力星图提交外部 KAI 密码。",
+        en: "KAI identity is an external unified identity. A first successful KAI sign-in or registration creates one local platform account only by KAI issuer and subject; it never automatically merges an existing account using KAI email, mobile number, nickname, or avatar. You may then choose a local mobile sign-in identifier and password; until SMS verification is available, that number does not prove ownership. Recovery email must still be verified by email code; a KAI-first account without a local password may use a recent KAI sign-in to authorise its first email binding. Unlinking or deleting 算力星图 does not automatically delete the external KAI account. Do not submit an external KAI password to 算力星图.",
       },
     ],
   },

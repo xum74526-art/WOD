@@ -19,7 +19,7 @@ from app.core.config import settings  # noqa: E402
 _ENSURE = {
     "users": [
         "role", "supplier_status", "phone_bound", "created_platform",
-        "account_status", "deleted_at", "recovery_email",
+        "account_status", "deleted_at", "password_set", "recovery_email",
         "recovery_email_fingerprint", "recovery_email_verified_at", "auth_version",
     ],
     "assets": ["end_at", "start_at", "purchase_type", "sell_price"],
@@ -85,7 +85,7 @@ _ENSURE = {
         "qualification_day", "daily_slot", "qualification_order_id",
         "qualification_reason", "fixed_reward_accrual_id",
     ],
-    "external_auth_flows": ["user_id", "platform", "client_id"],
+    "external_auth_flows": ["user_id", "platform", "client_id", "terms_accepted"],
     "external_auth_tickets": ["platform", "client_id"],
 }
 
@@ -115,7 +115,7 @@ _NUMERIC_COLS = {
     "withdrawable_balance", "withdraw_frozen", "promotional_balance",
     "promotional_frozen",
 }
-_BOOLEAN_COLS = {"phone_bound"}
+_BOOLEAN_COLS = {"phone_bound", "password_set", "terms_accepted"}
 _JSON_COLS = {"product_snapshot"}
 
 def _ensure_columns(db_engine=None):
@@ -133,6 +133,8 @@ def _ensure_columns(db_engine=None):
                     col_type = "VARCHAR(24) NOT NULL DEFAULT 'visible'"
                 elif col == "auth_version":
                     col_type = "INTEGER NOT NULL DEFAULT 0"
+                elif col == "password_set":
+                    col_type = "BOOLEAN NOT NULL DEFAULT TRUE"
                 elif table == "products" and col == "version":
                     col_type = "INTEGER NOT NULL DEFAULT 1"
                 elif col in {"client_request_id", "create_request_hash"}:
@@ -172,6 +174,7 @@ def _ensure_columns(db_engine=None):
     if "users" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text("UPDATE users SET auth_version = 0 WHERE auth_version IS NULL"))
+            conn.execute(text("UPDATE users SET password_set = TRUE WHERE password_set IS NULL"))
     for table in ("posts", "comments"):
         if table in insp.get_table_names():
             with target_engine.begin() as conn:
@@ -937,32 +940,110 @@ def _migrate_unverified_phone_flags(db_engine=None):
     return True
 
 
+def _normalize_kai_identity_issuers(db_engine=None):
+    """Rewrite the historical endpoint-base issuer to KAI's canonical issuer."""
+
+    from app.services.kai_auth import identity_issuer_urls, issuer_url
+
+    target_engine = db_engine or engine
+    inspector = inspect(target_engine)
+    if "external_identities" not in inspector.get_table_names():
+        return False
+    canonical = issuer_url()
+    legacy_values = [
+        value for value in identity_issuer_urls()
+        if value and value != canonical
+    ]
+    if not canonical or not legacy_values:
+        return False
+    parameters = {"canonical": canonical}
+    legacy_conditions = []
+    for index, value in enumerate(legacy_values):
+        key = f"legacy_{index}"
+        parameters[key] = value
+        legacy_conditions.append(f"issuer = :{key}")
+    legacy_where = " OR ".join(legacy_conditions)
+    all_where = f"issuer = :canonical OR {legacy_where}"
+    with target_engine.begin() as conn:
+        conflict = conn.execute(text(
+            "SELECT subject, COUNT(*) AS identity_count "
+            "FROM external_identities "
+            f"WHERE provider = 'kai' AND ({all_where}) "
+            "GROUP BY subject HAVING COUNT(*) > 1 LIMIT 1"
+        ), parameters).first()
+        if conflict:
+            raise RuntimeError(
+                "Kai issuer migration conflict must be resolved before migration: "
+                f"subject={conflict.subject}"
+            )
+        result = conn.execute(text(
+            "UPDATE external_identities SET issuer = :canonical "
+            f"WHERE provider = 'kai' AND ({legacy_where})"
+        ), parameters)
+    changed = bool(result.rowcount)
+    if changed:
+        print("[init_db] 已将历史 Kai 身份签发方归一为 OIDC canonical issuer")
+    return changed
+
+
 def _ensure_auth_identity_constraints(db_engine=None):
-    """Make one Kai identity per local user a database-level invariant."""
+    """Make both local-user and issuer-subject identity keys unique."""
     target_engine = db_engine or engine
     inspector = inspect(target_engine)
     if "external_identities" not in inspector.get_table_names():
         return False
     with target_engine.begin() as conn:
-        duplicate = conn.execute(text(
+        duplicate_user = conn.execute(text(
             "SELECT user_id, provider, COUNT(*) AS identity_count "
             "FROM external_identities GROUP BY user_id, provider "
             "HAVING COUNT(*) > 1 LIMIT 1"
         )).first()
-        if duplicate:
+        if duplicate_user:
             raise RuntimeError(
                 "external identity conflict must be resolved before migration: "
-                f"user_id={duplicate.user_id}, provider={duplicate.provider}"
+                f"user_id={duplicate_user.user_id}, provider={duplicate_user.provider}"
             )
-        existing_indexes = {index["name"] for index in inspect(target_engine).get_indexes("external_identities")}
-        if "ix_external_identity_user_provider" in existing_indexes:
-            return False
-        conn.execute(text(
-            "CREATE UNIQUE INDEX ix_external_identity_user_provider "
-            "ON external_identities (user_id, provider)"
-        ))
-    print("[init_db] 已确保每个本地账号仅绑定一个 Kai 身份")
-    return True
+        duplicate_subject = conn.execute(text(
+            "SELECT issuer, subject, COUNT(*) AS identity_count "
+            "FROM external_identities GROUP BY issuer, subject "
+            "HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+        if duplicate_subject:
+            raise RuntimeError(
+                "external identity subject conflict must be resolved before migration: "
+                f"issuer={duplicate_subject.issuer}, subject={duplicate_subject.subject}"
+            )
+
+        refreshed = inspect(target_engine)
+        indexes = refreshed.get_indexes("external_identities")
+        constraints = refreshed.get_unique_constraints("external_identities")
+
+        def has_unique(columns):
+            expected = list(columns)
+            return any(
+                item.get("unique") and item.get("column_names") == expected
+                for item in indexes
+            ) or any(
+                item.get("column_names") == expected
+                for item in constraints
+            )
+
+        changed = False
+        if not has_unique(("user_id", "provider")):
+            conn.execute(text(
+                "CREATE UNIQUE INDEX ix_external_identity_user_provider "
+                "ON external_identities (user_id, provider)"
+            ))
+            changed = True
+        if not has_unique(("issuer", "subject")):
+            conn.execute(text(
+                "CREATE UNIQUE INDEX ix_external_identity_issuer_subject_unique "
+                "ON external_identities (issuer, subject)"
+            ))
+            changed = True
+    if changed:
+        print("[init_db] 已确保本地账号与 Kai 签发方主体标识均唯一")
+    return changed
 
 
 def _migrate_offline_purchases():
@@ -1608,6 +1689,7 @@ def init():
     _migrate_product_market_sources()
     _migrate_product_create_idempotency()
     _reconcile_supplier_completed_order_counts()
+    _normalize_kai_identity_issuers()
     _ensure_auth_identity_constraints()
     _migrate_unverified_phone_flags()
     _migrate_payment_precision_and_pending_deadlines()

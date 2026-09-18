@@ -253,7 +253,15 @@ export function passwordRegister(input: { display_name: string; identifier: stri
 }
 
 export function getKaiAuthConfig() {
-  return apiRequest<{ configured: boolean; issuer: string; scopes: string[] }>("/api/v1/auth/kai/config");
+  return apiRequest<{
+    configured: boolean;
+    issuer: string;
+    scopes: string[];
+    auto_provision_enabled: boolean;
+    phone_binding_required: boolean;
+    phone_login_setup_enabled: boolean;
+    sms_verification_available: boolean;
+  }>("/api/v1/auth/kai/config");
 }
 
 export function exchangeKaiTicket(ticket: string) {
@@ -265,7 +273,10 @@ export function exchangeKaiTicket(ticket: string) {
 
 export function kaiWebAuthorizationUrl(intent: "login" | "register" | "recover", returnTo = "/") {
   const query = new URLSearchParams({ intent });
-  if (intent !== "recover") query.set("return_to", returnTo);
+  if (intent !== "recover") {
+    query.set("return_to", returnTo);
+    query.set("terms_accepted", "1");
+  }
   return `${apiBaseUrl}/api/v1/auth/kai/start?${query.toString()}`;
 }
 
@@ -317,6 +328,19 @@ export type AccountRecoveryConfig = {
 export type RecoveryEmailStatus = {
   email: string | null;
   verified: boolean;
+  /** A short, server-owned KAI session can authorize the first email bind. */
+  current_password_required: boolean;
+  kai_reauth_available?: boolean;
+  kai_reauth_required?: boolean;
+};
+
+export type LoginPhoneStatus = {
+  configured: boolean;
+  phone_masked: string | null;
+  /** Always false until an SMS provider is added; do not present as verified. */
+  phone_verified: boolean;
+  can_configure: boolean;
+  sms_verification_available: boolean;
 };
 
 export function getAccountRecoveryConfig() {
@@ -327,10 +351,21 @@ export function getRecoveryEmailStatus() {
   return apiRequest<RecoveryEmailStatus>("/api/v1/user/recovery-email");
 }
 
-export function requestRecoveryEmailVerification(email: string, currentPassword: string) {
+export function getLoginPhoneStatus() {
+  return apiRequest<LoginPhoneStatus>("/api/v1/user/login-phone");
+}
+
+export function configureLoginPhone(phone: string, password: string) {
+  return apiRequest<{ id: number; username: string; phone_bound?: boolean; password_set?: boolean }>("/api/v1/user/login-phone", {
+    method: "POST",
+    body: JSON.stringify({ phone, password }),
+  });
+}
+
+export function requestRecoveryEmailVerification(email: string, currentPassword?: string) {
   return apiRequest<{ accepted: boolean; already_verified: boolean }>("/api/v1/user/recovery-email/request-verification", {
     method: "POST",
-    body: JSON.stringify({ email, current_password: currentPassword }),
+    body: JSON.stringify({ email, ...(currentPassword ? { current_password: currentPassword } : {}) }),
   });
 }
 

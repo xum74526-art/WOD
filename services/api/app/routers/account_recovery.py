@@ -14,8 +14,7 @@ from app.core.rate_limit import (
 )
 from app.db.session import get_db
 from app.integrations.account_email import email_delivery_configured
-from app.models.user import User
-from app.core.deps import AuthContext, get_current_auth_context, get_current_user
+from app.core.deps import AuthContext, get_current_auth_context
 from app.schemas.auth import (
     PasswordResetConfirmIn,
     PasswordResetRequestIn,
@@ -105,8 +104,17 @@ def request_recovery_email_verification(
 
 
 @router.get("/api/user/recovery-email")
-def get_recovery_email(user: User = Depends(get_current_user)):
-    return success(recovery.recovery_email_status(user))
+def get_recovery_email(
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    return success(
+        recovery.recovery_email_status(
+            context.user,
+            db,
+            context.session_id,
+        )
+    )
 
 
 @router.post("/api/auth/email/verification/confirm")

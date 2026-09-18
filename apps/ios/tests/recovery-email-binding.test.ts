@@ -56,9 +56,9 @@ test('binding page separates status and capability failures without presenting f
 test('binding page clears credentials and cancels late responses on hide or unload', () => {
   const page = readSource('../src/pages/recovery-email/index.vue')
 
-  assert.match(page, /const submittedPassword = currentPassword\.value\s+currentPassword\.value = ''\s+requestError\.value = ''\s+submitting\.value = true[\s\S]*?requestRecoveryEmailVerification\(normalizedEmail, submittedPassword\)/)
+  assert.match(page, /const submittedPassword = passwordRequired\.value \? currentPassword\.value : undefined\s+currentPassword\.value = ''\s+requestError\.value = ''\s+submitting\.value = true[\s\S]*?requestRecoveryEmailVerification\(normalizedEmail, submittedPassword\)/)
   assert.match(page, /if \(!active \|\| generation !== pageGeneration\) return/)
-  assert.match(page, /if \(active && generation === pageGeneration\) requestError\.value = requestErrorMessage\(cause\)/)
+  assert.match(page, /if \(!active \|\| generation !== pageGeneration\) return\s+const message = requestErrorMessage\(cause\)\s+requestError\.value = message/)
   assert.match(page, /function leavePage\(\) \{[\s\S]*?active = false[\s\S]*?pageGeneration \+= 1[\s\S]*?requestError\.value = ''[\s\S]*?clearSensitiveFields\(\)/)
   assert.match(page, /function clearSensitiveFields\(\) \{\s+email\.value = ''\s+currentPassword\.value = ''/)
   assert.match(page, /onHide\(leavePage\)/)
@@ -106,4 +106,24 @@ test('binding page has matching Chinese and English semantic copy', () => {
   assert.match(locale, /recoveryEmailTitle: 'Bind email'/)
   assert.match(locale, /recoveryEmailStatusUnavailable: '状态暂不可用'/)
   assert.match(locale, /recoveryEmailStatusUnavailable: 'Status unavailable'/)
+})
+
+test('KAI-first accounts can bind email without a local password and configure an unverified login phone', () => {
+  const recoveryApi = readSource('../src/api/account-recovery.ts')
+  const recoveryPage = readSource('../src/pages/recovery-email/index.vue')
+  const userApi = readSource('../src/api/user.ts')
+  const settings = readSource('../src/pages/settings/index.vue')
+  const phonePage = readSource('../src/pages/login-phone/index.vue')
+  const pages = JSON.parse(readSource('../src/pages.json'))
+
+  assert.match(recoveryApi, /current_password_required: boolean/)
+  assert.match(recoveryApi, /currentPassword\?: string/)
+  assert.match(recoveryPage, /const passwordRequired = computed\(\(\) => status\.value\?\.current_password_required !== false\)/)
+  assert.match(recoveryPage, /v-if="passwordRequired" class="field"/)
+  assert.match(userApi, /url: '\/user\/login-phone'/)
+  assert.match(settings, /getPhoneLoginStatus/)
+  assert.match(settings, /phoneLogin\?\.can_configure/)
+  assert.match(phonePage, /phoneLoginUnverifiedNotice/)
+  assert.match(phonePage, /\^1\\d\{10\}\$/)
+  assert.ok(pages.pages.some((item: { path: string }) => item.path === 'pages/login-phone/index'))
 })

@@ -107,7 +107,6 @@ import {
   createPendingKaiLoginIntent,
   peekPendingLoginKaiCallback,
   PENDING_KAI_INTENT_KEY,
-  readPendingKaiLoginIntent,
 } from '@/utils/login-kai-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { consumeAuthReturnPath } from '@/utils/auth-return-path'
@@ -145,7 +144,6 @@ const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 
 function setMode(value: 'login' | 'register') {
   mode.value = value
-  if (value === 'register') authMethod.value = 'phone'
   syncCaptchaLifecycle(false)
 }
 
@@ -314,25 +312,15 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   externalKaiAuthorizationPending.value = false
   submitting.value = true
   authMethod.value = 'kai'
-  const pendingKaiIntent = readPendingKaiLoginIntent(
-    uni.getStorageSync(PENDING_KAI_INTENT_KEY),
-  ) || 'login'
   try {
     if (callback.error) {
       uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
       uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
       clearPendingLoginKaiCallback(callback)
-      if (callback.error === 'identity_not_bound' && pendingKaiIntent === 'register') {
-        mode.value = 'register'
-        authMethod.value = 'phone'
-        syncCaptchaLifecycle(true)
-        uni.showToast({ title: t('kaiRegisterContinuePhone'), icon: 'none', duration: 2600 })
-        return true
-      }
       const errorKey = callback.error === 'access_denied'
         ? 'kaiCancelled'
-        : callback.error === 'identity_not_bound'
-          ? 'kaiIdentityNotBoundLogin'
+        : callback.error === 'terms_required'
+          ? '请先同意协议'
           : 'kaiLoginFailed'
       uni.showToast({ title: t(errorKey), icon: 'none' })
       return true

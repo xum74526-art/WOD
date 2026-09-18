@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, false, func, text
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, false, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -26,6 +26,10 @@ class User(Base):
     # as a login identifier. API serializers hide it while this flag is false.
     phone_bound: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     password: Mapped[str] = mapped_column(String(255))
+    # KAI-first accounts start with a high-entropy unusable placeholder hash.
+    # This explicit flag avoids inferring credential state from that hash or
+    # from the internal phone placeholder.
+    password_set: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     avatar: Mapped[str | None] = mapped_column(String(512), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default="personal")  # personal / supplier / admin
     supplier_status: Mapped[str] = mapped_column(String(16), default="none")  # none / pending / approved / rejected

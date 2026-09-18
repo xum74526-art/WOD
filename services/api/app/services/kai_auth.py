@@ -43,10 +43,86 @@ def _b64url_decode(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
+_KAI_ENDPOINT_PATH = "/api/auth"
+
+
+def issuer_url() -> str:
+    """Return the canonical OIDC issuer used in signed responses and tokens.
+
+    Older deployments stored the KAI endpoint base in ``KAI_AUTH_ISSUER``.
+    Normalising that legacy value keeps a rolling deployment usable while the
+    private environment is updated to the standards-compliant split config.
+    """
+
+    configured = settings.KAI_AUTH_ISSUER.strip().rstrip("/")
+    if configured.endswith(_KAI_ENDPOINT_PATH):
+        return configured[: -len(_KAI_ENDPOINT_PATH)]
+    return configured
+
+
+def endpoint_base_url() -> str:
+    """Return the base URL that hosts KAI's OAuth and OIDC endpoints."""
+
+    explicit = settings.KAI_AUTH_ENDPOINT_BASE.strip().rstrip("/")
+    if explicit:
+        return explicit
+    configured = settings.KAI_AUTH_ISSUER.strip().rstrip("/")
+    if configured.endswith(_KAI_ENDPOINT_PATH):
+        return configured
+    return f"{configured}{_KAI_ENDPOINT_PATH}" if configured else ""
+
+
+def identity_issuer_urls() -> tuple[str, ...]:
+    """Return canonical and historically persisted KAI issuer values.
+
+    Earlier releases used the OAuth endpoint base as the identity issuer.  A
+    rolling deployment must still locate those rows, then rewrite them to the
+    issuer declared by KAI's OpenID metadata.
+    """
+
+    values = (
+        issuer_url(),
+        settings.KAI_AUTH_ISSUER.strip().rstrip("/"),
+        endpoint_base_url(),
+    )
+    return tuple(dict.fromkeys(value for value in values if value))
+
+
+def find_kai_identity(db: Session, subject: str) -> ExternalIdentity | None:
+    """Find one KAI subject across issuer aliases and normalize it in-place."""
+
+    identities = db.query(ExternalIdentity).filter(
+        ExternalIdentity.provider == "kai",
+        ExternalIdentity.issuer.in_(identity_issuer_urls()),
+        ExternalIdentity.subject == subject,
+    ).all()
+    if len(identities) > 1:
+        raise BizError(
+            "统一认证身份存在历史冲突，请联系平台处理",
+            status_code=409,
+        )
+    if not identities:
+        return None
+    identity = identities[0]
+    canonical = issuer_url()
+    if identity.issuer != canonical:
+        identity.issuer = canonical
+        try:
+            db.flush()
+        except IntegrityError as exc:
+            db.rollback()
+            raise BizError(
+                "统一认证身份存在历史冲突，请联系平台处理",
+                status_code=409,
+            ) from exc
+    return identity
+
+
 def is_configured() -> bool:
     return all(
         (
-            settings.KAI_AUTH_ISSUER.strip(),
+            issuer_url(),
+            endpoint_base_url(),
             settings.KAI_AUTH_CLIENT_ID.strip(),
             settings.KAI_AUTH_CLIENT_SECRET.strip(),
             settings.KAI_AUTH_CALLBACK_URL.strip(),
@@ -58,9 +134,12 @@ def is_configured() -> bool:
 def public_config() -> dict[str, Any]:
     return {
         "configured": is_configured(),
-        "issuer": settings.KAI_AUTH_ISSUER.rstrip("/"),
+        "issuer": issuer_url(),
         "scopes": settings.KAI_AUTH_SCOPES.split(),
-        "phone_binding_required": True,
+        "auto_provision_enabled": True,
+        "phone_binding_required": False,
+        "phone_login_setup_enabled": True,
+        "sms_verification_available": False,
     }
 
 
@@ -99,6 +178,7 @@ def create_authorization_flow(
     user_id: int | None = None,
     platform: str = "legacy",
     client_id: str | None = None,
+    terms_accepted: bool = False,
 ) -> str:
     _require_configured()
     if intent not in {"login", "register", "bind", "recover", "delete"}:
@@ -122,6 +202,7 @@ def create_authorization_flow(
             code_verifier=code_verifier,
             nonce=nonce,
             intent=intent,
+            terms_accepted=bool(terms_accepted),
             user_id=user_id,
             platform=platform,
             client_id=client_id,
@@ -149,8 +230,7 @@ def create_authorization_flow(
         # of an old provider session.
         params["prompt"] = "login"
         params["max_age"] = "0"
-    issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
-    return f"{issuer}/oauth2/authorize?{urlencode(params)}"
+    return f"{endpoint_base_url()}/oauth2/authorize?{urlencode(params)}"
 
 
 def get_flow(db: Session, state: str) -> ExternalAuthFlow:
@@ -177,7 +257,6 @@ def consume_flow(db: Session, flow: ExternalAuthFlow) -> None:
 
 async def exchange_authorization_code(code: str, flow: ExternalAuthFlow) -> dict[str, Any]:
     _require_configured()
-    issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     payload = {
         "grant_type": "authorization_code",
         "code": code,
@@ -189,7 +268,7 @@ async def exchange_authorization_code(code: str, flow: ExternalAuthFlow) -> dict
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                f"{issuer}/oauth2/token",
+                f"{endpoint_base_url()}/oauth2/token",
                 data=payload,
                 auth=(settings.KAI_AUTH_CLIENT_ID, settings.KAI_AUTH_CLIENT_SECRET),
                 headers={"Accept": "application/json"},
@@ -216,10 +295,13 @@ async def verify_id_token(id_token: str, nonce: str) -> dict[str, Any]:
     if header.get("alg") != "EdDSA" or not header.get("kid"):
         raise BizError("统一认证身份令牌签名算法无效")
 
-    issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
+    issuer = issuer_url()
     try:
         async with httpx.AsyncClient(timeout=settings.KAI_AUTH_HTTP_TIMEOUT) as client:
-            response = await client.get(f"{issuer}/jwks", headers={"Accept": "application/json"})
+            response = await client.get(
+                f"{endpoint_base_url()}/jwks",
+                headers={"Accept": "application/json"},
+            )
             response.raise_for_status()
             keys = response.json().get("keys", [])
     except (httpx.HTTPError, ValueError) as exc:
@@ -256,11 +338,10 @@ async def verify_id_token(id_token: str, nonce: str) -> dict[str, Any]:
 async def enrich_with_userinfo(claims: dict[str, Any], access_token: str | None) -> dict[str, Any]:
     if not access_token:
         return claims
-    issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=settings.KAI_AUTH_HTTP_TIMEOUT) as client:
             response = await client.get(
-                f"{issuer}/oauth2/userinfo",
+                f"{endpoint_base_url()}/oauth2/userinfo",
                 headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
             )
             response.raise_for_status()
@@ -279,12 +360,8 @@ def find_bound_user(
     expected_user_id: int | None = None,
 ) -> User | None:
     """Find an explicitly bound local user; never create a ZTW account."""
-    issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     subject = str(claims["sub"])
-    identity = db.query(ExternalIdentity).filter(
-        ExternalIdentity.issuer == issuer,
-        ExternalIdentity.subject == subject,
-    ).first()
+    identity = find_kai_identity(db, subject)
     if not identity:
         return None
     if expected_user_id is not None and identity.user_id != expected_user_id:
@@ -295,7 +372,7 @@ def find_bound_user(
     from app.services.account_lifecycle import lock_active_user
     lock_active_user(db, user.id)
     identity.email = _optional_text(claims.get("email"), 320)
-    identity.email_verified = bool(claims.get("email_verified"))
+    identity.email_verified = claims.get("email_verified") is True
     identity.display_name = _optional_text(claims.get("name"), 128)
     identity.avatar_url = _optional_text(claims.get("picture"), 512)
     if identity.avatar_url and not user.avatar:
@@ -388,10 +465,10 @@ def issue_bind_ticket(
             ticket_hash=_sha256(ticket),
             user_id=user_id,
             provider="kai",
-            issuer=settings.KAI_AUTH_ISSUER.rstrip("/"),
+            issuer=issuer_url(),
             subject=subject,
             email=_optional_text(claims.get("email"), 320),
-            email_verified=bool(claims.get("email_verified")),
+            email_verified=claims.get("email_verified") is True,
             display_name=_optional_text(claims.get("name"), 128),
             avatar_url=_optional_text(claims.get("picture"), 512),
             platform=platform,
@@ -421,18 +498,33 @@ def bind_identity_with_ticket(db: Session, ticket: str, user: User) -> ExternalI
     ):
         raise BizError("统一认证绑定凭证无效或已过期")
 
-    subject_identity = db.query(ExternalIdentity).filter(
-        ExternalIdentity.issuer == row.issuer,
-        ExternalIdentity.subject == row.subject,
-    ).first()
+    is_kai_identity = row.provider == "kai" and row.issuer in identity_issuer_urls()
+    row_issuer = issuer_url() if is_kai_identity else row.issuer
+    subject_identity = (
+        find_kai_identity(db, row.subject)
+        if is_kai_identity
+        else db.query(ExternalIdentity).filter(
+            ExternalIdentity.provider == row.provider,
+            ExternalIdentity.issuer == row_issuer,
+            ExternalIdentity.subject == row.subject,
+        ).first()
+    )
     user_identity = db.query(ExternalIdentity).filter(
         ExternalIdentity.user_id == user.id,
         ExternalIdentity.provider == row.provider,
     ).first()
     if subject_identity and subject_identity.user_id != user.id:
         raise BizError("该 Kai 身份已绑定其他账号", status_code=409)
+    user_issuer_matches = bool(
+        user_identity
+        and (
+            user_identity.issuer in identity_issuer_urls()
+            if is_kai_identity
+            else user_identity.issuer == row_issuer
+        )
+    )
     if user_identity and (
-        user_identity.issuer != row.issuer or user_identity.subject != row.subject
+        not user_issuer_matches or user_identity.subject != row.subject
     ):
         raise BizError("当前账号已绑定其他 Kai 身份", status_code=409)
 
@@ -441,10 +533,12 @@ def bind_identity_with_ticket(db: Session, ticket: str, user: User) -> ExternalI
         identity = ExternalIdentity(
             user_id=user.id,
             provider=row.provider,
-            issuer=row.issuer,
+            issuer=row_issuer,
             subject=row.subject,
         )
         db.add(identity)
+    elif identity.issuer != row_issuer:
+        identity.issuer = row_issuer
     identity.email = row.email
     identity.email_verified = row.email_verified
     identity.display_name = row.display_name

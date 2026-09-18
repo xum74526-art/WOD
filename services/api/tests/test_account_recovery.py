@@ -86,11 +86,13 @@ class AccountRecoveryTests(unittest.TestCase):
                 "ACCOUNT_RECOVERY_SMTP_STARTTLS",
                 "ACCOUNT_RECOVERY_SMTP_SSL",
                 "KAI_AUTH_ISSUER",
+                "KAI_AUTH_ENDPOINT_BASE",
                 "KAI_AUTH_CLIENT_ID",
                 "KAI_AUTH_CLIENT_SECRET",
                 "KAI_AUTH_CALLBACK_URL",
                 "KAI_AUTH_APP_RETURN_URL",
                 "KAI_AUTH_ALLOWED_RETURN_URLS",
+                "KAI_AUTH_REAUTH_MAX_AGE_SECONDS",
             )
         }
         settings.SECRET_KEY = "account-recovery-unit-test-secret"
@@ -108,11 +110,13 @@ class AccountRecoveryTests(unittest.TestCase):
         settings.ACCOUNT_RECOVERY_SMTP_STARTTLS = True
         settings.ACCOUNT_RECOVERY_SMTP_SSL = False
         settings.KAI_AUTH_ISSUER = "https://auth.kai.test"
+        settings.KAI_AUTH_ENDPOINT_BASE = "https://auth.kai.test/api/auth"
         settings.KAI_AUTH_CLIENT_ID = "wod-recovery-test"
         settings.KAI_AUTH_CLIENT_SECRET = "synthetic-secret"
         settings.KAI_AUTH_CALLBACK_URL = "https://api.wod.test/api/auth/kai/callback"
         settings.KAI_AUTH_APP_RETURN_URL = "wod://auth/kai"
         settings.KAI_AUTH_ALLOWED_RETURN_URLS = "https://web.wod.test/reset-password"
+        settings.KAI_AUTH_REAUTH_MAX_AGE_SECONDS = 600
         self._clear_rate_limits()
 
     def tearDown(self):
@@ -228,6 +232,62 @@ class AccountRecoveryTests(unittest.TestCase):
         self.assertEqual(row.target_email_fingerprint, fingerprint(normalized))
         self.assertIsNone(user.recovery_email)
         self.assertIsNone(user.recovery_email_verified_at)
+
+    def test_kai_first_account_uses_only_a_recent_kai_session_for_email_binding(self):
+        user = User(
+            phone="__kai_recovery_1",
+            phone_bound=False,
+            username="KAI first user",
+            password=hash_password("unknown-random-placeholder"),
+            password_set=False,
+        )
+        self.db.add(user)
+        self.db.flush()
+        self.db.add(ExternalIdentity(
+            user_id=user.id,
+            provider="kai",
+            issuer=settings.KAI_AUTH_ISSUER,
+            subject="recovery-email-subject",
+        ))
+        session = AuthSession(
+            id="recent-kai-email-session",
+            user_id=user.id,
+            platform="android",
+            client_id="android",
+            auth_method="kai_oidc",
+            expires_at=utcnow() + timedelta(hours=1),
+            created_at=utcnow(),
+        )
+        self.db.add(session)
+        self.db.commit()
+
+        status = recovery.recovery_email_status(user, self.db, session.id)
+        self.assertFalse(status["current_password_required"])
+        self.assertTrue(status["kai_reauth_available"])
+        already_verified, token, recipient = recovery.request_email_verification(
+            self.db,
+            user,
+            "kai-first@example.com",
+            None,
+            session.id,
+        )
+        self.assertFalse(already_verified)
+        self.assertTrue(token)
+        self.assertEqual(recipient, "kai-first@example.com")
+
+        session.created_at = utcnow() - timedelta(minutes=11)
+        self.db.commit()
+        status = recovery.recovery_email_status(user, self.db, session.id)
+        self.assertFalse(status["current_password_required"])
+        self.assertTrue(status["kai_reauth_required"])
+        with self.assertRaisesRegex(BizError, "重新登录"):
+            recovery.request_email_verification(
+                self.db,
+                user,
+                "another@example.com",
+                None,
+                session.id,
+            )
 
     def test_email_binding_rechecks_password_and_auth_version_after_account_lock(self):
         user = self._user()

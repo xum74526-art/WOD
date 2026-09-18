@@ -23,6 +23,7 @@ from app.services.account_recovery_mail import (
     enqueue_suppressed_password_reset,
 )
 from app.services.auth_session import utcnow
+from app.services.account_credentials import has_recent_kai_session
 from app.utils.email_address import normalize_email
 from app.utils.response import BizError
 
@@ -92,17 +93,32 @@ def _refresh_locked_user(
     return user
 
 
-def recovery_email_status(user: User) -> dict[str, object]:
+def recovery_email_status(
+    user: User,
+    db: Session | None = None,
+    current_session_id: str | None = None,
+) -> dict[str, object]:
     plain = reveal(user.recovery_email)
     verified = bool(plain and user.recovery_email_verified_at)
-    return {"email": plain if verified else None, "verified": verified}
+    kai_reauth_available = bool(
+        not user.password_set
+        and db is not None
+        and has_recent_kai_session(db, user.id, current_session_id)
+    )
+    return {
+        "email": plain if verified else None,
+        "verified": verified,
+        "current_password_required": bool(user.password_set),
+        "kai_reauth_available": kai_reauth_available,
+        "kai_reauth_required": bool(not user.password_set and not kai_reauth_available),
+    }
 
 
 def request_email_verification(
     db: Session,
     user: User,
     email: str,
-    current_password: str,
+    current_password: str | None,
     current_session_id: str | None = None,
 ) -> tuple[bool, str | None, str]:
     require_email_delivery()
@@ -116,9 +132,16 @@ def request_email_verification(
         expected_auth_version=expected_auth_version,
         current_session_id=current_session_id,
     )
-    if not verify_password(current_password, user.password):
+    if current_password:
+        if not verify_password(current_password, user.password):
+            db.rollback()
+            raise BizError("当前密码错误")
+    elif user.password_set:
         db.rollback()
-        raise BizError("当前密码错误")
+        raise BizError("请输入当前密码")
+    elif not has_recent_kai_session(db, user.id, current_session_id):
+        db.rollback()
+        raise BizError("请使用 Kai 重新登录后绑定邮箱", status_code=401)
     conflict = db.query(User.id).filter(
         User.recovery_email_fingerprint == email_fingerprint,
         User.id != user.id,
@@ -322,6 +345,7 @@ def issue_kai_recovery_token(db: Session, user: User) -> str:
 def _set_password_and_revoke(db: Session, user: User, password: str, now=None) -> None:
     changed_at = now or utcnow()
     user.password = hash_password(password)
+    user.password_set = True
     user.auth_version = int(user.auth_version or 0) + 1
     db.query(AuthSession).filter(
         AuthSession.user_id == user.id,
@@ -407,6 +431,7 @@ def change_password_and_revoke_other_sessions(
         raise BizError("原密码错误")
     changed_at = utcnow()
     user.password = hash_password(password)
+    user.password_set = True
     sessions = db.query(AuthSession).filter(
         AuthSession.user_id == user.id,
         AuthSession.revoked_at.is_(None),

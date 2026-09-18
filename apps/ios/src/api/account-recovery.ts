@@ -3,6 +3,8 @@ import { request } from './request'
 export interface RecoveryEmailStatus {
   email: string | null
   verified: boolean
+  current_password_required: boolean
+  kai_reauth_required?: boolean
 }
 
 export interface RecoveryEmailVerificationResult {
@@ -40,11 +42,11 @@ export function getRecoveryEmailStatus(silent = true) {
   })
 }
 
-export function requestRecoveryEmailVerification(email: string, currentPassword: string) {
+export function requestRecoveryEmailVerification(email: string, currentPassword?: string) {
   return request<RecoveryEmailVerificationResult>({
     url: '/user/recovery-email/request-verification',
     method: 'POST',
-    data: { email, current_password: currentPassword },
+    data: { email, ...(currentPassword ? { current_password: currentPassword } : {}) },
     silent: true,
   })
 }

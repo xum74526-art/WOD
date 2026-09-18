@@ -12,13 +12,18 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import AuthContext, get_current_auth_context, get_current_user
+from app.core.rate_limit import limit_phone_login_setup
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import ChangePasswordIn, ProfileUpdateIn, UserOut
+from app.schemas.user import ChangePasswordIn, PhoneLoginSetupIn, ProfileUpdateIn, UserOut
 from app.utils.response import BizError, success
 from app.services.account_lifecycle import active_user_exists, lock_active_user
 from app.services.account_recovery import change_password_and_revoke_other_sessions
 from app.services.community_safety import validate_public_display_name
+from app.services.account_credentials import (
+    configure_initial_phone_login,
+    phone_login_status,
+)
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -60,6 +65,31 @@ def _verified_avatar_extension(content: bytes) -> str:
 
 @router.get("/profile")
 def profile(user: User = Depends(get_current_user)):
+    return success(UserOut.model_validate(user).model_dump())
+
+
+@router.get("/login-phone")
+def get_login_phone_status(
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    return success(phone_login_status(db, context.user))
+
+
+@router.post("/login-phone")
+def setup_login_phone(
+    data: PhoneLoginSetupIn,
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    limit_phone_login_setup(context.user.id)
+    user = configure_initial_phone_login(
+        db,
+        context.user,
+        phone=data.phone,
+        password=data.password,
+        current_session_id=context.session_id,
+    )
     return success(UserOut.model_validate(user).model_dump())
 
 

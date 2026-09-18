@@ -34,6 +34,9 @@ class UserOut(OrmModel):
     username: str
     phone: str | None = None
     phone_bound: bool = False
+    password_set: bool = True
+    phone_login_enabled: bool = False
+    phone_masked: str | None = None
     avatar: str | None = None
     role: str | None = "personal"
     supplier_status: str | None = "none"
@@ -41,6 +44,12 @@ class UserOut(OrmModel):
 
     @model_validator(mode="after")
     def hide_internal_phone(self):
+        raw_phone = str(self.phone or "")
+        self.phone_login_enabled = bool(
+            self.password_set and len(raw_phone) == 11 and raw_phone.isdigit()
+        )
+        if self.phone_login_enabled:
+            self.phone_masked = f"{raw_phone[:3]}****{raw_phone[-4:]}"
         if not self.phone_bound:
             self.phone = None
         return self
@@ -60,3 +69,8 @@ class ProfileUpdateIn(BaseModel):
 class ChangePasswordIn(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=6, max_length=64)
+
+
+class PhoneLoginSetupIn(BaseModel):
+    phone: str = Field(..., pattern=r"^1\d{10}$")
+    password: str = Field(..., min_length=8, max_length=64)

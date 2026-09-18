@@ -7,9 +7,32 @@ export interface UserInfo {
   username: string
   phone?: string | null
   phone_bound?: boolean
+  password_set?: boolean
+  phone_login_enabled?: boolean
+  phone_masked?: string | null
   avatar?: string
   role?: string
   supplier_status?: string
+}
+
+export interface PhoneLoginStatus {
+  configured: boolean
+  phone_masked: string | null
+  phone_verified: boolean
+  can_configure: boolean
+  sms_verification_available: boolean
+}
+
+export function getPhoneLoginStatus(silent = true) {
+  return request<PhoneLoginStatus>({ url: '/user/login-phone', silent })
+}
+
+export function configurePhoneLogin(phone: string, password: string) {
+  return request<UserInfo>({
+    url: '/user/login-phone',
+    method: 'POST',
+    data: { phone, password },
+  })
 }
 
 export function login(phone: string, password: string) {
@@ -35,6 +58,9 @@ export interface KaiAuthConfig {
   issuer: string
   scopes: string[]
   phone_binding_required: boolean
+  auto_provision_enabled: boolean
+  phone_login_setup_enabled: boolean
+  sms_verification_available: boolean
 }
 
 export function getKaiAuthConfig() {
@@ -43,7 +69,7 @@ export function getKaiAuthConfig() {
 
 export function startKaiAuth(intent: 'login' | 'register') {
   return request<{ authorization_url: string }>({
-    url: '/auth/kai/start', method: 'POST', data: { intent, return_url: KAI_AUTH_APP_RETURN_URL, client_id: CLIENT_PLATFORM },
+    url: '/auth/kai/start', method: 'POST', data: { intent, return_url: KAI_AUTH_APP_RETURN_URL, client_id: CLIENT_PLATFORM, terms_accepted: true },
   })
 }
 

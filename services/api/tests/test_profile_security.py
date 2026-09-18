@@ -2,6 +2,7 @@ import asyncio
 import io
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,12 +14,20 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.datastructures import Headers, UploadFile
 
+from app.core.config import settings
 from app.core.deps import get_current_user
+from app.core.security import hash_password, verify_password
 from app.db.base import Base
-from app.models import User  # noqa: F401
+from app.models import AuthSession, ExternalIdentity, User  # noqa: F401
 from app.routers import user as user_router
 from app.schemas.user import ProfileUpdateIn
 from app.utils.response import BizError
+from app.services.account_credentials import (
+    configure_initial_phone_login,
+    internal_kai_phone,
+    phone_login_status,
+)
+from app.services.auth_session import utcnow
 
 
 def image_bytes(image_format: str = "PNG") -> bytes:
@@ -124,6 +133,107 @@ class ProfileSecurityTests(unittest.TestCase):
         self.db.refresh(kai_user)
         self.assertFalse(kai_user.phone_bound)
         self.assertEqual(kai_user.phone, "__kai_pending_42")
+
+    def test_kai_first_account_can_configure_unverified_phone_login_once(self):
+        issuer = "https://auth.kai.test"
+        subject = "phone-setup-user"
+        kai_user = User(
+            phone=internal_kai_phone(issuer, subject),
+            phone_bound=False,
+            username="Kai 登录设置用户",
+            password=hash_password("unknown-random-placeholder"),
+            password_set=False,
+        )
+        self.db.add(kai_user)
+        self.db.flush()
+        self.db.add(ExternalIdentity(
+            user_id=kai_user.id,
+            provider="kai",
+            issuer=issuer,
+            subject=subject,
+        ))
+        session = AuthSession(
+            id="recent-kai-session",
+            user_id=kai_user.id,
+            platform="android",
+            client_id="android",
+            auth_method="kai_oidc",
+            expires_at=utcnow() + timedelta(hours=1),
+            created_at=utcnow(),
+        )
+        self.db.add(session)
+        self.db.commit()
+
+        before = phone_login_status(self.db, kai_user)
+        self.assertFalse(before["configured"])
+        self.assertTrue(before["can_configure"])
+        updated = configure_initial_phone_login(
+            self.db,
+            kai_user,
+            phone="13900000009",
+            password="New-Password-42",
+            current_session_id=session.id,
+        )
+        self.assertEqual(updated.phone, "13900000009")
+        self.assertFalse(updated.phone_bound)
+        self.assertTrue(updated.password_set)
+        self.assertTrue(verify_password("New-Password-42", updated.password))
+        status = phone_login_status(self.db, updated)
+        self.assertTrue(status["configured"])
+        self.assertFalse(status["phone_verified"])
+        self.assertEqual(status["phone_masked"], "139****0009")
+        with self.assertRaisesRegex(BizError, "已设置"):
+            configure_initial_phone_login(
+                self.db,
+                updated,
+                phone="13900000008",
+                password="Other-Password-42",
+                current_session_id=session.id,
+            )
+
+    def test_kai_phone_setup_requires_a_recent_kai_session_and_never_merges(self):
+        previous_age = settings.KAI_AUTH_REAUTH_MAX_AGE_SECONDS
+        settings.KAI_AUTH_REAUTH_MAX_AGE_SECONDS = 600
+        try:
+            issuer = "https://auth.kai.test"
+            kai_user = User(
+                phone=internal_kai_phone(issuer, "stale-user"),
+                phone_bound=False,
+                username="Kai 过期会话用户",
+                password=hash_password("unknown-random-placeholder"),
+                password_set=False,
+            )
+            self.db.add(kai_user)
+            self.db.flush()
+            self.db.add(ExternalIdentity(
+                user_id=kai_user.id,
+                provider="kai",
+                issuer=issuer,
+                subject="stale-user",
+            ))
+            stale = AuthSession(
+                id="stale-kai-session",
+                user_id=kai_user.id,
+                platform="ios",
+                client_id="ios",
+                auth_method="kai_oidc",
+                expires_at=utcnow() + timedelta(hours=1),
+                created_at=utcnow() - timedelta(minutes=11),
+            )
+            self.db.add(stale)
+            self.db.commit()
+            with self.assertRaisesRegex(BizError, "最近一次 KAI 登录"):
+                configure_initial_phone_login(
+                    self.db,
+                    kai_user,
+                    phone=self.user.phone,
+                    password="New-Password-42",
+                    current_session_id=stale.id,
+                )
+            self.db.refresh(kai_user)
+            self.assertTrue(kai_user.phone.startswith("__kai_"))
+        finally:
+            settings.KAI_AUTH_REAUTH_MAX_AGE_SECONDS = previous_age
 
     def test_arbitrary_avatar_url_cannot_be_saved_through_profile(self):
         with self.assertRaisesRegex(BizError, "头像上传"):

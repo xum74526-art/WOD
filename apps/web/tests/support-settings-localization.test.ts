@@ -63,7 +63,8 @@ test("help and support metadata have complete English copy without release place
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
 
   assert.match(help, /算力星图 Sign-in Help/);
-  assert.match(help, /same 算力星图 account/);
+  assert.match(help, /first successful Kai SSO sign-in or registration creates a local account/);
+  assert.match(help, /never merges an existing account by email or phone/);
   assert.doesNotMatch(help, /认证服务完成后|will be published here|北斗 kai account/);
   assert.match(support, /算力星图 Help & Support/);
   assert.match(simple, />算力星图 \/ INFORMATION</);

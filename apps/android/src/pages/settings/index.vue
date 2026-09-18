@@ -55,6 +55,16 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
+        <view v-if="phoneLogin?.can_configure" class="menu-item" @tap="onPhoneLogin">
+          <view class="mi-left">
+            <AppIcon name="shield" :size="40" />
+            <view>
+              <text class="mi-text">{{ t('phoneLoginSetupTitle') }}</text>
+              <text class="binding-hint">{{ t('phoneLoginSetupMenuHint') }}</text>
+            </view>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
         <view class="menu-item" @tap="onHelp">
           <view class="mi-left">
             <AppIcon name="help" :size="40" />
@@ -183,7 +193,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { onHide, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import { getKaiBindingStatus, startKaiBinding, type KaiBindingStatus } from '@/api/user'
+import { getKaiBindingStatus, getPhoneLoginStatus, startKaiBinding, type KaiBindingStatus, type PhoneLoginStatus } from '@/api/user'
 import { getRecoveryEmailStatus, type RecoveryEmailStatus } from '@/api/account-recovery'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -217,6 +227,7 @@ const updateChecking = ref(false)
 const recoveryEmail = ref<RecoveryEmailStatus | null>(null)
 const recoveryEmailLoading = ref(false)
 const recoveryEmailLoadFailed = ref(false)
+const phoneLogin = ref<PhoneLoginStatus | null>(null)
 let recoveryEmailActive = false
 let recoveryEmailGeneration = 0
 const themeOptions: Array<{ mode: ThemeMode; key: string }> = [
@@ -277,11 +288,25 @@ async function refreshRecoveryEmail() {
     if (isCurrentRequest()) recoveryEmailLoading.value = false
   }
 }
+async function refreshPhoneLogin() {
+  if (!recoveryEmailActive || !userStore.isLogin) return
+  const sessionToken = userStore.token
+  const sessionUserId = userStore.userInfo?.id ?? null
+  try {
+    const nextStatus = await getPhoneLoginStatus(true)
+    if (!recoveryEmailActive || !userStore.isLogin || userStore.token !== sessionToken
+      || (sessionUserId !== null && (userStore.userInfo?.id ?? null) !== sessionUserId)) return
+    phoneLogin.value = nextStatus
+  } catch {
+    if (recoveryEmailActive && userStore.token === sessionToken) phoneLogin.value = null
+  }
+}
 onShow(() => {
   recoveryEmailActive = true
   notificationStore.refresh(true).catch(() => {})
   void refreshKaiBinding()
   void refreshRecoveryEmail()
+  void refreshPhoneLogin()
 })
 function deactivateRecoveryEmail() {
   recoveryEmailActive = false
@@ -289,6 +314,7 @@ function deactivateRecoveryEmail() {
   recoveryEmail.value = null
   recoveryEmailLoading.value = false
   recoveryEmailLoadFailed.value = false
+  phoneLogin.value = null
 }
 onHide(deactivateRecoveryEmail)
 function openKaiAuthorization(url: string) {
@@ -326,6 +352,7 @@ function onSessionChanged() {
   recoveryEmail.value = null
   recoveryEmailLoading.value = false
   recoveryEmailLoadFailed.value = false
+  phoneLogin.value = null
   if (recoveryEmailActive) void refreshRecoveryEmail()
 }
 uni.$on('wod-kai-binding-changed', onKaiBindingChanged)
@@ -356,6 +383,9 @@ function onPassword() {
 }
 function onRecoveryEmail() {
   nav('/pages/recovery-email/index')
+}
+function onPhoneLogin() {
+  nav('/pages/login-phone/index')
 }
 function onHelp() {
   uni.showModal({

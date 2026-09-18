@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from app.utils.email_address import normalize_email
 
@@ -9,6 +9,7 @@ class KaiStartIn(BaseModel):
     intent: Literal["login", "register", "recover"] = "login"
     return_url: str | None = Field(default=None, max_length=1024)
     client_id: str | None = Field(default=None, min_length=1, max_length=64)
+    terms_accepted: StrictBool = False
 
 
 class KaiBindStartIn(BaseModel):
@@ -21,7 +22,7 @@ class KaiTicketIn(BaseModel):
 
 class RecoveryEmailVerificationRequestIn(BaseModel):
     email: str = Field(..., min_length=3, max_length=320)
-    current_password: str = Field(..., min_length=1, max_length=64)
+    current_password: str | None = Field(default=None, min_length=1, max_length=64)
 
     @field_validator("email")
     @classmethod

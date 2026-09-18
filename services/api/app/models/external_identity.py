@@ -34,6 +34,9 @@ class ExternalAuthFlow(Base):
     code_verifier: Mapped[str] = mapped_column(String(128))
     nonce: Mapped[str] = mapped_column(String(128))
     intent: Mapped[str] = mapped_column(String(16), default="login")
+    # A new local account may only be provisioned from a flow where the
+    # first-party client recorded agreement acceptance before redirecting.
+    terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     platform: Mapped[str] = mapped_column(String(16), default="legacy")
     client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

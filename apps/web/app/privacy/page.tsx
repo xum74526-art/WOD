@@ -40,16 +40,16 @@ const privacySections: LegalSection[] = [
     title: { zh: "我们处理的信息", en: "Information we process" },
     items: [
       {
-        zh: "账号与登录：手机号码、用户名或昵称、加密后的密码、登录会话和账号状态。密码以不可逆摘要方式保存，不保存明文密码。",
-        en: "Account and sign-in: mobile number, username or nickname, password hash, sign-in session and account status. Passwords are stored as non-reversible hashes, never as plaintext.",
+        zh: "账号与登录：手机号码、用户名或昵称、加密后的密码、登录会话和账号状态。密码以不可逆摘要方式保存，不保存明文密码。未接入短信验证时，手机号仅为登录标识，不代表已核验号码归属。",
+        en: "Account and sign-in: mobile number, username or nickname, password hash, sign-in session and account status. Passwords are stored as non-reversible hashes, never as plaintext. Until SMS verification is available, a mobile number is only a sign-in identifier and does not prove ownership.",
       },
       {
-        zh: "邮箱找回：你主动绑定的找回邮箱、验证码发送与校验状态、短时验证票据和重置票据。邮箱仅用于账号找回和必要安全通知。",
-        en: "Email recovery: the recovery email you bind, verification delivery and validation state, and short-lived verification and reset tickets. The email is used only for account recovery and necessary security notices.",
+        zh: "邮箱找回：你主动绑定的找回邮箱、验证码发送与校验状态、短时验证票据和重置票据。邮箱仅用于账号找回和必要安全通知。首次 KAI 账号尚未设置本地密码时，可由近期 KAI 登录会话授权首次绑定邮箱，但邮箱仍须完成验证码验证。",
+        en: "Email recovery: the recovery email you bind, verification delivery and validation state, and short-lived verification and reset tickets. The email is used only for account recovery and necessary security notices. A KAI-first account without a local password may use a recent KAI sign-in session to authorise its first email binding, but the email must still be verified.",
       },
       {
-        zh: "KAI 身份关联：你主动登录或发起关联时，由关联身份服务返回主体标识、关联结果、一次性短时票据，以及授权范围内的邮箱、姓名和头像，用于登录、身份关联及你确认的资料展示；我们不会索取或保存你的外部 KAI 密码。",
-        en: "KAI identity linking: when you initiate sign-in or linking, we process the subject identifier, linking result, one-time short-lived ticket, and the email address, name, and avatar returned within the authorized scope. We use them for sign-in, identity linking, and profile details you confirm. We do not request or store your external KAI password.",
+        zh: "KAI 身份登录与关联：你主动选择 KAI 登录、注册或关联时，我们处理关联身份服务返回的签发方、主体标识、关联结果、一次性短时票据，以及授权范围内的邮箱、姓名和头像，用于登录、创建或关联账号及你确认的资料展示。首次成功的 KAI 登录或注册仅按签发方和主体标识创建本地账号；我们不会按 KAI 返回的邮箱、手机号、昵称或头像自动合并既有账号，也不会索取或保存你的外部 KAI 密码。",
+        en: "KAI identity sign-in and linking: when you choose KAI sign-in, registration, or linking, we process the issuer, subject identifier, linking result, one-time short-lived ticket, and the email address, name, and avatar returned within the authorised scope. We use them for sign-in, account creation or linking, and profile details you confirm. A first successful KAI sign-in or registration creates a local account only by issuer and subject; we do not automatically merge an existing account using KAI email, mobile number, nickname, or avatar, and do not request or store your external KAI password.",
       },
       {
         zh: "实名核验：姓名、身份证件号码、证件正反面图像、核验结果和审核状态。当前文字识别由平台自管环境中的本地 OCR（Tesseract）完成，不向第三方 OCR 服务传送证件图像。",
@@ -132,8 +132,8 @@ const privacySections: LegalSection[] = [
         en: "DCloud uni-app base runtime (developer: Digital Paradise (Beijing) Network Technology Co., Ltd.): after you consent to this policy, it provides app runtime, rendering, networking, media playback, compatibility and fault analysis. It may process device brand and model, operating system, app version, network type, IP address, User-Agent and runtime logs, and packaged components may involve OAID. It is not used for advertising or personalised recommendations in this product. Future disclosure will follow verified package scans and the SDK inventory.",
       },
       {
-        zh: "KAI 关联身份服务：仅在你主动选择 KAI 身份登录或绑定时处理主体标识、授权状态、一次性票据，以及授权范围内返回的邮箱、姓名和头像，不接收外部账号密码。",
-        en: "KAI linked-identity service: processes the subject identifier, authorisation state, one-time ticket, and the email address, name, and avatar returned within the authorized scope only when you choose KAI sign-in or linking, and does not provide us with the external account password.",
+        zh: "KAI 关联身份服务：仅在你主动选择 KAI 身份登录、注册或绑定时处理签发方、主体标识、授权状态、一次性票据，以及授权范围内返回的邮箱、姓名和头像，以创建或关联本地平台账号及展示你确认的资料；不接收外部账号密码。",
+        en: "KAI linked-identity service: processes the issuer, subject identifier, authorisation state, one-time ticket, and the email address, name, and avatar returned within the authorised scope only when you choose KAI sign-in, registration, or linking, so that a local platform account can be created or linked and profile details you confirm can be displayed; it does not provide us with the external account password.",
       },
       {
         zh: "哔哩哔哩视频服务：当你打开来源为哔哩哔哩的资讯视频时，播放请求会向其服务发送视频标识、IP 地址、浏览器或设备请求信息；其处理同时受其隐私规则约束。",

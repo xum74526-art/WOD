@@ -57,8 +57,8 @@ const PRIVACY_ZH: LegalDocument = {
       title: '一、我们处理的信息与目的',
       paragraphs: [
         '1. 账号与登录：手机号码、用户名或昵称、经单向散列处理的密码、登录会话及账号状态，用于注册、登录、身份识别、风险控制和保障账号安全。当前手机号仅作为登录标识，未接入短信验证时不代表平台已核验号码归属。',
-        '2. 账号找回：你主动绑定的找回邮箱、验证码发送及校验状态、短时有效的找回或重置凭据，用于验证邮箱并重置密码。我们不会在页面公开找回邮箱。',
-        '3. KAI 身份关联：你主动登录或绑定时取得的关联身份标识、授权结果、一次性绑定凭据，以及 KAI 在授权范围内返回的邮箱、姓名和头像，用于登录、把本平台账号与 KAI 统一身份关联及完善你确认的个人资料；本平台不会索取或保存你的 KAI 密码。',
+        '2. 账号找回：你主动绑定的找回邮箱、验证码发送及校验状态、短时有效的找回或重置凭据，用于验证邮箱并重置密码。我们不会在页面公开找回邮箱。首次通过 KAI 登录创建且尚未设置本地密码的账号，可由近期的 KAI 登录会话授权首次绑定邮箱；邮箱仍须完成验证码验证。',
+        '3. KAI 身份登录与关联：你主动选择 KAI 登录、注册或绑定时，我们处理关联身份标识、授权结果、一次性凭据，以及 KAI 返回的邮箱、姓名和头像，用于创建或关联本平台账号及展示基础资料。首次成功的 KAI 登录或注册会仅按 KAI 签发方和主体标识创建本地账号；我们不会按 KAI 提供的邮箱、手机号、昵称或头像自动合并既有账号，也不会索取或保存你的 KAI 密码。',
         '4. 个人资料与实名认证：昵称、头像、真实姓名、证件号码、证件正反面图片、格式校验结果及审核状态，用于个人资料展示、实名认证、商家准入和风险控制。证件图片仅供受权人员核验；服务器使用本地 Tesseract OCR 生成比对结果，不将证件图片发送给第三方 OCR 服务。',
         '5. 业务资料：银行卡登记信息以加密方式保存并仅展示掩码；地址信息用于用户主动选择的业务联系或交付。买方需求可能包含联系人、电话、算力型号、数量、期限、地区和需求说明；商家资料可能包含主体、联系人、资源、设备和交付信息。',
         '6. 撮合、订单与交付：需求、报价、反报价、方案确认、订单、卡时或账务记录、结算、退款、争议及历史状态，用于撮合沟通、履约、对账、售后和争议处理。商家提交的 SSH 地址、端口、用户名和凭据仅用于经确认的交付，并按角色限制展示。',
@@ -88,7 +88,7 @@ const PRIVACY_ZH: LegalDocument = {
       paragraphs: [
         '1. 阿里云中国香港区域（cn-hongkong）：作为云基础设施受托方，为核心 API、数据库、上传文件、备份与安全防护提供计算和存储能力，可能处理本政策列明的账号、实名、业务、内容及日志信息。服务区域位于中国香港特别行政区。',
         '2. DCloud uni-app 基础运行框架（开发者：数字天堂（北京）网络技术有限公司）：在你同意隐私政策后，为应用运行、页面渲染、兼容性、安全和故障分析，可能处理设备品牌与型号、操作系统、应用版本、网络类型、IP 地址、User-Agent、运行日志，以及打包组件可能涉及的 OAID。本项目不将这些信息用于广告或个性化推荐；实际范围以后续正式安装包检测结果和应用内第三方 SDK 清单为准。',
-        '3. KAI 统一身份服务：仅在你主动选择 KAI 登录或绑定时处理授权请求、关联身份标识、回跳参数、一次性凭据，以及授权范围内返回的邮箱、姓名和头像，以完成登录、身份关联及你确认的资料展示。',
+        '3. KAI 统一身份服务：仅在你主动选择 KAI 登录、注册或绑定时处理授权请求、关联身份标识、回跳参数和一次性凭据，以完成登录、创建本平台账号或身份关联；本平台不接收外部 KAI 密码。',
         '4. 哔哩哔哩：当你打开来自哔哩哔哩的资讯视频时，播放器或接口会向其请求内容，并可能传递 IP 地址、网络与浏览器或应用请求信息；其处理同时受哔哩哔哩隐私规则约束。',
         '5. 网易 163 邮件服务：当你绑定找回邮箱、获取验证码或重置密码时，用于投递必要邮件，可能处理收件邮箱、邮件内容、投递时间与状态。SMTP 授权信息仅保存在服务端，不向客户端公开。',
         '6. 七相支付（Qixiang Pay）：当前审核版默认关闭在线支付。仅在未来直接交易能力由服务端和客户端同时启用、你主动发起支付且已完成必要提示时，才会处理完成支付所需的订单号、金额、回调状态等最少信息。',
@@ -161,8 +161,8 @@ const PRIVACY_EN: LegalDocument = {
       title: '1. Information we process and why',
       paragraphs: [
         'Account and access data includes your mobile number, username or nickname, one-way password hash, sessions, and account status. We use it for registration, sign-in, identification, risk control, and account security. Until SMS verification is enabled, a mobile number is only a login identifier and does not prove ownership.',
-        'Account recovery data includes an email address you choose to bind, verification and delivery status, and short-lived recovery or reset credentials. It is used only to verify the address and reset the password, and is not displayed publicly.',
-        'When you choose KAI sign-in or binding, we process the linked identity identifier, authorization result, one-time binding credential, and the email address, name, and avatar returned by KAI within the authorized scope. We use them for sign-in, identity linking, and profile details you confirm. We never request or store your KAI password.',
+        'Account recovery data includes an email address you choose to bind, verification and delivery status, and short-lived recovery or reset credentials. It is used only to verify the address and reset the password, and is not displayed publicly. A KAI-first account that has not set a local password may authorise its first email binding with a recent KAI sign-in session, but the email must still be verified.',
+        'When you choose KAI sign-in, registration, or binding, we process the linked identity identifier, authorization result, one-time credential, and the email address, name, and avatar returned by KAI to create or link a platform account and display basic profile information. A first successful KAI sign-in or registration creates a local account only by KAI issuer and subject; we do not automatically merge an existing account using KAI email, mobile number, nickname, or avatar. We never request or store your KAI password.',
         'Profile and verification data may include your nickname, avatar, legal name, national ID number, front and back ID images, validation results, and review status. Server-side local Tesseract OCR produces comparison results; ID images are not sent to a third-party OCR provider.',
         'Business data may include encrypted and masked bank-card details, addresses, buyer contact and compute requirements, merchant identity and contact materials, resource and device descriptions, and delivery details.',
         'Matchmaking, order, and fulfillment data may include requirements, proposals, counteroffers, confirmations, orders, CH or ledger entries, settlement, refunds, disputes, history, and seller-provided SSH host, port, username, and credentials. SSH details are role-restricted and used only for confirmed fulfillment.',
@@ -184,7 +184,7 @@ const PRIVACY_EN: LegalDocument = {
         'Identity documents and bank-card details are sensitive personal information. Misuse or disclosure may create identity or financial risk. We process them only for specific and strictly necessary purposes such as identity review or an authorized card function, obtain separate consent in the relevant feature where required by law, and apply enhanced encryption, masking, least-privilege, and access-audit safeguards. Precise SSH and other delivery credentials are protected as high-risk business secrets through encryption, least privilege, and access auditing; we do not claim separate consent where that workflow is not implemented.',
         'Alibaba Cloud Hong Kong region (cn-hongkong), as the contracted cloud-infrastructure provider, supplies compute, storage, backup, and security capabilities for the core API, database, and uploaded files, and may process the account, identity, business, content, and log data described in this Policy. The service region is Hong Kong SAR.',
         'The DCloud uni-app base runtime (developer: Digital Paradise (Beijing) Network Technology Co., Ltd.) may, after you accept this Policy, process device brand and model, operating system, app version, network type, IP address, User-Agent, runtime logs, and OAID that may be present in packaged components for runtime compatibility, security, and troubleshooting. 算力星图 does not use this data for advertising or personalized recommendations. The final scope follows inspection of the released package and the in-app third-party SDK list.',
-        'KAI identity services process authorization requests, linked identifiers, return parameters, one-time credentials, and the email address, name, and avatar returned within the authorized scope only when you initiate sign-in or binding. Bilibili receives a content request and may receive IP, network, and user-agent or app request information when you open Bilibili-hosted news video.',
+        'KAI identity services process authorization requests, linked identifiers, return parameters, and one-time credentials only when you initiate sign-in, registration, or binding, so that a platform account can be created or linked. Bilibili receives a content request and may receive IP, network, and user-agent or app request information when you open Bilibili-hosted news video.',
         'NetEase 163 mail services deliver verification and password-recovery messages and may process recipient address, message, delivery time, and status. SMTP credentials remain server-side. QiXiang Pay is disabled by default in the review build; minimum order, amount, and callback data is processed only if direct trading is later enabled on both server and client, you initiate payment, and the required notice is shown.',
         'We contractually restrict processors. An independent third party is also governed by its own published rules. A listed integration does not receive business data unless the feature is enabled and you use it.',
       ],
@@ -265,7 +265,7 @@ function agreementZh(): LegalDocument {
         title: '二、账号注册、登录与安全',
         paragraphs: [
           '你应提供真实、合法且属于自己的注册资料。当前手机号在未接入短信验证时仅作为登录标识，不代表平台已核验号码归属；不得使用他人号码、冒用身份或转让账号。',
-          '你可以主动绑定找回邮箱或 KAI 身份。找回邮箱用于验证码和重置密码；KAI 绑定仅关联身份，不会要求你向本平台提供 KAI 密码。你应妥善保管密码、验证码、找回凭据和设备，因自身保管不当造成的风险由你依法承担。',
+          '你可以主动绑定找回邮箱或 KAI 身份。首次成功使用 KAI 登录或注册时，平台仅按 KAI 签发方和主体标识创建本地账号，不会按 KAI 返回的邮箱、手机号、昵称或头像自动合并既有账号；你随后可自愿设置本地手机号登录标识和密码。手机号未接入短信验证时不代表归属核验。找回邮箱用于验证码和重置密码；首次 KAI 账号在尚未设置本地密码时可由近期 KAI 登录授权首次绑定邮箱，但邮箱仍须验证。平台不会要求你向本平台提供 KAI 密码。你应妥善保管密码、验证码、找回凭据和设备，因自身保管不当造成的风险由你依法承担。',
           '平台会采取合理安全措施，并可对异常登录、批量注册、接口滥用或高风险操作进行验证、限流、暂停或人工核查。若发现账号异常，请立即修改密码并联系我们。',
         ],
       },
@@ -381,7 +381,7 @@ function agreementEn(): LegalDocument {
         title: '2. Accounts and security',
         paragraphs: [
           'Provide truthful, lawful information that belongs to you. Until SMS verification is enabled, a mobile number is only a login identifier and does not prove ownership. Do not impersonate others, use their number, transfer an account, or share credentials.',
-          'You may bind a recovery email or KAI identity. Recovery email supports verification and password reset. KAI binding links identities and never requires your KAI password. Protect passwords, codes, recovery credentials, SSH credentials, and devices.',
+          'You may bind a recovery email or KAI identity. A first successful KAI sign-in or registration creates a local account only by KAI issuer and subject; it never automatically merges an existing account using KAI email, mobile number, nickname, or avatar. You may then set a local mobile sign-in identifier and password. Until SMS verification is available, that number does not prove ownership. Recovery email supports verification and password reset; a KAI-first account without a local password may use a recent KAI sign-in for its first email binding, but the email must still be verified. KAI never requires you to provide its password to this platform. Protect passwords, codes, recovery credentials, SSH credentials, and devices.',
           'We may verify, rate-limit, suspend, or manually review unusual sign-in, bulk registration, API abuse, or high-risk activity. Change your password and contact us promptly if you detect misuse.',
         ],
       },

@@ -37,6 +37,10 @@ from app.services import kai_auth
 from app.services import account_recovery
 from app.services import account_deletion
 from app.services.community_safety import validate_public_display_name
+from app.services.account_provisioning import (
+    KAI_TERMS_REQUIRED_CODE,
+    resolve_or_create_kai_login,
+)
 
 INIT_BALANCE = Decimal("0")  # 无初始余额
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -193,6 +197,7 @@ def kai_start(data: KaiStartIn, db: Session = Depends(get_db)):
         data.return_url,
         platform=platform,
         client_id=client_id,
+        terms_accepted=data.terms_accepted,
     )
     return success({"authorization_url": authorization_url})
 
@@ -245,7 +250,7 @@ async def kai_callback(
         return RedirectResponse(kai_auth.append_return_params(return_url, kai_error="access_denied"), status_code=302)
     if not code:
         return RedirectResponse(kai_auth.append_return_params(return_url, kai_error="missing_code"), status_code=302)
-    if iss and iss.rstrip("/") != settings.KAI_AUTH_ISSUER.rstrip("/"):
+    if iss and iss.rstrip("/") != kai_auth.issuer_url():
         return RedirectResponse(kai_auth.append_return_params(return_url, kai_error="invalid_issuer"), status_code=302)
     try:
         token_data = await kai_auth.exchange_authorization_code(code, flow)
@@ -265,26 +270,26 @@ async def kai_callback(
                 kai_auth.append_return_params(return_url, kai_bind_ticket=ticket),
                 status_code=302,
             )
-        user = kai_auth.find_bound_user(
-            db,
-            claims,
-            expected_user_id=flow.user_id if flow.intent == "delete" else None,
-        )
-        if not user:
-            return RedirectResponse(
-                kai_auth.append_return_params(return_url, kai_error="identity_not_bound"),
-                status_code=302,
+        if flow.intent in {"recover", "delete"}:
+            user = kai_auth.find_bound_user(
+                db,
+                claims,
+                expected_user_id=flow.user_id if flow.intent == "delete" else None,
             )
-        if flow.intent == "recover":
-            recovery_token = account_recovery.issue_kai_recovery_token(db, user)
-            return RedirectResponse(
-                kai_auth.append_return_fragment(
-                    return_url,
-                    kai_recovery_token=recovery_token,
-                ),
-                status_code=302,
-            )
-        if flow.intent == "delete":
+            if not user:
+                return RedirectResponse(
+                    kai_auth.append_return_params(return_url, kai_error="identity_not_bound"),
+                    status_code=302,
+                )
+            if flow.intent == "recover":
+                recovery_token = account_recovery.issue_kai_recovery_token(db, user)
+                return RedirectResponse(
+                    kai_auth.append_return_fragment(
+                        return_url,
+                        kai_recovery_token=recovery_token,
+                    ),
+                    status_code=302,
+                )
             deletion_token = account_deletion.issue_kai_reauth_token(db, user)
             return RedirectResponse(
                 kai_auth.append_return_fragment(
@@ -293,13 +298,19 @@ async def kai_callback(
                 ),
                 status_code=302,
             )
-        ticket = kai_auth.issue_handoff_ticket(
+        _user, ticket, _created = resolve_or_create_kai_login(
             db,
-            user.id,
+            claims,
             platform=flow.platform or "legacy",
             client_id=flow.client_id,
+            allow_create=bool(flow.terms_accepted),
         )
-    except BizError:
+    except BizError as exc:
+        if exc.code == KAI_TERMS_REQUIRED_CODE:
+            return RedirectResponse(
+                kai_auth.append_return_params(return_url, kai_error="terms_required"),
+                status_code=302,
+            )
         return RedirectResponse(kai_auth.append_return_params(return_url, kai_error="authorization_failed"), status_code=302)
     except Exception:
         logger.exception("Kai authentication callback failed")

@@ -321,7 +321,7 @@ const commonCapabilities = [
         file: 'apps/web/components/mobile-account-settings.tsx',
         patterns: [
           'getRecoveryEmailStatus()',
-          'requestRecoveryEmailVerification(recoveryForm.email.trim(), recoveryForm.currentPassword)',
+          'recoveryEmail?.current_password_required === false ? undefined : recoveryForm.currentPassword',
           'settings.recoveryEmailUnknown',
           'recoveryConfig?.email_enabled === false',
         ],
@@ -340,7 +340,8 @@ const commonCapabilities = [
         patterns: [
           'Promise.allSettled',
           'recoveryEmailServiceUnknown',
-          'const submittedPassword = currentPassword.value',
+          'const passwordRequired = computed(() => status.value?.current_password_required !== false)',
+          'const submittedPassword = passwordRequired.value ? currentPassword.value : undefined',
           'onUnload(leavePage)',
         ],
       },
@@ -359,7 +360,8 @@ const commonCapabilities = [
         patterns: [
           'Promise.allSettled',
           'recoveryEmailServiceUnknown',
-          'const submittedPassword = currentPassword.value',
+          'const passwordRequired = computed(() => status.value?.current_password_required !== false)',
+          'const submittedPassword = passwordRequired.value ? currentPassword.value : undefined',
           'onUnload(leavePage)',
         ],
       },
@@ -370,6 +372,82 @@ const commonCapabilities = [
           'getRecoveryEmailStatus(true)',
           "uni.$on('wod-session-changed', onSessionChanged)",
           "'recoveryEmailStatusUnavailable'",
+        ],
+      },
+    ],
+  },
+  {
+    name: 'Kai-first phone login setup',
+    evidence: [
+      {
+        client: 'Web',
+        file: 'apps/web/components/mobile-account-settings.tsx',
+        patterns: [
+          'getLoginPhoneStatus()',
+          'configureLoginPhone(loginPhoneForm.phone, loginPhoneForm.password)',
+          'settings.loginPhoneNotice',
+          '未经过短信核验',
+        ],
+      },
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/api.ts',
+        patterns: [
+          'getLoginPhoneStatus()',
+          'configureLoginPhone(phone: string, password: string)',
+          '"/api/v1/user/login-phone"',
+        ],
+      },
+      {
+        client: 'Android API',
+        file: 'apps/android/src/api/user.ts',
+        patterns: [
+          'getPhoneLoginStatus(silent = true)',
+          'configurePhoneLogin(phone: string, password: string)',
+          "url: '/user/login-phone'",
+        ],
+      },
+      {
+        client: 'Android settings',
+        file: 'apps/android/src/pages/settings/index.vue',
+        patterns: [
+          'getPhoneLoginStatus(true)',
+          "nav('/pages/login-phone/index')",
+        ],
+      },
+      {
+        client: 'Android setup',
+        file: 'apps/android/src/pages/login-phone/index.vue',
+        patterns: [
+          'configurePhoneLogin(phone.value.trim(), submittedPassword)',
+          "'phoneLoginExpired'",
+          'phoneLoginSavedMessage',
+        ],
+      },
+      {
+        client: 'iOS API',
+        file: 'apps/ios/src/api/user.ts',
+        patterns: [
+          'getPhoneLoginStatus(silent = true)',
+          'configurePhoneLogin(phone: string, password: string)',
+          "url: '/user/login-phone'",
+        ],
+      },
+      {
+        client: 'iOS settings',
+        file: 'apps/ios/src/pages/settings/index.vue',
+        patterns: [
+          'getPhoneLoginStatus(true)',
+          "nav('/pages/login-phone/index')",
+        ],
+      },
+      {
+        client: 'iOS setup',
+        file: 'apps/ios/src/pages/login-phone/index.vue',
+        patterns: [
+          'configurePhoneLogin(phone.value.trim(), submittedPassword)',
+          "'phoneLoginExpired'",
+          'phoneLoginSavedMessage',
         ],
       },
     ],

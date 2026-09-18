@@ -10,8 +10,6 @@ import { useI18n } from "@/components/locale-root";
 import { ContactPhone } from "@/components/contact-phone";
 
 type AuthPanelProps = { mode: "login" | "register" };
-const PENDING_KAI_INTENT_KEY = "wod_kai_auth_intent";
-const KAI_REGISTRATION_NOTICE_KEY = "wod_kai_registration_notice";
 // The server keeps challenges for 300 seconds; expire locally 30 seconds early.
 const CAPTCHA_FRESHNESS_MS = 270_000;
 
@@ -145,20 +143,13 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     const suffix = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
     setSwitchHref(`${isRegister ? "/login" : "/register"}${suffix}`);
     const kaiError = params.get("kai_error");
-    const pendingKaiIntent = window.sessionStorage.getItem(PENDING_KAI_INTENT_KEY);
     if (kaiError) {
-      window.sessionStorage.removeItem(PENDING_KAI_INTENT_KEY);
-      if (kaiError === "identity_not_bound" && pendingKaiIntent === "register" && !isRegister) {
-        window.sessionStorage.setItem(KAI_REGISTRATION_NOTICE_KEY, "complete");
-        window.location.replace(`/register${suffix}`);
-        return;
-      }
       const errors: Record<string, [string, string]> = {
         access_denied: ["auth.kaiError.accessDenied", "已取消 KAI 授权"],
-        identity_not_bound: ["auth.kaiError.identityNotBound", "该 KAI 身份尚未绑定，请先使用手机号登录，再到账户设置中绑定"],
         identity_conflict: ["auth.kaiError.identityConflict", "KAI 身份与现有账号冲突，请联系支持"],
         missing_code: ["auth.kaiError.missingCode", "KAI 未返回有效授权信息"],
         invalid_issuer: ["auth.kaiError.invalidIssuer", "KAI 身份签发方无效"],
+        terms_required: ["auth.kaiError.termsRequired", "请先阅读并同意用户协议和隐私说明"],
         authorization_failed: ["auth.kaiError.authorizationFailed", "KAI 身份验证失败，请重新授权"],
       };
       setMessageTone("error");
@@ -166,15 +157,8 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       setMessage(errorCopy ? t(errorCopy[0], errorCopy[1]) : t("auth.kaiError.fallback", "KAI 登录失败，请重试"));
       setMethod("kai");
     }
-    if (isRegister && window.sessionStorage.getItem(KAI_REGISTRATION_NOTICE_KEY) === "complete") {
-      window.sessionStorage.removeItem(KAI_REGISTRATION_NOTICE_KEY);
-      setMessageTone("info");
-      setMessage(t("auth.kai.registrationComplete", "KAI 注册已完成。请继续创建手机号账号，登录后再到账户设置中绑定 KAI 身份。"));
-      setMethod("password");
-    }
     const kaiTicket = params.get("kai_ticket");
     if (kaiTicket && !kaiExchangeStarted.current) {
-      window.sessionStorage.removeItem(PENDING_KAI_INTENT_KEY);
       kaiExchangeStarted.current = true;
       setMethod("kai");
       setSubmitting(true);
@@ -198,7 +182,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    if (isRegister && !acceptedTerms) {
+    if ((isRegister || method === "kai") && !acceptedTerms) {
       setMessageTone("error");
       setMessage(t("auth.termsRequired", "请先阅读并同意用户协议和隐私说明"));
       return;
@@ -211,7 +195,6 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     try {
       if (method === "kai") {
         if (!kaiConfigured) throw new Error(t("auth.kai.notConfigured", "KAI 统一认证尚未配置"));
-        window.sessionStorage.setItem(PENDING_KAI_INTENT_KEY, mode);
         window.location.assign(kaiWebAuthorizationUrl(mode, safeReturnPath()));
         return;
       }
@@ -308,16 +291,14 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         ) : (
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
-            <h2>{isRegister ? t("auth.kai.createTitle", "创建 KAI 身份") : t("auth.kai.signInTitle", "使用已绑定的 KAI 身份登录")}</h2>
+            <h2>{isRegister ? t("auth.kai.createTitle", "使用 KAI 身份创建账号") : t("auth.kai.signInTitle", "使用 KAI 身份登录")}</h2>
             <p>{t("auth.kai.privacyDescription", "算力星图只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
             <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false
               ? t("auth.kai.credentialsMissing", "管理员尚未配置 KAI 客户端凭据")
-              : isRegister
-                ? t("auth.kai.registrationScope", "完成 KAI 注册后，请先在此创建手机号账号，再到账户设置中绑定")
-                : t("auth.kai.unlinkedScope", "未绑定身份需先用手机号登录，再在账户设置中绑定")}</span></div>
+              : t("auth.kai.registrationScope", "首次完成 KAI 统一认证会自动创建算力星图账号；登录后可在账户设置中设置登录手机号与绑定邮箱。")}</span></div>
           </div>
         )}
-        {isRegister && (
+        {(isRegister || method === "kai") && (
           <>
             {method === "password" && <p className="form-note">{t("auth.phoneRule", "手机号需为 11 位；密码至少 6 个字符。")}</p>}
             <label className="auth-consent">

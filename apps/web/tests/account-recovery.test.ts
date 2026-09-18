@@ -37,6 +37,7 @@ test("BFF exposes only the scoped recovery routes and keeps public proofs unauth
   for (const route of [
     "auth/recovery/config",
     "user/recovery-email",
+    "user/login-phone",
     "user/recovery-email/request-verification",
     "auth/email/verification/confirm",
     "auth/email/password-reset/request",
@@ -58,7 +59,7 @@ test("KAI recovery returns only to reset-password and does not create the normal
   assert.match(adapter, /if \(!recovering\) \{[\s\S]*response\.cookies\.set\(RETURN_TO_COOKIE/);
   const api = read("../lib/api.ts");
   assert.match(api, /"login" \| "register" \| "recover"/);
-  assert.match(api, /if \(intent !== "recover"\) query\.set\("return_to", returnTo\)/);
+  assert.match(api, /if \(intent !== "recover"\) \{[\s\S]*query\.set\("return_to", returnTo\)[\s\S]*query\.set\("terms_accepted", "1"\)/);
 });
 
 test("recovery UI distinguishes linked-email settings from email recovery and never persists the proof", () => {
@@ -100,14 +101,20 @@ test("account recovery and verification UI ship complete English copy under the 
   assert.match(localeRoot, /"auth\.recovery\.boundEmail": "Linked email"/);
 });
 
-test("account settings shows verified status and requires the current password before binding or changing email", () => {
+test("account settings supports KAI-first credentials without presenting an unverified phone as verified", () => {
   const settings = read("../components/mobile-account-settings.tsx");
   const api = read("../lib/api.ts");
   assert.match(settings, /getRecoveryEmailStatus/);
-  assert.match(settings, /requestRecoveryEmailVerification\(recoveryForm\.email\.trim\(\), recoveryForm\.currentPassword\)/);
+  assert.match(settings, /getLoginPhoneStatus/);
+  assert.match(settings, /configureLoginPhone/);
+  assert.match(settings, /登录手机号仅作为登录标识，尚未经过短信核验/);
+  assert.match(settings, /recoveryEmail\?\.current_password_required === false/);
   assert.match(settings, /type="password" autoComplete="current-password"/);
   assert.match(settings, /recoveryEmail\?\.verified/);
   assert.match(settings, /EMAIL BINDING/);
   assert.doesNotMatch(settings, /找回邮箱/);
   assert.match(api, /\/api\/v1\/user\/recovery-email\/request-verification/);
+  assert.match(api, /\/api\/v1\/user\/login-phone/);
+  assert.match(api, /current_password_required: boolean/);
+  assert.match(api, /sms_verification_available: boolean/);
 });

@@ -873,10 +873,24 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   if (path === "user/recovery-email" && request.method === "GET") {
     return recoveryApiResponse(await upstream(request, "/api/user/recovery-email"));
   }
+  if (path === "user/login-phone" && request.method === "GET") {
+    return recoveryApiResponse(await upstream(request, "/api/user/login-phone"));
+  }
+  if (path === "user/login-phone" && request.method === "POST") {
+    return recoveryApiResponse(await upstream(request, "/api/user/login-phone", {
+      method: "POST",
+      body: { phone: text(body.phone).trim(), password: text(body.password) },
+    }));
+  }
   if (path === "user/recovery-email/request-verification" && request.method === "POST") {
     return recoveryApiResponse(await upstream(request, "/api/user/recovery-email/request-verification", {
       method: "POST",
-      body: { email: text(body.email).trim(), current_password: text(body.current_password) },
+      body: {
+        email: text(body.email).trim(),
+        ...(typeof body.current_password === "string" && body.current_password.trim()
+          ? { current_password: text(body.current_password) }
+          : {}),
+      },
     }));
   }
   if (path === "auth/email/verification/confirm" && request.method === "POST") {
@@ -945,10 +959,11 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const requestedIntent = request.nextUrl.searchParams.get("intent");
     const intent = requestedIntent === "register" || requestedIntent === "recover" ? requestedIntent : "login";
     const recovering = intent === "recover";
+    const termsAccepted = !recovering && request.nextUrl.searchParams.get("terms_accepted") === "1";
     const result = await upstream(request, "/api/auth/kai/start", {
       method: "POST",
       auth: false,
-      body: { intent, return_url: `${publicOrigin(request)}${recovering ? "/reset-password" : "/login"}`, client_id: "web" },
+      body: { intent, return_url: `${publicOrigin(request)}${recovering ? "/reset-password" : "/login"}`, client_id: "web", terms_accepted: termsAccepted },
     });
     if (!result.ok) return upstreamFailure(result);
     const authorizationUrl = text(object(result.body.data).authorization_url);

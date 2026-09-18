@@ -14,9 +14,9 @@ export default function HelpPage() {
   return <SimplePage
     title="登录帮助"
     titleEn="Sign-in Help"
-    description="使用手机号密码或 Kai 统一身份登录同一个算力星图账户。"
-    descriptionEn="Use a phone number and password or Kai SSO to access the same 算力星图 account."
-    body="手机号账户请使用注册号码和密码登录。绑定 Kai 统一身份时，请先登录现有账户，再到账户设置完成绑定，避免创建重复账户；需要协助时可进入帮助与客服提交问题。"
-    bodyEn="For phone access, sign in with the registered number and password. To link Kai SSO, sign in to your existing account first and complete the link in Account Settings to avoid a duplicate account. Open Help & Support whenever you need assistance."
+    description="使用手机号密码或 Kai 统一身份登录算力星图账户。"
+    descriptionEn="Use a phone number and password or Kai SSO to access a 算力星图 account."
+    body="手机号账户请使用注册号码和密码登录。首次成功使用 Kai 统一身份登录或注册时，系统会按该 Kai 身份创建本地账号，不会按邮箱或手机号合并既有账号；登录后可在账户设置中自愿设置手机号登录标识、密码和找回邮箱。当前没有短信验证，手机号不代表已核验归属。已有本地账号如需关联 Kai，请先登录后在账户设置完成绑定。"
+    bodyEn="For phone access, sign in with the registered number and password. A first successful Kai SSO sign-in or registration creates a local account for that Kai identity and never merges an existing account by email or phone. After signing in, you may set a local mobile sign-in identifier, password, and recovery email in Account Settings. SMS verification is not currently available, so a mobile number does not prove ownership. To link Kai to an existing local account, sign in first and complete linking in Account Settings."
   />;
 }

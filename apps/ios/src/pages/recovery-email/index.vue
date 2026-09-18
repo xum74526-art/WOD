@@ -23,7 +23,7 @@
 
       <view class="card form-card">
         <text class="heading">{{ t(status?.verified ? 'recoveryEmailChangeTitle' : 'recoveryEmailBindTitle') }}</text>
-        <text class="form-hint">{{ t('recoveryEmailFormHint') }}</text>
+        <text class="form-hint">{{ t(kaiReauthRequired ? 'recoveryEmailKaiReauthRequired' : passwordRequired ? 'recoveryEmailFormHint' : 'recoveryEmailKaiFormHint') }}</text>
 
         <view v-if="config?.email_enabled === false" class="service-notice" role="status">
           {{ t('recoveryEmailUnavailable') }}
@@ -31,6 +31,10 @@
         <view v-else-if="configFailed" class="service-notice" role="status">
           <text class="service-copy">{{ t('recoveryEmailServiceUnknown') }}</text>
           <button class="retry service-retry" :disabled="loading" @tap="reloadPage">{{ t('recoveryEmailRetry') }}</button>
+        </view>
+        <view v-if="kaiReauthRequired" class="service-notice" role="status">
+          <text class="service-copy">{{ t('recoveryEmailKaiReauthRequired') }}</text>
+          <button class="retry service-retry" @tap="openKaiLogin">{{ t('recoveryEmailKaiReauthAction') }}</button>
         </view>
 
         <view class="field">
@@ -47,7 +51,7 @@
           />
         </view>
 
-        <view class="field">
+        <view v-if="passwordRequired" class="field">
           <text class="field-label">{{ t('recoveryEmailCurrentPassword') }}</text>
           <input
             v-model="currentPassword"
@@ -95,7 +99,9 @@ const configFailed = ref(false)
 const submitting = ref(false)
 const requestError = ref('')
 const emailServiceEnabled = computed(() => config.value?.email_enabled === true)
-const canSubmit = computed(() => emailServiceEnabled.value && !submitting.value && !!email.value.trim() && !!currentPassword.value)
+const passwordRequired = computed(() => status.value?.current_password_required !== false)
+const kaiReauthRequired = computed(() => status.value?.kai_reauth_required === true)
+const canSubmit = computed(() => !kaiReauthRequired.value && emailServiceEnabled.value && !submitting.value && !!email.value.trim() && (!passwordRequired.value || !!currentPassword.value))
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REQUEST_ERROR_KEYS: Record<string, string> = {
   '当前密码错误': 'recoveryEmailErrorCurrentPassword',
@@ -103,6 +109,7 @@ const REQUEST_ERROR_KEYS: Record<string, string> = {
   '邮箱服务尚未配置': 'recoveryEmailUnavailable',
   '找回请求参数无效，请检查后重试': 'recoveryEmailInvalidRequest',
   '请求过于频繁，请稍后再试': 'recoveryEmailTooFrequent',
+  '请使用 Kai 重新登录后绑定邮箱': 'recoveryEmailKaiReauthRequired',
 }
 let active = false
 let pageGeneration = 0
@@ -146,6 +153,10 @@ function reloadPage() {
   void refreshPage(generation)
 }
 
+function openKaiLogin() {
+  uni.reLaunch({ url: '/pages/login/index' })
+}
+
 async function submitVerification() {
   if (!canSubmit.value) return
   const normalizedEmail = email.value.trim()
@@ -155,7 +166,7 @@ async function submitVerification() {
   }
 
   const generation = pageGeneration
-  const submittedPassword = currentPassword.value
+  const submittedPassword = passwordRequired.value ? currentPassword.value : undefined
   currentPassword.value = ''
   requestError.value = ''
   submitting.value = true
@@ -171,7 +182,17 @@ async function submitVerification() {
     })
     void refreshPage(generation)
   } catch (cause) {
-    if (active && generation === pageGeneration) requestError.value = requestErrorMessage(cause)
+    if (!active || generation !== pageGeneration) return
+    const message = requestErrorMessage(cause)
+    requestError.value = message
+    if (message === t('recoveryEmailKaiReauthRequired')) {
+      uni.showModal({
+        title: t('recoveryEmailKaiReauthTitle'),
+        content: message,
+        confirmText: t('recoveryEmailKaiReauthAction'),
+        success: ({ confirm }) => { if (confirm) uni.reLaunch({ url: '/pages/login/index' }) },
+      })
+    }
   } finally {
     if (generation === pageGeneration) submitting.value = false
   }

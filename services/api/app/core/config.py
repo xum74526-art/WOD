@@ -302,6 +302,10 @@ class Settings(BaseSettings):
     # Kai OAuth 2.1 / OpenID Connect. Credentials and redirect addresses must
     # be supplied by deployment environment variables; empty values disable it.
     KAI_AUTH_ISSUER: str = ""
+    # OAuth/OIDC endpoints are hosted below /api/auth while the signed token
+    # issuer is the origin itself. Keep those two values separate so ID-token
+    # and authorization-response issuer validation follows OIDC metadata.
+    KAI_AUTH_ENDPOINT_BASE: str = ""
     KAI_AUTH_CLIENT_ID: str = ""
     KAI_AUTH_CLIENT_SECRET: str = ""
     KAI_AUTH_CALLBACK_URL: str = ""
@@ -312,6 +316,9 @@ class Settings(BaseSettings):
     KAI_AUTH_SCOPES: str = "openid profile email"
     KAI_AUTH_FLOW_TTL_SECONDS: int = 600
     KAI_AUTH_TICKET_TTL_SECONDS: int = 120
+    # KAI sessions may replace a local-password prompt only during this short
+    # window for KAI-first accounts that do not have a local password yet.
+    KAI_AUTH_REAUTH_MAX_AGE_SECONDS: int = 600
     KAI_AUTH_HTTP_TIMEOUT: float = 10.0
 
     # Ignore retired AutoDL keys that may remain temporarily in a private

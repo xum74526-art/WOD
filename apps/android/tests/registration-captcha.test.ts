@@ -42,7 +42,7 @@ test('captcha freshness follows the five-minute server lifetime with a safe clie
   assert.match(loginSource, /function refreshCaptchaWithNotice[\s\S]*?if \(captchaReplacementNoticePromise\) return captchaReplacementNoticePromise/)
   assert.match(loginSource, /function setMode[\s\S]*?syncCaptchaLifecycle\(false\)/)
   assert.match(loginSource, /function setAuthMethod[\s\S]*?syncCaptchaLifecycle\(false\)/)
-  assert.match(loginSource, /callback\.error === 'identity_not_bound'[\s\S]*?syncCaptchaLifecycle\(true\)/)
+  assert.doesNotMatch(loginSource, /identity_not_bound/)
   assert.match(loginSource, /onShow\(\(\) => \{[\s\S]*?syncCaptchaLifecycle\(true\)/)
   assert.match(loginSource, /onHide\(\(\) => \{[\s\S]*?stopCaptchaExpiryTimer\(\)/)
   assert.match(loginSource, /onUnmounted\(\(\) => \{[\s\S]*?stopCaptchaExpiryTimer\(\)/)

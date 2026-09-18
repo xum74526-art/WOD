@@ -53,7 +53,7 @@ def _filter_platform(
 
 def _masked_phone(user: User) -> str | None:
     value = str(user.phone or "")
-    if len(value) < 7:
+    if len(value) != 11 or not value.isdigit():
         return None
     return f"{value[:3]}****{value[-4:]}"
 

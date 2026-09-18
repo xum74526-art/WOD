@@ -72,6 +72,7 @@ recovery_request_account_rate_limit = SlidingWindowRateLimiter(limit=5, window_s
 recovery_confirm_global_rate_limit = SlidingWindowRateLimiter(limit=600, window_seconds=60)
 recovery_confirm_token_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=600)
 recovery_binding_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
+phone_login_setup_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
 
 
 def _identity_key(value: str) -> str:
@@ -134,3 +135,7 @@ def limit_recovery_confirm(token: str) -> None:
 
 def limit_recovery_email_binding(user_id: int) -> None:
     recovery_binding_rate_limit.check(f"recovery-binding:{int(user_id)}")
+
+
+def limit_phone_login_setup(user_id: int) -> None:
+    phone_login_setup_rate_limit.check(f"phone-login-setup:{int(user_id)}")

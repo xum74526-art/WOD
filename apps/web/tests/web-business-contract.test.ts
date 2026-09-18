@@ -275,8 +275,10 @@ test("released Web account copy does not expose retired test-only wording", () =
   );
 });
 
-test("Web registration offers phone and Kai registration through the existing authorization route", () => {
+test("Web registration offers phone and KAI registration, with transparent first-time KAI account creation", () => {
   const panel = fs.readFileSync(new URL("../components/auth-panel.tsx", import.meta.url), "utf8");
+  const api = fs.readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+  const adapter = fs.readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
   assert.match(panel, /value=\{name\}[^\r\n]*minLength=\{2\} maxLength=\{64\}/);
   assert.match(panel, /value=\{password\}[^\r\n]*minLength=\{isRegister \? 6 : 1\} maxLength=\{64\}/);
@@ -284,11 +286,13 @@ test("Web registration offers phone and Kai registration through the existing au
   assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
   assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
   assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);
-  assert.match(panel, /sessionStorage\.setItem\(PENDING_KAI_INTENT_KEY, mode\)/);
-  assert.match(panel, /kaiError === "identity_not_bound" && pendingKaiIntent === "register"/);
-  assert.match(panel, /window\.location\.replace\(`\/register\$\{suffix\}`\)/);
+  assert.match(panel, /首次完成 KAI 统一认证会自动创建算力星图账号/);
+  assert.doesNotMatch(panel, /identity_not_bound|PENDING_KAI_INTENT_KEY|KAI_REGISTRATION_NOTICE_KEY/);
   assert.match(panel, /isRegister \? t\("auth\.kai\.continueRegistration"/);
   assert.match(panel, /t\("auth\.kai\.signIn"/);
+  assert.match(panel, /\(isRegister \|\| method === "kai"\) && !acceptedTerms/);
+  assert.match(api, /query\.set\("terms_accepted", "1"\)/);
+  assert.match(adapter, /terms_accepted: termsAccepted/);
 });
 
 test("released clients do not describe canonical data as coming from mobile", () => {

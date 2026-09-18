@@ -296,6 +296,7 @@ export type MobileUserProfile = {
   username: string;
   phone?: string | null;
   phone_bound?: boolean;
+  password_set?: boolean;
   avatar?: string | null;
   role?: "personal" | "supplier" | "admin" | string;
   supplier_status?: string | null;
