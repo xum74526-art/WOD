@@ -20,7 +20,7 @@ test('native package identity and icon paths use the 算力星图 Vue 3 source t
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, '算力星图')
   assert.equal(manifest.versionName, '1.2.1')
-  assert.equal(manifest.versionCode, '122')
+  assert.equal(manifest.versionCode, '123')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
 

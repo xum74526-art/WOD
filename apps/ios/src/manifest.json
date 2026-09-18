@@ -5,7 +5,7 @@
     "locale" : "zh-Hant",
     "vueVersion" : "3",
     "versionName" : "1.2.1",
-    "versionCode" : "122",
+    "versionCode" : "123",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
