@@ -30,7 +30,7 @@ test('native package identity and icon paths use the 算力星图 Vue 3 source t
   assert.equal(manifest['app-plus'].distribute.ios.urltypes, 'kai')
 
   const iconPaths = stringLeaves(manifest['app-plus'].distribute.icons[CLIENT_PLATFORM])
-  assert.ok(iconPaths.length >= 4)
+  assert.ok(iconPaths.length >= 3)
   for (const iconPath of iconPaths) {
     assert.match(iconPath, /^src\/static\/logo\//)
     assert.equal(existsSync(resolve(appRoot, iconPath)), true, `${iconPath} must exist`)
@@ -44,11 +44,18 @@ test('native transport refuses untrusted TLS certificates', () => {
 
 test('login, registration and the native icon present the 算力星图 brand', () => {
   if (CLIENT_PLATFORM === 'ios') {
-    const iconPath = manifest['app-plus'].distribute.icons.ios.appstore
-    const icon = readFileSync(resolve(appRoot, iconPath))
-    assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG')
-    assert.equal(icon.readUInt32BE(16), 1024)
-    assert.equal(icon.readUInt32BE(20), 1024)
+    const iosIcons = manifest['app-plus'].distribute.icons.ios
+    for (const [iconPath, size] of [
+      [iosIcons.appstore, 1024],
+      [iosIcons.iphone['app@2x'], 120],
+      [iosIcons.iphone['app@3x'], 180],
+    ] as Array<[string, number]>) {
+      const icon = readFileSync(resolve(appRoot, iconPath))
+      assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG')
+      assert.equal(icon.readUInt32BE(16), size)
+      assert.equal(icon.readUInt32BE(20), size)
+      assert.equal(icon.readUInt8(25), 2, `${iconPath} must use RGB without alpha`)
+    }
   }
 
   const loginPage = readFileSync(resolve(appRoot, 'src/pages/login/index.vue'), 'utf8')

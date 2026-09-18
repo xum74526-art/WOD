@@ -60,7 +60,7 @@ API 运行配置从 `infra/api.env.example` 复制，Collector 从 `infra/collec
 3. 使用新 API 镜像运行 `python migrate_account_recovery.py --check`。首次检查报告缺失项并
    返回非零是预期结果；除预期的账号找回增量外，出现任何不兼容结构都必须停止发布；
 4. 运行 `python migrate_account_recovery.py`，随后再次运行 `--check`，必须显示 schema ready；
-5. 在 KAI/OIDC 控制台登记 `https://wod.kai.com/api/auth/kai/callback`，并确认 `https://wod.kai.com/login`、`https://wod.kai.com/reset-password`、`https://wod.kai.com/account/settings` 与原生端 `kai://auth` 均已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；更换移动包名不等于更换 OAuth 回跳，除非 KAI 服务端和两个客户端在同一版本同时迁移，否则保持 `kai://auth`；
+5. 在 KAI/OIDC 控制台登记 `https://wod.kai.com/api/auth/kai/callback`，并确认 `https://wod.kai.com/login`、`https://wod.kai.com/reset-password`、`https://wod.kai.com/account-deletion`、`https://wod.kai.com/account/settings` 与原生端 `kai://auth` 均已加入 `KAI_AUTH_ALLOWED_RETURN_URLS` 的精确白名单；更换移动包名不等于更换 OAuth 回跳，除非 KAI 服务端和两个客户端在同一版本同时迁移，否则保持 `kai://auth`；
 6. 再启动候选 API，检查 `/health`、找回能力配置接口和近期日志，最后才切换正式流量。
 
 Docker 镜像必须包含 `migrate_account_recovery.py`，便于通过 `--entrypoint python` 在与正式服务

@@ -384,6 +384,8 @@ class AccountDeletionDataTests(unittest.TestCase):
         self.db.add_all([other_comment, Comment(post_id=post.id, user_id=self.user.id, content="private"),
                          Comment(post_id=other_post.id, user_id=self.user.id, content="private"),
                          Comment(post_id=other_post.id, user_id=self.other.id, content="stay"),
+                         Comment(post_id=other_post.id, user_id=self.other.id, content="removed",
+                                 moderation_status="removed"),
                          Like(post_id=post.id, user_id=self.user.id), Like(post_id=post.id, user_id=self.other.id),
                          Like(post_id=other_post.id, user_id=self.user.id),
                          Follow(follower_id=self.user.id, following_id=self.other.id)])

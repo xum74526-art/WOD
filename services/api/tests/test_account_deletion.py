@@ -17,7 +17,10 @@ from app.core.deps import get_current_auth_context
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import AccountDeletionRequest, AuthSession, User, Wallet, Supplier, Product, Order, InviteRecord, RewardAccrual
+from app.models import (
+    AccountDeletionRequest, AccountRecoveryToken, AuthSession, ExternalIdentity,
+    User, Wallet, Supplier, Product, Order, InviteRecord, RewardAccrual,
+)
 from app.routers import account_deletion as router
 from app.services import account_deletion as service
 from app.services.auth_session import create_authenticated_session, utcnow
@@ -73,6 +76,71 @@ class AccountDeletionTests(unittest.TestCase):
         with self.assertRaisesRegex(BizError, "算力星图账号密码"):
             service.verify_deletion_password(self.db, self.user, "incorrect")
         self.assertEqual(self.db.query(AccountDeletionRequest).count(), 0)
+
+    def test_kai_only_account_uses_fresh_single_use_reauth_proof(self):
+        self.user.password = "!"
+        self.db.add(ExternalIdentity(
+            user_id=self.user.id,
+            provider="kai",
+            issuer="",
+            subject="kai-only-user",
+        ))
+        self.db.commit()
+        proof = service.issue_kai_reauth_token(self.db, self.user)
+        with patch("app.services.kai_auth.is_configured", return_value=True):
+            eligibility = service.eligibility(self.db, self.user)
+            self.assertEqual(eligibility["verification_methods"], ["kai"])
+            verification = service.verify_deletion_kai(self.db, self.user, proof)
+        self.assertEqual(self.row(verification["ticket"]).status, "verified")
+        token_row = self.db.query(AccountRecoveryToken).filter_by(
+            purpose=service.KAI_DELETION_REAUTH,
+        ).one()
+        self.assertIsNotNone(token_row.consumed_at)
+        with (
+            patch("app.services.kai_auth.is_configured", return_value=True),
+            self.assertRaisesRegex(BizError, "无效或已过期"),
+        ):
+            service.verify_deletion_kai(self.db, self.user, proof)
+
+    def test_kai_deletion_proof_is_bound_to_user_and_cannot_reset_password(self):
+        self.user.password = "!"
+        self.db.add(ExternalIdentity(
+            user_id=self.user.id,
+            provider="kai",
+            issuer="",
+            subject="kai-only-user",
+        ))
+        self.db.commit()
+        proof = service.issue_kai_reauth_token(self.db, self.user)
+        with (
+            patch("app.services.kai_auth.is_configured", return_value=True),
+            self.assertRaisesRegex(BizError, "无效或已过期"),
+        ):
+            service.verify_deletion_kai(self.db, self.other, proof)
+        from app.services import account_recovery
+        with self.assertRaisesRegex(BizError, account_recovery.INVALID_TOKEN_MESSAGE):
+            account_recovery.reset_password(self.db, proof, "Replacement-password-42")
+        with patch("app.services.kai_auth.is_configured", return_value=True):
+            verification = service.verify_deletion_kai(self.db, self.user, proof)
+        self.assertTrue(verification["ticket"])
+
+    def test_kai_reauth_proof_is_invalidated_by_auth_version_change(self):
+        self.user.password = "!"
+        self.db.add(ExternalIdentity(
+            user_id=self.user.id,
+            provider="kai",
+            issuer="",
+            subject="kai-only-user",
+        ))
+        self.db.commit()
+        proof = service.issue_kai_reauth_token(self.db, self.user)
+        self.user.auth_version += 1
+        self.db.commit()
+        with (
+            patch("app.services.kai_auth.is_configured", return_value=True),
+            self.assertRaisesRegex(BizError, "无效或已过期"),
+        ):
+            service.verify_deletion_kai(self.db, self.user, proof)
 
     def test_explicit_confirmation_required(self):
         ticket = self.ticket()
@@ -180,6 +248,13 @@ class AccountDeletionTests(unittest.TestCase):
         relative = f"community/{self.user.id}/" + "a" * 32 + ".png"
         with patch.object(Path, "is_junction", return_value=True, create=True):
             with self.assertRaises(ValueError):
+                service._owned_path(self.root, relative, self.user.id)
+
+    def test_symlink_below_upload_root_is_rejected(self):
+        relative = f"community/{self.user.id}/" + "a" * 32 + ".png"
+        with tempfile.TemporaryDirectory(prefix="wod-deletion-escape-") as escaped:
+            (self.root / "community").symlink_to(Path(escaped), target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlink_cleanup_path"):
                 service._owned_path(self.root, relative, self.user.id)
 
     def test_privileged_blocker_survives_status_query(self):
@@ -290,6 +365,7 @@ class AccountDeletionTests(unittest.TestCase):
             unauthorized = client.get("/api/user/account-deletion/eligibility")
             self.assertEqual(unauthorized.status_code, 401)
             self.assertEqual(unauthorized.headers["cache-control"], "no-store")
+            self.assertEqual(unauthorized.headers["referrer-policy"], "no-referrer")
             invalid_password = client.post("/api/user/account-deletion/verify", json={"password": "secret-value-" * 20}, headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(invalid_password.status_code, 422)
             self.assertNotIn("secret-value", invalid_password.text)

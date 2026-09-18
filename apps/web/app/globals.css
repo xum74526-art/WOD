@@ -6260,6 +6260,7 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
   border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .community-post-card--featured .community-post-card__actions { margin: 0 30px; }
@@ -6275,6 +6276,9 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .community-comments article strong,
 .community-comments article p { font-size: 11px; }
 .community-comments article time { font-size: 9px; }
+.community-comment-safety-actions { margin-top: 5px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 2px; }
+.community-comment-safety-actions button { min-height: 26px; padding: 0 6px; border: 0; color: var(--brand-strong); background: transparent; cursor: pointer; font-size: 9px; }
+.community-comment-safety-actions button:disabled { cursor: wait; opacity: .55; }
 .community-comments__empty { margin: 0; color: var(--text-soft); font-size: 11px; }
 .community-comments form input { min-height: 40px; font-size: 12px; }
 .community-comments form button { padding-inline: 16px; font-size: 12px; }

@@ -1,5 +1,6 @@
 {
   "pages": [
+    { "path": "pages/privacy-consent/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/index/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/market/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/community/index", "style": { "navigationStyle": "custom" } },

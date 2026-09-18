@@ -47,9 +47,13 @@ _ENSURE = {
         "source_published_at", "summary", "rights_status", "rights_checked_at",
         "video_provider", "video_id", "video_url", "embed_url", "thumbnail_url",
         "canonical_url", "content_hash", "ingested_at", "publish_batch", "video_duration",
-        "created_platform", "last_modified_platform",
+        "created_platform", "last_modified_platform", "moderation_status",
+        "moderation_reason", "moderated_by", "moderated_at",
     ],
-    "comments": ["created_platform", "client_request_id"],
+    "comments": [
+        "created_platform", "client_request_id", "moderation_status",
+        "moderation_reason", "moderated_by", "moderated_at",
+    ],
     "likes": ["created_platform"],
     "follows": ["created_platform"],
     "notifications": ["title_en", "content_en", "action_url", "dedupe_key"],
@@ -89,7 +93,7 @@ _DATETIME_COLS = {
     "deleted_at",
     "end_at", "start_at", "price_updated_at", "source_published_at",
     "rights_checked_at", "ingested_at", "reviewed_at", "updated_at",
-    "ocr_updated_at",
+    "ocr_updated_at", "moderated_at",
     "consent_at",
     "checkout_started_at",
     "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
@@ -104,7 +108,7 @@ _INTEGER_COLS = {
     "ref_merchant_settlement_id", "reviewed_by", "dispute_resolved_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
     "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
-    "auth_version",
+    "auth_version", "moderated_by",
 }
 _NUMERIC_COLS = {
     "sell_price", "source_price", "exchange_rate", "reliability",
@@ -125,6 +129,8 @@ def _ensure_columns(db_engine=None):
             if col not in existing:
                 if col == "account_status":
                     col_type = "VARCHAR(16) NOT NULL DEFAULT 'active'"
+                elif col == "moderation_status":
+                    col_type = "VARCHAR(24) NOT NULL DEFAULT 'visible'"
                 elif col == "auth_version":
                     col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif table == "products" and col == "version":
@@ -166,6 +172,17 @@ def _ensure_columns(db_engine=None):
     if "users" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text("UPDATE users SET auth_version = 0 WHERE auth_version IS NULL"))
+    for table in ("posts", "comments"):
+        if table in insp.get_table_names():
+            with target_engine.begin() as conn:
+                conn.execute(text(
+                    f"UPDATE {table} SET moderation_status = 'visible' "
+                    "WHERE moderation_status IS NULL OR TRIM(moderation_status) = ''"
+                ))
+                conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS ix_{table}_moderation_status "
+                    f"ON {table} (moderation_status)"
+                ))
     if "order_renewals" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text(
@@ -188,6 +205,8 @@ def _ensure_columns(db_engine=None):
         "comments": ("created_platform",),
         "likes": ("created_platform",),
         "follows": ("created_platform",),
+        "community_blocks": ("created_platform",),
+        "community_reports": ("created_platform",),
         "invite_records": ("created_platform", "last_modified_platform"),
     }
     table_names = set(insp.get_table_names())
@@ -616,6 +635,16 @@ def _migrate_community_comment_idempotency(db_engine=None) -> dict[str, int | bo
             ))
         print("[init_db] 补列: comments.client_request_id")
 
+    # Normal startup calls ``_ensure_columns`` first, so moderation_status is
+    # present and legacy rows have already been backfilled to ``visible``. Keep
+    # the standalone migration compatible with older test/repair databases
+    # that predate moderation while never counting hidden rows when the status
+    # column exists.
+    visible_comment_filter = (
+        " AND stored_comments.moderation_status = 'visible'"
+        if "moderation_status" in columns else ""
+    )
+
     inspector = inspect(target_engine)
     indexes = inspector.get_indexes("comments")
     constraints = inspector.get_unique_constraints("comments")
@@ -666,9 +695,11 @@ def _migrate_community_comment_idempotency(db_engine=None) -> dict[str, int | bo
             "UPDATE posts SET comments = ("
             "SELECT COUNT(*) FROM comments AS stored_comments "
             "WHERE stored_comments.post_id = posts.id"
+            f"{visible_comment_filter}"
             ") WHERE COALESCE(posts.comments, -1) != ("
             "SELECT COUNT(*) FROM comments AS stored_comments "
             "WHERE stored_comments.post_id = posts.id"
+            f"{visible_comment_filter}"
             ")"
         )).rowcount or 0
         if not has_scoped_unique:

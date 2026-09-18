@@ -37,6 +37,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
                 "INVITE_REWARD_ENABLED",
                 "REWARD_SETTLEMENT_ENABLED",
                 "DIRECT_TRADE_ENABLED",
+                "THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED",
                 "MERCHANT_SERVICE_FEE_BPS",
                 "ORDER_DELIVERY_TIMEOUT_HOURS",
                 "ORDER_CONFIRMATION_TIMEOUT_HOURS",
@@ -47,6 +48,7 @@ class MerchantCommerceFlowTests(unittest.TestCase):
         settings.INVITE_REWARD_ENABLED = False
         settings.REWARD_SETTLEMENT_ENABLED = False
         settings.DIRECT_TRADE_ENABLED = True
+        settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED = True
         settings.MERCHANT_SERVICE_FEE_BPS = 1000
         settings.ORDER_DELIVERY_TIMEOUT_HOURS = 24
         settings.ORDER_CONFIRMATION_TIMEOUT_HOURS = 24

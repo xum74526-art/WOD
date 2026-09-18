@@ -172,7 +172,7 @@ npm run check:all
 - 正式安装包必须在对应平台环境中使用已批准的 AppID、证书和签名材料生成。
 - keystore、证书、Provisioning Profile、密码、APK/AAB/IPA、DCloud 缓存和签名目录不得进入 Git。
 - 移动端共同业务修改必须同步检查 iOS 与 Android；manifest、回跳、权限和签名配置保留平台差异。
-- Android 和 iOS 的具体构建要求分别见 [`apps/android/README.md`](apps/android/README.md)、[`docs/ANDROID_BUILD.md`](docs/ANDROID_BUILD.md) 和 [`apps/ios/README.md`](apps/ios/README.md)。
+- Android 和 iOS 的具体构建要求分别见 [`apps/android/README.md`](apps/android/README.md)、[`docs/ANDROID_BUILD.md`](docs/ANDROID_BUILD.md)、[`apps/ios/README.md`](apps/ios/README.md) 和 [`docs/IOS_APP_STORE_RELEASE.md`](docs/IOS_APP_STORE_RELEASE.md)。
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 的服务器发布只更新 API 与 Web，不会自动更新已签名 APK/IPA。新 Android 包需单独上传为 `suanlixingtu.apk`，同步更新下载页的版本、大小和 SHA-256，并验证公网下载文件哈希；旧 `wod.apk` 只能继续承载 `com.kai.wod`。
 
 ## 静态审核页面
@@ -214,6 +214,7 @@ node --test static-review/site.test.mjs
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 唯一数据源、请求链路、模块边界和兼容层治理 |
 | [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md) | 撮合审核版与未来直接交易版的能力门禁 |
 | [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) | Android/iOS 共享能力、平台差异和本地验证 |
+| [`docs/IOS_APP_STORE_RELEASE.md`](docs/IOS_APP_STORE_RELEASE.md) | iOS TestFlight、App Store Connect、最终 IPA 与隐私验收清单 |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 本地开发、启动、采集与契约更新 |
 | [`docs/APP_OWNERSHIP.md`](docs/APP_OWNERSHIP.md) | Web、iOS、Android 的源码边界 |
 | [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | 自动门禁、人工检查和外部上线条件 |

@@ -27,21 +27,34 @@ test('iOS declares purpose strings for each user-selected media source', () => {
   for (const key of [
     'NSPhotoLibraryUsageDescription',
     'NSCameraUsageDescription',
-    'NSMicrophoneUsageDescription',
   ]) {
     assert.equal(typeof privacy[key], 'string')
     assert.ok(privacy[key].trim().length >= 12, `${key} must explain the user-facing purpose`)
   }
   assert.equal(privacy.NSPhotoLibraryAddUsageDescription, undefined)
+  assert.equal(privacy.NSMicrophoneUsageDescription, undefined)
 })
 
-test('media permissions correspond to features that are actually reachable', () => {
+test('review build keeps only image permissions used by profile and identity flows', () => {
   const sources = [
     '../src/pages/profile-edit/index.vue',
     '../src/pages/verification/index.vue',
-    '../src/pages/community/publish.vue',
   ].map(relative => readFileSync(new URL(relative, import.meta.url), 'utf8')).join('\n')
+  const communityPublisher = readFileSync(new URL('../src/pages/community/publish.vue', import.meta.url), 'utf8')
 
   assert.match(sources, /uni\.chooseImage\(/)
-  assert.match(sources, /uni\.chooseVideo\(/)
+  assert.doesNotMatch(communityPublisher, /uni\.chooseImage|uni\.chooseVideo/)
+})
+
+test('localized iOS purpose strings match the review build feature set', () => {
+  for (const locale of ['en', 'zh-Hans', 'zh-Hant']) {
+    const strings = readFileSync(
+      new URL(`../nativeResources/ios/Resources/${locale}.lproj/InfoPlist.strings`, import.meta.url),
+      'utf8',
+    )
+    assert.match(strings, /"NSPhotoLibraryUsageDescription"\s*=/)
+    assert.match(strings, /"NSCameraUsageDescription"\s*=/)
+    assert.doesNotMatch(strings, /NSMicrophoneUsageDescription/)
+    assert.doesNotMatch(strings, /community|社区|社區|社群|视频|影片|\bvideo\b/i)
+  }
 })

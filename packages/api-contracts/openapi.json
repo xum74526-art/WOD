@@ -271,6 +271,28 @@
         "title": "ApproveWithdrawalIn",
         "type": "object"
       },
+      "AuthorizationResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeletionAuthorizationOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AuthorizationResponse",
+        "type": "object"
+      },
       "BankCardIn": {
         "properties": {
           "bank_name": {
@@ -614,6 +636,8 @@
             "title": "Client Request Id"
           },
           "content": {
+            "maxLength": 500,
+            "minLength": 1,
             "title": "Content",
             "type": "string"
           }
@@ -622,6 +646,217 @@
           "content"
         ],
         "title": "CommentIn",
+        "type": "object"
+      },
+      "CommentListResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CommentOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CommentListResponse",
+        "type": "object"
+      },
+      "CommentOut": {
+        "properties": {
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_own": {
+            "default": false,
+            "title": "Is Own",
+            "type": "boolean"
+          },
+          "post_comments": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Comments"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "post_id",
+          "user_id",
+          "content"
+        ],
+        "title": "CommentOut",
+        "type": "object"
+      },
+      "CommentResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CommentOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CommentResponse",
+        "type": "object"
+      },
+      "CommunityBlockStateIn": {
+        "properties": {
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "blocked"
+        ],
+        "title": "CommunityBlockStateIn",
+        "type": "object"
+      },
+      "CommunityReportIn": {
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "reason": {
+            "enum": [
+              "illegal",
+              "harassment",
+              "hate",
+              "sexual",
+              "violence",
+              "scam",
+              "privacy",
+              "copyright",
+              "spam",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "target_type": {
+            "enum": [
+              "post",
+              "comment",
+              "user"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "reason"
+        ],
+        "title": "CommunityReportIn",
+        "type": "object"
+      },
+      "CommunityReportReviewIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "resolution": {
+            "enum": [
+              "dismissed",
+              "content_removed",
+              "user_restricted"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resolution"
+        ],
+        "title": "CommunityReportReviewIn",
         "type": "object"
       },
       "DealActionIn": {
@@ -672,6 +907,19 @@
         "title": "DealReasonIn",
         "type": "object"
       },
+      "DeletionAuthorizationOut": {
+        "properties": {
+          "authorization_url": {
+            "title": "Authorization Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_url"
+        ],
+        "title": "DeletionAuthorizationOut",
+        "type": "object"
+      },
       "DeletionBlocker": {
         "properties": {
           "code": {
@@ -714,14 +962,60 @@
           "eligible": {
             "title": "Eligible",
             "type": "boolean"
+          },
+          "verification_methods": {
+            "items": {
+              "enum": [
+                "password",
+                "kai"
+              ],
+              "type": "string"
+            },
+            "title": "Verification Methods",
+            "type": "array"
           }
         },
         "required": [
           "eligible",
           "blockers",
-          "automatic_actions"
+          "automatic_actions",
+          "verification_methods"
         ],
         "title": "DeletionEligibility",
+        "type": "object"
+      },
+      "DeletionKaiProofIn": {
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 40,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "DeletionKaiProofIn",
+        "type": "object"
+      },
+      "DeletionKaiStartIn": {
+        "properties": {
+          "return_url": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Url"
+          }
+        },
+        "title": "DeletionKaiStartIn",
         "type": "object"
       },
       "DeletionPasswordIn": {
@@ -2860,6 +3154,8 @@
       "PostCreateIn": {
         "properties": {
           "content": {
+            "maxLength": 2000,
+            "minLength": 1,
             "title": "Content",
             "type": "string"
           },
@@ -2880,6 +3176,7 @@
           "topic": {
             "anyOf": [
               {
+                "maxLength": 64,
                 "type": "string"
               },
               {
@@ -2917,6 +3214,425 @@
           "content"
         ],
         "title": "PostCreateIn",
+        "type": "object"
+      },
+      "PostListData": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PostOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PostListData",
+        "type": "object"
+      },
+      "PostListResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PostListData"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "PostListResponse",
+        "type": "object"
+      },
+      "PostOut": {
+        "properties": {
+          "author_avatar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Avatar"
+          },
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Url"
+          },
+          "comments": {
+            "default": 0,
+            "title": "Comments",
+            "type": "integer"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "content_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content En"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "embed_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
+          },
+          "is_following": {
+            "default": false,
+            "title": "Is Following",
+            "type": "boolean"
+          },
+          "is_liked": {
+            "default": false,
+            "title": "Is Liked",
+            "type": "boolean"
+          },
+          "is_own": {
+            "default": false,
+            "title": "Is Own",
+            "type": "boolean"
+          },
+          "likes": {
+            "default": 0,
+            "title": "Likes",
+            "type": "integer"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "publish_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Batch"
+          },
+          "rights_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights Status"
+          },
+          "shares": {
+            "default": 0,
+            "title": "Shares",
+            "type": "integer"
+          },
+          "source_author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Author"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "source_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Key"
+          },
+          "source_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Name"
+          },
+          "source_published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Published At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "topic_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic En"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video"
+          },
+          "video_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Duration"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "video_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Provider"
+          },
+          "video_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Url"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "content"
+        ],
+        "title": "PostOut",
+        "type": "object"
+      },
+      "PostResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PostOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "PostResponse",
         "type": "object"
       },
       "ProfileUpdateIn": {
@@ -4602,6 +5318,138 @@
         "tags": [
           "admin",
           "buy-request"
+        ]
+      }
+    },
+    "/api/admin/community/reports": {
+      "get": {
+        "operationId": "community_reports_api_admin_community_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "pending",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Community Reports",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/community/reports/{report_id}": {
+      "patch": {
+        "operationId": "review_community_report_api_admin_community_reports__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityReportReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Review Community Report",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -6849,6 +7697,51 @@
         ]
       }
     },
+    "/api/community/comments/{comment_id}": {
+      "delete": {
+        "operationId": "delete_own_comment_api_community_comments__comment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Own Comment",
+        "tags": [
+          "community"
+        ]
+      }
+    },
     "/api/community/ingest/status": {
       "get": {
         "operationId": "ingest_status_api_community_ingest_status_get",
@@ -6963,13 +7856,25 @@
               "title": "Keyword",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "allow_aggregated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Allow Aggregated",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PostListResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7011,7 +7916,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7039,6 +7946,49 @@
       }
     },
     "/api/community/posts/{pid}": {
+      "delete": {
+        "operationId": "delete_own_post_api_community_posts__pid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pid",
+            "required": true,
+            "schema": {
+              "title": "Pid",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Own Post",
+        "tags": [
+          "community"
+        ]
+      },
       "get": {
         "operationId": "post_detail_api_community_posts__pid__get",
         "parameters": [
@@ -7056,7 +8006,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7101,7 +8053,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CommentListResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7117,6 +8071,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "summary": "List Comments",
         "tags": [
           "community"
@@ -7149,7 +8108,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CommentResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7238,6 +8199,50 @@
         ]
       }
     },
+    "/api/community/reports": {
+      "post": {
+        "operationId": "report_community_content_api_community_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Report Community Content",
+        "tags": [
+          "community"
+        ]
+      }
+    },
     "/api/community/sources": {
       "get": {
         "operationId": "list_content_sources_api_community_sources_get",
@@ -7257,6 +8262,61 @@
           }
         ],
         "summary": "List Content Sources",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/api/community/users/{uid}/block": {
+      "post": {
+        "operationId": "set_user_block_api_community_users__uid__block_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "title": "Uid",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityBlockStateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set User Block",
         "tags": [
           "community"
         ]
@@ -11638,6 +12698,98 @@
           }
         ],
         "summary": "Eligibility",
+        "tags": [
+          "account-deletion"
+        ]
+      }
+    },
+    "/api/user/account-deletion/kai/start": {
+      "post": {
+        "operationId": "kai_start_api_user_account_deletion_kai_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionKaiStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Kai Start",
+        "tags": [
+          "account-deletion"
+        ]
+      }
+    },
+    "/api/user/account-deletion/kai/verify": {
+      "post": {
+        "operationId": "kai_verify_api_user_account_deletion_kai_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionKaiProofIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Kai Verify",
         "tags": [
           "account-deletion"
         ]

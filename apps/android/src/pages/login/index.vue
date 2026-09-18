@@ -102,6 +102,13 @@ import {
   parseKaiAuthUrl,
   type KaiAuthCallback,
 } from '@/utils/kai-auth-callback'
+import {
+  clearPendingLoginKaiCallback,
+  createPendingKaiLoginIntent,
+  peekPendingLoginKaiCallback,
+  PENDING_KAI_INTENT_KEY,
+  readPendingKaiLoginIntent,
+} from '@/utils/login-kai-callback'
 import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { consumeAuthReturnPath } from '@/utils/auth-return-path'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
@@ -134,7 +141,6 @@ let processingKaiCallback = ''
 let kaiReturnProbeTimer: ReturnType<typeof setTimeout> | null = null
 let kaiReturnProbeGeneration = 0
 const HANDLED_KAI_CALLBACK_KEY = 'wod_kai_callback_fingerprint'
-const PENDING_KAI_INTENT_KEY = 'wod_kai_auth_intent'
 const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 
 function setMode(value: 'login' | 'register') {
@@ -279,7 +285,7 @@ async function submitKai() {
   submitting.value = true
   try {
     const result = await startKaiAuth(mode.value)
-    uni.setStorageSync(PENDING_KAI_INTENT_KEY, mode.value)
+    uni.setStorageSync(PENDING_KAI_INTENT_KEY, createPendingKaiLoginIntent(mode.value))
     externalKaiAuthorizationPending.value = true
     if (!openExternalAuthorization(result.authorization_url)) {
       uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
@@ -298,6 +304,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   const fingerprint = kaiAuthCallbackFingerprint(callback)
   if (fingerprint === processingKaiCallback) return true
   if (uni.getStorageSync(HANDLED_KAI_CALLBACK_KEY) === fingerprint) {
+    clearPendingLoginKaiCallback(callback)
     externalKaiAuthorizationPending.value = false
     submitting.value = false
     return true
@@ -307,11 +314,14 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
   externalKaiAuthorizationPending.value = false
   submitting.value = true
   authMethod.value = 'kai'
-  const pendingKaiIntent = uni.getStorageSync(PENDING_KAI_INTENT_KEY) === 'register' ? 'register' : 'login'
+  const pendingKaiIntent = readPendingKaiLoginIntent(
+    uni.getStorageSync(PENDING_KAI_INTENT_KEY),
+  ) || 'login'
   try {
     if (callback.error) {
       uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
       uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
+      clearPendingLoginKaiCallback(callback)
       if (callback.error === 'identity_not_bound' && pendingKaiIntent === 'register') {
         mode.value = 'register'
         authMethod.value = 'phone'
@@ -331,6 +341,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     await userStore.loginWithKaiTicket(callback.ticket)
     uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
     uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
+    clearPendingLoginKaiCallback(callback)
     uni.showToast({ title: t('loginSuccess'), icon: 'success' })
     setTimeout(enterAuthenticatedApp, 500)
     return true
@@ -342,6 +353,13 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     processingKaiCallback = ''
     submitting.value = false
   }
+}
+
+function handleStagedKaiCallback() {
+  const callback = peekPendingLoginKaiCallback()
+  if (!callback) return false
+  void handleKaiCallback(callback)
+  return true
 }
 
 let authenticatedNavigationStarted = false
@@ -468,18 +486,21 @@ async function submit() {
 }
 
 onLoad((options) => {
-  void handleKaiCallback(parseKaiAuthQuery(options))
+  const callback = parseKaiAuthQuery(options)
+  if (callback) void handleKaiCallback(callback)
+  else handleStagedKaiCallback()
 })
 
 onShow(() => {
   captchaPageVisible = true
   if (userStore.isLogin) {
+    clearPendingLoginKaiCallback()
     stopCaptchaExpiryTimer()
     setTimeout(enterAuthenticatedApp, 800)
     return
   }
   syncCaptchaLifecycle(true)
-  probeKaiReturnCallback()
+  if (!handleStagedKaiCallback()) probeKaiReturnCallback()
 })
 
 onHide(() => {
@@ -488,12 +509,14 @@ onHide(() => {
 })
 
 onMounted(() => {
+  uni.$on('wod-kai-login-callback-ready', handleStagedKaiCallback)
   registerKaiRuntimeListener()
   void checkKaiConfig()
 })
 onUnmounted(() => {
   captchaPageVisible = false
   stopCaptchaExpiryTimer()
+  uni.$off('wod-kai-login-callback-ready', handleStagedKaiCallback)
   unregisterKaiRuntimeListener()
   stopKaiReturnProbe()
 })

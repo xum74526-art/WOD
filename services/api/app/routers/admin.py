@@ -8,14 +8,17 @@ boundary: administrator access remains protected by ``require_admin``.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query as SqlAlchemyQuery, Session
 
 from app.core.deps import require_admin
 from app.core.sensitive import reveal
 from app.db.session import get_db
 from app.models.bank_card import BankCard
+from app.models.community import CommunityReport, Comment, Post
 from app.models.external_identity import ExternalIdentity
 from app.models.order import Order
 from app.models.payment import PaymentOrder
@@ -23,12 +26,17 @@ from app.models.product import Product
 from app.models.user import User
 from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
+from app.schemas.community import CommunityReportReviewIn
 from app.services.auth_session import AUDIT_PLATFORMS, AuditPlatform
 from app.services.product_provider import product_provider_info
 from app.utils.response import BizError, success
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def _page(page: int, page_size: int) -> None:
     if page < 1 or page_size < 1 or page_size > 100:
@@ -242,3 +250,217 @@ def recharge_orders(
             "updated_at": row.updated_at,
         })
     return success({"total": total, "page": page, "page_size": page_size, "items": items})
+
+
+def _community_report_target(db: Session, report: CommunityReport) -> dict:
+    if report.target_type == "post":
+        target = db.get(Post, report.target_id)
+        author = db.get(User, target.user_id) if target else None
+        return {
+            "exists": target is not None,
+            "author": {"id": author.id, "username": author.username} if author else None,
+            "excerpt": (target.content[:240] if target else None),
+            "moderation_status": target.moderation_status if target else None,
+        }
+    if report.target_type == "comment":
+        target = db.get(Comment, report.target_id)
+        author = db.get(User, target.user_id) if target else None
+        return {
+            "exists": target is not None,
+            "author": {"id": author.id, "username": author.username} if author else None,
+            "excerpt": (target.content[:240] if target else None),
+            "moderation_status": target.moderation_status if target else None,
+        }
+    target = db.get(User, report.target_id)
+    return {
+        "exists": target is not None,
+        "author": {"id": target.id, "username": target.username} if target else None,
+        "excerpt": None,
+        "moderation_status": target.account_status if target else None,
+    }
+
+
+def _refresh_visible_comment_counts(db: Session, post_ids: set[int]) -> None:
+    """Keep the legacy cached counter aligned with moderation visibility."""
+
+    for post_id in post_ids:
+        post = db.get(Post, post_id)
+        if post is None:
+            continue
+        post.comments = int(db.query(func.count(Comment.id)).filter(
+            Comment.post_id == post_id,
+            Comment.moderation_status == "visible",
+        ).scalar() or 0)
+
+
+@router.get("/community/reports")
+def community_reports(
+    status: str | None = Query(default="pending", max_length=24),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _page(page, page_size)
+    query = db.query(CommunityReport)
+    if status:
+        query = query.filter(CommunityReport.status == status)
+    total = query.count()
+    rows = query.order_by(
+        CommunityReport.created_at.asc(), CommunityReport.id.asc()
+    ).offset((page - 1) * page_size).limit(page_size).all()
+    items = []
+    for row in rows:
+        reporter = db.get(User, row.reporter_user_id)
+        items.append({
+            "id": row.id,
+            "target_type": row.target_type,
+            "target_id": row.target_id,
+            "reason": row.reason,
+            "details": row.details,
+            "status": row.status,
+            "resolution": row.resolution,
+            "resolution_note": row.resolution_note,
+            "reporter": (
+                {"id": reporter.id, "username": reporter.username}
+                if reporter else None
+            ),
+            "target": _community_report_target(db, row),
+            "created_platform": row.created_platform or "legacy",
+            "created_at": row.created_at,
+            "reviewed_at": row.reviewed_at,
+        })
+    return success({"total": total, "page": page, "page_size": page_size, "items": items})
+
+
+@router.patch("/community/reports/{report_id}")
+def review_community_report(
+    report_id: int,
+    data: CommunityReportReviewIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    report = db.get(CommunityReport, report_id)
+    if report is None:
+        raise BizError("举报记录不存在", status_code=404)
+    if report.status != "pending":
+        raise BizError("举报已处理，请刷新审核队列", status_code=409)
+    target, author = None, None
+    affected_post_ids: set[int] = set()
+    if report.target_type == "post":
+        target = db.get(Post, report.target_id)
+        author = db.get(User, target.user_id) if target else None
+    elif report.target_type == "comment":
+        target = db.get(Comment, report.target_id)
+        author = db.get(User, target.user_id) if target else None
+        if target is not None:
+            affected_post_ids.add(int(target.post_id))
+    else:
+        author = db.get(User, report.target_id)
+
+    if data.resolution == "content_removed" and target is None:
+        raise BizError("被举报内容不存在", status_code=404)
+    if data.resolution == "user_restricted" and author is None:
+        raise BizError("被举报用户不存在", status_code=404)
+
+    if data.resolution == "user_restricted":
+        # Restricting an account is one moderation decision across that
+        # account and all of its content. Claim every pending report in that
+        # scope before mutating anything, so concurrent reviewers cannot
+        # overwrite the first completed audit record through a sibling report.
+        author_post_ids = db.query(Post.id).filter(Post.user_id == author.id)
+        author_comment_ids = db.query(Comment.id).filter(Comment.user_id == author.id)
+        review_scope = or_(
+            and_(
+                CommunityReport.target_type == "user",
+                CommunityReport.target_id == author.id,
+            ),
+            and_(
+                CommunityReport.target_type == "post",
+                CommunityReport.target_id.in_(author_post_ids),
+            ),
+            and_(
+                CommunityReport.target_type == "comment",
+                CommunityReport.target_id.in_(author_comment_ids),
+            ),
+        )
+    else:
+        review_scope = and_(
+            CommunityReport.target_type == report.target_type,
+            CommunityReport.target_id == report.target_id,
+        )
+
+    claimed = db.query(CommunityReport).filter(
+        review_scope,
+        CommunityReport.status == "pending",
+    ).update(
+        {CommunityReport.status: "reviewing"},
+        synchronize_session=False,
+    )
+    db.expire(report, ["status"])
+    if claimed < 1 or report.status != "reviewing":
+        db.rollback()
+        raise BizError("举报已被其他管理员处理，请刷新审核队列", status_code=409)
+
+    now = _utcnow()
+    if data.resolution == "content_removed":
+        target.moderation_status = "removed"
+        target.moderation_reason = report.reason
+        target.moderated_by = actor.id
+        target.moderated_at = now
+    elif data.resolution == "user_restricted":
+        author.account_status = "suspended"
+        db.query(Post).filter(
+            Post.user_id == author.id,
+            Post.moderation_status.in_(("visible", "pending_review")),
+        ).update({
+            Post.moderation_status: "removed",
+            Post.moderation_reason: "account_restricted",
+            Post.moderated_by: actor.id,
+            Post.moderated_at: now,
+        }, synchronize_session="fetch")
+        affected_post_ids.update(
+            int(row[0]) for row in db.query(Comment.post_id).filter(
+                Comment.user_id == author.id,
+                Comment.moderation_status.in_(("visible", "pending_review")),
+            ).distinct().all()
+        )
+        db.query(Comment).filter(
+            Comment.user_id == author.id,
+            Comment.moderation_status.in_(("visible", "pending_review")),
+        ).update({
+            Comment.moderation_status: "removed",
+            Comment.moderation_reason: "account_restricted",
+            Comment.moderated_by: actor.id,
+            Comment.moderated_at: now,
+        }, synchronize_session="fetch")
+
+    matching = db.query(CommunityReport).filter(
+        review_scope,
+        CommunityReport.status == "reviewing",
+    ).all()
+    for item in matching:
+        item.status = "dismissed" if data.resolution == "dismissed" else "resolved"
+        item.resolution = data.resolution
+        item.resolution_note = data.note.strip() if data.note else None
+        item.reviewed_by = actor.id
+        item.reviewed_at = now
+
+    if (
+        data.resolution == "dismissed"
+        and target is not None
+        and target.moderation_status == "pending_review"
+        and target.moderation_reason == "multiple_user_reports"
+    ):
+        target.moderation_status = "visible"
+        target.moderation_reason = None
+        target.moderated_by = actor.id
+        target.moderated_at = now
+    db.flush()
+    _refresh_visible_comment_counts(db, affected_post_ids)
+    db.commit()
+    return success({
+        "id": report.id,
+        "status": report.status,
+        "resolution": report.resolution,
+    })

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   clearDeletionReceipt, DELETION_RECEIPT_KEY, deletionRevokesNormalSession, newDeletionReceipt,
-  readDeletionReceipt, saveDeletionReceipt, submitDeletionWithRecovery,
+  deletionKaiProofFromUrl, readDeletionReceipt, saveDeletionReceipt, submitDeletionWithRecovery,
   type AccountDeletionStatus,
 } from "../lib/account-deletion-flow.ts";
 import { accountDeletionMethods, accountDeletionProxyOptions } from "../lib/account-deletion-proxy.ts";
@@ -25,12 +25,23 @@ const result = (status: AccountDeletionStatus["status"]): AccountDeletionStatus 
 
 test("receipt-bound BFF operations work without forwarding the normal login token", () => {
   const input = { ticket, confirm: true, password: "not-forwarded", user_id: 12, token: "not-forwarded" };
-  assert.deepEqual(accountDeletionMethods, { eligibility: "GET", verify: "POST", submit: "POST", status: "POST" });
+  assert.deepEqual(accountDeletionMethods, { eligibility: "GET", verify: "POST", "kai/start": "POST", "kai/verify": "POST", submit: "POST", status: "POST" });
   assert.deepEqual(accountDeletionProxyOptions("eligibility", input), { method: "GET", auth: true });
   assert.deepEqual(accountDeletionProxyOptions("verify", input), { method: "POST", auth: true, body: { password: "not-forwarded" } });
+  assert.deepEqual(accountDeletionProxyOptions("kai/start", { return_url: "https://wod.kai.com/account-deletion" }), { method: "POST", auth: true, body: { return_url: "https://wod.kai.com/account-deletion" } });
+  assert.deepEqual(accountDeletionProxyOptions("kai/verify", { token: "kai-proof" }), { method: "POST", auth: true, body: { token: "kai-proof" } });
   assert.deepEqual(accountDeletionProxyOptions("submit", input), { method: "POST", auth: false, body: { ticket, confirm: true } });
   assert.deepEqual(accountDeletionProxyOptions("status", input), { method: "POST", auth: false, body: { ticket } });
   assert.deepEqual(accountDeletionProxyOptions("submit", { ticket, confirm: false }).body, { ticket, confirm: false });
+});
+
+test("KAI deletion proof is accepted only from the fragment and scrubbed immediately", () => {
+  const parsed = deletionKaiProofFromUrl("https://wod.kai.com/account-deletion?keep=1#kai_deletion_token=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN&tab=notice");
+  assert.equal(parsed.token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN");
+  assert.equal(parsed.cleanPath, "/account-deletion?keep=1#tab=notice");
+  const queryOnly = deletionKaiProofFromUrl("https://wod.kai.com/account-deletion?kai_deletion_token=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN");
+  assert.equal(queryOnly.token, "");
+  assert.equal(queryOnly.cleanPath, "/account-deletion");
 });
 
 test("cookies are cleared only when backend confirms processing or completed, not merely verification", () => {
@@ -175,6 +186,10 @@ test("UI has unchecked consent, separate final confirmation and persists recover
   const api = readFileSync(new URL("../lib/account-deletion-api.ts", import.meta.url), "utf8");
   assert.match(ui, /\[acknowledged, setAcknowledged\] = useState\(false\)/);
   assert.match(ui, /id="deletion-final-title"/);
+  assert.match(ui, /verifyKaiAccountDeletion\(kaiCallback\.token\)/);
+  assert.match(ui, /setAcknowledged\(false\)/);
+  assert.match(api, /account-deletion\/kai\/start/);
+  assert.match(api, /account-deletion\/kai\/verify/);
   assert.match(ui, /saveDeletionReceipt\(window\.localStorage, saved\)[\s\S]*submitDeletionWithRecovery\(saved\.ticket/);
   assert.match(ui, /const complete = status\?\.status === "completed"/);
   assert.match(ui, /loginHref\("\/account-deletion"\)/);
@@ -190,6 +205,7 @@ test("BFF retains same-origin gate and no-store envelopes before deletion route 
   assert.match(deletion, /request\.nextUrl\.search/);
   assert.match(deletion, /deletionRevokesNormalSession\(result\.body\.data\)[\s\S]*clearAuthCookie/);
   assert.match(deletion, /deletionMayClearSession\(marker, ticket, currentBearer\)\) clearAuthCookie/);
+  assert.match(deletion, /operation === "verify" \|\| operation === "kai\/verify"/);
   assert.match(deletion, /httpOnly: true, sameSite: "strict"/);
   assert.doesNotMatch(deletion, /Authorization|publicApiSuccess/);
 });

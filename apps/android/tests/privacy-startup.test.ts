@@ -63,10 +63,12 @@ test('the startup prompt links to the public 算力星图 agreement and privacy 
   }
 })
 
-test('the startup prompt keeps Chinese consent punctuation with a short final sentence', () => {
-  assert.match(privacyConfig.message || '', /點擊「同意並繼續」，即表示您已閱讀並同意。$/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /点击“同意并继续”，即表示您已阅读并同意。$/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /點擊「同意並繼續」，即表示您已閱讀並同意。$/)
-  assert.doesNotMatch(privacyConfig.message || '', /上述內容。$/)
-  assert.doesNotMatch(privacyConfig.messageLocales?.['zh-Hans'] || '', /上述内容。$/)
+test('the native startup prompt explains the separate Hong Kong processing choice for every user', () => {
+  assert.match(privacyConfig.message || '', /點擊「同意並繼續」，即表示您已閱讀並同意。/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /点击“同意并继续”，即表示您已阅读并同意。/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /點擊「同意並繼續」，即表示您已閱讀並同意。/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /所有用户.*中国香港.*单独确认/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /所有使用者.*中國香港.*單獨確認/)
+  assert.doesNotMatch(privacyConfig.message || '', /上述內容。/)
+  assert.doesNotMatch(privacyConfig.messageLocales?.['zh-Hans'] || '', /上述内容。/)
 })

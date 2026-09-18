@@ -138,6 +138,80 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'community safety controls',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/mobile-community-api.ts',
+        patterns: ['allow_aggregated: "false"', 'reportCommunityContent(', 'setCommunityBlock(', 'deleteCommunityPost(', 'deleteCommunityComment('],
+      },
+      {
+        client: 'Web',
+        file: 'apps/web/components/community-feed.tsx',
+        patterns: ['reportCommunityContent("post", row.id)', 'reportCommunityContent("comment", commentItem.id)', 'reportCommunityContent("user", commentItem.user_id)', 'setCommunityBlock(row.user_id, true)', 'setCommunityBlock(commentItem.user_id, true)', 'deleteCommunityPost(row.id)', 'deleteCommunityComment(commentItem.id)'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} API`,
+          file: `apps/${client}/src/api/community.ts`,
+          patterns: ['allow_aggregated: false', 'reportCommunityContent(', 'setUserBlock(', 'deleteCommunityPost(', 'deleteCommunityComment('],
+        },
+        {
+          client: `${client} detail`,
+          file: `apps/${client}/src/pages/community/detail.vue`,
+          patterns: ["reportTarget('post'", "reportTarget('comment'", "reportTarget('user'", 'setUserBlock(userId, true)', 'deleteCommunityPost(currentPost.id)', 'deleteCommunityComment(comment.id)'],
+        },
+      ]),
+      {
+        client: 'Canonical API',
+        file: 'services/api/app/routers/community.py',
+        patterns: ['allow_aggregated: bool = False', 'def report_community_content(', 'def set_user_block(', 'def delete_own_post(', 'def delete_own_comment('],
+      },
+      {
+        client: 'Admin review queue',
+        file: 'services/api/app/routers/admin.py',
+        patterns: ['def community_reports(', 'def review_community_report('],
+      },
+    ],
+  },
+  {
+    name: 'KAI reauthentication for account deletion',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/account-deletion-api.ts',
+        patterns: ['/user/account-deletion/kai/start', '/user/account-deletion/kai/verify', 'body: JSON.stringify({ token })'],
+      },
+      {
+        client: 'Web',
+        file: 'apps/web/components/account-deletion.tsx',
+        patterns: ['deletionKaiProofFromUrl(window.location.href)', 'setAcknowledged(false)', 'verifyKaiAccountDeletion(kaiCallback.token)', 'startKaiAccountDeletionVerification()'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} API`,
+          file: `apps/${client}/src/api/account-deletion.ts`,
+          patterns: ['/user/account-deletion/kai/start', '/user/account-deletion/kai/verify', 'KAI_AUTH_APP_RETURN_URL'],
+        },
+        {
+          client: `${client} deletion page`,
+          file: `apps/${client}/src/pages/account-deletion/index.vue`,
+          patterns: ['beginDeletionKaiReauth()', 'takePendingDeletionKaiCallback()', 'controller.verifyKai(callback.token)', 'acknowledged.value = false'],
+        },
+      ]),
+      {
+        client: 'Canonical deletion API',
+        file: 'services/api/app/routers/account_deletion.py',
+        patterns: ['@router.post("/kai/start"', '@router.post("/kai/verify"', 'verify_deletion_kai(db, user, data.token)'],
+      },
+      {
+        client: 'Canonical KAI callback',
+        file: 'services/api/app/routers/auth.py',
+        patterns: ['expected_user_id=flow.user_id if flow.intent == "delete" else None', 'issue_kai_reauth_token(db, user)', 'kai_deletion_token=deletion_token'],
+      },
+    ],
+  },
+  {
     name: 'registration captcha freshness',
     evidence: [
       {
@@ -695,12 +769,25 @@ const allowedMobileDrift = new Set([
   'src/androidPrivacy.json',
   'src/utils/client-platform.ts',
   'src/static/logo/logo-1024.png',
+  // iPhone application icons use Apple's 60-point @2x/@3x sizes. Android
+  // consumes the shared 72/96/144/192 density icons instead.
+  'src/static/logo/logo-120.png',
+  'src/static/logo/logo-180.png',
   // Each manifest uses the same public identity but stores the callback scheme
   // under a platform-specific DCloud field; the matching regression assertion
   // therefore cannot be byte-for-byte identical.
   'tests/manifest-branding.test.ts',
   'tests/manifest-permissions.test.ts',
   'tests/privacy-startup.test.ts',
+  // These assertions embed the platform name and therefore intentionally
+  // differ by one literal while exercising the same consent contract.
+  'tests/privacy-consent.test.ts',
+  // iOS-only App Store privacy and native permission resources.
+  'nativeResources/ios/PrivacyInfo.xcprivacy',
+  'nativeResources/ios/Resources/en.lproj/InfoPlist.strings',
+  'nativeResources/ios/Resources/zh-Hans.lproj/InfoPlist.strings',
+  'nativeResources/ios/Resources/zh-Hant.lproj/InfoPlist.strings',
+  'tests/privacy-manifest.test.ts',
 ])
 const ignoredMobileNames = new Set(['node_modules', 'dist', '.DS_Store', '.env.local'])
 

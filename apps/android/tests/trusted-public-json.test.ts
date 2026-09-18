@@ -12,6 +12,7 @@ function transportFixture(response: { statusCode: number; data: unknown }) {
   const requests: Record<string, any>[] = []
   const requireMock = (name: string) => {
     if (name === '@/utils/auth') return { getToken: () => 'private-session', clearAuth: () => {} }
+    if (name === '@/utils/privacy-consent') return { requirePrivacyConsent: () => {} }
     if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => {} }
     if (name === '@/utils/config') return { API_BASE: 'https://wod.kai.com/api' }
     if (name === '@/store/i18n') return { useI18nStore: () => ({ locale: 'zh-CN', t: (key: string) => key, tr: (value: string) => value }) }

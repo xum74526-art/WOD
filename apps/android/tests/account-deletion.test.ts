@@ -6,6 +6,10 @@ import {
   createDeletionController, createDeletionState, validDeletionReceipt,
   DELETION_RECEIPT_TTL_MS, type DeletionReceipt, type DeletionResult,
 } from '../src/utils/account-deletion.ts'
+import { parseKaiAuthUrl } from '../src/utils/kai-auth-callback.ts'
+import {
+  beginDeletionKaiReauth, stageDeletionKaiCallback, takePendingDeletionKaiCallback,
+} from '../src/utils/account-deletion-kai-callback.ts'
 
 const now = Date.parse('2026-09-04T10:00:00Z')
 function fixture() {
@@ -17,8 +21,9 @@ function fixture() {
   let submitHold: Promise<void> | null = null
   const controller = createDeletionController({
     state, now: () => now,
-    eligibility: async () => { calls.push('eligibility'); return { eligible: true, blockers: [], automatic_actions: ['Remove unmatched requests'] } },
+    eligibility: async () => { calls.push('eligibility'); return { eligible: true, blockers: [], automatic_actions: ['Remove unmatched requests'], verification_methods: ['password', 'kai'] } },
     verify: async (password) => { assert.equal(password, 'test-password'); calls.push('verify'); return { ticket: 'deletion-only-test-capability', expires_at: new Date(now + 600_000).toISOString() } },
+    verifyKai: async (token) => { assert.equal(token, 'kai-deletion-proof'); calls.push('verify-kai'); return { ticket: 'deletion-only-test-capability', expires_at: new Date(now + 600_000).toISOString() } },
     submit: async (ticket) => { assert.equal(ticket, 'deletion-only-test-capability'); calls.push('submit'); if (submitHold) await submitHold; if (failSubmit) throw new Error('timeout'); return result },
     status: async (ticket) => { assert.equal(ticket, 'deletion-only-test-capability'); calls.push('status'); return result },
     saveReceipt: (value) => { calls.push('save'); receipt = value },
@@ -27,6 +32,27 @@ function fixture() {
   })
   return { state, calls, controller, receipt: () => receipt, result: (next: DeletionResult) => { result = next }, fail: () => { failSubmit = true }, hold: (next: Promise<void>) => { submitHold = next } }
 }
+
+test('KAI deletion callback accepts only the app fragment and stages its proof in memory once', async () => {
+  assert.equal(parseKaiAuthUrl('https://evil.example/#kai_deletion_token=stolen'), null)
+  assert.equal(parseKaiAuthUrl('kai://auth?kai_deletion_token=query-leak'), null)
+  const callback = parseKaiAuthUrl('kai://auth#kai_deletion_token=kai-deletion-proof')
+  assert.deepEqual(callback, { deletionToken: 'kai-deletion-proof' })
+  assert.equal(stageDeletionKaiCallback(callback), true)
+  assert.deepEqual(takePendingDeletionKaiCallback(), { token: 'kai-deletion-proof' })
+  assert.equal(takePendingDeletionKaiCallback(), null)
+  assert.equal(stageDeletionKaiCallback(callback), false)
+  beginDeletionKaiReauth()
+  assert.equal(stageDeletionKaiCallback(parseKaiAuthUrl('kai://auth?kai_error=access_denied')), true)
+  assert.deepEqual(takePendingDeletionKaiCallback(), { error: 'access_denied' })
+
+  const flow = fixture()
+  await flow.controller.checkEligibility()
+  await flow.controller.verifyKai('kai-deletion-proof')
+  assert.equal(flow.state.stage, 'verified')
+  assert.deepEqual(flow.calls, ['eligibility', 'verify-kai'])
+  assert.equal(flow.receipt(), null)
+})
 
 test('eligibility and password verification never submit deletion or persist a ticket', async () => {
   const flow = fixture()
@@ -129,7 +155,7 @@ test('receipt owner isolates cleanup from other logged-in accounts and old owner
   const clearedOwners: Array<number | undefined> = []
   const controller = createDeletionController({
     state, now: () => now, ownerUserId: () => 17,
-    eligibility: async () => ({ eligible: true, blockers: [], automatic_actions: [] }),
+    eligibility: async () => ({ eligible: true, blockers: [], automatic_actions: [], verification_methods: ['password'] }),
     verify: async () => ({ ticket: 'owner-scoped-capability', expires_at: new Date(now + 1000).toISOString() }),
     submit: async () => ({ status: 'processing', blockers: [], completed_at: null }),
     status: async () => ({ status: 'completed', blockers: [], completed_at: '2026-09-04T10:00:01Z' }),
@@ -177,6 +203,8 @@ test('deletion endpoints use the canonical client and submit/status do not attac
   assert.match(api, /import \{ request \} from '@\/api\/request'/)
   assert.match(api, /url: '\/user\/account-deletion\/eligibility'/)
   assert.match(api, /url: '\/user\/account-deletion\/verify'/)
+  assert.match(api, /url: '\/user\/account-deletion\/kai\/start'/)
+  assert.match(api, /url: '\/user\/account-deletion\/kai\/verify'/)
   assert.match(api, /\/submit', method: 'POST', data: \{ ticket, confirm: true \}, auth: 'none'/)
   assert.match(api, /\/status', method: 'POST', data: \{ ticket \}, auth: 'none'/)
   assert.match(request, /options.auth === 'none' \? '' : getToken\(\)/)
@@ -193,6 +221,7 @@ test('expired deletion capability rejects inline without bearer auth, session cl
   const exports: Record<string, any> = {}
   const requireMock = (name: string) => {
     if (name === '@/utils/auth') return { getToken: () => 'ordinary-session-token', clearAuth: () => { cleared += 1 } }
+    if (name === '@/utils/privacy-consent') return { requirePrivacyConsent: () => {} }
     if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => { staged += 1 } }
     if (name === '@/utils/config') return { API_BASE: 'https://example.invalid/api' }
     if (name === '@/store/i18n') return { useI18nStore: () => ({ lang: 'zh', t: (key: string) => key, tr: (value: string) => value }) }
@@ -238,6 +267,8 @@ test('mobile entry, consent, password wiping and bounded status recovery are pre
   assert.match(page, /finally \{ password.value = '' \}/)
   assert.match(page, /polls >= 6/)
   assert.match(page, /if \(receipt\) \{ controller.restore\(receipt\); void checkStatus\(\) \}/)
+  assert.match(page, /controller\.verifyKai\(callback\.token\)/)
+  assert.match(page, /acknowledged\.value = false/)
   assert.match(login, /v-if="pendingDeletion"/)
   assert.doesNotMatch(page, /clearStorage|setStorageSync\([^)]*password|console\./)
 })

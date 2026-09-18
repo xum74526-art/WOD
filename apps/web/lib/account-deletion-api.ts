@@ -12,6 +12,18 @@ export function verifyAccountDeletion(password: string) {
   });
 }
 
+export function startKaiAccountDeletionVerification() {
+  return apiRequest<{ authorization_url: string }>(canonicalApiPath("/user/account-deletion/kai/start"), {
+    method: "POST", body: JSON.stringify({}),
+  });
+}
+
+export function verifyKaiAccountDeletion(token: string) {
+  return apiRequest<AccountDeletionVerification>(canonicalApiPath("/user/account-deletion/kai/verify"), {
+    method: "POST", body: JSON.stringify({ token }),
+  });
+}
+
 export function submitAccountDeletion(ticket: string) {
   return apiRequest<AccountDeletionStatus>(canonicalApiPath("/user/account-deletion/submit"), {
     method: "POST", body: JSON.stringify({ ticket, confirm: true }),

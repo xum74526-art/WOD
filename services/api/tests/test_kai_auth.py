@@ -19,6 +19,7 @@ from sqlalchemy.pool import NullPool, StaticPool
 from app.core.config import settings
 from app.db.base import Base
 from app.models import (  # noqa: F401
+    AccountRecoveryToken,
     AuthSession,
     ExternalAuthBindTicket,
     ExternalAuthFlow,
@@ -350,6 +351,88 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(flow.client_id, "android")
         with self.assertRaisesRegex(BizError, "必须先登录"):
             kai_auth.create_authorization_flow(self.db, "bind")
+
+    def test_deletion_flow_is_user_bound_and_forces_fresh_login(self):
+        self.configure()
+        user = self._user()
+        url = kai_auth.create_authorization_flow(
+            self.db,
+            "delete",
+            user_id=user.id,
+            platform="ios",
+            client_id="ios",
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["prompt"], ["login"])
+        self.assertEqual(query["max_age"], ["0"])
+        flow = self.db.query(ExternalAuthFlow).one()
+        self.assertEqual((flow.intent, flow.user_id), ("delete", user.id))
+        with self.assertRaisesRegex(BizError, "必须先登录"):
+            kai_auth.create_authorization_flow(self.db, "delete")
+
+    def test_deletion_reauth_rejects_a_different_bound_kai_subject(self):
+        self.configure()
+        initiating_user = self._user("13900000001")
+        other_user = self._user("13900000002")
+        identity = ExternalIdentity(
+            user_id=other_user.id,
+            provider="kai",
+            issuer=settings.KAI_AUTH_ISSUER,
+            subject="other-kai-user",
+            display_name="Original name",
+        )
+        self.db.add(identity)
+        self.db.commit()
+
+        with self.assertRaisesRegex(BizError, "身份与当前账号不匹配"):
+            kai_auth.find_bound_user(
+                self.db,
+                {"sub": "other-kai-user", "name": "Attacker-controlled update"},
+                expected_user_id=initiating_user.id,
+            )
+        self.db.refresh(identity)
+        self.assertEqual(identity.display_name, "Original name")
+        self.assertEqual(self.db.query(AccountRecoveryToken).count(), 0)
+
+    async def test_deletion_callback_returns_scoped_proof_in_fragment(self):
+        self.configure()
+        user = self._user()
+        self.db.add(ExternalIdentity(
+            user_id=user.id,
+            provider="kai",
+            issuer=settings.KAI_AUTH_ISSUER,
+            subject="kai-delete-user",
+        ))
+        self.db.commit()
+        url = kai_auth.create_authorization_flow(self.db, "delete", user_id=user.id)
+        state = parse_qs(urlparse(url).query)["state"][0]
+
+        async def exchange(_code, _flow):
+            return {"id_token": "verified-token"}
+
+        async def verify(_id_token, _nonce):
+            return {"sub": "kai-delete-user"}
+
+        async def enrich(claims, _access_token):
+            return claims
+
+        with (
+            patch.object(kai_auth, "exchange_authorization_code", exchange),
+            patch.object(kai_auth, "verify_id_token", verify),
+            patch.object(kai_auth, "enrich_with_userinfo", enrich),
+        ):
+            response = await auth_router.kai_callback(
+                code="authorization-code",
+                state=state,
+                iss=settings.KAI_AUTH_ISSUER,
+                error=None,
+                db=self.db,
+            )
+        parsed = urlparse(response.headers["location"])
+        self.assertNotIn("kai_deletion_token", parse_qs(parsed.query))
+        proof = parse_qs(parsed.fragment)["kai_deletion_token"][0]
+        self.assertTrue(proof)
+        self.assertNotIn(proof, repr(self.db.query(AccountRecoveryToken).all()))
 
     async def test_id_token_validates_eddsa_issuer_audience_and_nonce(self):
         self.configure()

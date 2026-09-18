@@ -32,24 +32,20 @@
             "icons" : {
                 "ios" : {
                     "appstore" : "src/static/logo/logo-1024.png",
-                    "ipad" : {
-                        "app" : "src/static/logo/logo-144.png",
-                        "app@2x" : "src/static/logo/logo-192.png"
-                    },
                     "iphone" : {
-                        "app@2x" : "src/static/logo/logo-96.png",
-                        "app@3x" : "src/static/logo/logo-144.png"
+                        "app@2x" : "src/static/logo/logo-120.png",
+                        "app@3x" : "src/static/logo/logo-180.png"
                     }
                 }
             },
             "ios" : {
                 "appid" : "com.kai.ztwstarmap",
-                "dSYMs" : false,
+                "devices" : "iphone",
+                "dSYMs" : true,
                 "urltypes" : "kai",
                 "privacyDescription" : {
-                    "NSPhotoLibraryUsageDescription" : "用于选择头像、身份认证资料以及要发布到算力社区的图片或视频。",
-                    "NSCameraUsageDescription" : "用于拍摄头像、身份认证资料以及要发布到算力社区的图片或视频。",
-                    "NSMicrophoneUsageDescription" : "用于录制并发布带声音的算力社区视频。"
+                    "NSPhotoLibraryUsageDescription" : "用于选择头像或身份认证资料。",
+                    "NSCameraUsageDescription" : "用于拍摄头像或身份认证资料。"
                 }
             }
         }

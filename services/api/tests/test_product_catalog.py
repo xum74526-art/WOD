@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from sqlalchemy import create_engine
@@ -8,9 +9,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.models import MarketSourceStatus, Product, Supplier, User  # noqa: F401
-from app.routers.product import get_product, list_products
+from app.routers.product import get_product, list_products, price_trend
+from app.routers.supplier import store_page
 from app.utils.response import BizError
 
 
@@ -18,8 +20,10 @@ class ProductCatalogTests(unittest.TestCase):
     def setUp(self):
         self.original_direct_trade = settings.DIRECT_TRADE_ENABLED
         self.original_matchmaking = settings.MATCHMAKING_ENABLED
+        self.original_merchant_catalog = settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED
         settings.DIRECT_TRADE_ENABLED = True
         settings.MATCHMAKING_ENABLED = True
+        settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED = True
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -108,6 +112,7 @@ class ProductCatalogTests(unittest.TestCase):
     def tearDown(self):
         settings.DIRECT_TRADE_ENABLED = self.original_direct_trade
         settings.MATCHMAKING_ENABLED = self.original_matchmaking
+        settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED = self.original_merchant_catalog
         self.db.close()
 
     @staticmethod
@@ -349,6 +354,79 @@ class ProductCatalogTests(unittest.TestCase):
         with self.assertRaises(BizError) as ctx:
             get_product(pending_product.id, db=self.db)
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_public_merchant_catalog_defaults_off_and_hides_every_public_surface(self):
+        self.assertIs(
+            Settings.model_fields["THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED"].default,
+            False,
+        )
+        repository = Path(__file__).resolve().parents[3]
+        for environment_template in (
+            repository / "services" / "api" / ".env.example",
+            repository / "infra" / "api.env.example",
+        ):
+            self.assertIn(
+                "THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED=false",
+                environment_template.read_text(encoding="utf-8"),
+            )
+        settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED = False
+
+        public_catalog = list_products(
+            keyword=None,
+            memory=None,
+            region=None,
+            category=None,
+            sort="default",
+            min_price=None,
+            max_price=None,
+            market_source=None,
+            representative=False,
+            page=1,
+            page_size=100,
+            db=self.db,
+        )["data"]
+        self.assertTrue(public_catalog["items"])
+        self.assertEqual(
+            {item["market_source"] for item in public_catalog["items"]},
+            {"kai"},
+        )
+
+        merchant_catalog = list_products(
+            keyword=None,
+            memory=None,
+            region=None,
+            category=None,
+            sort="default",
+            min_price=None,
+            max_price=None,
+            market_source="wod",
+            representative=False,
+            page=1,
+            page_size=100,
+            db=self.db,
+        )["data"]
+        self.assertEqual(merchant_catalog["items"], [])
+        self.assertEqual(merchant_catalog["total"], 0)
+
+        merchant_product = self.db.query(Product).filter(
+            Product.name == "商家 A40 甲",
+        ).one()
+        merchant_supplier = self.db.query(Supplier).filter(
+            Supplier.company_name == "目录商家1",
+        ).one()
+        for public_lookup in (
+            lambda: get_product(merchant_product.id, db=self.db),
+            lambda: price_trend(merchant_product.id, db=self.db),
+            lambda: store_page(merchant_supplier.id, db=self.db),
+        ):
+            with self.assertRaises(BizError) as ctx:
+                public_lookup()
+            self.assertEqual(ctx.exception.status_code, 404)
+
+        self.db.refresh(merchant_product)
+        self.db.refresh(merchant_supplier)
+        self.assertEqual(merchant_product.status, "on")
+        self.assertEqual(merchant_supplier.status, "approved")
 
     def test_kai_catalog_fails_closed_without_a_valid_platform_fulfiller(self):
         original = settings.PLATFORM_FULFILLMENT_USER_IDS

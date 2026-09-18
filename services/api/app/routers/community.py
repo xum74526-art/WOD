@@ -5,6 +5,8 @@ import os
 import re
 import tempfile
 import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -19,11 +21,37 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.deps import get_current_platform, get_current_user, get_optional_current_user
 from app.db.session import get_db
-from app.models.community import Comment, ContentIngestRun, ContentSource, Follow, Like, Post
+from app.models.community import (
+    CommunityBlock,
+    CommunityReport,
+    Comment,
+    ContentIngestRun,
+    ContentSource,
+    Follow,
+    Like,
+    Post,
+)
 from app.models.user import User
-from app.schemas.community import CommentIn, CommentOut, FollowStateIn, LikeStateIn, PostCreateIn, PostOut
+from app.schemas.community import (
+    CommentIn,
+    CommentListResponse,
+    CommentOut,
+    CommentResponse,
+    CommunityBlockStateIn,
+    CommunityReportIn,
+    FollowStateIn,
+    LikeStateIn,
+    PostCreateIn,
+    PostListResponse,
+    PostOut,
+    PostResponse,
+)
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
+from app.services.community_safety import (
+    safe_public_display_name,
+    validate_public_community_text,
+)
 from app.services.community_video import (
     standardize_community_video,
     standardized_video_duration,
@@ -56,6 +84,40 @@ MEDIA_TYPES = {
     "mov": "video/quicktime",
     "webm": "video/webm",
 }
+VISIBLE_MODERATION_STATUS = "visible"
+AUTO_HIDE_REPORT_THRESHOLD = 3
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _blocked_user_ids(db: Session, user_id: int | None) -> set[int]:
+    if not user_id:
+        return set()
+    rows = db.query(
+        CommunityBlock.blocker_user_id,
+        CommunityBlock.blocked_user_id,
+    ).filter(or_(
+        CommunityBlock.blocker_user_id == user_id,
+        CommunityBlock.blocked_user_id == user_id,
+    )).all()
+    return {
+        int(blocked_id if int(blocker_id) == user_id else blocker_id)
+        for blocker_id, blocked_id in rows
+    }
+
+
+def _reported_target_ids(db: Session, user_id: int | None, target_type: str) -> set[int]:
+    if not user_id:
+        return set()
+    return {
+        row[0]
+        for row in db.query(CommunityReport.target_id).filter(
+            CommunityReport.reporter_user_id == user_id,
+            CommunityReport.target_type == target_type,
+        ).all()
+    }
 
 
 def _file_size_limit_label(byte_count: int) -> str:
@@ -135,6 +197,8 @@ async def upload_community_media(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if not settings.COMMUNITY_USER_MEDIA_ENABLED:
+        raise BizError("当前版本仅支持发布文字动态", status_code=403)
     user_id = int(user.id)
     # Authentication and this route share the same cached Session. End its
     # read-only transaction before file IO and potentially long video
@@ -234,6 +298,8 @@ def public_community_media(
     request: Request,
     db: Session = Depends(get_db, scope="function"),
 ):
+    if not settings.COMMUNITY_USER_MEDIA_ENABLED:
+        raise HTTPException(status_code=404, detail="社区媒体不存在")
     from app.services.account_lifecycle import active_user_exists
     if not active_user_exists(db, user_id):
         raise HTTPException(status_code=404, detail="社区媒体不存在")
@@ -289,16 +355,91 @@ def public_community_media(
     )
 
 
-def _post_out(p: Post, user: User | None, db: Session) -> dict:
-    u = db.query(User).filter(User.id == p.user_id).first()
-    is_liked = bool(user) and db.query(Like).filter(
-        Like.post_id == p.id, Like.user_id == user.id
-    ).first() is not None
-    is_following = bool(user) and db.query(Follow).filter(
-        Follow.follower_id == user.id, Follow.following_id == p.user_id
-    ).first() is not None
-    # 用真实评论数替代种子生成时的随机数
-    actual_comments = db.query(Comment).filter(Comment.post_id == p.id).count()
+@dataclass(frozen=True)
+class _PostOutputContext:
+    authors: dict[int, User]
+    liked_post_ids: set[int]
+    followed_author_ids: set[int]
+    comment_counts: dict[int, int]
+
+
+def _post_output_context(
+    db: Session,
+    posts: list[Post],
+    user: User | None,
+    *,
+    hidden_author_ids: set[int] | None = None,
+) -> _PostOutputContext:
+    post_ids = {int(post.id) for post in posts}
+    author_ids = {int(post.user_id) for post in posts}
+    if not post_ids:
+        return _PostOutputContext({}, set(), set(), {})
+
+    authors = {
+        int(author.id): author
+        for author in db.query(User).filter(User.id.in_(author_ids)).all()
+    }
+    viewer_id = int(user.id) if user else None
+    if viewer_id:
+        liked_post_ids = {
+            int(row[0]) for row in db.query(Like.post_id).filter(
+                Like.user_id == viewer_id,
+                Like.post_id.in_(post_ids),
+            ).all()
+        }
+        followed_author_ids = {
+            int(row[0]) for row in db.query(Follow.following_id).filter(
+                Follow.follower_id == viewer_id,
+                Follow.following_id.in_(author_ids),
+            ).all()
+        }
+        if hidden_author_ids is None:
+            hidden_author_ids = _blocked_user_ids(db, viewer_id) | _reported_target_ids(
+                db, viewer_id, "user",
+            )
+        reported_comment_ids = _reported_target_ids(db, viewer_id, "comment")
+    else:
+        liked_post_ids = set()
+        followed_author_ids = set()
+        hidden_author_ids = set()
+        reported_comment_ids = set()
+
+    comments_query = db.query(
+        Comment.post_id,
+        func.count(Comment.id),
+    ).filter(
+        Comment.post_id.in_(post_ids),
+        Comment.moderation_status == VISIBLE_MODERATION_STATUS,
+    )
+    if hidden_author_ids:
+        comments_query = comments_query.filter(
+            Comment.user_id.notin_(hidden_author_ids),
+        )
+    if reported_comment_ids:
+        comments_query = comments_query.filter(
+            Comment.id.notin_(reported_comment_ids),
+        )
+    comment_counts = {
+        int(post_id): int(count)
+        for post_id, count in comments_query.group_by(Comment.post_id).all()
+    }
+    return _PostOutputContext(
+        authors=authors,
+        liked_post_ids=liked_post_ids,
+        followed_author_ids=followed_author_ids,
+        comment_counts=comment_counts,
+    )
+
+
+def _post_out(
+    p: Post,
+    user: User | None,
+    db: Session,
+    context: _PostOutputContext | None = None,
+) -> dict:
+    if context is None:
+        context = _post_output_context(db, [p], user)
+    author = context.authors.get(int(p.user_id))
     # Post.images is stored as JSON text for legacy SQLite compatibility, while
     # the API schema correctly exposes a string array. Build the payload first
     # so Pydantic never tries to interpret the raw JSON string as a list.
@@ -312,40 +453,94 @@ def _post_out(p: Post, user: User | None, db: Session) -> dict:
     except (TypeError, ValueError, json.JSONDecodeError):
         payload["images"] = None
     out = PostOut.model_validate(payload).model_dump()
-    out["author_name"] = u.username if u else "匿名"
-    out["author_avatar"] = u.avatar if u else None
-    out["is_liked"] = is_liked
-    out["is_following"] = is_following
+    out["author_name"] = safe_public_display_name(author.username if author else None)
+    # Public profile media has no moderation pipeline in the first review
+    # release. Keep the private profile avatar usable in account screens while
+    # omitting it from community payloads.
+    out["author_avatar"] = None
+    out["is_liked"] = p.id in context.liked_post_ids
+    out["is_following"] = p.user_id in context.followed_author_ids
     out["is_own"] = bool(user) and p.user_id == user.id
-    out["comments"] = actual_comments
+    out["comments"] = context.comment_counts.get(int(p.id), 0)
     return out
 
 
-@router.get("/posts")
+def _release_visible_post_query(
+    db: Session,
+    *,
+    allow_aggregated: bool = False,
+):
+    """Apply release-policy visibility at every public post read boundary.
+
+    Client query parameters may narrow the server-approved feed but cannot
+    enable content that the active release policy disables. Historical user
+    media remains stored for deletion/moderation while being unreachable from
+    public lists, details and interaction endpoints.
+    """
+
+    query = db.query(Post).filter(
+        Post.moderation_status == VISIBLE_MODERATION_STATUS,
+    )
+    if not settings.COMMUNITY_USER_MEDIA_ENABLED:
+        user_post_is_text_only = and_(
+            Post.images.is_(None),
+            Post.video.is_(None),
+            or_(
+                Post.content_type.is_(None),
+                Post.content_type.notin_(("image", "video")),
+            ),
+        )
+        query = query.filter(or_(
+            Post.origin == "aggregated",
+            user_post_is_text_only,
+        ))
+
+    if not (settings.COMMUNITY_AGGREGATED_CONTENT_ENABLED and allow_aggregated):
+        return query.filter(or_(
+            Post.origin != "aggregated",
+            Post.origin.is_(None),
+        ))
+
+    enabled_source_keys = [
+        row.key for row in db.query(ContentSource).filter(
+            ContentSource.enabled.is_(True),
+            ContentSource.rights_status == "allowed",
+        ).all()
+    ]
+    publishable_aggregated_post = and_(
+        Post.origin == "aggregated",
+        Post.source_key.in_(enabled_source_keys),
+        or_(
+            Post.content_type != "video",
+            and_(
+                Post.video_provider == "bilibili",
+                Post.video_id.like("BV__________"),
+            ),
+        ),
+    )
+    return query.filter(or_(
+        Post.origin != "aggregated",
+        Post.origin.is_(None),
+        publishable_aggregated_post,
+    ))
+
+
+@router.get("/posts", response_model=PostListResponse)
 def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
                page_size: int = Query(default=10, ge=1, le=50),
                keyword: str = "",
+               allow_aggregated: bool = False,
                user: User | None = Depends(get_optional_current_user), db: Session = Depends(get_db)):
-    q = db.query(Post)
-    # 外部来源一旦停用或授权状态变更，聚合内容立即停止展示；用户内容和站内行情不受影响。
-    enabled_source_keys = [
-        row.key for row in db.query(ContentSource).filter(
-            ContentSource.enabled.is_(True), ContentSource.rights_status == "allowed"
-        ).all()
-    ]
-    q = q.filter(or_(Post.origin != "aggregated", Post.origin.is_(None), Post.source_key.in_(enabled_source_keys)))
-    # Do not surface external video rows that native/Web clients cannot safely
-    # reconstruct. User-hosted videos are governed by the standardized upload
-    # path above; aggregated videos use the one supported provider/id contract.
-    q = q.filter(or_(
-        Post.content_type != "video",
-        Post.origin != "aggregated",
-        Post.origin.is_(None),
-        and_(
-            Post.video_provider == "bilibili",
-            Post.video_id.like("BV__________"),
-        ),
-    ))
+    q = _release_visible_post_query(db, allow_aggregated=allow_aggregated)
+    viewer_id = int(user.id) if user else None
+    hidden_authors = _blocked_user_ids(db, viewer_id) | _reported_target_ids(
+        db, viewer_id, "user"
+    )
+    if hidden_authors:
+        q = q.filter(Post.user_id.notin_(hidden_authors))
+    reported_posts = _reported_target_ids(db, viewer_id, "post")
+    if reported_posts:
+        q = q.filter(Post.id.notin_(reported_posts))
     # 关键词搜索：匹配内容、话题、作者名
     if keyword:
         kw = f"%{keyword}%"
@@ -375,21 +570,32 @@ def list_posts(tab: str = "recommend", page: int = Query(default=1, ge=1),
         q = q.order_by(video_priority.asc(), Post.created_at.desc(), Post.likes.desc())
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()
+    output_context = _post_output_context(
+        db,
+        items,
+        user,
+        hidden_author_ids=hidden_authors,
+    )
     return success({
-        "items": [_post_out(p, user, db) for p in items],
+        "items": [_post_out(p, user, db, output_context) for p in items],
         "total": total, "page": page, "page_size": page_size,
     })
 
 
-@router.post("/posts")
+@router.post("/posts", response_model=PostResponse)
 def create_post(
     data: PostCreateIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    if not data.content or not data.content.strip():
-        raise BizError("内容不能为空")
+    content = validate_public_community_text(data.content)
+    topic = validate_public_community_text(data.topic, field_name="话题") if data.topic else None
+    if (
+        not settings.COMMUNITY_USER_MEDIA_ENABLED
+        and (data.images or data.video or data.video_duration is not None)
+    ):
+        raise BizError("当前版本仅支持发布文字动态", status_code=403)
     images = data.images or []
     if len(images) > 9:
         raise BizError("图片最多上传 9 张")
@@ -416,9 +622,9 @@ def create_post(
     images_str = json.dumps(images, ensure_ascii=False) if images else None
     source_platform = normalize_platform(platform)
     p = Post(
-        user_id=user.id, content=data.content, images=images_str,
+        user_id=user.id, content=content, images=images_str,
         video=video, video_duration=video_duration,
-        topic=data.topic, origin="user",
+        topic=topic, origin="user",
         content_type="video" if video else ("image" if images else "text"),
         created_platform=source_platform,
         last_modified_platform=source_platform,
@@ -426,15 +632,36 @@ def create_post(
     db.add(p)
     db.commit()
     db.refresh(p)
-    return success(_post_out(p, user, db))
+    output_context = _post_output_context(
+        db,
+        [p],
+        user,
+        hidden_author_ids=set(),
+    )
+    return success(_post_out(p, user, db, output_context))
 
 
-@router.get("/posts/{pid}")
+@router.get("/posts/{pid}", response_model=PostResponse)
 def post_detail(pid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    p = db.query(Post).filter(Post.id == pid).first()
+    p = _release_visible_post_query(db, allow_aggregated=True).filter(
+        Post.id == pid,
+    ).first()
     if not p:
         raise BizError("动态不存在", status_code=404)
-    return success(_post_out(p, user, db))
+    hidden_authors = _blocked_user_ids(db, int(user.id)) | _reported_target_ids(
+        db, int(user.id), "user"
+    )
+    if p.user_id in hidden_authors:
+        raise BizError("动态不存在", status_code=404)
+    if p.id in _reported_target_ids(db, int(user.id), "post"):
+        raise BizError("动态不存在", status_code=404)
+    output_context = _post_output_context(
+        db,
+        [p],
+        user,
+        hidden_author_ids=hidden_authors,
+    )
+    return success(_post_out(p, user, db, output_context))
 
 
 def _insert_like_if_missing(
@@ -480,7 +707,18 @@ def _set_like_state(
     db: Session,
     platform: str,
 ):
-    if db.query(Post.id).filter(Post.id == pid).scalar() is None:
+    target = _release_visible_post_query(db, allow_aggregated=True).filter(
+        Post.id == pid,
+    ).first()
+    if target is None:
+        raise BizError("动态不存在", status_code=404)
+    hidden_authors = _blocked_user_ids(db, user_id) | _reported_target_ids(
+        db, user_id, "user"
+    )
+    if (
+        target.user_id in hidden_authors
+        or pid in _reported_target_ids(db, user_id, "post")
+    ):
         raise BizError("动态不存在", status_code=404)
 
     source_platform = normalize_platform(platform)
@@ -542,19 +780,59 @@ def toggle_like(
     return _set_like_state(pid, user.id, liked, db, platform)
 
 
-@router.get("/posts/{pid}/comments")
-def list_comments(pid: int, db: Session = Depends(get_db)):
-    items = db.query(Comment).filter(Comment.post_id == pid).order_by(
+@router.get(
+    "/posts/{pid}/comments",
+    response_model=CommentListResponse,
+    response_model_exclude_none=True,
+)
+def list_comments(
+    pid: int,
+    user: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    visible_post = _release_visible_post_query(db, allow_aggregated=True).filter(
+        Post.id == pid,
+    ).first()
+    if visible_post is None:
+        raise BizError("动态不存在", status_code=404)
+    query = db.query(Comment).filter(
+        Comment.post_id == pid,
+        Comment.moderation_status == VISIBLE_MODERATION_STATUS,
+    )
+    viewer_id = int(user.id) if user else None
+    hidden_authors = _blocked_user_ids(db, viewer_id) | _reported_target_ids(
+        db, viewer_id, "user"
+    )
+    if viewer_id and (
+        visible_post.user_id in hidden_authors
+        or pid in _reported_target_ids(db, viewer_id, "post")
+    ):
+        raise BizError("动态不存在", status_code=404)
+    if hidden_authors:
+        query = query.filter(Comment.user_id.notin_(hidden_authors))
+    reported_comments = _reported_target_ids(db, viewer_id, "comment")
+    if reported_comments:
+        query = query.filter(Comment.id.notin_(reported_comments))
+    items = query.order_by(
         Comment.created_at.desc()
     ).limit(50).all()
+    comment_authors = {
+        int(author.id): author
+        for author in db.query(User).filter(
+            User.id.in_({int(comment.user_id) for comment in items}),
+        ).all()
+    } if items else {}
     out = []
     for c in items:
-        u = db.query(User).filter(User.id == c.user_id).first()
+        author = comment_authors.get(int(c.user_id))
         # ``post_comments`` is authoritative metadata for create responses.
         # Keep the historical list-item shape unchanged instead of emitting
         # an unnecessary nullable field on every existing comment.
         d = CommentOut.model_validate(c).model_dump(exclude={"post_comments"})
-        d["author_name"] = u.username if u else "匿名"
+        d["author_name"] = safe_public_display_name(
+            author.username if author else None,
+        )
+        d["is_own"] = bool(user) and c.user_id == user.id
         out.append(d)
     return success(out)
 
@@ -648,16 +926,22 @@ def _created_comment_out(comment_id: int, post_id: int, db: Session) -> dict:
     if comment is None:
         raise BizError(_COMMENT_WRITE_CONFLICT_MESSAGE, status_code=409)
     post_comments = int(
-        db.query(func.count(Comment.id)).filter(Comment.post_id == post_id).scalar() or 0
+        db.query(func.count(Comment.id)).filter(
+            Comment.post_id == post_id,
+            Comment.moderation_status == VISIBLE_MODERATION_STATUS,
+        ).scalar() or 0
     )
     author = db.query(User).filter(User.id == comment.user_id).first()
     result = CommentOut.model_validate(comment).model_dump()
-    result["author_name"] = author.username if author else "匿名"
+    result["author_name"] = safe_public_display_name(
+        author.username if author else None,
+    )
     result["post_comments"] = post_comments
+    result["is_own"] = True
     return result
 
 
-@router.post("/posts/{pid}/comments")
+@router.post("/posts/{pid}/comments", response_model=CommentResponse)
 def create_comment(
     pid: int,
     data: CommentIn,
@@ -665,21 +949,32 @@ def create_comment(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    if not data.content:
-        raise BizError("评论内容不能为空")
+    content = validate_public_community_text(data.content, field_name="评论内容")
     user_id = int(user.id)
     client_request_id = str(data.client_request_id or "").strip() or None
     source_platform = normalize_platform(platform)
     _begin_serialized_comment_transaction(db)
 
-    if db.query(Post.id).filter(Post.id == pid).scalar() is None:
+    post = _release_visible_post_query(db, allow_aggregated=True).filter(
+        Post.id == pid,
+    ).first()
+    if post is None:
+        db.rollback()
+        raise BizError("动态不存在", status_code=404)
+    hidden_authors = _blocked_user_ids(db, user_id) | _reported_target_ids(
+        db, user_id, "user"
+    )
+    if post.user_id in hidden_authors:
+        db.rollback()
+        raise BizError("动态不存在", status_code=404)
+    if pid in _reported_target_ids(db, user_id, "post"):
         db.rollback()
         raise BizError("动态不存在", status_code=404)
 
     if client_request_id:
         existing = _find_comment_by_client_id(db, user_id, client_request_id)
         if existing:
-            if not _same_comment_intent(existing, post_id=pid, content=data.content):
+            if not _same_comment_intent(existing, post_id=pid, content=content):
                 db.rollback()
                 raise BizError(_COMMENT_REQUEST_CONFLICT_MESSAGE, status_code=409)
             comment_id = existing.id
@@ -690,11 +985,11 @@ def create_comment(
         db,
         post_id=pid,
         user_id=user_id,
-        content=data.content,
+        content=content,
         client_request_id=client_request_id,
         platform=source_platform,
     )
-    if not _same_comment_intent(comment, post_id=pid, content=data.content):
+    if not _same_comment_intent(comment, post_id=pid, content=content):
         db.rollback()
         raise BizError(_COMMENT_REQUEST_CONFLICT_MESSAGE, status_code=409)
 
@@ -761,6 +1056,19 @@ def _set_follow_state(
         raise BizError("不能关注自己")
     if db.query(User.id).filter(User.id == uid).scalar() is None:
         raise BizError("用户不存在", status_code=404)
+    if following and db.query(CommunityBlock.id).filter(
+        or_(
+            and_(
+                CommunityBlock.blocker_user_id == follower_id,
+                CommunityBlock.blocked_user_id == uid,
+            ),
+            and_(
+                CommunityBlock.blocker_user_id == uid,
+                CommunityBlock.blocked_user_id == follower_id,
+            ),
+        )
+    ).first():
+        raise BizError("无法关注已屏蔽的用户")
 
     if following:
         _insert_follow_if_missing(
@@ -797,6 +1105,287 @@ def toggle_follow(
     else:
         following = bool(data.following)
     return _set_follow_state(uid, user.id, following, db, platform)
+
+
+def _insert_block_if_missing(
+    db: Session,
+    *,
+    blocker_user_id: int,
+    blocked_user_id: int,
+    platform: str,
+) -> None:
+    values = {
+        "blocker_user_id": blocker_user_id,
+        "blocked_user_id": blocked_user_id,
+        "created_platform": normalize_platform(platform),
+    }
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        db.execute(sqlite_insert(CommunityBlock).values(**values).on_conflict_do_nothing(
+            index_elements=["blocker_user_id", "blocked_user_id"],
+        ))
+    elif dialect == "postgresql":
+        db.execute(postgresql_insert(CommunityBlock).values(**values).on_conflict_do_nothing(
+            index_elements=["blocker_user_id", "blocked_user_id"],
+        ))
+    elif db.query(CommunityBlock.id).filter(
+        CommunityBlock.blocker_user_id == blocker_user_id,
+        CommunityBlock.blocked_user_id == blocked_user_id,
+    ).first() is None:
+        try:
+            with db.begin_nested():
+                db.add(CommunityBlock(**values))
+                db.flush()
+        except IntegrityError:
+            pass
+
+
+@router.post("/users/{uid}/block")
+def set_user_block(
+    uid: int,
+    data: CommunityBlockStateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    user_id = int(user.id)
+    if uid == user_id:
+        raise BizError("不能屏蔽自己")
+    if db.query(User.id).filter(
+        User.id == uid,
+        User.account_status == "active",
+    ).scalar() is None:
+        raise BizError("用户不存在", status_code=404)
+    if data.blocked:
+        _insert_block_if_missing(
+            db,
+            blocker_user_id=user_id,
+            blocked_user_id=uid,
+            platform=platform,
+        )
+        db.execute(delete(Follow).where(or_(
+            and_(Follow.follower_id == user_id, Follow.following_id == uid),
+            and_(Follow.follower_id == uid, Follow.following_id == user_id),
+        )))
+    else:
+        db.execute(delete(CommunityBlock).where(
+            CommunityBlock.blocker_user_id == user_id,
+            CommunityBlock.blocked_user_id == uid,
+        ))
+    db.commit()
+    actual = db.query(CommunityBlock.id).filter(
+        CommunityBlock.blocker_user_id == user_id,
+        CommunityBlock.blocked_user_id == uid,
+    ).first() is not None
+    return success({"blocked": actual})
+
+
+_REPORT_WRITE_CONFLICT_MESSAGE = "举报正在提交，请稍后重试"
+
+
+def _begin_serialized_report_transaction(db: Session) -> None:
+    """Serialize SQLite reports; PostgreSQL uses a per-target row lock below."""
+
+    if db.get_bind().dialect.name != "sqlite":
+        return
+    try:
+        if db.in_transaction():
+            db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    except OperationalError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if "locked" in message or "busy" in message:
+            raise BizError(_REPORT_WRITE_CONFLICT_MESSAGE, status_code=409) from exc
+        raise
+
+
+def _report_target(
+    db: Session,
+    target_type: str,
+    target_id: int,
+    *,
+    lock_for_update: bool = False,
+):
+    if target_type == "post":
+        query = db.query(Post).filter(
+            Post.id == target_id,
+            Post.moderation_status.in_(("visible", "pending_review")),
+        )
+        target = query.with_for_update().first() if lock_for_update else query.first()
+        return target, target.user_id if target else None
+    if target_type == "comment":
+        query = db.query(Comment).filter(
+            Comment.id == target_id,
+            Comment.moderation_status.in_(("visible", "pending_review")),
+        )
+        target = query.with_for_update().first() if lock_for_update else query.first()
+        return target, target.user_id if target else None
+    query = db.query(User).filter(
+        User.id == target_id,
+        User.account_status == "active",
+    )
+    target = query.with_for_update().first() if lock_for_update else query.first()
+    return target, target.id if target else None
+
+
+def _insert_report_if_missing(
+    db: Session,
+    *,
+    reporter_user_id: int,
+    data: CommunityReportIn,
+    platform: str,
+) -> None:
+    values = {
+        "reporter_user_id": reporter_user_id,
+        "target_type": data.target_type,
+        "target_id": data.target_id,
+        "reason": data.reason,
+        "details": data.details.strip() if data.details else None,
+        "created_platform": normalize_platform(platform),
+    }
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        db.execute(sqlite_insert(CommunityReport).values(**values).on_conflict_do_nothing(
+            index_elements=["reporter_user_id", "target_type", "target_id"],
+        ))
+    elif dialect == "postgresql":
+        db.execute(postgresql_insert(CommunityReport).values(**values).on_conflict_do_nothing(
+            index_elements=["reporter_user_id", "target_type", "target_id"],
+        ))
+    elif db.query(CommunityReport.id).filter(
+        CommunityReport.reporter_user_id == reporter_user_id,
+        CommunityReport.target_type == data.target_type,
+        CommunityReport.target_id == data.target_id,
+    ).first() is None:
+        try:
+            with db.begin_nested():
+                db.add(CommunityReport(**values))
+                db.flush()
+        except IntegrityError:
+            pass
+
+
+@router.post("/reports")
+def report_community_content(
+    data: CommunityReportIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    user_id = int(user.id)
+    _begin_serialized_report_transaction(db)
+    target, author_id = _report_target(
+        db,
+        data.target_type,
+        data.target_id,
+        lock_for_update=True,
+    )
+    if target is None or author_id is None:
+        db.rollback()
+        raise BizError("举报对象不存在", status_code=404)
+    if int(author_id) == user_id:
+        db.rollback()
+        raise BizError("不能举报自己的内容或账号")
+    _insert_report_if_missing(
+        db,
+        reporter_user_id=user_id,
+        data=data,
+        platform=platform,
+    )
+    report = db.query(CommunityReport).filter(
+        CommunityReport.reporter_user_id == user_id,
+        CommunityReport.target_type == data.target_type,
+        CommunityReport.target_id == data.target_id,
+    ).first()
+    if report is None:
+        db.rollback()
+        raise BizError(_REPORT_WRITE_CONFLICT_MESSAGE, status_code=409)
+
+    if data.target_type in {"post", "comment"}:
+        pending_count = db.query(func.count(CommunityReport.id)).filter(
+            CommunityReport.target_type == data.target_type,
+            CommunityReport.target_id == data.target_id,
+            CommunityReport.status == "pending",
+        ).scalar() or 0
+        if pending_count >= AUTO_HIDE_REPORT_THRESHOLD:
+            target.moderation_status = "pending_review"
+            target.moderation_reason = "multiple_user_reports"
+            target.moderated_at = _utcnow()
+    db.commit()
+    return success({
+        "report_id": report.id,
+        "status": report.status,
+        "hidden_for_reporter": True,
+    })
+
+
+@router.delete("/comments/{comment_id}")
+def delete_own_comment(
+    comment_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if comment is None:
+        # DELETE is idempotent and does not disclose whether another user once
+        # owned this identifier. Any existing report remains as an audit row
+        # whose target is explicitly shown as deleted in the admin queue.
+        return success({"deleted": True})
+    if comment.user_id != user.id:
+        raise BizError("评论不存在", status_code=404)
+    post_id = int(comment.post_id)
+    db.delete(comment)
+    db.flush()
+    visible_comment_count = int(db.query(func.count(Comment.id)).filter(
+        Comment.post_id == post_id,
+        Comment.moderation_status == VISIBLE_MODERATION_STATUS,
+    ).scalar() or 0)
+    db.execute(update(Post).where(Post.id == post_id).values(
+        comments=visible_comment_count,
+        last_modified_platform=normalize_platform(platform),
+    ))
+    db.commit()
+    return success({"deleted": True})
+
+
+@router.delete("/posts/{pid}")
+def delete_own_post(
+    pid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    post = db.query(Post).filter(Post.id == pid).first()
+    if post is None or post.user_id != user.id:
+        raise BizError("动态不存在", status_code=404)
+    if post.moderation_status != "deleted":
+        try:
+            media_urls = json.loads(post.images or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            media_urls = []
+        media_items = [
+            (url, "image") for url in media_urls if isinstance(url, str)
+        ]
+        if post.video:
+            media_items.append((post.video, "video"))
+        for media_url, media_kind in media_items:
+            try:
+                _media_path_from_url(media_url, int(user.id), media_kind).unlink(missing_ok=True)
+            except (BizError, OSError):
+                pass
+        post.content = "[内容已删除]"
+        post.images = None
+        post.video = None
+        post.video_duration = None
+        post.topic = None
+        post.moderation_status = "deleted"
+        post.moderation_reason = "author_deleted"
+        post.moderated_at = _utcnow()
+        post.last_modified_platform = normalize_platform(platform)
+    db.commit()
+    return success({"deleted": True})
 
 
 @router.get("/sources")

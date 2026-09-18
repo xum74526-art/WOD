@@ -91,6 +91,23 @@ class ProfileSecurityTests(unittest.TestCase):
         self.assertEqual(result["data"]["phone"], "13900000001")
         self.assertEqual(result["data"]["username"], "更新后的用户名")
 
+    def test_profile_update_filters_and_normalizes_the_public_username(self):
+        with self.assertRaisesRegex(BizError, "不适合公开发布"):
+            user_router.update_profile(
+                ProfileUpdateIn(username="出售毒品"),
+                self.user,
+                self.db,
+            )
+        self.db.refresh(self.user)
+        self.assertEqual(self.user.username, "资料测试用户")
+
+        result = user_router.update_profile(
+            ProfileUpdateIn(username="  安全昵称  "),
+            self.user,
+            self.db,
+        )
+        self.assertEqual(result["data"]["username"], "安全昵称")
+
     def test_kai_only_account_cannot_fake_phone_binding_in_profile(self):
         kai_user = User(
             phone="__kai_pending_42",

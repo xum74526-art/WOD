@@ -17,6 +17,7 @@
           <view v-if="!post.is_own" class="fbtn" :class="{ following: post.is_following }" @tap="onFollow">
             <text>{{ t(post.is_following ? '已关注' : '+ 关注') }}</text>
           </view>
+          <view class="more-btn" role="button" @tap="onPostMenu">•••</view>
         </view>
         <view v-if="isAutoPost(post)" class="source-meta">
           <text class="auto-badge">{{ t('autoNews') }}</text>
@@ -96,7 +97,10 @@
         <view class="cbody">
           <text class="cname">{{ authorName(c.author_name) }}</text>
           <text class="ctext">{{ communityText(c.content) }}</text>
-          <text class="ctime">{{ formatDate(c.created_at) }}</text>
+          <view class="cfooter">
+            <text class="ctime">{{ formatDate(c.created_at) }}</text>
+            <text class="comment-action" role="button" @tap="onCommentMenu(c)">{{ t(c.is_own ? 'communityDeleteAction' : 'communityReportAction') }}</text>
+          </view>
         </view>
       </view>
       <view class="bottom-spacer" />
@@ -111,7 +115,21 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getPostDetail, getComments, createComment, setFollow, setLike, type PostItem, type CommentItem } from '@/api/community'
+import {
+  createComment,
+  deleteCommunityComment,
+  deleteCommunityPost,
+  getComments,
+  getPostDetail,
+  reportCommunityContent,
+  setFollow,
+  setLike,
+  setUserBlock,
+  type CommunityReportReason,
+  type CommunityReportTarget,
+  type CommentItem,
+  type PostItem,
+} from '@/api/community'
 import { requestTrustedPublicJson } from '@/api/request'
 import { formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
@@ -138,6 +156,112 @@ const pendingCommentIntent = ref<ClientRequestIntent | null>(null)
 let likeInFlight = false
 let followInFlight = false
 let commentInFlight = false
+let safetyActionInFlight = false
+
+const reportReasons: Array<{ key: string; value: CommunityReportReason }> = [
+  { key: 'communityReportReasonIllegal', value: 'illegal' },
+  { key: 'communityReportReasonHarassment', value: 'harassment' },
+  { key: 'communityReportReasonHate', value: 'hate' },
+  { key: 'communityReportReasonSexual', value: 'sexual' },
+  { key: 'communityReportReasonViolence', value: 'violence' },
+  { key: 'communityReportReasonScam', value: 'scam' },
+  { key: 'communityReportReasonPrivacy', value: 'privacy' },
+  { key: 'communityReportReasonCopyright', value: 'copyright' },
+  { key: 'communityReportReasonSpam', value: 'spam' },
+  { key: 'communityReportReasonOther', value: 'other' },
+]
+
+function chooseAction(itemList: string[]): Promise<number> {
+  return new Promise(resolve => {
+    uni.showActionSheet({
+      itemList,
+      success: result => resolve(result.tapIndex),
+      fail: () => resolve(-1),
+    })
+  })
+}
+
+function confirmAction(title: string, content: string): Promise<boolean> {
+  return new Promise(resolve => {
+    uni.showModal({
+      title,
+      content,
+      confirmText: t('confirm'),
+      cancelText: t('cancel'),
+      success: result => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+async function reportTarget(targetType: CommunityReportTarget, targetId: number): Promise<boolean> {
+  const reasonIndex = await chooseAction(reportReasons.map(item => t(item.key)))
+  if (reasonIndex < 0) return false
+  const reason = reportReasons[reasonIndex]
+  if (!reason) return false
+  await reportCommunityContent(targetType, targetId, reason.value)
+  uni.showToast({ title: t('communityReportSubmitted'), icon: 'success' })
+  return true
+}
+
+async function blockAuthor(userId: number): Promise<boolean> {
+  if (!await confirmAction(t('communityBlockUser'), t('communityBlockHint'))) return false
+  await setUserBlock(userId, true)
+  uni.showToast({ title: t('communityUserBlocked'), icon: 'success' })
+  return true
+}
+
+async function onPostMenu() {
+  const currentPost = post.value
+  if (!currentPost || safetyActionInFlight) return
+  safetyActionInFlight = true
+  try {
+    if (currentPost.is_own) {
+      if (!await confirmAction(t('communityDeletePost'), t('communityDeleteIrreversible'))) return
+      await deleteCommunityPost(currentPost.id)
+      uni.showToast({ title: t('communityPostDeleted'), icon: 'success' })
+      setTimeout(() => uni.navigateBack(), 350)
+      return
+    }
+    const index = await chooseAction([t('communityReportPost'), t('communityReportUser'), t('communityBlockUser')])
+    if (index === 0) {
+      if (await reportTarget('post', currentPost.id)) setTimeout(() => uni.navigateBack(), 350)
+    } else if (index === 1) {
+      if (await reportTarget('user', currentPost.user_id)) setTimeout(() => uni.navigateBack(), 350)
+    } else if (index === 2 && await blockAuthor(currentPost.user_id)) {
+      setTimeout(() => uni.navigateBack(), 350)
+    }
+  } catch {
+    uni.showToast({ title: t('communityActionFailed'), icon: 'none' })
+  } finally {
+    safetyActionInFlight = false
+  }
+}
+
+async function onCommentMenu(comment: CommentItem) {
+  if (safetyActionInFlight) return
+  safetyActionInFlight = true
+  try {
+    if (comment.is_own) {
+      if (!await confirmAction(t('communityDeleteComment'), t('communityDeleteIrreversible'))) return
+      await deleteCommunityComment(comment.id)
+      comments.value = comments.value.filter(item => item.id !== comment.id)
+      if (post.value) post.value.comments = Math.max(0, post.value.comments - 1)
+      uni.showToast({ title: t('communityCommentDeleted'), icon: 'success' })
+      return
+    }
+    const index = await chooseAction([t('communityReportComment'), t('communityReportUser'), t('communityBlockUser')])
+    let shouldHide = false
+    if (index === 0) shouldHide = await reportTarget('comment', comment.id)
+    else if (index === 1) shouldHide = await reportTarget('user', comment.user_id)
+    else if (index === 2) shouldHide = await blockAuthor(comment.user_id)
+    if (shouldHide) comments.value = comments.value.filter(item => item.id !== comment.id)
+  } catch {
+    uni.showToast({ title: t('communityActionFailed'), icon: 'none' })
+  } finally {
+    safetyActionInFlight = false
+  }
+}
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)
@@ -346,6 +470,7 @@ async function onComment() {
 .dtime { color: var(--text-dim); font-size: 22rpx; display: block; margin-top: 4rpx; }
 .fbtn { padding: 8rpx 24rpx; border-radius: 32rpx; background: linear-gradient(135deg, var(--primary), var(--primary)); color: #fff; font-size: 22rpx; font-weight: 600; flex-shrink: 0; }
 .fbtn.following { background: var(--bg); color: var(--text-sub); border: 1rpx solid var(--border); }
+.more-btn { min-width: 58rpx; min-height: 58rpx; margin-left: 10rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 30rpx; font-weight: 700; border-radius: 29rpx; }
 .dtext { color: var(--text); font-size: 28rpx; line-height: 1.6; display: block; margin-bottom: 20rpx; }
 .post-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8rpx; margin-bottom: 20rpx; }
 .post-images.single { grid-template-columns: 1fr; }
@@ -378,7 +503,9 @@ async function onComment() {
 .cbody { flex: 1; }
 .cname { color: var(--text); font-size: 26rpx; font-weight: 600; display: block; }
 .ctext { color: var(--text); font-size: 26rpx; margin-top: 8rpx; display: block; line-height: 1.5; }
-.ctime { color: var(--text-dim); font-size: 20rpx; margin-top: 8rpx; display: block; }
+.cfooter { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin-top: 8rpx; }
+.ctime { color: var(--text-dim); font-size: 20rpx; display: block; }
+.comment-action { min-height: 52rpx; display: flex; align-items: center; color: var(--primary); font-size: 22rpx; font-weight: 600; }
 .bottom-spacer { height: calc(120rpx + var(--safe-bottom)); }
 .input-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; gap: 16rpx; padding: 16rpx 32rpx calc(16rpx + var(--safe-bottom)); background: var(--card); border-top: 1rpx solid var(--border); box-shadow: 0 -4rpx 16rpx var(--shadow); }
 .cinput { flex: 1; height: 72rpx; line-height: 72rpx; background: var(--bg); border-radius: var(--radius); padding: 0 24rpx; color: var(--text); font-size: 28rpx; }

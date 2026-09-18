@@ -48,8 +48,8 @@ const privacySections: LegalSection[] = [
         en: "Email recovery: the recovery email you bind, verification delivery and validation state, and short-lived verification and reset tickets. The email is used only for account recovery and necessary security notices.",
       },
       {
-        zh: "KAI 身份关联：你主动发起关联时，由关联身份服务返回的主体标识、关联结果和一次性短时票据；我们不会索取或保存你的外部 KAI 密码。",
-        en: "KAI identity linking: when you initiate linking, we process the subject identifier, linking result and one-time short-lived ticket returned by the linked identity service. We do not request or store your external KAI password.",
+        zh: "KAI 身份关联：你主动登录或发起关联时，由关联身份服务返回主体标识、关联结果、一次性短时票据，以及授权范围内的邮箱、姓名和头像，用于登录、身份关联及你确认的资料展示；我们不会索取或保存你的外部 KAI 密码。",
+        en: "KAI identity linking: when you initiate sign-in or linking, we process the subject identifier, linking result, one-time short-lived ticket, and the email address, name, and avatar returned within the authorized scope. We use them for sign-in, identity linking, and profile details you confirm. We do not request or store your external KAI password.",
       },
       {
         zh: "实名核验：姓名、身份证件号码、证件正反面图像、核验结果和审核状态。当前文字识别由平台自管环境中的本地 OCR（Tesseract）完成，不向第三方 OCR 服务传送证件图像。",
@@ -104,8 +104,8 @@ const privacySections: LegalSection[] = [
         en: "Network access is required to sign in, obtain market data, submit requests, load news and synchronise service status.",
       },
       {
-        zh: "相机、相册、图片或视频访问仅在你主动拍摄、选择头像、上传证件或发布媒体内容时请求；麦克风仅在你主动录制含声音的视频时使用。拒绝后仅相应上传或录制功能不可用。",
-        en: "Camera, photo-library, image or video access is requested only when you take a photo, choose an avatar, upload a document or publish media. Microphone access is used only when you record a video with sound. Refusal affects only the relevant upload or recording feature.",
+        zh: "相机、相册或图片访问仅在你主动拍摄、选择头像或上传身份认证资料时请求。当前审核版本关闭社区媒体发布且不申请麦克风权限；若未来启用含声音的视频录制，我们会先更新权限说明和适用规则。拒绝后仅相应拍摄或上传功能不可用。",
+        en: "Camera, photo-library, or image access is requested only when you take a photo, choose an avatar, or upload identity-verification material. The current review build disables community media publishing and does not request microphone access. If video recording with sound is enabled later, we will first update the permission notice and applicable terms. Refusal affects only the relevant capture or upload feature.",
       },
       {
         zh: "算力星图当前不以提供核心服务为由申请通讯录或精确位置权限。你可在系统设置中关闭已授予权限。",
@@ -132,8 +132,8 @@ const privacySections: LegalSection[] = [
         en: "DCloud uni-app base runtime (developer: Digital Paradise (Beijing) Network Technology Co., Ltd.): after you consent to this policy, it provides app runtime, rendering, networking, media playback, compatibility and fault analysis. It may process device brand and model, operating system, app version, network type, IP address, User-Agent and runtime logs, and packaged components may involve OAID. It is not used for advertising or personalised recommendations in this product. Future disclosure will follow verified package scans and the SDK inventory.",
       },
       {
-        zh: "KAI 关联身份服务：仅在你主动选择 KAI 身份登录或绑定时处理主体标识、授权状态和一次性票据，不接收外部账号密码。",
-        en: "KAI linked-identity service: processes the subject identifier, authorisation state and one-time ticket only when you choose KAI sign-in or linking, and does not provide us with the external account password.",
+        zh: "KAI 关联身份服务：仅在你主动选择 KAI 身份登录或绑定时处理主体标识、授权状态、一次性票据，以及授权范围内返回的邮箱、姓名和头像，不接收外部账号密码。",
+        en: "KAI linked-identity service: processes the subject identifier, authorisation state, one-time ticket, and the email address, name, and avatar returned within the authorized scope only when you choose KAI sign-in or linking, and does not provide us with the external account password.",
       },
       {
         zh: "哔哩哔哩视频服务：当你打开来源为哔哩哔哩的资讯视频时，播放请求会向其服务发送视频标识、IP 地址、浏览器或设备请求信息；其处理同时受其隐私规则约束。",
@@ -168,12 +168,12 @@ const privacySections: LegalSection[] = [
     title: { zh: "存储地点与跨境处理", en: "Storage location and cross-border processing" },
     paragraphs: [
       {
-        zh: "当前算力星图核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。当中国大陆用户使用服务时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。",
-        en: "算力星图's core API, database and uploaded files are currently deployed in Alibaba Cloud's Hong Kong region (cn-hongkong). When a user in mainland China uses the service, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfilment, security, troubleshooting and legally required retention.",
+        zh: "当前算力星图核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。所有地区的用户使用业务联网功能时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。",
+        en: "算力星图's core API, database and uploaded files are currently deployed in Alibaba Cloud's Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfilment, security, troubleshooting and legally required retention.",
       },
       {
-        zh: "该中国香港服务环境由本政策所列运营主体控制，云基础设施服务商为阿里云；处理目的、方式和信息种类限于本政策所列范围。你可通过账号功能或“联系我们：+86 4001082026”向运营主体行使查询、更正、复制、删除、限制处理和撤回同意等权利。对于依法构成向境外提供个人信息的场景，我们将在传输前完成适用的个人信息保护影响评估和其他法定程序，并通过独立勾选或弹窗取得单独同意；本政策的一般同意不替代该单独同意。",
-        en: "The Hong Kong service environment is controlled by the operator named in this Policy, with Alibaba Cloud providing the cloud infrastructure. Purposes, methods and data categories are limited to those described here. You may exercise access, correction, copy, deletion, restriction and consent-withdrawal rights through account features or by contacting the operator at +86 4001082026. Where the transfer is legally treated as an overseas provision of personal information, we will complete the applicable personal-information protection impact assessment and other required procedure before transfer and obtain separate consent through an independent checkbox or prompt; general acceptance of this Policy does not replace that separate consent.",
+        zh: "该中国香港服务环境由本政策所列运营主体控制，云基础设施服务商为阿里云；处理目的、方式和信息种类限于本政策所列范围。移动客户端无论选择中国大陆或其他服务地区，都会在业务网络请求前通过独立勾选要求你明确确认上述香港存储、处理与必要传输，所选地区仍保存在本机用于适用规则判断。你可通过账号功能或“联系我们：+86 4001082026”向运营主体行使查询、更正、复制、删除、限制处理和撤回同意等权利。对于依法构成向境外提供个人信息的场景，我们将在传输前完成适用的个人信息保护影响评估和其他法定程序并取得单独同意；本政策的一般同意不替代该单独同意。",
+        en: "The Hong Kong service environment is controlled by the operator named in this Policy, with Alibaba Cloud providing the cloud infrastructure. Purposes, methods and data categories are limited to those described here. In the mobile apps, whether you select mainland China or another service region, an independent checkbox requires your explicit confirmation of that Hong Kong storage, processing and necessary transfer before the app starts its business network requests; the region choice remains stored on your device to determine applicable rules. You may exercise access, correction, copy, deletion, restriction and consent-withdrawal rights through account features or by contacting the operator at +86 4001082026. Where the transfer is legally treated as an overseas provision of personal information, we will complete the applicable personal-information protection impact assessment and other required procedure before transfer and obtain separate consent; general acceptance of this Policy does not replace that separate consent.",
       },
     ],
   },

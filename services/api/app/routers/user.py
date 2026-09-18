@@ -18,6 +18,7 @@ from app.schemas.user import ChangePasswordIn, ProfileUpdateIn, UserOut
 from app.utils.response import BizError, success
 from app.services.account_lifecycle import active_user_exists, lock_active_user
 from app.services.account_recovery import change_password_and_revoke_other_sessions
+from app.services.community_safety import validate_public_display_name
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -73,8 +74,8 @@ def update_profile(data: ProfileUpdateIn, user: User = Depends(get_current_user)
         # profile edit silently replace a login identifier. Kai-only accounts
         # will use a future, dedicated verified binding flow.
         raise BizError("修改手机号需先完成验证码验证")
-    if data.username:
-        user.username = data.username
+    if data.username is not None:
+        user.username = validate_public_display_name(data.username)
     db.commit()
     db.refresh(user)
     return success(UserOut.model_validate(user).model_dump())

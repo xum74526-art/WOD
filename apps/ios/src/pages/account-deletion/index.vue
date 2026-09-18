@@ -53,17 +53,30 @@
             <text class="heading">{{ t('deletionAutomaticActions') }}</text>
             <text v-for="action in state.eligibility.automatic_actions" :key="action" class="paragraph">{{ tr(action) }}</text>
           </view>
-          <view v-if="state.eligibility?.eligible && !state.blockers.length" class="card section">
+          <view v-if="state.stage === 'verified' && !state.hasSubmitted" class="card section">
+            <text class="heading">{{ t('deletionIdentityVerified') }}</text>
+            <text class="paragraph">{{ t('deletionIdentityVerifiedHint') }}</text>
             <checkbox-group @change="onAcknowledgement">
               <label class="acknowledgement">
                 <checkbox value="understood" :checked="acknowledged" :disabled="state.busy" color="#18AFC4" />
                 <text>{{ t('deletionAcknowledgement') }}</text>
               </label>
             </checkbox-group>
-            <text class="field-label">{{ t('deletionPasswordLabel') }}</text>
-            <input v-model="password" class="password" password :maxlength="128" :disabled="state.busy" :placeholder="t('deletionPasswordPlaceholder')" />
-            <text class="paragraph muted">{{ t('deletionPasswordHint') }}</text>
-            <button class="action danger" :disabled="!canVerify" @tap="verifyPassword">{{ t(state.busy ? 'loading' : 'deletionVerifyContinue') }}</button>
+            <button class="action danger" :disabled="state.busy || !acknowledged" @tap="showConfirm = true">{{ t('deletionContinueFinalConfirm') }}</button>
+          </view>
+          <view v-else-if="state.eligibility?.eligible && !state.blockers.length" class="card section">
+            <template v-if="supportsPasswordVerification">
+              <text class="field-label">{{ t('deletionPasswordLabel') }}</text>
+              <input v-model="password" class="password" password :maxlength="128" :disabled="state.busy" :placeholder="t('deletionPasswordPlaceholder')" />
+              <text class="paragraph muted">{{ t('deletionPasswordHint') }}</text>
+              <button class="action danger" :disabled="!canVerify" @tap="verifyPassword">{{ t(state.busy ? 'loading' : 'deletionVerifyContinue') }}</button>
+            </template>
+            <template v-if="supportsKaiVerification">
+              <text class="field-label">{{ t('deletionKaiVerifyLabel') }}</text>
+              <text class="paragraph muted">{{ t('deletionKaiVerifyHint') }}</text>
+              <button class="secondary" :disabled="state.busy || kaiAuthorizing" @tap="beginKaiVerification">{{ t(kaiAuthorizing ? 'loading' : 'deletionKaiVerifyContinue') }}</button>
+            </template>
+            <text v-if="!supportsPasswordVerification && !supportsKaiVerification" class="paragraph">{{ t('deletionNoVerificationMethod') }}</text>
           </view>
         </template>
       </template>
@@ -79,7 +92,7 @@ import { computed, reactive, ref } from 'vue'
 import { onBackPress, onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import AppNavBar from '@/components/AppNavBar.vue'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
-import { getDeletionEligibility, getDeletionStatus, submitAccountDeletion, verifyDeletionPassword } from '@/api/account-deletion'
+import { getDeletionEligibility, getDeletionStatus, startDeletionKaiReauth, submitAccountDeletion, verifyDeletionKai, verifyDeletionPassword } from '@/api/account-deletion'
 import { ApiRequestError } from '@/api/request'
 import { createDeletionController, createDeletionState } from '@/utils/account-deletion'
 import { clearDeletionReceipt, consumeDeletionCompletion, readDeletionReceipt, rememberDeletionCompletion, saveDeletionReceipt } from '@/utils/account-deletion-receipt'
@@ -88,6 +101,7 @@ import { navigateTo as nav } from '@/utils/nav'
 import { useUserStore } from '@/store/user'
 import { useNotificationStore } from '@/store/notification'
 import { useI18nStore } from '@/store/i18n'
+import { beginDeletionKaiReauth, cancelDeletionKaiReauth, takePendingDeletionKaiCallback } from '@/utils/account-deletion-kai-callback'
 
 const { t, tr } = useI18nStore()
 const userStore = useUserStore()
@@ -98,15 +112,18 @@ const showConfirm = ref(false)
 const error = ref('')
 const canReverify = ref(false)
 const receiptExpired = ref(false)
+const kaiAuthorizing = ref(false)
 const receiptView = computed(() => ['uncertain', 'processing', 'completed'].includes(state.stage) || (state.hasSubmitted && state.stage === 'verified') || (state.hasSubmitted && state.stage === 'blocked' && !userStore.isLogin))
-const canVerify = computed(() => !state.busy && acknowledged.value && !!password.value && !!state.eligibility?.eligible)
+const supportsPasswordVerification = computed(() => state.eligibility?.verification_methods.includes('password') === true)
+const supportsKaiVerification = computed(() => state.eligibility?.verification_methods.includes('kai') === true)
+const canVerify = computed(() => !state.busy && !!password.value && !!state.eligibility?.eligible)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let polls = 0
 let active = true
 let needsPageReset = false
 
 const controller = createDeletionController({
-  state, eligibility: getDeletionEligibility, verify: verifyDeletionPassword,
+  state, eligibility: getDeletionEligibility, verify: verifyDeletionPassword, verifyKai: verifyDeletionKai,
   submit: submitAccountDeletion, status: getDeletionStatus,
   saveReceipt: saveDeletionReceipt, clearReceipt: clearDeletionReceipt,
   ownerUserId: () => userStore.userInfo?.id,
@@ -146,9 +163,54 @@ async function verifyPassword() {
   error.value = ''
   try {
     await controller.verify(password.value)
-    showConfirm.value = state.stage === 'verified'
+    acknowledged.value = false
+    showConfirm.value = false
   } catch (cause) { showError(cause) }
   finally { password.value = '' }
+}
+function openKaiAuthorization(url: string) {
+  let opened = false
+  // #ifdef H5
+  window.location.assign(url)
+  opened = true
+  // #endif
+  // #ifdef APP-PLUS
+  plus.runtime.openURL(url)
+  opened = true
+  // #endif
+  return opened
+}
+async function beginKaiVerification() {
+  if (state.busy || kaiAuthorizing.value || !supportsKaiVerification.value) return
+  error.value = ''
+  kaiAuthorizing.value = true
+  try {
+    const result = await startDeletionKaiReauth()
+    beginDeletionKaiReauth()
+    if (!openKaiAuthorization(result.authorization_url)) {
+      cancelDeletionKaiReauth()
+      throw new Error('deletionKaiVerificationFailed')
+    }
+  } catch (cause) {
+    cancelDeletionKaiReauth()
+    showError(cause)
+  } finally { kaiAuthorizing.value = false }
+}
+async function consumeKaiVerification() {
+  const callback = takePendingDeletionKaiCallback()
+  if (!callback) return false
+  if (callback.error) {
+    error.value = t(callback.error === 'access_denied' ? 'deletionKaiVerificationCancelled' : 'deletionKaiVerificationFailed')
+    return true
+  }
+  if (!callback.token) return true
+  error.value = ''
+  try {
+    await controller.verifyKai(callback.token)
+    acknowledged.value = false
+    showConfirm.value = false
+  } catch (cause) { showError(cause) }
+  return true
 }
 async function confirmDeletion() {
   if (!showConfirm.value || state.busy || !acknowledged.value) return
@@ -220,6 +282,7 @@ function schedulePoll() {
 }
 function goLogin() { uni.reLaunch({ url: '/pages/login/index' }) }
 onLoad(() => {
+  uni.$on('wod-deletion-kai-callback-ready', consumeKaiVerification)
   const completed = consumeDeletionCompletion()
   if (completed) {
     state.stage = 'completed'
@@ -228,11 +291,18 @@ onLoad(() => {
   }
   const receipt = readDeletionReceipt()
   if (receipt) { controller.restore(receipt); void checkStatus() }
-  else if (userStore.isLogin) void refreshEligibility()
+  else {
+    // A cold-start callback already carries a one-time proof. Exchange it
+    // before loading eligibility: both operations share the controller busy
+    // guard, and taking the proof first must never discard it behind a GET.
+    void consumeKaiVerification().then((handled) => {
+      if (!handled && userStore.isLogin) void refreshEligibility()
+    })
+  }
 })
-onShow(() => { active = true; schedulePoll() })
+onShow(() => { active = true; void consumeKaiVerification(); schedulePoll() })
 onHide(() => { active = false; password.value = ''; showConfirm.value = false; stopPoll() })
-onUnload(() => { active = false; password.value = ''; state.ticket = ''; stopPoll() })
+onUnload(() => { active = false; password.value = ''; state.ticket = ''; stopPoll(); uni.$off('wod-deletion-kai-callback-ready', consumeKaiVerification) })
 onBackPress(() => {
   if (!receiptView.value) return false
   goLogin()

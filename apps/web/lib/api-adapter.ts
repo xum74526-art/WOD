@@ -829,16 +829,19 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   }
 
   if (path.startsWith("canonical/user/account-deletion")) {
-    const matched = path.match(/^canonical\/user\/account-deletion\/(eligibility|verify|submit|status)$/);
+    const matched = path.match(/^canonical\/user\/account-deletion\/(eligibility|verify|kai\/start|kai\/verify|submit|status)$/);
     if (!matched) return apiError("注销接口不存在", 404);
     const operation = matched[1] as AccountDeletionOperation;
     if (request.method !== accountDeletionMethods[operation]) return apiError("此注销接口不支持该请求方法", 405);
     if (request.nextUrl.search) return apiError("注销验证信息只能通过请求正文提交", 400);
-    const result = await upstream(request, `/api/user/account-deletion/${operation}`, accountDeletionProxyOptions(operation, body));
+    const proxyBody = operation === "kai/start"
+      ? { ...body, return_url: `${publicOrigin(request)}/account-deletion` }
+      : body;
+    const result = await upstream(request, `/api/user/account-deletion/${operation}`, accountDeletionProxyOptions(operation, proxyBody));
     if (!result.ok) return upstreamFailure(result);
     const response = apiSuccess(result.body.data, { source: "canonical-api" });
     const currentBearer = request.cookies.get(TOKEN_COOKIE)?.value;
-    if (operation === "verify" && currentBearer && typeof object(result.body.data).ticket === "string") {
+    if ((operation === "verify" || operation === "kai/verify") && currentBearer && typeof object(result.body.data).ticket === "string") {
       response.cookies.set(DELETION_SESSION_COOKIE, deletionSessionMarker(text(object(result.body.data).ticket), currentBearer), {
         httpOnly: true, sameSite: "strict", secure: requestIsHttps(request), path: "/", maxAge: 7 * 24 * 60 * 60,
       });

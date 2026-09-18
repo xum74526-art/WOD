@@ -1,5 +1,10 @@
 export interface DeletionBlocker { code: string; message: string; count: number }
-export interface DeletionEligibility { eligible: boolean; blockers: DeletionBlocker[]; automatic_actions: string[] }
+export interface DeletionEligibility {
+  eligible: boolean
+  blockers: DeletionBlocker[]
+  automatic_actions: string[]
+  verification_methods: Array<'password' | 'kai'>
+}
 export interface DeletionVerification { ticket: string; expires_at: string }
 export interface DeletionResult {
   status: 'verified' | 'blocked' | 'processing' | 'completed'
@@ -42,6 +47,7 @@ export function createDeletionController(options: {
   state: ReturnType<typeof createDeletionState>
   eligibility: () => Promise<DeletionEligibility>
   verify: (password: string) => Promise<DeletionVerification>
+  verifyKai?: (token: string) => Promise<DeletionVerification>
   submit: (ticket: string) => Promise<DeletionResult>
   status: (ticket: string) => Promise<DeletionResult>
   saveReceipt: (receipt: DeletionReceipt) => void
@@ -88,6 +94,18 @@ export function createDeletionController(options: {
     } finally { state.busy = false }
   }
 
+  async function verifyKai(token: string) {
+    if (state.busy || !token || !options.verifyKai) return
+    state.busy = true
+    try {
+      state.ownerUserId = options.ownerUserId?.()
+      const result = await options.verifyKai(token)
+      state.ticket = result.ticket
+      state.verificationExpiresAt = Date.parse(result.expires_at)
+      state.stage = 'verified'
+    } finally { state.busy = false }
+  }
+
   async function submit() {
     if (state.busy || state.stage !== 'verified' || !state.ticket) return
     // On restart the receipt contains no login/profile data or verification
@@ -124,5 +142,5 @@ export function createDeletionController(options: {
     state.verificationExpiresAt = 0
   }
 
-  return { checkEligibility, verify, submit, checkStatus, restore }
+  return { checkEligibility, verify, verifyKai, submit, checkStatus, restore }
 }

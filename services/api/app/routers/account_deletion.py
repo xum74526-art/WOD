@@ -6,15 +6,17 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import AuthContext, get_current_auth_context, get_current_user
 from app.core.rate_limit import SlidingWindowRateLimiter
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.account_deletion import (
+    AuthorizationResponse, DeletionKaiProofIn, DeletionKaiStartIn,
     DeletionPasswordIn, DeletionResponse, DeletionSubmitIn, DeletionTicketIn,
     EligibilityResponse, TicketResponse,
 )
 from app.services import account_deletion as deletion
+from app.services import kai_auth
 from app.utils.response import BizError, error, success
 
 
@@ -37,6 +39,7 @@ class DeletionRoute(APIRoute):
                 message = exc.detail if isinstance(exc.detail, str) else "请求错误"
                 response = JSONResponse(status_code=exc.status_code, content=error(message), headers=exc.headers)
             response.headers["Cache-Control"] = "no-store"
+            response.headers["Referrer-Policy"] = "no-referrer"
             return response
 
         return handle
@@ -44,6 +47,7 @@ class DeletionRoute(APIRoute):
 
 def no_store(response: Response):
     response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
 
 
 router = APIRouter(prefix="/api/user/account-deletion", tags=["account-deletion"], route_class=DeletionRoute, dependencies=[Depends(no_store)])
@@ -84,6 +88,36 @@ def eligibility(user: User = Depends(get_current_user), db: Session = Depends(ge
 def verify(data: DeletionPasswordIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _password_limit.check(f"deletion:{user.id}")
     return success(deletion.verify_deletion_password(db, user, data.password))
+
+
+@router.post("/kai/start", response_model=AuthorizationResponse)
+def kai_start(
+    data: DeletionKaiStartIn,
+    context: AuthContext = Depends(get_current_auth_context),
+    db: Session = Depends(get_db),
+):
+    _password_limit.check(f"deletion-kai:{context.user.id}")
+    if not deletion.can_reauthenticate_with_kai(db, context.user):
+        raise BizError("当前账号没有可用于注销验证的 KAI 身份")
+    authorization_url = kai_auth.create_authorization_flow(
+        db,
+        "delete",
+        data.return_url,
+        user_id=context.user.id,
+        platform=context.platform,
+        client_id=context.client_id,
+    )
+    return success({"authorization_url": authorization_url})
+
+
+@router.post("/kai/verify", response_model=TicketResponse)
+def kai_verify(
+    data: DeletionKaiProofIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _password_limit.check(f"deletion-kai:{user.id}")
+    return success(deletion.verify_deletion_kai(db, user, data.token))
 
 
 @router.post("/submit", response_model=DeletionResponse)

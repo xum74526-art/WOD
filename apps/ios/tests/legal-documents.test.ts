@@ -24,9 +24,9 @@ function textOf(document: LegalDocument): string {
 }
 
 test('legal metadata identifies the operator, version, dates, filing and only approved phone', () => {
-  assert.equal(LEGAL_VERSION, '1.0')
-  assert.equal(LEGAL_UPDATED_AT, '2026-09-16')
-  assert.equal(LEGAL_EFFECTIVE_AT, '2026-09-16')
+  assert.equal(LEGAL_VERSION, '1.1')
+  assert.equal(LEGAL_UPDATED_AT, '2026-09-18')
+  assert.equal(LEGAL_EFFECTIVE_AT, '2026-09-18')
   assert.equal(LEGAL_OPERATOR, '锆芯期算人工智能科技（上海）有限公司')
   assert.equal(LEGAL_ADDRESS, '上海市浦东新区川南奉公路5058号3幢一层（集中登记地）')
   assert.equal(LEGAL_ICP_FILING, '沪ICP备2026046279号-1')
@@ -48,15 +48,18 @@ test('privacy policy covers actual data, permissions, processors, retention and 
   for (const requirement of [
     /找回邮箱/,
     /KAI 身份/,
+    /KAI.*邮箱、姓名和头像/,
     /Tesseract OCR/,
     /银行卡/,
     /SSH/,
     /Android.*照片\/媒体/,
-    /iOS.*麦克风/,
+    /当前审核版本.*不申请麦克风权限/,
     /DCloud uni-app 基础运行框架/,
     /OAID/,
     /阿里云中国香港区域/,
     /cn-hongkong/,
+    /所有地区的用户使用业务联网功能/,
+    /无论选择中国大陆或其他服务地区.*独立勾选.*香港存储、处理与必要传输/,
     /不将这些信息用于广告或个性化推荐/,
     /哔哩哔哩/,
     /网易 163 邮件服务/,
@@ -99,6 +102,8 @@ test('Traditional Chinese is the default-ready presentation and English is compl
   const englishAgreement = textOf(getLegalDocument('agreement', 'en'))
   assert.match(englishPrivacy, /Privacy Policy/)
   assert.match(englishPrivacy, /DCloud uni-app base runtime/)
+  assert.match(englishPrivacy, /email address, name, and avatar returned by KAI/)
+  assert.match(englishPrivacy, /whether you select mainland China or another service region.*independent checkbox/)
   assert.match(englishPrivacy, /Contact us: \+86 4001082026/)
   assert.match(englishAgreement, /User Agreement/)
   assert.match(englishAgreement, /Current matchmaking mode and conditional direct trading/)

@@ -14,10 +14,23 @@ class DeletionEligibility(BaseModel):
     eligible: bool
     blockers: list[DeletionBlocker]
     automatic_actions: list[str]
+    verification_methods: list[Literal["password", "kai"]]
 
 
 class DeletionPasswordIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
+
+
+class DeletionKaiStartIn(BaseModel):
+    return_url: str | None = Field(default=None, max_length=1024)
+
+
+class DeletionKaiProofIn(BaseModel):
+    token: str = Field(min_length=40, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class DeletionAuthorizationOut(BaseModel):
+    authorization_url: str
 
 
 class DeletionTicketOut(BaseModel):
@@ -49,6 +62,12 @@ class TicketResponse(BaseModel):
     code: int = 0
     msg: str = "ok"
     data: DeletionTicketOut
+
+
+class AuthorizationResponse(BaseModel):
+    code: int = 0
+    msg: str = "ok"
+    data: DeletionAuthorizationOut
 
 
 class DeletionResponse(BaseModel):

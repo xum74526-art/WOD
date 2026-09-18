@@ -270,7 +270,8 @@ class CommunityCommentMigrationTests(unittest.TestCase):
             connection.execute(text(
                 "CREATE TABLE comments ("
                 "id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, "
-                "content TEXT NOT NULL, created_platform TEXT)"
+                "content TEXT NOT NULL, moderation_status VARCHAR(32) DEFAULT 'visible', "
+                "created_platform TEXT)"
             ))
             connection.execute(text(
                 "INSERT INTO posts (id, comments) VALUES (10, 99), (11, -3)"
@@ -278,6 +279,11 @@ class CommunityCommentMigrationTests(unittest.TestCase):
             connection.execute(text(
                 "INSERT INTO comments (id, post_id, user_id, content, created_platform) VALUES "
                 "(1, 10, 7, '保留一', 'web'), (2, 10, 8, '保留二', 'ios')"
+            ))
+            connection.execute(text(
+                "INSERT INTO comments "
+                "(id, post_id, user_id, content, moderation_status, created_platform) "
+                "VALUES (3, 10, 9, '待审核评论', 'pending_review', 'web')"
             ))
 
         first = _migrate_community_comment_idempotency(engine)
@@ -311,7 +317,8 @@ class CommunityCommentMigrationTests(unittest.TestCase):
             connection.execute(text(
                 "CREATE TABLE comments ("
                 "id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, "
-                "content TEXT NOT NULL, client_request_id VARCHAR(64), created_platform TEXT)"
+                "content TEXT NOT NULL, client_request_id VARCHAR(64), "
+                "moderation_status VARCHAR(32) DEFAULT 'visible', created_platform TEXT)"
             ))
             connection.execute(text(
                 "INSERT INTO posts (id, comments) VALUES (10, 99), (11, 99)"
@@ -324,6 +331,11 @@ class CommunityCommentMigrationTests(unittest.TestCase):
                 "(3, 10, 7, '旧评论', NULL, 'legacy'), "
                 "(4, 10, 7, '旧评论', NULL, 'legacy'), "
                 "(5, 11, 8, '另一用户', 'comment-migrate-0001', 'android')"
+            ))
+            connection.execute(text(
+                "INSERT INTO comments "
+                "(id, post_id, user_id, content, client_request_id, moderation_status, created_platform) "
+                "VALUES (6, 10, 9, '隐藏评论', NULL, 'pending_review', 'web')"
             ))
 
         result = _migrate_community_comment_idempotency(engine)
@@ -344,6 +356,7 @@ class CommunityCommentMigrationTests(unittest.TestCase):
             (3, 10, 7, None),
             (4, 10, 7, None),
             (5, 11, 8, "comment-migrate-0001"),
+            (6, 10, 9, None),
         ])
         self.assertEqual(counts, [(10, 3), (11, 1)])
 

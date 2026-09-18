@@ -100,6 +100,13 @@
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
+        <view class="menu-item" @tap="showPrivacyWithdrawal = true">
+          <view class="mi-left">
+            <AppIcon name="shield" :size="40" />
+            <text class="mi-text">{{ t('privacyChoices') }}</text>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
       </view>
 
       <SectionHeader :title="t('kaiIdentityBinding')" />
@@ -144,6 +151,16 @@
     <LanguageSelectorSheet v-model:visible="showLanguageSelector" />
 
     <ConfirmSheet
+      :visible="showPrivacyWithdrawal"
+      :title="t('withdrawPrivacyConsentTitle')"
+      :desc="t('withdrawPrivacyConsentDescription')"
+      :cancelText="t('cancel')"
+      :confirmText="t('withdrawPrivacyConsentAction')"
+      @cancel="showPrivacyWithdrawal = false"
+      @confirm="onWithdrawPrivacyConsent"
+    />
+
+    <ConfirmSheet
       :visible="showLogout"
       :title="t('k_44efd179')"
       :desc="t('k_4ec210a8')"
@@ -174,6 +191,10 @@ import { useNotificationStore } from '@/store/notification'
 import { checkForAppUpdate, getInstalledAppVersion } from '@/utils/app-update'
 import { CLIENT_PLATFORM } from '@/utils/client-platform'
 import { languageOption } from '@/utils/language'
+import {
+  clearPrivacyConsent,
+  PRIVACY_CONSENT_REVOKED_EVENT,
+} from '@/utils/privacy-consent'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -181,6 +202,7 @@ const userStore = useUserStore()
 const themeStore = useThemeStore()
 const notificationStore = useNotificationStore()
 const showLogout = ref(false)
+const showPrivacyWithdrawal = ref(false)
 const showLanguageSelector = ref(false)
 const kaiBinding = ref<KaiBindingStatus | null>(null)
 const kaiBindingLoading = ref(false)
@@ -352,6 +374,15 @@ function onAbout() {
     showCancel: false,
     confirmText: t('知道了'),
   })
+}
+
+function onWithdrawPrivacyConsent() {
+  showPrivacyWithdrawal.value = false
+  if (!clearPrivacyConsent()) {
+    uni.showToast({ title: t('withdrawPrivacyConsentFailed'), icon: 'none' })
+    return
+  }
+  uni.$emit(PRIVACY_CONSENT_REVOKED_EVENT)
 }
 
 function onLogout() {

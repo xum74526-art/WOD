@@ -1,8 +1,10 @@
 """Account deletion state machine and retryable, narrowly scoped file cleanup.
 
-Only a freshly password-verified, deletion-scoped capability may submit. The
-capability is carried in a POST body, hashed at rest and never logged. Money,
-order and reward rules remain owned by their existing services.
+Only a freshly verified, deletion-scoped capability may submit. Verification
+uses either the local password or a short-lived, single-use proof issued after
+fresh KAI OIDC reauthentication. The final capability is carried in a POST
+body, hashed at rest and never logged. Money, order and reward rules remain
+owned by their existing services.
 """
 from datetime import timedelta, timezone
 import hashlib
@@ -17,9 +19,11 @@ from app.core.config import settings
 from app.core.security import verify_password
 from app.db.session import SessionLocal
 from app.models.account_deletion import AccountDeletionRequest
+from app.models.account_recovery import AccountRecoveryToken
 from app.models.auth_session import AuthSession
+from app.models.external_identity import ExternalIdentity
 from app.models.user import User
-from app.services.account_lifecycle import lock_active_user
+from app.services.account_lifecycle import ensure_active_user, lock_active_user
 from app.services.auth_session import utcnow
 from app.utils.response import BizError
 
@@ -28,22 +32,55 @@ def _digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+KAI_DELETION_REAUTH = "account_deletion_kai"
+
+
+def has_usable_local_password(user: User) -> bool:
+    """Recognize only password hashes produced by this service.
+
+    Historical KAI-only accounts use an intentionally unusable marker such as
+    ``!``. Treating an arbitrary legacy string as a usable password would leave
+    those users trapped on a password form they can never complete.
+    """
+
+    value = str(user.password or "")
+    return bool(re.fullmatch(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}", value))
+
+
+def can_reauthenticate_with_kai(db: Session, user: User) -> bool:
+    from app.services import kai_auth
+
+    if not kai_auth.is_configured():
+        return False
+    return db.query(ExternalIdentity.id).filter(
+        ExternalIdentity.user_id == user.id,
+        ExternalIdentity.provider == "kai",
+        ExternalIdentity.issuer == settings.KAI_AUTH_ISSUER.rstrip("/"),
+    ).first() is not None
+
+
 def eligibility(db: Session, user: User) -> dict:
     from app.services.account_deletion_data import get_deletion_blockers, get_automatic_actions
     blockers = get_deletion_blockers(db, user)
     if user.role not in ("personal", "supplier"):
         blockers.append({"code": "privileged_account", "message": "平台管理账号须先完成管理权限交接，不能通过普通账号入口注销。", "count": 1})
-    return {"eligible": not blockers, "blockers": blockers, "automatic_actions": get_automatic_actions(db, user)}
+    verification_methods = []
+    if has_usable_local_password(user):
+        verification_methods.append("password")
+    if can_reauthenticate_with_kai(db, user):
+        verification_methods.append("kai")
+    return {
+        "eligible": not blockers,
+        "blockers": blockers,
+        "automatic_actions": get_automatic_actions(db, user),
+        "verification_methods": verification_methods,
+    }
 
 
-def verify_deletion_password(db: Session, user: User, password: str) -> dict:
-    if not verify_password(password, user.password):
-        raise BizError("原密码不正确，请使用算力星图账号密码验证")
+def _issue_deletion_ticket(db: Session, user: User) -> dict:
     lock_active_user(db, user.id)
-    # Re-read after the lock: a password change may have won the race.
     db.refresh(user)
-    if not verify_password(password, user.password):
-        raise BizError("密码已变更，请重新验证")
+    ensure_active_user(user)
     ticket = secrets.token_urlsafe(32)
     now = utcnow()
     row = AccountDeletionRequest(
@@ -55,6 +92,69 @@ def verify_deletion_password(db: Session, user: User, password: str) -> dict:
     db.add(row)
     db.commit()
     return {"ticket": ticket, "expires_at": row.expires_at.replace(tzinfo=timezone.utc)}
+
+
+def verify_deletion_password(db: Session, user: User, password: str) -> dict:
+    if not has_usable_local_password(user):
+        raise BizError("此账号没有可用的算力星图密码，请使用已绑定的 KAI 身份验证")
+    if not verify_password(password, user.password):
+        raise BizError("原密码不正确，请使用算力星图账号密码验证")
+    lock_active_user(db, user.id)
+    # Re-read after the lock: a password change may have won the race.
+    db.refresh(user)
+    if not verify_password(password, user.password):
+        raise BizError("密码已变更，请重新验证")
+    return _issue_deletion_ticket(db, user)
+
+
+def issue_kai_reauth_token(db: Session, user: User) -> str:
+    """Issue a deletion-only proof after a fresh, matching KAI OIDC login."""
+
+    lock_active_user(db, user.id)
+    db.refresh(user)
+    ensure_active_user(user)
+    now = utcnow()
+    db.query(AccountRecoveryToken).filter(
+        AccountRecoveryToken.user_id == user.id,
+        AccountRecoveryToken.purpose == KAI_DELETION_REAUTH,
+        AccountRecoveryToken.consumed_at.is_(None),
+    ).update({AccountRecoveryToken.consumed_at: now}, synchronize_session=False)
+    token = secrets.token_urlsafe(32)
+    db.add(AccountRecoveryToken(
+        user_id=user.id,
+        purpose=KAI_DELETION_REAUTH,
+        token_hash=_digest(token),
+        auth_version_snapshot=int(user.auth_version or 0),
+        expires_at=now + timedelta(seconds=settings.ACCOUNT_RECOVERY_KAI_TTL_SECONDS),
+    ))
+    db.commit()
+    return token
+
+
+def verify_deletion_kai(db: Session, user: User, token: str) -> dict:
+    """Atomically exchange a KAI reauth proof for the normal deletion ticket."""
+
+    lock_active_user(db, user.id)
+    db.refresh(user)
+    ensure_active_user(user)
+    now = utcnow()
+    consumed = db.query(AccountRecoveryToken).filter(
+        AccountRecoveryToken.token_hash == _digest(token),
+        AccountRecoveryToken.user_id == user.id,
+        AccountRecoveryToken.purpose == KAI_DELETION_REAUTH,
+        AccountRecoveryToken.consumed_at.is_(None),
+        AccountRecoveryToken.expires_at >= now,
+        AccountRecoveryToken.auth_version_snapshot == int(user.auth_version or 0),
+    ).update(
+        {AccountRecoveryToken.consumed_at: now},
+        synchronize_session=False,
+    )
+    if consumed != 1 or not can_reauthenticate_with_kai(db, user):
+        db.rollback()
+        raise BizError("KAI 注销验证凭据无效或已过期", status_code=401)
+    # The consumed proof and issued deletion ticket commit together. If ticket
+    # creation fails, rolling back leaves the one-time proof retryable.
+    return _issue_deletion_ticket(db, user)
 
 
 def _request(db: Session, ticket: str) -> AccountDeletionRequest:
@@ -142,8 +242,18 @@ def _owned_path(root: Path, relative: str, user_id: int) -> Path:
     if not any(re.fullmatch(pattern, relative) for pattern in patterns):
         raise ValueError("unowned_cleanup_path")
     path = root / relative
-    if _is_link(path) or any(_is_link(parent) for parent in path.parents if parent != root):
-        raise ValueError("symlink_cleanup_path")
+    # Check only entries below the configured root. On macOS, temporary paths
+    # commonly live under /var, which is itself an operating-system symlink to
+    # /private/var; rejecting ancestors above the trusted root breaks all safe
+    # cleanup without adding protection against an in-root escape.
+    current = path
+    while current != root:
+        if _is_link(current):
+            raise ValueError("symlink_cleanup_path")
+        parent = current.parent
+        if parent == current:
+            raise ValueError("unsafe_cleanup_path")
+        current = parent
     if not path.resolve().is_relative_to(root.resolve()):
         raise ValueError("unsafe_cleanup_path")
     return path

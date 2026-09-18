@@ -28,6 +28,12 @@ npm run build:android
 原生正式 API 由 `VITE_KAI_APP_API_BASE` 设置，默认示例为
 `https://wod.kai.com/api`。H5 仅用于本地界面预览，默认端口为 `9001`。
 
+原生 `androidPrivacy.json` 先阻止 DCloud 运行组件在用户同意前加载，随后
+`pages/privacy-consent/index` 完成当前法律版本和服务地区选择。未完成必选同意时，
+`api/request.ts` 会拒绝请求、上传、下载和受信第三方元数据访问；更新检查、能力刷新、通知轮询
+与 KAI 回跳处理也不会启动。所有地区均需通过独立勾选明确确认在中国香港存储、处理及必要
+传输个人信息；同意版本、时间、地区和平台只留存在本机。
+
 ## 打包要求
 
 - DCloud AppID 沿用 `__UNI__47CF9D3`，更换 applicationId 不得新建或替换现有 AppID；

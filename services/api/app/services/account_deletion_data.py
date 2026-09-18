@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     AccountRecoveryMailOutbox, AccountRecoveryToken, Address, Asset, AuthSession, BankCard, BuyRequest, BuyRequestCredential,
     BuyRequestDeal, BuyRequestEvent, BuyRequestQuote, BuyRequestQuoteRevision,
-    Comment, ComputeOnboarding, Coupon, ExternalAuthBindTicket,
+    Comment, CommunityBlock, CommunityReport, ComputeOnboarding, Coupon, ExternalAuthBindTicket,
     ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity, Follow, InviteCode,
     InviteRecord, Like, MerchantSettlement, Notification, NotificationPreference,
     OfflinePurchase, Order, OrderFundingAllocation, OrderRenewal,
@@ -358,9 +358,20 @@ def scrub_account_data(db: Session, user: User) -> list[str]:
     remove(Comment, Comment.user_id == user.id)
     remove(Like, Like.user_id == user.id)
     remove(Follow, or_(Follow.follower_id == user.id, Follow.following_id == user.id))
+    remove(
+        CommunityBlock,
+        or_(
+            CommunityBlock.blocker_user_id == user.id,
+            CommunityBlock.blocked_user_id == user.id,
+        ),
+    )
+    remove(CommunityReport, CommunityReport.reporter_user_id == user.id)
     for post in db.query(Post).filter(Post.id.in_(comment_posts | like_posts)).all():
         if post.id in comment_posts:
-            post.comments = db.query(Comment).filter(Comment.post_id == post.id).count()
+            post.comments = db.query(Comment).filter(
+                Comment.post_id == post.id,
+                Comment.moderation_status == "visible",
+            ).count()
         if post.id in like_posts:
             post.likes = db.query(Like).filter(Like.post_id == post.id).count()
     conversation_ids = db.query(SupportConversation.id).filter(SupportConversation.user_id == user.id)

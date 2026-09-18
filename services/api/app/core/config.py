@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     ID_OCR_MAX_PIXELS: int = 20_000_000
     ID_OCR_MAX_OUTPUT_CHARS: int = 50_000
     AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
+    # The first public review release accepts text posts only. Keep media
+    # uploads and media-bearing posts fail-closed until image/video moderation
+    # is staffed and verified in production.
+    COMMUNITY_USER_MEDIA_ENABLED: bool = False
     COMMUNITY_IMAGE_MAX_BYTES: int = 5 * 1024 * 1024
     COMMUNITY_VIDEO_MAX_BYTES: int = 20 * 1024 * 1024
     # Every newly uploaded community video is normalized to a cross-platform
@@ -99,6 +103,10 @@ class Settings(BaseSettings):
     COMMUNITY_VIDEO_MAX_DURATION_SECONDS: int = 300
     COMMUNITY_VIDEO_TRANSCODE_TIMEOUT_SECONDS: int = 180
     COMMUNITY_VIDEO_TRANSCODE_CONCURRENCY: int = 1
+    # The first public review release exposes only KAI-operated catalogue rows.
+    # Keep third-party merchant storefronts and listings private until their
+    # post-approval edits have a staffed moderation and reporting workflow.
+    THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED: bool = False
     # Direct checkout and other in-app transaction commitments stay disabled
     # until the required company qualifications and payment rails are ready.
     # Inquiry submission and human follow-up remain available independently.
@@ -280,6 +288,9 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = ""
     DEEPSEEK_MODEL: str = "deepseek-v4-flash"
+    # Third-party aggregated content is a separate server-owned publication
+    # policy. Client query parameters can narrow results but cannot enable it.
+    COMMUNITY_AGGREGATED_CONTENT_ENABLED: bool = False
     # 社区每日公开资讯（全部来源均需在代码白名单内）
     COMMUNITY_ONLINE_ENABLED: bool = True
     COMMUNITY_DAILY_TARGET: int = 10

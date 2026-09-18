@@ -472,7 +472,7 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(product_market_state(expired, {"vast": "live"}, now, 900), "stale")
         self.assertEqual(product_market_state(current, {"vast": "unavailable"}, now, 900), "unavailable")
 
-    def test_kai_and_first_party_wod_remain_visible_while_retired_sources_are_hidden(self):
+    def test_kai_and_release_gated_merchants_respect_source_availability(self):
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -525,10 +525,17 @@ class MarketDataTests(unittest.TestCase):
         wod_listing.supplier_id = merchant.id
         db.commit()
 
-        delayed = _current_product_query(db, {"kai": "delayed"}).all()
-        self.assertEqual({item.name for item in delayed}, {"KAI offer", "ZTW listing"})
-        unavailable = _current_product_query(db, {"kai": "unavailable"}).all()
-        self.assertEqual([item.name for item in unavailable], ["ZTW listing"])
+        with patch.object(settings, "THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED", False):
+            delayed = _current_product_query(db, {"kai": "delayed"}).all()
+            self.assertEqual({item.name for item in delayed}, {"KAI offer"})
+            unavailable = _current_product_query(db, {"kai": "unavailable"}).all()
+            self.assertEqual(unavailable, [])
+
+        with patch.object(settings, "THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED", True):
+            delayed = _current_product_query(db, {"kai": "delayed"}).all()
+            self.assertEqual({item.name for item in delayed}, {"KAI offer", "ZTW listing"})
+            unavailable = _current_product_query(db, {"kai": "unavailable"}).all()
+            self.assertEqual([item.name for item in unavailable], ["ZTW listing"])
         db.close()
 
     def test_regional_quote_compares_one_exact_kai_identity_only(self):

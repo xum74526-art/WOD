@@ -60,6 +60,10 @@ class CommunityMediaTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.dir_patcher = patch.object(community_router, "COMMUNITY_DIR", Path(self.temp_dir.name))
         self.dir_patcher.start()
+        self.media_policy_patcher = patch.object(
+            settings, "COMMUNITY_USER_MEDIA_ENABLED", True,
+        )
+        self.media_policy_patcher.start()
         self.standardized_video = minimal_mp4_bytes() + b"standardized"
         self.standardize_patcher = patch.object(
             community_router,
@@ -98,6 +102,7 @@ class CommunityMediaTests(unittest.TestCase):
         self.client.close()
         self.duration_patcher.stop()
         self.standardize_patcher.stop()
+        self.media_policy_patcher.stop()
         self.dir_patcher.stop()
         self.temp_dir.cleanup()
         self.db.close()
@@ -116,6 +121,35 @@ class CommunityMediaTests(unittest.TestCase):
             files={"media": ("image.png", image_bytes(), "image/png")},
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_review_policy_defaults_to_text_only_and_rejects_every_media_write(self):
+        self.assertFalse(
+            Settings.model_fields["COMMUNITY_USER_MEDIA_ENABLED"].default,
+        )
+        historical_dir = Path(self.temp_dir.name) / str(self.user.id)
+        historical_dir.mkdir(parents=True)
+        historical_media = historical_dir / f"{'a' * 32}.png"
+        historical_media.write_bytes(image_bytes())
+        with patch.object(settings, "COMMUNITY_USER_MEDIA_ENABLED", False):
+            upload = self.upload("photo.png", image_bytes(), "image/png")
+            image_post = self.client.post(
+                "/api/community/posts",
+                json={"content": "图片动态", "images": ["/uploads/community/1/missing.png"]},
+            )
+            video_post = self.client.post(
+                "/api/community/posts",
+                json={"content": "视频动态", "video": "/uploads/community/1/missing.mp4"},
+            )
+            historical_read = self.client.get(
+                f"/api/uploads/community/{self.user.id}/{historical_media.name}",
+            )
+
+        self.assertEqual(upload.status_code, 403)
+        self.assertEqual(image_post.status_code, 403)
+        self.assertEqual(video_post.status_code, 403)
+        self.assertEqual(historical_read.status_code, 404)
+        self.assertIn("仅支持发布文字动态", upload.json()["msg"])
+        self.assertEqual(list(Path(self.temp_dir.name).rglob("*.*")), [historical_media])
 
     def test_post_feed_and_comments_are_publicly_readable(self):
         post = Post(user_id=self.user.id, content="公开算力资讯", content_type="text")
@@ -354,6 +388,8 @@ class CommunityMediaTests(unittest.TestCase):
             repository / "infra" / "api.env.example",
         ):
             environment = environment_template.read_text(encoding="utf-8")
+            self.assertIn("COMMUNITY_USER_MEDIA_ENABLED=false", environment)
+            self.assertIn("COMMUNITY_AGGREGATED_CONTENT_ENABLED=false", environment)
             self.assertIn("COMMUNITY_VIDEO_MAX_BYTES=20971520", environment)
             self.assertIn("COMMUNITY_VIDEO_MAX_DURATION_SECONDS=300", environment)
         for platform in ("android", "ios"):

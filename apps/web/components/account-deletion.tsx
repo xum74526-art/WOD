@@ -7,9 +7,9 @@ import { SiteFooter } from "@/components/site-footer";
 import { useI18n } from "@/components/locale-root";
 import { ApiError } from "@/lib/api";
 import { loginHref } from "@/lib/auth-navigation";
-import { getAccountDeletionEligibility, getAccountDeletionStatus, submitAccountDeletion, verifyAccountDeletion } from "@/lib/account-deletion-api";
+import { getAccountDeletionEligibility, getAccountDeletionStatus, startKaiAccountDeletionVerification, submitAccountDeletion, verifyAccountDeletion, verifyKaiAccountDeletion } from "@/lib/account-deletion-api";
 import {
-  clearDeletionReceipt, deletionRevokesNormalSession, newDeletionReceipt, readDeletionReceipt,
+  clearDeletionReceipt, deletionKaiProofFromUrl, deletionRevokesNormalSession, newDeletionReceipt, readDeletionReceipt,
   saveDeletionReceipt, submitDeletionWithRecovery,
   type AccountDeletionEligibility, type AccountDeletionStatus, type AccountDeletionVerification, type DeletionReceipt,
 } from "@/lib/account-deletion-flow";
@@ -56,6 +56,21 @@ export function AccountDeletion() {
 
   useEffect(() => {
     let active = true;
+    const kaiCallback = deletionKaiProofFromUrl(window.location.href);
+    if (kaiCallback.token || kaiCallback.error) {
+      window.history.replaceState(null, "", kaiCallback.cleanPath);
+      if (kaiCallback.token) {
+        setBusy(true);
+        verifyKaiAccountDeletion(kaiCallback.token)
+          .then((result) => { if (active) { setVerification(result); setAcknowledged(false); } })
+          .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "KAI 身份验证未完成。"); })
+          .finally(() => { if (active) setBusy(false); });
+      } else {
+        setBusy(false);
+        setError(kaiCallback.error === "access_denied" ? (en ? "KAI identity verification was canceled." : "已取消 KAI 身份验证。") : (en ? "KAI identity verification failed. Try again." : "KAI 身份验证失败，请重试。"));
+      }
+      return () => { active = false; };
+    }
     let saved: DeletionReceipt | null = null;
     try { saved = readDeletionReceipt(window.localStorage); } catch { /* Submission separately requires a saved recovery receipt. */ }
     if (!saved) { void loadEligibility(); return () => { active = false; }; }
@@ -70,7 +85,7 @@ export function AccountDeletion() {
       })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [applyStatus, loadEligibility]);
+  }, [applyStatus, en, loadEligibility]);
 
   const checkStatus = useCallback(async () => {
     if (!receipt) return;
@@ -92,9 +107,21 @@ export function AccountDeletion() {
     event.preventDefault();
     if (!eligibility?.eligible || !acknowledged || busy) return;
     setBusy(true); setError("");
-    try { setVerification(await verifyAccountDeletion(password)); }
+    try { setVerification(await verifyAccountDeletion(password)); setAcknowledged(false); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "身份验证未完成。"); }
     finally { setPassword(""); setBusy(false); }
+  }
+
+  async function startKaiVerification() {
+    if (!eligibility?.eligible || busy) return;
+    setBusy(true); setError("");
+    try {
+      const result = await startKaiAccountDeletionVerification();
+      window.location.assign(result.authorization_url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "KAI 身份验证未完成。");
+      setBusy(false);
+    }
   }
 
   async function confirmDeletion() {
@@ -219,6 +246,7 @@ export function AccountDeletion() {
         </div> : verification ? <section className={styles.confirmation} aria-labelledby="deletion-final-title">
           <h3 id="deletion-final-title">{en ? "Final confirmation" : "最后确认"}</h3>
           <p>{en ? "Identity verified. Clicking the button below submits an irreversible request to delete this 算力星图 account. The server will check outstanding items again." : "身份已验证。点击下方按钮将正式申请注销此算力星图账号，完成后不可恢复。服务器仍会再次检查是否有未处理事项。"}</p>
+          <label className={styles.acknowledgment}><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy}/><span>{en ? "I have reviewed the notice and understand that this account cannot be restored after deletion." : "我已重新阅读注销说明，理解账号注销完成后无法恢复。"}</span></label>
           <div className={styles.actions}>
             <button type="button" className="outline-link" disabled={busy} onClick={() => { setVerification(null); setAcknowledged(false); }}>{en ? "Go back" : "返回"}</button>
             <button type="button" className={styles.dangerButton} disabled={busy || !acknowledged} onClick={() => void confirmDeletion()}>{en ? "Confirm account deletion" : "确认注销账号"}</button>
@@ -227,13 +255,18 @@ export function AccountDeletion() {
           <p role="status">{eligibility.eligible ? (en ? "The server found no blocking items. Verify your identity below to continue." : "服务器检查通过，没有阻止注销的事项。请继续验证身份。") : en ? "Resolve these items before requesting deletion:" : "请先处理以下事项，再申请注销："}</p>
           {blockers.length > 0 && <ul className={styles.blockers}>{blockers.map((item) => <li key={item.code}>{item.message}{item.count > 1 ? ` (${item.count})` : ""}</li>)}</ul>}
           {eligibility.automatic_actions.length > 0 && <div className={styles.note}><strong>{en ? "Included in the deletion process" : "确认注销后将一并处理"}</strong><ul>{eligibility.automatic_actions.map((action) => <li key={action}>{action}</li>)}</ul></div>}
-          {eligibility.eligible && <form className={styles.form} onSubmit={verify}>
+          {eligibility.eligible && eligibility.verification_methods.includes("password") && <form className={styles.form} onSubmit={verify}>
             <label htmlFor="deletion-password">{en ? "算力星图 sign-in password" : "算力星图登录密码"}</label>
             <input id="deletion-password" type="password" required autoComplete="current-password" maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy}/>
             <p className={styles.note}>{en ? "Enter your 算力星图 password, not your external Kai password. SMS verification is not available in this version." : "请填写算力星图密码，不是外部 Kai 统一身份密码。本版不提供短信验证。"}</p>
             <label className={styles.acknowledgment}><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy}/><span>{en ? "I have read the notice and understand that this 算力星图 account cannot be restored after deletion." : "我已阅读注销说明，理解此算力星图账号注销完成后无法恢复。"}</span></label>
             <button className={styles.dangerButton} type="submit" disabled={busy || !acknowledged || !password}>{busy ? (en ? "Verifying…" : "验证中…") : en ? "Verify identity and continue" : "验证身份并继续"}</button>
           </form>}
+          {eligibility.eligible && eligibility.verification_methods.includes("kai") && <div className={styles.form}>
+            <p className={styles.note}>{en ? "Sign in to your linked KAI identity again. 算力星图 never receives your KAI password." : "前往已绑定的 KAI 身份重新登录确认。算力星图不会接收你的 KAI 密码。"}</p>
+            <button className="outline-link" type="button" disabled={busy} onClick={() => void startKaiVerification()}>{busy ? (en ? "Opening KAI…" : "正在打开 KAI…") : en ? "Verify with KAI" : "使用 KAI 身份验证"}</button>
+          </div>}
+          {eligibility.eligible && eligibility.verification_methods.length === 0 && <p className={styles.note}>{en ? "No online verification method is available for this account. Link KAI identity or recover a local password first." : "当前账号没有可用的在线身份验证方式，请先绑定 KAI 身份或恢复本地密码。"}</p>}
           {!eligibility.eligible && <button className="outline-link" disabled={busy} type="button" onClick={() => void loadEligibility()}>{en ? "Check again" : "重新检查"}</button>}
         </> : busy ? <p role="status">{en ? "Checking account eligibility…" : "正在检查账号注销条件…"}</p> : <button type="button" className="outline-link" onClick={() => void loadEligibility()}>{en ? "Try again" : "重新检查"}</button>}
       </section>

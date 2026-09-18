@@ -3,6 +3,8 @@
  * 双重防护：① 时间锁 800ms  ② URL 去重（目标=当前页则跳过）
  */
 
+import { hasCurrentPrivacyConsent } from './privacy-consent'
+
 let navLock = false
 let lastUrl = ''
 
@@ -50,6 +52,10 @@ export function navigateBack(delta = 1) {
     fail: () => {
       navLock = false
       try {
+        if (!hasCurrentPrivacyConsent()) {
+          uni.reLaunch({ url: '/pages/privacy-consent/index' })
+          return
+        }
         uni.switchTab({ url: '/pages/index/index' })
       } catch {}
     },

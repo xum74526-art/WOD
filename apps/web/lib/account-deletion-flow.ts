@@ -3,6 +3,7 @@ export type AccountDeletionEligibility = {
   eligible: boolean;
   blockers: AccountDeletionBlocker[];
   automatic_actions: string[];
+  verification_methods: Array<"password" | "kai">;
 };
 export type AccountDeletionVerification = { ticket: string; expires_at: string; receipt_expires_at?: string };
 export type AccountDeletionStatus = {
@@ -17,6 +18,19 @@ export const DELETION_RECEIPT_KEY = "wod.account-deletion.receipt.v1";
 const RECEIPT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export type DeletionReceipt = { ticket: string; expiresAt: number; verifyExpiresAt?: number };
 type ReceiptStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export function deletionKaiProofFromUrl(href: string) {
+  const url = new URL(href);
+  const fragment = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+  const candidate = fragment.get("kai_deletion_token") || "";
+  const token = candidate.length >= 40 && candidate.length <= 128 ? candidate : "";
+  const error = url.searchParams.get("kai_error") || "";
+  fragment.delete("kai_deletion_token");
+  url.searchParams.delete("kai_deletion_token");
+  url.searchParams.delete("kai_error");
+  const cleanFragment = fragment.toString();
+  return { token, error, cleanPath: `${url.pathname}${url.search}${cleanFragment ? `#${cleanFragment}` : ""}` };
+}
 
 export function newDeletionReceipt(verification: AccountDeletionVerification, now = Date.now()): DeletionReceipt {
   const serverExpiry = Date.parse(verification.receipt_expires_at || "");

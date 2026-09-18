@@ -101,11 +101,12 @@ def create_authorization_flow(
     client_id: str | None = None,
 ) -> str:
     _require_configured()
-    if intent not in {"login", "register", "bind", "recover"}:
+    if intent not in {"login", "register", "bind", "recover", "delete"}:
         raise BizError("统一认证请求类型无效")
-    if intent == "bind" and not user_id:
-        raise BizError("绑定统一认证前必须先登录", status_code=401)
-    if intent != "bind" and user_id is not None:
+    authenticated_intents = {"bind", "delete"}
+    if intent in authenticated_intents and not user_id:
+        raise BizError("此统一认证操作必须先登录", status_code=401)
+    if intent not in authenticated_intents and user_id is not None:
         raise BizError("统一认证流程目标用户无效")
 
     _cleanup_expired(db)
@@ -143,10 +144,11 @@ def create_authorization_flow(
     }
     if intent == "register":
         params["prompt"] = "create"
-    elif intent == "recover":
-        # Recovery must be a fresh identity check, not silent reuse of an old
-        # provider session.
+    elif intent in {"recover", "delete"}:
+        # Recovery and deletion must be fresh identity checks, not silent reuse
+        # of an old provider session.
         params["prompt"] = "login"
+        params["max_age"] = "0"
     issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     return f"{issuer}/oauth2/authorize?{urlencode(params)}"
 
@@ -270,7 +272,12 @@ async def enrich_with_userinfo(claims: dict[str, Any], access_token: str | None)
     return {**claims, **info}
 
 
-def find_bound_user(db: Session, claims: dict[str, Any]) -> User | None:
+def find_bound_user(
+    db: Session,
+    claims: dict[str, Any],
+    *,
+    expected_user_id: int | None = None,
+) -> User | None:
     """Find an explicitly bound local user; never create a ZTW account."""
     issuer = settings.KAI_AUTH_ISSUER.rstrip("/")
     subject = str(claims["sub"])
@@ -280,6 +287,8 @@ def find_bound_user(db: Session, claims: dict[str, Any]) -> User | None:
     ).first()
     if not identity:
         return None
+    if expected_user_id is not None and identity.user_id != expected_user_id:
+        raise BizError("统一认证身份与当前账号不匹配")
     user = db.query(User).filter(User.id == identity.user_id).first()
     if not user:
         raise BizError("统一认证关联用户不存在")

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.core.config import settings
 from app.core.deps import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.asset import Asset
@@ -712,6 +713,10 @@ def update_supplier_profile(data: SupplierProfileUpdateIn, user: User = Depends(
 
 @router.get("/{sid}")
 def store_page(sid: int, db: Session = Depends(get_db)):
+    if settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED is not True:
+        # Do not reveal whether a merchant exists while the public directory is
+        # disabled. Supplier management APIs remain available to the owner.
+        raise BizError("供应商不存在", status_code=404)
     s = db.query(Supplier).filter(Supplier.id == sid, Supplier.status == "approved").first()
     if not s:
         raise BizError("供应商不存在", status_code=404)

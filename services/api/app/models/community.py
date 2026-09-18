@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -47,6 +47,12 @@ class Post(Base):
     last_modified_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy"
     )
+    moderation_status: Mapped[str] = mapped_column(
+        String(24), default="visible", server_default="visible", index=True
+    )
+    moderation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    moderated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -61,6 +67,12 @@ class Comment(Base):
     created_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy", index=True
     )
+    moderation_status: Mapped[str] = mapped_column(
+        String(24), default="visible", server_default="visible", index=True
+    )
+    moderation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    moderated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     __table_args__ = (
         Index(
@@ -98,6 +110,54 @@ class Follow(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 关注者
     following_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 被关注者
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class CommunityBlock(Base):
+    """A viewer-controlled block relation used to remove abusive users' content."""
+
+    __tablename__ = "community_blocks"
+    __table_args__ = (
+        UniqueConstraint("blocker_user_id", "blocked_user_id", name="uq_community_blocks_pair"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    blocker_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    blocked_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class CommunityReport(Base):
+    """Auditable user report for a community post, comment, or account."""
+
+    __tablename__ = "community_reports"
+    __table_args__ = (
+        UniqueConstraint(
+            "reporter_user_id", "target_type", "target_id",
+            name="uq_community_reports_reporter_target",
+        ),
+        Index("ix_community_reports_queue", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    reporter_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    target_type: Mapped[str] = mapped_column(String(16), index=True)
+    target_id: Mapped[int] = mapped_column(Integer, index=True)
+    reason: Mapped[str] = mapped_column(String(32))
+    details: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(24), default="pending", server_default="pending", index=True
+    )
+    resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy", index=True
     )

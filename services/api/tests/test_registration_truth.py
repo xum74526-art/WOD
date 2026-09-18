@@ -91,6 +91,16 @@ class RegistrationTruthTests(unittest.TestCase):
         relation = self.db.query(InviteRecord).filter(InviteRecord.invitee_id == created.id).one()
         self.assertEqual(relation.inviter_id, self.inviter.id)
 
+    def test_registration_rejects_an_objectionable_public_username(self):
+        phone = "13900000048"
+        data = self.registration_data(phone)
+        data.username = "代办假证"
+
+        with self.assertRaisesRegex(BizError, "不适合公开发布"):
+            register(data, self.db)
+
+        self.assert_no_partial_registration(phone)
+
     def test_invalid_invite_code_stops_registration_instead_of_being_ignored(self):
         phone = "13900000047"
         with (

@@ -7,11 +7,12 @@ from app.db.base import Base
 
 
 class AccountRecoveryToken(Base):
-    """Short-lived, single-use proof for recovery-email and password flows.
+    """Short-lived, single-use proof for narrowly scoped identity flows.
 
     Only a SHA-256 digest of the opaque token is persisted.  Email values are
-    encrypted with the same field-level protection used by other sensitive
-    account data; fingerprints are keyed and used only for equality lookup.
+    populated only for recovery-email purposes and are encrypted with the same
+    field-level protection used by other sensitive account data; fingerprints
+    are keyed and used only for equality lookup.
     """
 
     __tablename__ = "account_recovery_tokens"

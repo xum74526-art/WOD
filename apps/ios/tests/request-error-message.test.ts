@@ -23,6 +23,7 @@ function fixture(response: MockResponse) {
     if (name === '@/utils/auth') {
       return { getToken: () => 'session-token', clearAuth: () => { cleared += 1 } }
     }
+    if (name === '@/utils/privacy-consent') return { requirePrivacyConsent: () => {} }
     if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => {} }
     if (name === '@/utils/config') return { API_BASE: 'https://example.invalid/api' }
     if (name === '@/store/i18n') {

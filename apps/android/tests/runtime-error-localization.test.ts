@@ -12,7 +12,7 @@ test('runtime errors only expose known localized messages and otherwise use a lo
   assert.match(i18n, /return t\(key \|\| fallbackKey\)/)
 
   const expectedCalls = new Map([
-    ['../src/pages/community/publish.vue', 2],
+    ['../src/pages/community/publish.vue', 1],
     ['../src/pages/supplier/apply.vue', 1],
     ['../src/pages/supplier/devices.vue', 1],
     ['../src/pages/supplier/orders.vue', 1],

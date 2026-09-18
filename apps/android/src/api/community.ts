@@ -46,11 +46,19 @@ export interface CommentItem {
   created_at?: string
   author_name?: string
   post_comments?: number
+  is_own: boolean
 }
 
 export function getPosts(tab: string = 'recommend', page: number = 1, keyword: string = '') {
   return request<{ items: PostItem[]; total: number; page: number; page_size: number }>({
-    url: '/community/posts', data: { tab, page, keyword },
+    url: '/community/posts', data: {
+      tab,
+      page,
+      keyword,
+      // App-store builds fail closed until every third-party source has a
+      // documented display/streaming licence that can be shown to review.
+      allow_aggregated: false,
+    },
   })
 }
 
@@ -115,6 +123,50 @@ export function setFollow(uid: number, following: boolean) {
     url: `/community/users/${uid}/follow`,
     method: 'POST',
     data: { following },
+    retryUncertainOnce: true,
+  })
+}
+
+export type CommunityReportTarget = 'post' | 'comment' | 'user'
+export type CommunityReportReason =
+  | 'illegal' | 'harassment' | 'hate' | 'sexual' | 'violence'
+  | 'scam' | 'privacy' | 'copyright' | 'spam' | 'other'
+
+export function reportCommunityContent(
+  target_type: CommunityReportTarget,
+  target_id: number,
+  reason: CommunityReportReason,
+  details?: string,
+) {
+  return request<{ report_id: number; status: string; hidden_for_reporter: boolean }>({
+    url: '/community/reports',
+    method: 'POST',
+    data: { target_type, target_id, reason, details },
+    retryUncertainOnce: true,
+  })
+}
+
+export function setUserBlock(uid: number, blocked: boolean) {
+  return request<{ blocked: boolean }>({
+    url: `/community/users/${uid}/block`,
+    method: 'POST',
+    data: { blocked },
+    retryUncertainOnce: true,
+  })
+}
+
+export function deleteCommunityPost(id: number) {
+  return request<{ deleted: boolean }>({
+    url: `/community/posts/${id}`,
+    method: 'DELETE',
+    retryUncertainOnce: true,
+  })
+}
+
+export function deleteCommunityComment(id: number) {
+  return request<{ deleted: boolean }>({
+    url: `/community/comments/${id}`,
+    method: 'DELETE',
     retryUncertainOnce: true,
   })
 }

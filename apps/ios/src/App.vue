@@ -7,14 +7,40 @@ import { useHostingStore } from './store/hosting'
 import { useNotificationStore } from './store/notification'
 import { useCommerceStore } from './store/commerce'
 import { kaiAuthCallbackFingerprint, parseKaiAuthUrl } from './utils/kai-auth-callback'
+import { stageDeletionKaiCallback } from './utils/account-deletion-kai-callback'
+import {
+  hasPendingLoginKaiCallback,
+  PENDING_KAI_INTENT_KEY,
+  readPendingKaiLoginIntent,
+  stageLoginKaiCallback,
+} from './utils/login-kai-callback'
 import { stagePasswordResetCallback } from './utils/password-reset-callback'
 import { checkForAppUpdate } from './utils/app-update'
 import { CLIENT_PLATFORM } from './utils/client-platform'
+import {
+  hasCurrentPrivacyConsent,
+  PRIVACY_CONSENT_EVENT,
+  PRIVACY_CONSENT_REVOKED_EVENT,
+} from './utils/privacy-consent'
 
 const HANDLED_KAI_BIND_CALLBACK_KEY = 'wod_kai_bind_callback_fingerprint'
 let kaiBindingCallbackProcessing = ''
 let kaiBindingProbeTimer: ReturnType<typeof setTimeout> | null = null
 let passwordResetNavigationTimer: ReturnType<typeof setTimeout> | null = null
+let appUpdateTimer: ReturnType<typeof setTimeout> | null = null
+let loginKaiCallbackNavigationTimer: ReturnType<typeof setTimeout> | null = null
+let networkRuntimeStarted = false
+
+function currentRoute() {
+  const pages = getCurrentPages()
+  return pages[pages.length - 1]?.route || ''
+}
+
+function ensurePrivacyConsentPage() {
+  const route = currentRoute()
+  if (route === 'pages/privacy-consent/index' || route === 'pages/agreement/index') return
+  uni.reLaunch({ url: '/pages/privacy-consent/index' })
+}
 
 function runtimeArguments() {
   // #ifdef APP-PLUS
@@ -27,11 +53,44 @@ function runtimeKaiCallback() {
   return parseKaiAuthUrl(runtimeArguments())
 }
 
+function captureLoginKaiCallback() {
+  const hasPendingIntent = readPendingKaiLoginIntent(
+    uni.getStorageSync(PENDING_KAI_INTENT_KEY),
+  ) !== null
+  return stageLoginKaiCallback(runtimeArguments(), hasPendingIntent)
+}
+
+function routePendingLoginKaiCallback() {
+  if (!hasCurrentPrivacyConsent() || !hasPendingLoginKaiCallback()) return false
+  const route = currentRoute()
+  // The local consent page owns the first navigation after acceptance. It will
+  // route directly to login when a callback was captured during cold start.
+  if (route === 'pages/privacy-consent/index') return true
+  if (!route) {
+    if (!loginKaiCallbackNavigationTimer) {
+      loginKaiCallbackNavigationTimer = setTimeout(() => {
+        loginKaiCallbackNavigationTimer = null
+        routePendingLoginKaiCallback()
+      }, 0)
+    }
+    return true
+  }
+  if (route === 'pages/login/index') {
+    uni.$emit('wod-kai-login-callback-ready')
+    return true
+  }
+  const url = '/pages/login/index'
+  uni.navigateTo({ url, fail: () => uni.reLaunch({ url }) })
+  return true
+}
+
 function handlePasswordResetCallback(allowRepeatedIntent = false) {
+  if (!hasCurrentPrivacyConsent()) return false
   if (!stagePasswordResetCallback(runtimeArguments(), allowRepeatedIntent)) return false
   if (passwordResetNavigationTimer) clearTimeout(passwordResetNavigationTimer)
   passwordResetNavigationTimer = setTimeout(() => {
     passwordResetNavigationTimer = null
+    if (!hasCurrentPrivacyConsent()) return
     const pages = getCurrentPages()
     const currentRoute = pages[pages.length - 1]?.route || ''
     if (currentRoute === 'pages/reset-password/index') {
@@ -45,6 +104,7 @@ function handlePasswordResetCallback(allowRepeatedIntent = false) {
 }
 
 async function handleKaiBindingCallback() {
+  if (!hasCurrentPrivacyConsent()) return false
   const callback = runtimeKaiCallback()
   if (!callback?.bindTicket) return false
   const user = useUserStore()
@@ -65,11 +125,29 @@ async function handleKaiBindingCallback() {
   return true
 }
 
+function handleDeletionKaiCallback() {
+  if (!hasCurrentPrivacyConsent()) return false
+  if (!stageDeletionKaiCallback(runtimeKaiCallback())) return false
+  const route = currentRoute()
+  if (route === 'pages/account-deletion/index') {
+    uni.$emit('wod-deletion-kai-callback-ready')
+  } else {
+    const url = '/pages/account-deletion/index'
+    uni.navigateTo({ url, fail: () => uni.reLaunch({ url }) })
+  }
+  return true
+}
+
 function probeKaiBindingCallback() {
+  if (!hasCurrentPrivacyConsent()) return
   if (kaiBindingProbeTimer) clearTimeout(kaiBindingProbeTimer)
   const delays = [0, 120, 320, 700]
   const probe = (index: number) => {
+    if (handleDeletionKaiCallback()) return
+    captureLoginKaiCallback()
+    if (routePendingLoginKaiCallback()) return
     void handleKaiBindingCallback().then((handled) => {
+      if (!hasCurrentPrivacyConsent()) return
       if (handled || index + 1 >= delays.length) return
       kaiBindingProbeTimer = setTimeout(() => probe(index + 1), delays[index + 1] - delays[index])
     })
@@ -82,9 +160,52 @@ function registerKaiBindingListener() {
   const globalEvent = (plus as unknown as {
     globalEvent?: { addEventListener(event: string, listener: () => void): void }
   }).globalEvent
-  globalEvent?.addEventListener('newintent', probeKaiBindingCallback)
-  globalEvent?.addEventListener('newintent', () => handlePasswordResetCallback(true))
+  globalEvent?.addEventListener('newintent', () => {
+    captureLoginKaiCallback()
+    if (!hasCurrentPrivacyConsent()) {
+      ensurePrivacyConsentPage()
+      return
+    }
+    probeKaiBindingCallback()
+    handlePasswordResetCallback(true)
+  })
   // #endif
+}
+
+function startNetworkedRuntime() {
+  if (networkRuntimeStarted || !hasCurrentPrivacyConsent()) return false
+  networkRuntimeStarted = true
+  const user = useUserStore()
+  user.restore()
+  // #ifdef APP-PLUS
+  appUpdateTimer = setTimeout(() => {
+    appUpdateTimer = null
+    if (hasCurrentPrivacyConsent()) void checkForAppUpdate(CLIENT_PLATFORM)
+  }, 800)
+  // #endif
+  void useCommerceStore().refresh(true)
+  if (user.isLogin) useNotificationStore().startPolling()
+  handlePasswordResetCallback()
+  probeKaiBindingCallback()
+  return true
+}
+
+function stopNetworkedRuntime() {
+  networkRuntimeStarted = false
+  if (appUpdateTimer) clearTimeout(appUpdateTimer)
+  if (kaiBindingProbeTimer) clearTimeout(kaiBindingProbeTimer)
+  if (passwordResetNavigationTimer) clearTimeout(passwordResetNavigationTimer)
+  if (loginKaiCallbackNavigationTimer) clearTimeout(loginKaiCallbackNavigationTimer)
+  appUpdateTimer = null
+  kaiBindingProbeTimer = null
+  passwordResetNavigationTimer = null
+  loginKaiCallbackNavigationTimer = null
+  useNotificationStore().reset()
+}
+
+function handlePrivacyConsentRevoked() {
+  stopNetworkedRuntime()
+  ensurePrivacyConsentPage()
 }
 
 onLaunch(() => {
@@ -92,7 +213,7 @@ onLaunch(() => {
     useHostingStore().reset()
     const notifications = useNotificationStore()
     notifications.reset()
-    notifications.startPolling()
+    if (hasCurrentPrivacyConsent()) notifications.startPolling()
   })
   uni.$on('wod-auth-expired', () => {
     useUserStore().clearSession()
@@ -101,21 +222,23 @@ onLaunch(() => {
   })
   useThemeStore().init()
   useI18nStore().init()
-  // #ifdef APP-PLUS
-  setTimeout(() => { void checkForAppUpdate(CLIENT_PLATFORM) }, 800)
-  // #endif
-  void useCommerceStore().refresh(true)
-  const user = useUserStore()
-  user.restore()
-  if (user.isLogin) useNotificationStore().startPolling()
   registerKaiBindingListener()
-  handlePasswordResetCallback()
-  probeKaiBindingCallback()
+  captureLoginKaiCallback()
+  uni.$on(PRIVACY_CONSENT_EVENT, startNetworkedRuntime)
+  uni.$on(PRIVACY_CONSENT_REVOKED_EVENT, handlePrivacyConsentRevoked)
+  if (!startNetworkedRuntime()) setTimeout(ensurePrivacyConsentPage, 0)
 })
 onShow(() => {
   const theme = useThemeStore()
   theme.refreshSystemTheme()
   theme.applyTheme()
+  captureLoginKaiCallback()
+  if (!hasCurrentPrivacyConsent()) {
+    useNotificationStore().stopPolling()
+    setTimeout(ensurePrivacyConsentPage, 0)
+    return
+  }
+  startNetworkedRuntime()
   if (useUserStore().isLogin) useNotificationStore().startPolling()
   void useCommerceStore().refresh()
   handlePasswordResetCallback()

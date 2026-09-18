@@ -58,7 +58,7 @@ test("web video normalization waits longer than the backend transcode ceiling", 
   assert.match(client, /AbortSignal\.timeout\(timeoutMs\)/);
 });
 
-test("web community uploads expose transfer progress and server processing separately", () => {
+test("web first-review composer is text-only while the dormant upload adapter remains bounded", () => {
   const api = readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
   const adapter = readFileSync(new URL("../lib/mobile-community-api.ts", import.meta.url), "utf8");
   const composer = readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
@@ -66,9 +66,21 @@ test("web community uploads expose transfer progress and server processing separ
   assert.match(api, /request\.upload\.onprogress/);
   assert.match(api, /phase: "processing"/);
   assert.match(adapter, /apiUploadRequest/);
-  assert.match(composer, /正在上传第 \$\{progress\.current\}\/\$\{progress\.total\} 个文件/);
-  assert.match(composer, /服务器正在\$\{progress\.video \? "转换兼容视频" : "处理文件"\}/);
-  assert.match(composer, /community-upload-progress/);
+  assert.doesNotMatch(composer, /apiUploadRequest|uploadCommunityMedia|community-upload-progress/);
+  assert.doesNotMatch(composer, /type="file"|accept="[^\"]*(?:image|video)/);
+});
+
+test("web comment menus match the apps' comment and author safety controls", () => {
+  const feed = readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
+  const locale = readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
+
+  assert.match(feed, /reportCommunityContent\("comment", commentItem\.id\)/);
+  assert.match(feed, /reportCommunityContent\("user", commentItem\.user_id\)/);
+  assert.match(feed, /setCommunityBlock\(commentItem\.user_id, true\)/);
+  assert.match(feed, /onReportCommentUser=\{\(post, item\) => void reportCommentUser\(post, item\)\}/);
+  assert.match(feed, /onBlockCommentUser=\{\(post, item\) => void blockCommentUser\(post, item\)\}/);
+  assert.match(locale, /"community\.feed\.reportUser": "Report user"/);
+  assert.match(locale, /"community\.feed\.reportUserConfirm": "Report this user\?/);
 });
 
 test("community image validation accepts the exact byte limit and detects MIME or extension", () => {

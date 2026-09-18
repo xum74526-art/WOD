@@ -2,18 +2,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { fallbackWebProductImage, resolveWebProductImage } from "../lib/product-image.ts";
+import { DEFAULT_WEB_PRODUCT_IMAGE, fallbackWebProductImage, resolveWebProductImage } from "../lib/product-image.ts";
 import { clampPurchaseHours, estimateProductExpiryRebate, localizeRebateHint } from "../lib/product-purchase.ts";
 import { localizeMarketRegion } from "../lib/market-localization.ts";
 
-test("Web product images safely honor image_url and give B300 a real fallback", () => {
-  assert.equal(fallbackWebProductImage("B300 288GB"), "/images/h100.jpg");
-  assert.equal(resolveWebProductImage("/static/gpu/gpu.png", "B300"), "/images/h100.jpg");
-  assert.equal(resolveWebProductImage("/uploads/unreachable.jpg", "B300"), "/images/h100.jpg");
-  assert.equal(resolveWebProductImage("https://cdn.example.com/gpu.webp", "A100"), "https://cdn.example.com/gpu.webp");
-  assert.equal(resolveWebProductImage("http://127.0.0.1/private.png", "A100"), "/images/a800.jpg");
-  assert.equal(resolveWebProductImage("http://localhost/private.png", "B300"), "/images/h100.jpg");
-  assert.equal(resolveWebProductImage("javascript:alert(1)", "RTX 5090"), "/images/rtx5090.jpg");
+test("Web product images use only the reviewed neutral release asset", () => {
+  assert.equal(fallbackWebProductImage("B300 288GB"), DEFAULT_WEB_PRODUCT_IMAGE);
+  for (const value of [
+    "/static/gpu/gpu.png",
+    "/uploads/unreachable.jpg",
+    "https://cdn.example.com/gpu.webp",
+    "http://127.0.0.1/private.png",
+    "http://localhost/private.png",
+    "javascript:alert(1)",
+  ]) {
+    assert.equal(resolveWebProductImage(value, "B300"), DEFAULT_WEB_PRODUCT_IMAGE);
+  }
 });
 
 test("Web English market localizes every canonical KAI region", () => {

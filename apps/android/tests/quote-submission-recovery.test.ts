@@ -16,6 +16,7 @@ function fixture(sequence: MockAttempt[]) {
   const toasts: Array<{ title: string; icon: string }> = []
   const requireMock = (name: string) => {
     if (name === '@/utils/auth') return { getToken: () => 'session-token', clearAuth: () => {} }
+    if (name === '@/utils/privacy-consent') return { requirePrivacyConsent: () => {} }
     if (name === '@/utils/auth-return-path') return { stageAuthReturnPath: () => {} }
     if (name === '@/utils/config') return { API_BASE: 'https://example.invalid/api' }
     if (name === '@/store/i18n') {

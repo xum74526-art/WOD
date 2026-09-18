@@ -35,6 +35,8 @@ from app.utils.response import success, BizError
 from app.utils.captcha import create_captcha, verify_captcha
 from app.services import kai_auth
 from app.services import account_recovery
+from app.services import account_deletion
+from app.services.community_safety import validate_public_display_name
 
 INIT_BALANCE = Decimal("0")  # 无初始余额
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -65,6 +67,7 @@ def _ensure_invite_code(user_id: int, db: Session) -> str:
 
 def register(data: RegisterIn, db: Session = Depends(get_db)):
     limit_register_request()
+    username = validate_public_display_name(data.username)
     # Reject an already-full phone bucket before consuming a one-time captcha,
     # but do not let invalid captcha guesses spend another person's quota.
     ensure_register_account_available(data.phone)
@@ -85,7 +88,7 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
     # login identifier and must not be represented as SMS-verified/bound.
     try:
         user = User(
-            username=data.username,
+            username=username,
             phone=data.phone,
             phone_bound=False,
             password=hash_password(data.password),
@@ -262,7 +265,11 @@ async def kai_callback(
                 kai_auth.append_return_params(return_url, kai_bind_ticket=ticket),
                 status_code=302,
             )
-        user = kai_auth.find_bound_user(db, claims)
+        user = kai_auth.find_bound_user(
+            db,
+            claims,
+            expected_user_id=flow.user_id if flow.intent == "delete" else None,
+        )
         if not user:
             return RedirectResponse(
                 kai_auth.append_return_params(return_url, kai_error="identity_not_bound"),
@@ -274,6 +281,15 @@ async def kai_callback(
                 kai_auth.append_return_fragment(
                     return_url,
                     kai_recovery_token=recovery_token,
+                ),
+                status_code=302,
+            )
+        if flow.intent == "delete":
+            deletion_token = account_deletion.issue_kai_reauth_token(db, user)
+            return RedirectResponse(
+                kai_auth.append_return_fragment(
+                    return_url,
+                    kai_deletion_token=deletion_token,
                 ),
                 status_code=302,
             )

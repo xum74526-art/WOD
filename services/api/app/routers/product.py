@@ -75,7 +75,7 @@ def _current_product_query(
     # eligible for the public catalogue. Retired sources remain audit-only.
     approved_supplier_ids = db.query(Supplier.id).filter(Supplier.status == "approved")
     source_filters = []
-    if include_merchants:
+    if include_merchants and settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED is True:
         source_filters.append(and_(
             or_(
                 Product.market_source == "wod",
@@ -531,6 +531,8 @@ def get_product(pid: int, db: Session = Depends(get_db)):
     if not p:
         raise BizError("商品不存在", status_code=404)
     if product_market_source(p) == "wod":
+        if settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED is not True:
+            raise BizError("商品不存在", status_code=404)
         approved_supplier = db.query(Supplier.id).filter(
             Supplier.id == p.supplier_id,
             Supplier.status == "approved",
@@ -547,6 +549,11 @@ def get_product(pid: int, db: Session = Depends(get_db)):
 def price_trend(pid: int, db: Session = Depends(get_db)):
     p = db.query(Product).filter(Product.id == pid).first()
     if not p:
+        raise BizError("商品不存在", status_code=404)
+    if (
+        product_market_source(p) == "wod"
+        and settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED is not True
+    ):
         raise BizError("商品不存在", status_code=404)
     from app.models.market_price import MarketPriceSnapshot
     from app.services.gpu_catalog import canonicalize_gpu, gpu_variant_aliases, normalize_gpu_variant

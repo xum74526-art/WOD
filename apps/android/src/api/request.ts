@@ -2,6 +2,7 @@ import { getToken, clearAuth } from '@/utils/auth'
 import { API_BASE } from '@/utils/config'
 import { useI18nStore } from '@/store/i18n'
 import { stageAuthReturnPath } from '@/utils/auth-return-path'
+import { requirePrivacyConsent } from '@/utils/privacy-consent'
 
 export interface ApiResponse<T = unknown> {
   code: number
@@ -47,12 +48,27 @@ function trustedPublicJsonHeaders(value: TrustedPublicJsonRequestOptions['header
   return result
 }
 
+function rejectWhenPrivacyConsentIsMissing(reject: (reason?: unknown) => void): boolean {
+  try {
+    requirePrivacyConsent()
+    return false
+  } catch (error) {
+    reject(error)
+    return true
+  }
+}
+
 /**
  * Credential-free transport for the one approved public metadata origin.
  * Session tokens, locale headers and API response-envelope handling must never
  * be added here because the destination is outside the canonical KAI API.
  */
 export function requestTrustedPublicJson<T = unknown>(options: TrustedPublicJsonRequestOptions): Promise<T> {
+  try {
+    requirePrivacyConsent()
+  } catch (error) {
+    return Promise.reject(error)
+  }
   const url = trustedPublicJsonUrl(options.url)
   if (!url) return Promise.reject(new Error('Untrusted public JSON request URL'))
 
@@ -70,13 +86,17 @@ export function requestTrustedPublicJson<T = unknown>(options: TrustedPublicJson
       timeout,
       header,
       success: (response) => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(response.data as T)
           return
         }
         reject(new Error(`Public JSON request failed with HTTP ${response.statusCode}`))
       },
-      fail: reject,
+      fail: (error) => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
+        reject(error)
+      },
     })
   })
 }
@@ -126,10 +146,24 @@ export function request<T = unknown>(options: {
   /** Only for mutations whose server endpoint safely reconciles an identical retry. */
   retryUncertainOnce?: boolean
 }): Promise<T> {
+  try {
+    requirePrivacyConsent()
+  } catch (error) {
+    return Promise.reject(error)
+  }
   const token = options.auth === 'none' ? '' : getToken()
   const i18n = useI18nStore()
   return new Promise((resolve, reject) => {
     const send = (attempt: 0 | 1) => {
+      try {
+        // Consent can be withdrawn while an earlier attempt is in flight.
+        // Recheck immediately before every attempt so an automatic retry can
+        // never become a new post-withdrawal business request.
+        requirePrivacyConsent()
+      } catch (error) {
+        reject(error)
+        return
+      }
       uni.request({
         url: API_BASE + options.url,
         method: options.method || 'GET',
@@ -141,6 +175,7 @@ export function request<T = unknown>(options: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         success: (res) => {
+          if (rejectWhenPrivacyConsentIsMissing(reject)) return
           const body = responseBody<T>(res.data)
           if (res.statusCode === 401 || body.code === 401) {
             if (options.auth === 'none' || options.unauthorized === 'reject') {
@@ -172,6 +207,7 @@ export function request<T = unknown>(options: {
           resolve(body.data as T)
         },
         fail: (err) => {
+          if (rejectWhenPrivacyConsentIsMissing(reject)) return
           if (options.retryUncertainOnce && attempt === 0) {
             send(1)
             return
@@ -195,6 +231,11 @@ export function upload<T = unknown>(options: {
   timeout?: number
   onProgress?: (progress: number) => void
 }): Promise<T> {
+  try {
+    requirePrivacyConsent()
+  } catch (error) {
+    return Promise.reject(error)
+  }
   const token = getToken()
   const i18n = useI18nStore()
   return new Promise((resolve, reject) => {
@@ -210,6 +251,7 @@ export function upload<T = unknown>(options: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success: (res) => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
         let body: Partial<ApiResponse<T>> = {}
         try {
           body = responseBody<T>(typeof res.data === 'string' ? JSON.parse(res.data) : res.data)
@@ -230,11 +272,17 @@ export function upload<T = unknown>(options: {
         resolve(body.data as T)
       },
       fail: (err) => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
         if (!options.silent) uni.showToast({ title: i18n.t('网络异常'), icon: 'none' })
         reject(err)
       },
     })
     task.onProgressUpdate?.((event) => {
+      try {
+        requirePrivacyConsent()
+      } catch {
+        return
+      }
       const progress = Math.max(0, Math.min(100, Math.round(Number(event.progress) || 0)))
       options.onProgress?.(progress)
     })
@@ -242,6 +290,11 @@ export function upload<T = unknown>(options: {
 }
 
 export function download(options: { url: string; silent?: boolean }): Promise<string> {
+  try {
+    requirePrivacyConsent()
+  } catch (error) {
+    return Promise.reject(error)
+  }
   const token = getToken()
   const i18n = useI18nStore()
   return new Promise((resolve, reject) => {
@@ -249,6 +302,7 @@ export function download(options: { url: string; silent?: boolean }): Promise<st
       url: API_BASE + options.url,
       header: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       success: result => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
         if (result.statusCode >= 200 && result.statusCode < 300) {
           resolve(result.tempFilePath)
           return
@@ -257,6 +311,7 @@ export function download(options: { url: string; silent?: boolean }): Promise<st
         reject(new Error(i18n.t('photoLoadFailed')))
       },
       fail: error => {
+        if (rejectWhenPrivacyConsentIsMissing(reject)) return
         if (!options.silent) uni.showToast({ title: i18n.t('photoLoadFailed'), icon: 'none' })
         reject(error)
       },

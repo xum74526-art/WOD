@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 from pydantic import ValidationError
@@ -415,12 +416,13 @@ class SecurityStateTests(unittest.TestCase):
         )
         self.db.add(product)
         self.db.commit()
-        data = store_page(self.supplier.id, self.db)["data"]["supplier"]
-        self.assertEqual(data["phone"], "139****0002")
-        self.assertNotIn("13900000002", str(data))
-        self.assertEqual(data["company_name"], "审核通过商家")
-        products = store_page(self.supplier.id, self.db)["data"]["products"]
-        self.assertTrue(products[0]["purchasable"])
+        with patch.object(settings, "THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED", True):
+            data = store_page(self.supplier.id, self.db)["data"]["supplier"]
+            self.assertEqual(data["phone"], "139****0002")
+            self.assertNotIn("13900000002", str(data))
+            self.assertEqual(data["company_name"], "审核通过商家")
+            products = store_page(self.supplier.id, self.db)["data"]["products"]
+            self.assertTrue(products[0]["purchasable"])
 
     def test_legacy_test_returns_and_rewards_are_not_spendable(self):
         settings.REVENUE_SETTLEMENT_ENABLED = False

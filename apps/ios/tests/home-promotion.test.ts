@@ -25,9 +25,9 @@ test('mobile homepage app promotions use approved local assets and real internal
     '/pages/buy-request/index?compose=1',
   ])
   assert.deepEqual(HOME_PROMOTIONS.map((item) => item.image), [
-    '/static/gpu/RTX5090.jpg',
-    '/static/gpu/H100.jpg',
-    '/static/gpu/RTX4090.jpg',
+    '/static/products/gpu.png',
+    '/static/products/gpu.png',
+    '/static/products/gpu.png',
   ])
   assert.equal(HOME_PROMOTIONS[0]?.id, 'hourly')
   assert.equal(HOME_PROMOTIONS[2]?.id, 'request')
