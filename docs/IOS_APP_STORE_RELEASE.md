@@ -10,7 +10,7 @@
 | DCloud AppID | `__UNI__47CF9D3` |
 | Bundle ID | `com.kai.ztwstarmap` |
 | Marketing Version | `1.2.1` |
-| Build | `121` |
+| Build | `122` |
 | 支持设备 | iPhone |
 | 生产 API | `https://wod.kai.com/api` |
 | 业务模式 | 算力需求撮合；直接交易、支付、充值和提现保持关闭 |
@@ -24,7 +24,7 @@
 - 审核构建由 API 的发布策略关闭第三方聚合内容；客户端的兼容查询参数不能绕过该策略。
 - 首版审核由 API 关闭用户图片/视频发布，并隐藏历史用户媒体动态及其详情、评论、点赞和媒体直链；iOS、Android 与 Web 发布器只展示文字和话题入口。
 - 社区公开响应不返回用户头像；新注册和资料修改会过滤公开昵称，历史不合规昵称回退为安全通用名称。
-- 三端商品卡首版只使用仓库内的中性 GPU 插图，并忽略服务端返回的产品照片 URL；来源或再分发权未完整归档的旧产品照片不进入发布包。
+- 三端商品卡使用仓库内已完成权利确认的 GPU 图片；Wikimedia Commons 衍生图片的原作、作者、许可、修改方式和型号复用关系记录在各移动端的 `src/static/gpu/ATTRIBUTION.md`，并通过 App 设置中的“图片来源与许可”和 Web `/image-attributions` 向用户公开。其余项目图片由运营方持有所有权或已取得直接使用授权。
 - App 内有账号注销入口，公开注销说明可访问。
 - iOS 隐私清单位于 `apps/ios/nativeResources/ios/PrivacyInfo.xcprivacy`。
 - 相册和相机权限仅用于头像与身份认证资料，说明提供英文、简体中文和繁体中文版本；审核包不声明麦克风用途。
@@ -78,6 +78,7 @@ git diff --check
 - 生产 API 的 `/api/v1/health` 正常；
 - API、Web 和移动端来自同一提交并已完成服务器部署验收；
 - `https://wod.kai.com/privacy` 与 `https://wod.kai.com/terms` 展示的版本、更新日期和正文与 App 内置法律文本一致；
+- `https://wod.kai.com/image-attributions` 可公开访问，App 设置中的“图片来源与许可”能够打开并展示简体中文、繁体中文和英文署名；
 - 普通用户和商家审核账号可用，验证码、KYC 或待审核状态不会阻断 Apple 审核员；
 - 审核账号不要求审核员提交真实身份证或银行卡；
 - 账号注销、发帖、评论、举报、屏蔽和客服入口实际可用；
@@ -119,6 +120,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 - `CFBundleIdentifier`、版本、Build、最低系统版本和设备范围正确；
 - `DTSDKName` 显示 iOS 26 或更高版本；Apple 自 2026 年 4 月 28 日起要求上传包使用 iOS 26 SDK 或更高版本构建；
 - App 图标和冷启动画面均为本次品牌资源，卸载旧版后重装验证；
+- 首页、算力市场和商品详情显示与型号映射一致的已授权 GPU 图片；图片加载失败时仍回退到项目自有中性插图，且设置中的图片署名与最终 IPA 内资源一致；
 - 主 App 和所有第三方 Framework 的隐私清单完整；
 - Xcode Privacy Report 中的数据类型、域名和 Required Reason API 与实际用途一致；
 - 相册和相机只在用户主动选择头像或身份认证资料时请求，三种语言的系统弹窗文案正确；审核包不请求麦克风权限；
@@ -139,6 +141,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 | Support URL | `https://wod.kai.com/contact` |
 | User Privacy Choices / Account Deletion | `https://wod.kai.com/account-deletion` |
 | Terms / EULA | `https://wod.kai.com/terms` |
+| Image Sources & Licenses | `https://wod.kai.com/image-attributions` |
 | Marketing URL（可选） | `https://wod.kai.com/info` |
 
 还需准备：

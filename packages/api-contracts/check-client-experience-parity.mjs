@@ -13,6 +13,38 @@ function source(relative) {
 // Web, Android and iOS. Platform-only integrations do not belong here.
 const commonCapabilities = [
   {
+    name: 'GPU image rights disclosure',
+    evidence: [
+      {
+        client: 'Web attribution page',
+        file: 'apps/web/app/image-attributions/image-attributions-content.tsx',
+        patterns: ['RTX2060.jpg', 'RTX5080.jpg', 'sourceUrl:', 'licenseUrl:', 'directly licensed for use'],
+      },
+      {
+        client: 'Web footer entry',
+        file: 'apps/web/components/site-footer.tsx',
+        patterns: ['href="/image-attributions"', 'footer.imageAttributions'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} attribution data`,
+          file: `apps/${client}/src/config/image-attributions.ts`,
+          patterns: ['RTX2060.jpg', 'RTX5080.jpg', 'sourceUrl:', 'licenseUrl:', 'modificationKey:', 'aliases:'],
+        },
+        {
+          client: `${client} attribution page`,
+          file: `apps/${client}/src/pages/image-attributions/index.vue`,
+          patterns: ['IMAGE_ATTRIBUTIONS', 'imageAttributionsDirectRightsDescription', 'openExternalLink'],
+        },
+        {
+          client: `${client} settings entry`,
+          file: `apps/${client}/src/pages/settings/index.vue`,
+          patterns: ["nav('/pages/image-attributions/index')", "t('imageAttributionsTitle')"],
+        },
+      ]),
+    ],
+  },
+  {
     name: 'idempotent community likes',
     evidence: [
       {

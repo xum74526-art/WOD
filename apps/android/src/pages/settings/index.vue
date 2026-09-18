@@ -100,6 +100,13 @@
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
+        <view class="menu-item" @tap="nav('/pages/image-attributions/index')">
+          <view class="mi-left">
+            <AppIcon name="verified" :size="40" />
+            <text class="mi-text">{{ t('imageAttributionsTitle') }}</text>
+          </view>
+          <AppIcon name="chevron" :size="36" />
+        </view>
         <view class="menu-item" @tap="showPrivacyWithdrawal = true">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />

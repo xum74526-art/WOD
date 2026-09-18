@@ -22,9 +22,10 @@
             <image
               class="promo-background"
               :class="`promo-background--${slide.id}`"
-              :src="slide.image"
+              :src="promotionImage(slide)"
               mode="aspectFill"
               :aria-label="t(slide.imageAltKey)"
+              @error="markPromotionImageFailed(slide.id)"
             />
             <view class="promo-shade" aria-hidden="true" />
             <view class="promo-copy">
@@ -105,12 +106,15 @@ import { navigateTo } from '@/utils/nav'
 import {
   HOME_NOTICES,
   HOME_PROMOTIONS,
+  type HomePromotionItem,
   type HomePromotionNavigation,
 } from '@/config/home-promotions'
+import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 
 const { t } = useI18nStore()
 const currentIndex = ref(0)
 const autoplayEnabled = ref(true)
+const failedPromotionImages = ref<Partial<Record<HomePromotionItem['id'], boolean>>>({})
 
 onMounted(() => {
   // #ifdef H5
@@ -131,6 +135,16 @@ function previousSlide() {
 
 function nextSlide() {
   currentIndex.value = (currentIndex.value + 1) % HOME_PROMOTIONS.length
+}
+
+function promotionImage(item: HomePromotionItem): string {
+  return failedPromotionImages.value[item.id]
+    ? fallbackProductImage()
+    : resolveProductImage(item.image)
+}
+
+function markPromotionImageFailed(id: HomePromotionItem['id']) {
+  failedPromotionImages.value[id] = true
 }
 
 function openItem(item: { route: string; navigation: HomePromotionNavigation }) {

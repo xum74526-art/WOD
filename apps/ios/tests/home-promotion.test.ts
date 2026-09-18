@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { HOME_NOTICES, HOME_PROMOTIONS } from '../src/config/home-promotions.ts'
+import { resolveProductImage } from '../src/utils/product-image.ts'
 
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -25,14 +26,15 @@ test('mobile homepage app promotions use approved local assets and real internal
     '/pages/buy-request/index?compose=1',
   ])
   assert.deepEqual(HOME_PROMOTIONS.map((item) => item.image), [
-    '/static/products/gpu.png',
-    '/static/products/gpu.png',
-    '/static/products/gpu.png',
+    '/static/gpu/RTX5090.jpg',
+    '/static/gpu/H100.jpg',
+    '/static/gpu/RTX4090.jpg',
   ])
   assert.equal(HOME_PROMOTIONS[0]?.id, 'hourly')
   assert.equal(HOME_PROMOTIONS[2]?.id, 'request')
   for (const item of HOME_PROMOTIONS) {
     assert.equal(item.image.startsWith('/static/'), true)
+    assert.equal(resolveProductImage(item.image), item.image)
     assert.equal(existsSync(new URL(`../src${item.image}`, import.meta.url)), true, `${item.image} must be bundled`)
   }
   assert.deepEqual(HOME_NOTICES.map((item) => item.route), HOME_PROMOTIONS.map((item) => item.route))
@@ -72,7 +74,9 @@ test('mobile promotion carousel uses a dark media card with internal paging and 
   assert.match(carousel, /circular/)
   assert.match(carousel, /class="promo-stage"/)
   assert.match(carousel, /class="promo-inline-controls"/)
-  assert.match(carousel, /class="promo-background"[\s\S]*?mode="aspectFill"/)
+  assert.match(carousel, /class="promo-background"[\s\S]*?:src="promotionImage\(slide\)"[\s\S]*?mode="aspectFill"/)
+  assert.match(carousel, /@error="markPromotionImageFailed\(slide\.id\)"/)
+  assert.match(carousel, /failedPromotionImages[\s\S]*?fallbackProductImage\(\)[\s\S]*?: resolveProductImage\(item\.image\)/)
   assert.match(carousel, /class="promo-shade"/)
   assert.match(carousel, /background: #081A20;/)
   assert.match(carousel, /background: #8EDDE7;/)

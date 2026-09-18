@@ -6,17 +6,99 @@ import { DEFAULT_WEB_PRODUCT_IMAGE, fallbackWebProductImage, resolveWebProductIm
 import { clampPurchaseHours, estimateProductExpiryRebate, localizeRebateHint } from "../lib/product-purchase.ts";
 import { localizeMarketRegion } from "../lib/market-localization.ts";
 
-test("Web product images use only the reviewed neutral release asset", () => {
-  assert.equal(fallbackWebProductImage("B300 288GB"), DEFAULT_WEB_PRODUCT_IMAGE);
+test("Web resolves API and local GPU paths through the shared exact allowlist", () => {
+  const cases: Array<[string, string]> = [
+    ["/static/gpu/H100.jpg", "/images/gpu/H100.jpg"],
+    ["/images/gpu/rtx4090.JPG", "/images/gpu/RTX4090.jpg"],
+    ["/static/gpu/RTX 4060 Ti.webp", "/images/gpu/RTX4070.jpg"],
+    ["/static/gpu/RTX5070TI.jpg", "/images/gpu/RTX5070.jpg"],
+    ["/static/gpu/RTX2080TI.jpg", "/images/gpu/RTX2080Ti.jpg"],
+    ["/static/gpu/VGPU32.jpg", "/images/gpu/vGPU32.jpg"],
+    ["/static/gpu/B200.jpg", "/images/gpu/B200.jpg"],
+    ["/static/gpu/B300.jpg", "/images/gpu/B300.jpg"],
+    ["/static/gpu/MI300X.jpg", "/images/gpu/MI300X.jpg"],
+    ["/static/gpu/P100.jpg", "/images/gpu/P100.jpg"],
+  ];
+
+  for (const [source, expected] of cases) {
+    assert.equal(resolveWebProductImage(source), expected);
+    assert.equal(fs.existsSync(new URL(`../public${expected}`, import.meta.url)), true, expected);
+  }
+
+  assert.equal(fallbackWebProductImage("RTX5000"), "/images/gpu/RTXPRO6000.jpg");
+  assert.equal(fallbackWebProductImage("RTX 5090"), "/images/gpu/RTX5090.jpg");
+  assert.equal(fallbackWebProductImage("unknown accelerator"), DEFAULT_WEB_PRODUCT_IMAGE);
+  assert.equal(resolveWebProductImage(DEFAULT_WEB_PRODUCT_IMAGE, "H100"), DEFAULT_WEB_PRODUCT_IMAGE);
+});
+
+test("unsafe and unknown image values fall back by exact GPU model or to the neutral image", () => {
   for (const value of [
     "/static/gpu/gpu.png",
     "/uploads/unreachable.jpg",
-    "https://cdn.example.com/gpu.webp",
+    "/images/gpu/unapproved.jpg",
+    "/images/gpu/H100.jpg?variant=80gb",
+    "/images/gpu/../H100.jpg",
+    "/images/gpu/%2e%2e%2fH100.jpg",
+    "https://cdn.example.com/H100.webp",
+    "https://wod.kai.com/images/gpu/H100.jpg",
     "http://127.0.0.1/private.png",
     "http://localhost/private.png",
+    "data:image/png;base64,AAAA",
     "javascript:alert(1)",
   ]) {
-    assert.equal(resolveWebProductImage(value, "B300"), DEFAULT_WEB_PRODUCT_IMAGE);
+    assert.equal(resolveWebProductImage(value, "B300"), "/images/gpu/B300.jpg", value);
+  }
+
+  assert.equal(resolveWebProductImage(undefined, "H100"), "/images/gpu/H100.jpg");
+  assert.equal(resolveWebProductImage("", "H100"), "/images/gpu/H100.jpg");
+  assert.equal(resolveWebProductImage(null, "unknown accelerator"), DEFAULT_WEB_PRODUCT_IMAGE);
+  assert.equal(resolveWebProductImage("not-an-image", "unknown accelerator"), DEFAULT_WEB_PRODUCT_IMAGE);
+});
+
+test("all current production GPU model paths resolve to existing Web assets", () => {
+  const productionModels = [
+    "A10", "A30", "A40", "A100", "A4000", "A5000", "A6000", "A800",
+    "B200", "B300", "H100", "H200", "L40", "L40S", "RTX2000", "RTX2060",
+    "RTX2070", "RTX2070SUPER", "RTX2080", "RTX2080TI", "RTX3050", "RTX3060",
+    "RTX3060TI", "RTX3070", "RTX3070TI", "RTX3080", "RTX3080TI", "RTX3090",
+    "RTX3090TI", "RTX4000", "RTX4060", "RTX4060TI", "RTX4070", "RTX4070SUPER",
+    "RTX4070TI", "RTX4080", "RTX4080SUPER", "RTX4090", "RTX4090D", "RTX4500",
+    "RTX5000", "RTX5060", "RTX5060TI", "RTX5070", "RTX5070TI", "RTX5080",
+    "RTX5090", "RTX5880", "RTX6000", "RTXPRO6000", "T4", "V100",
+  ];
+
+  assert.equal(productionModels.length, 52);
+  for (const model of productionModels) {
+    const image = resolveWebProductImage(`/static/gpu/${model}.jpg`, model);
+    assert.notEqual(image, DEFAULT_WEB_PRODUCT_IMAGE, model);
+    assert.equal(fs.existsSync(new URL(`../public${image}`, import.meta.url)), true, image);
+  }
+});
+
+test("Web and mobile keep the same canonical mapping for every known GPU alias", () => {
+  const parseAllowlist = (source: string) => Array.from(
+    source.matchAll(/^\s*([A-Z0-9]+): ["']([^"']+)["'],$/gm),
+    (match) => [match[1], match[2]],
+  ).sort(([left], [right]) => left.localeCompare(right));
+
+  const webSource = fs.readFileSync(new URL("../lib/product-image.ts", import.meta.url), "utf8");
+  const iosSource = fs.readFileSync(new URL("../../ios/src/utils/product-image.ts", import.meta.url), "utf8");
+  assert.deepEqual(parseAllowlist(webSource), parseAllowlist(iosSource));
+});
+
+test("Web bundles the same 72 licensed GPU files as the mobile clients", () => {
+  const assetNames = (directory: URL) => fs.readdirSync(directory)
+    .filter((name) => /\.jpg$/i.test(name))
+    .sort();
+  const webDirectory = new URL("../public/images/gpu/", import.meta.url);
+  const iosDirectory = new URL("../../ios/src/static/gpu/", import.meta.url);
+  const webAssets = assetNames(webDirectory);
+  const iosAssets = assetNames(iosDirectory);
+
+  assert.equal(webAssets.length, 72);
+  assert.deepEqual(webAssets, iosAssets);
+  for (const name of webAssets) {
+    assert.deepEqual(fs.readFileSync(new URL(name, webDirectory)), fs.readFileSync(new URL(name, iosDirectory)), name);
   }
 });
 

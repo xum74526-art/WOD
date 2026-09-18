@@ -1,0 +1,22 @@
+.page { max-width: 1060px; }
+.notice { max-width: 780px; font-size: 13px !important; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.card { padding: 25px; border: 1px solid var(--public-line); border-radius: 20px; background: var(--public-surface); box-shadow: 0 14px 38px rgb(16 67 64 / .06); }
+.card small { color: var(--public-accent); font-size: 10px; font-weight: 750; letter-spacing: .08em; }
+.card h2 { margin: 8px 0 20px; color: var(--public-ink); font-size: 20px; line-height: 1.35; }
+.card dl { margin: 0; }
+.card dl > div { padding: 12px 0; border-top: 1px solid var(--public-line); }
+.card dt { color: var(--public-muted); font-size: 11px; }
+.card dd { margin: 5px 0 0; color: var(--public-ink); font-size: 13px; line-height: 1.6; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.links a, .back { display: inline-flex; min-height: 38px; padding: 0 15px; border: 1px solid var(--public-line); border-radius: 999px; align-items: center; gap: 6px; color: var(--public-accent); font-size: 12px; font-weight: 680; text-decoration: none; }
+.links a:hover, .back:hover { border-color: var(--public-accent); }
+.directRights { margin-top: 24px; padding: 28px; border: 1px solid var(--public-line); border-radius: 20px; background: var(--public-soft); }
+.directRights h2 { margin: 0; color: var(--public-ink); font-size: 22px; }
+.directRights p { margin: 12px 0 0; color: var(--public-muted); font-size: 13px; line-height: 1.75; }
+.back { margin-top: 24px; }
+
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+  .card, .directRights { padding: 21px; }
+}

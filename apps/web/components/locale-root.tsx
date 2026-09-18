@@ -56,6 +56,7 @@ const english: Record<string, string> = {
   "footer.help": "Help Center",
   "footer.terms": "Terms of Service",
   "footer.privacy": "Privacy Notice",
+  "footer.imageAttributions": "Image Sources & Licenses",
   "home.title": "GPU servers,\nready on demand",
   "home.description": "Review GPU models, configurations, live market data, sellers, and fulfillment methods. Submit a requirement and our team will confirm availability, pricing, and delivery.",
   "home.step1.title": "Choose resources",

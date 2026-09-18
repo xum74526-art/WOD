@@ -23,6 +23,7 @@
     { "path": "pages/withdrawals/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/withdrawals/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/settings/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/image-attributions/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/account-deletion/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/notifications/index", "style": { "navigationStyle": "custom", "enablePullDownRefresh": true, "backgroundTextStyle": "dark" } },
     { "path": "pages/verification/index", "style": { "navigationStyle": "custom" } },
