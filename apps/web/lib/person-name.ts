@@ -4,9 +4,17 @@ import { toTraditionalChinese } from "./traditional-chinese.ts";
 
 const PERSON_EN: Record<string, string> = {
   "体验用户": "Demo User",
-  "WOD资讯": "算力星图 News",
-  "ZTW资讯": "算力星图 News",
 };
+
+const PLATFORM_MARKET_NAMES = new Set([
+  "WOD资讯",
+  "ZTW资讯",
+  "ZTW資訊",
+  "算力星图资讯",
+  "算力星图資訊",
+  "算力星图平台行情",
+  "算力星圖平台行情",
+]);
 
 /**
  * Localize a Chinese personal name for display only. Callers must keep the
@@ -15,8 +23,9 @@ const PERSON_EN: Record<string, string> = {
  */
 export function localizePersonName(value: string | null | undefined, locale: KaiLocale) {
   const source = String(value ?? "").trim();
-  if ((source === "WOD资讯" || source === "ZTW资讯") && locale === "zh-Hans") return "算力星图资讯";
-  if ((source === "WOD资讯" || source === "ZTW资讯") && locale === "zh-Hant") return "算力星图資訊";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hans") return "算力星图平台行情";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hant") return "算力星圖平台行情";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "en") return "算力星图 Platform Market";
   if (source && locale === "zh-Hant") return toTraditionalChinese(source);
   if (!source || locale !== "en") return source;
   if (PERSON_EN[source]) return PERSON_EN[source];

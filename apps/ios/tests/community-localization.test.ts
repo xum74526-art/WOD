@@ -7,7 +7,7 @@ const detailSource = readFileSync(new URL('../src/pages/community/detail.vue', i
 const localeSource = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
 
 test('community categories and empty states follow the active language', () => {
-  assert.match(indexSource, /:items="\[t\('recommend'\), t\('follow'\), t\('latest'\), t\('video'\)\]"/)
+  assert.match(indexSource, /:items="\[t\('recommend'\), t\('follow'\), t\('latest'\)\]"/)
   assert.match(indexSource, /:text="searching \? t\('noResults'\) : t\('noPosts'\)"/)
   assert.match(detailSource, /:text="t\('暂无评论，快来抢沙发'\)"/)
 

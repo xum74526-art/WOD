@@ -867,7 +867,7 @@ const ZH: Record<string, string> = {
   // TabBar
   tabHome: '首页',
   tabMarket: '算力',
-  tabCommunity: '资讯',
+  tabCommunity: '社区',
   tabAssets: '资产',
   tabProfile: '我的',
 
@@ -929,7 +929,7 @@ const ZH: Record<string, string> = {
   send: '发送',
   commentSuccess: '评论成功',
   copied: '已复制内容',
-  autoNews: '自动资讯',
+  autoNews: '平台行情',
   sourceLabel: '来源',
   viewOriginal: '查看原文',
   watchOnSource: '在来源网站观看',
@@ -967,6 +967,7 @@ const ZH: Record<string, string> = {
   duplicateCommunityImage: '请勿重复添加同一张图片',
   mixedCommunityMedia: '图片和视频不能同时发布',
   videoDurationWithoutVideo: '视频时长只能随视频提交',
+  communityScopeNotice: '社区仅限算力产品、站内行情与技术交流，请勿发布或转载新闻、公共事务及突发事件报道。',
 
   // Assets
   myAssets: '我的资产',
@@ -2682,7 +2683,7 @@ const EN: Record<string, string> = {
   // TabBar
   tabHome: 'Home',
   tabMarket: 'GPU',
-  tabCommunity: 'News',
+  tabCommunity: 'Community',
   tabAssets: 'Assets',
   tabProfile: 'Me',
 
@@ -2744,7 +2745,7 @@ const EN: Record<string, string> = {
   send: 'Send',
   commentSuccess: 'Comment posted',
   copied: 'Content copied',
-  autoNews: 'Auto News',
+  autoNews: 'Platform Market',
   sourceLabel: 'Source',
   viewOriginal: 'Read Original',
   watchOnSource: 'Watch on Source',
@@ -2782,6 +2783,7 @@ const EN: Record<string, string> = {
   duplicateCommunityImage: 'Do not add the same image more than once',
   mixedCommunityMedia: 'Images and video cannot be posted together',
   videoDurationWithoutVideo: 'Video duration can only be submitted with a video',
+  communityScopeNotice: 'Community posts are limited to compute products, platform market updates, and technical discussion. Do not publish or repost news, public affairs, or emergency reports.',
 
   // Assets
   myAssets: 'My Assets',

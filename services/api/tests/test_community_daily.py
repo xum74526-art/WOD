@@ -85,7 +85,7 @@ class CommunityDailyTests(unittest.TestCase):
         db.query.return_value.filter.return_value.first.return_value = user
 
         self.assertIs(_get_system_user(db), user)
-        self.assertEqual(user.username, "算力星图资讯")
+        self.assertEqual(user.username, "算力星图平台行情")
         self.assertEqual(user.phone, "wod-community")
         db.flush.assert_called_once_with()
 

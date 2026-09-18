@@ -48,10 +48,10 @@ test('an edited nickname is displayed and submitted exactly as entered', () => {
 })
 
 test('legacy WOD news account is presented with the 算力星图 brand without changing stored data', () => {
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), '算力星图资讯')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), '算力星图資訊')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), '算力星图 News')
-  assert.equal(profileUsernameSubmissionValue('WOD资讯', '算力星图资讯', false), 'WOD资讯')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), '算力星图平台行情')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), '算力星圖平台行情')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), '算力星图 Platform Market')
+  assert.equal(profileUsernameSubmissionValue('WOD资讯', '算力星图平台行情', false), 'WOD资讯')
 })
 
 test('only historical first-party news copy receives the 算力星图 display brand', () => {

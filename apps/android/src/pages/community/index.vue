@@ -15,7 +15,7 @@
         <text class="title">{{ t("tabCommunity") }}</text>
         <view class="top-actions" @tap="enterSearch"><AppIcon name="search" :size="40" /></view>
       </view>
-      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="[t('recommend'), t('follow'), t('latest'), t('video')]" :model-value="tab" @update:model-value="onTab" /></view>
+      <view v-if="!searching" class="seg-wrap"><SegmentedControl :items="[t('recommend'), t('follow'), t('latest')]" :model-value="tab" @update:model-value="onTab" /></view>
 
       <view v-if="loading && !list.length" class="state">{{ t("loading") }}</view>
       <view v-else-if="loadError && !list.length" class="state error-state">
@@ -116,7 +116,7 @@ const loadError = ref(false)
 const finished = ref(false)
 const page = ref(1)
 const tab = ref(0)
-const TAB_MAP = ['recommend', 'follow', 'latest', 'video']
+const TAB_MAP = ['recommend', 'follow', 'latest']
 
 function authorName(value?: string): string {
   return localizePersonName(value || t('匿名'), i18n.lang)

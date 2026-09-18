@@ -38,7 +38,6 @@ const tabs = [
   { value: "recommend", key: "community.feed.tab.recommend", fallback: "推荐" },
   { value: "latest", key: "community.feed.tab.latest", fallback: "最新" },
   { value: "follow", key: "community.feed.tab.follow", fallback: "关注" },
-  { value: "video", key: "community.feed.tab.video", fallback: "视频" },
 ] as const;
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -123,7 +122,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
       </header>
 
       <div className="community-post-card__copy">
-        {row.origin === "aggregated" && <div className="community-source-line"><span>{t("community.feed.aggregated", "自动资讯")}</span><b data-i18n-skip>{sourceName || t("community.feed.publicSource", "公开来源")}</b></div>}
+        {row.origin === "aggregated" && <div className="community-source-line"><span>{t("community.feed.aggregated", "平台行情")}</span><b data-i18n-skip>{sourceName || t("community.feed.publicSource", "平台来源")}</b></div>}
         <p data-i18n-skip>{content}</p>
         {summary && summary !== content && <small className="community-post-summary" data-i18n-skip>{summary}</small>}
       </div>
@@ -475,6 +474,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
       <header><PaperPlaneTilt size={20}/><div><small>{t("community.feed.composer.eyebrow", "CREATE POST")}</small><h2>{t("community.feed.composer.title", "发布社区动态")}</h2></div></header>
       <input disabled={publishing} maxLength={40} value={draft.topic} onChange={(event) => setDraft({ ...draft, topic: event.target.value })} placeholder={t("community.feed.composer.topic", "话题（可选）")} />
       <textarea disabled={publishing} required maxLength={COMMUNITY_POST_MAX_LENGTH} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder={t("community.feed.composer.content", "分享算力设备、行情或使用经验…")} />
+      <p className="community-composer__scope">{t("community.feed.composer.scope", "社区仅限算力产品、站内行情与技术交流，请勿发布或转载新闻、公共事务及突发事件报道。")}</p>
       <footer><span>{formatNumber(draft.content.length, dateLocale)}/{formatNumber(COMMUNITY_POST_MAX_LENGTH, dateLocale)}</span><button disabled={publishing}>{publishing ? t("community.feed.publishing", "发布中…") : t("community.feed.publish", "发布")}</button></footer>
     </form>}
 

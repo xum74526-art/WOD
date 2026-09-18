@@ -118,11 +118,11 @@ test('mobile keeps every pre-existing live homepage section wired to its origina
 
 test('mobile keeps community as the internal route while its default native tab is Traditional Chinese', () => {
   const communityTab = pages.tabBar.list.find((item) => item.pagePath === 'pages/community/index')
-  assert.equal(communityTab?.text, '資訊')
-  assert.equal(zhLocale['tab.community'], '资讯')
-  assert.equal(enLocale['tab.community'], 'News')
-  assert.match(i18n, /tabCommunity: '资讯'/)
-  assert.match(i18n, /tabCommunity: 'News'/)
+  assert.equal(communityTab?.text, '社群')
+  assert.equal(zhLocale['tab.community'], '社区')
+  assert.equal(enLocale['tab.community'], 'Community')
+  assert.match(i18n, /tabCommunity: '社区'/)
+  assert.match(i18n, /tabCommunity: 'Community'/)
   assert.match(homePage + carousel, /pages\/(?:quote|market|wallet)\/index/)
   assert.equal(pages.tabBar.list.some((item) => item.pagePath === 'pages/community/index'), true)
 })

@@ -15,7 +15,7 @@ export interface LegalDocument {
   sections: LegalSection[]
 }
 
-export const LEGAL_VERSION = '1.1'
+export const LEGAL_VERSION = '1.2'
 export const LEGAL_UPDATED_AT = '2026-09-18'
 export const LEGAL_EFFECTIVE_AT = '2026-09-18'
 export const LEGAL_OPERATOR = '锆芯期算人工智能科技（上海）有限公司'
@@ -62,7 +62,7 @@ const PRIVACY_ZH: LegalDocument = {
         '4. 个人资料与实名认证：昵称、头像、真实姓名、证件号码、证件正反面图片、格式校验结果及审核状态，用于个人资料展示、实名认证、商家准入和风险控制。证件图片仅供受权人员核验；服务器使用本地 Tesseract OCR 生成比对结果，不将证件图片发送给第三方 OCR 服务。',
         '5. 业务资料：银行卡登记信息以加密方式保存并仅展示掩码；地址信息用于用户主动选择的业务联系或交付。买方需求可能包含联系人、电话、算力型号、数量、期限、地区和需求说明；商家资料可能包含主体、联系人、资源、设备和交付信息。',
         '6. 撮合、订单与交付：需求、报价、反报价、方案确认、订单、卡时或账务记录、结算、退款、争议及历史状态，用于撮合沟通、履约、对账、售后和争议处理。商家提交的 SSH 地址、端口、用户名和凭据仅用于经确认的交付，并按角色限制展示。',
-        '7. 资讯与社区：你主动发布或上传的文字、图片、视频、评论、点赞及互动记录，用于展示、内容管理和处理举报。公开发布的内容会向其他用户展示，请勿上传证件、银行卡、密码或其他不宜公开的信息。',
+        '7. 社区：当前审核版本仅开放算力产品、站内行情与技术交流相关的文字动态、评论、点赞、举报及互动记录。公开发布的内容会向其他用户展示，请勿上传证件、银行卡、密码或其他不宜公开的信息。',
         '8. 客服与工单：咨询内容、工单、附件、处理状态和必要的账号关联信息，用于答复问题、跟进服务及处理投诉。',
         '9. 设备、网络和日志：应用版本、设备型号、操作系统版本、IP 地址、网络状态、崩溃与操作日志，以及运行环境实际提供的设备标识符，用于运行应用、兼容性分析、安全防护、故障诊断和防止滥用。我们不以此建立与服务无关的画像。',
       ],
@@ -70,7 +70,7 @@ const PRIVACY_ZH: LegalDocument = {
     {
       title: '二、系统权限',
       paragraphs: [
-        '1. 网络权限用于登录、获取行情与资讯、提交需求、上传内容和联系客服。',
+        '1. 网络权限用于登录、获取平台行情与社区内容、提交需求、上传内容和联系客服。',
         '2. 当你主动上传头像或身份认证资料时，Android 可能申请照片/媒体访问权限并调用系统拍摄入口，iOS 可能申请相机或照片权限。当前审核版本关闭社区媒体发布且不申请麦克风权限；若未来启用含声音的视频录制，我们会先更新权限说明和适用规则。相关权限不会在无关场景调用，你可在系统设置中撤回。',
         '3. 我们不申请通讯录权限，也不持续获取精确位置。关闭某项可选权限后，只会影响依赖该权限的拍摄、选择或上传功能。',
       ],
@@ -88,10 +88,9 @@ const PRIVACY_ZH: LegalDocument = {
       paragraphs: [
         '1. 阿里云中国香港区域（cn-hongkong）：作为云基础设施受托方，为核心 API、数据库、上传文件、备份与安全防护提供计算和存储能力，可能处理本政策列明的账号、实名、业务、内容及日志信息。服务区域位于中国香港特别行政区。',
         '2. DCloud uni-app 基础运行框架（开发者：数字天堂（北京）网络技术有限公司）：在你同意隐私政策后，为应用运行、页面渲染、兼容性、安全和故障分析，可能处理设备品牌与型号、操作系统、应用版本、网络类型、IP 地址、User-Agent、运行日志，以及打包组件可能涉及的 OAID。本项目不将这些信息用于广告或个性化推荐；实际范围以后续正式安装包检测结果和应用内第三方 SDK 清单为准。',
-        '3. KAI 统一身份服务：仅在你主动选择 KAI 登录、注册或绑定时处理授权请求、关联身份标识、回跳参数和一次性凭据，以完成登录、创建本平台账号或身份关联；本平台不接收外部 KAI 密码。',
-        '4. 哔哩哔哩：当你打开来自哔哩哔哩的资讯视频时，播放器或接口会向其请求内容，并可能传递 IP 地址、网络与浏览器或应用请求信息；其处理同时受哔哩哔哩隐私规则约束。',
-        '5. 网易 163 邮件服务：当你绑定找回邮箱、获取验证码或重置密码时，用于投递必要邮件，可能处理收件邮箱、邮件内容、投递时间与状态。SMTP 授权信息仅保存在服务端，不向客户端公开。',
-        '6. 七相支付（Qixiang Pay）：当前审核版默认关闭在线支付。仅在未来直接交易能力由服务端和客户端同时启用、你主动发起支付且已完成必要提示时，才会处理完成支付所需的订单号、金额、回调状态等最少信息。',
+        '3. KAI 统一身份服务：仅在你主动选择 KAI 登录、注册或绑定时处理授权请求、关联身份标识、回跳参数、一次性凭据，以及授权范围内返回的邮箱、姓名和头像，用于登录、创建或关联本平台账号及展示基础资料；本平台不接收外部 KAI 密码。',
+        '4. 网易 163 邮件服务：当你绑定找回邮箱、获取验证码或重置密码时，用于投递必要邮件，可能处理收件邮箱、邮件内容、投递时间与状态。SMTP 授权信息仅保存在服务端，不向客户端公开。',
+        '5. 七相支付（Qixiang Pay）：当前审核版默认关闭在线支付。仅在未来直接交易能力由服务端和客户端同时启用、你主动发起支付且已完成必要提示时，才会处理完成支付所需的订单号、金额、回调状态等最少信息。',
         '我们会通过合同、权限控制和安全要求约束受托方。第三方作为独立处理者时，其服务还受其公开规则约束；具体功能未启用或你未主动使用时，不会因本条说明而自动向其提供业务资料。',
       ],
     },
@@ -166,7 +165,7 @@ const PRIVACY_EN: LegalDocument = {
         'Profile and verification data may include your nickname, avatar, legal name, national ID number, front and back ID images, validation results, and review status. Server-side local Tesseract OCR produces comparison results; ID images are not sent to a third-party OCR provider.',
         'Business data may include encrypted and masked bank-card details, addresses, buyer contact and compute requirements, merchant identity and contact materials, resource and device descriptions, and delivery details.',
         'Matchmaking, order, and fulfillment data may include requirements, proposals, counteroffers, confirmations, orders, CH or ledger entries, settlement, refunds, disputes, history, and seller-provided SSH host, port, username, and credentials. SSH details are role-restricted and used only for confirmed fulfillment.',
-        'Community, content, and support data includes posts, images, videos, comments, reactions, reports, support conversations, tickets, attachments, and status. Public content is visible to other users, so never post IDs, cards, passwords, or other sensitive data.',
+        'Community and support data includes text posts, comments, reactions, reports, support conversations, tickets, attachments, and status. The current review release limits community publishing to text about compute products, first-party platform market updates, and technical discussion. Public content is visible to other users, so never post IDs, cards, passwords, or other sensitive data.',
         'Technical data may include app version, device model, operating-system version, IP address, network state, crash and operation logs, and device identifiers actually made available by the runtime. We use it for compatibility, security, troubleshooting, and abuse prevention, not unrelated profiling.',
       ],
     },
@@ -184,7 +183,7 @@ const PRIVACY_EN: LegalDocument = {
         'Identity documents and bank-card details are sensitive personal information. Misuse or disclosure may create identity or financial risk. We process them only for specific and strictly necessary purposes such as identity review or an authorized card function, obtain separate consent in the relevant feature where required by law, and apply enhanced encryption, masking, least-privilege, and access-audit safeguards. Precise SSH and other delivery credentials are protected as high-risk business secrets through encryption, least privilege, and access auditing; we do not claim separate consent where that workflow is not implemented.',
         'Alibaba Cloud Hong Kong region (cn-hongkong), as the contracted cloud-infrastructure provider, supplies compute, storage, backup, and security capabilities for the core API, database, and uploaded files, and may process the account, identity, business, content, and log data described in this Policy. The service region is Hong Kong SAR.',
         'The DCloud uni-app base runtime (developer: Digital Paradise (Beijing) Network Technology Co., Ltd.) may, after you accept this Policy, process device brand and model, operating system, app version, network type, IP address, User-Agent, runtime logs, and OAID that may be present in packaged components for runtime compatibility, security, and troubleshooting. 算力星图 does not use this data for advertising or personalized recommendations. The final scope follows inspection of the released package and the in-app third-party SDK list.',
-        'KAI identity services process authorization requests, linked identifiers, return parameters, and one-time credentials only when you initiate sign-in, registration, or binding, so that a platform account can be created or linked. Bilibili receives a content request and may receive IP, network, and user-agent or app request information when you open Bilibili-hosted news video.',
+        'KAI identity services process authorization requests, linked identifiers, return parameters, one-time credentials, and the email address, name, and avatar returned within the authorized scope only when you initiate sign-in, registration, or binding, so that a platform account can be created or linked and basic profile information displayed. We never receive your external KAI password.',
         'NetEase 163 mail services deliver verification and password-recovery messages and may process recipient address, message, delivery time, and status. SMTP credentials remain server-side. QiXiang Pay is disabled by default in the review build; minimum order, amount, and callback data is processed only if direct trading is later enabled on both server and client, you initiate payment, and the required notice is shown.',
         'We contractually restrict processors. An independent third party is also governed by its own published rules. A listed integration does not receive business data unless the feature is enabled and you use it.',
       ],
@@ -258,7 +257,7 @@ function agreementZh(): LegalDocument {
         title: '一、主体与协议范围',
         paragraphs: [
           `平台运营主体为${LEGAL_OPERATOR}，注册地址为${LEGAL_ADDRESS}。网站 ICP 备案为${LEGAL_ICP_FILING}。`,
-          '本协议适用于算力行情与资讯、资源目录、需求撮合、商家协作、社区、客服、账号及历史记录等功能。某项功能未启用时，本协议中的条件性说明不表示该功能已经开放。',
+          '本协议适用于平台算力行情、资源目录、需求撮合、商家协作、算力技术社区、客服、账号及历史记录等功能。某项功能未启用时，本协议中的条件性说明不表示该功能已经开放。',
         ],
       },
       {
@@ -272,7 +271,7 @@ function agreementZh(): LegalDocument {
       {
         title: '三、服务内容与使用条件',
         paragraphs: [
-          '平台提供 KAI Pricing 行情参考、算力资源信息、需求提交、商家方案与反报价、双方确认、人工协调交付、资讯社区、客服及历史查询。平台可根据合规、资质、系统或运营情况调整可用功能。',
+          '平台提供 KAI Pricing 行情参考、算力资源信息、需求提交、商家方案与反报价、双方确认、人工协调交付、算力技术社区、客服及历史查询。平台可根据合规、资质、系统或运营情况调整可用功能。',
           '实名认证、商家申请、内容发布、敏感操作或特定履约环节可能需要补充真实资料并通过审核。审核通过仅代表材料在审核时满足准入要求，不等于平台对持续履约能力、硬件性能或收益作担保。',
         ],
       },
@@ -301,10 +300,10 @@ function agreementZh(): LegalDocument {
         ],
       },
       {
-        title: '八、资讯与社区',
+        title: '八、算力技术社区',
         paragraphs: [
-          '你对发布的文字、图片、视频、评论及其他内容负责，并保证拥有必要权利。不得发布违法、侵权、虚假、欺诈、恶意营销、泄露隐私、攻击系统或妨害他人权益的内容。',
-          '为提供展示、转码、审核和传播功能，你授予平台在服务范围内必要、非独占、可撤回（法律或已完成传播另有要求除外）的使用许可。平台可依法采取屏蔽、删除、限制传播、保存证据或报告等措施。外部视频来源同时受来源平台规则约束。',
+          '当前社区仅用于算力产品、站内行情和技术交流，首版仅开放文字动态。你对发布的文字和评论负责，并保证拥有必要权利；不得发布违法、侵权、虚假、欺诈、恶意营销、泄露隐私、攻击系统或妨害他人权益的内容。',
+          '不得利用社区从事新闻采编、新闻转载，或发布公共事务、时政、军事、外交及突发事件的新闻报道或评论。你授予平台在服务范围内必要、非独占、可撤回的展示与审核许可；平台保留举报、审核、屏蔽、下架、保存证据和申诉机制。',
         ],
       },
       {
@@ -374,7 +373,7 @@ function agreementEn(): LegalDocument {
         title: '1. Operator and scope',
         paragraphs: [
           `The operator is ${LEGAL_OPERATOR}, registered at ${LEGAL_ADDRESS}. Website ICP filing: ${LEGAL_ICP_FILING}.`,
-          'This Agreement covers compute pricing and news, resource directories, requirement matchmaking, merchant collaboration, community, support, accounts, and history. A conditional clause does not mean a disabled feature is currently available.',
+          'This Agreement covers compute pricing, resource directories, requirement matchmaking, merchant collaboration, the compute technical community, support, accounts, and history. A conditional clause does not mean a disabled feature is currently available.',
         ],
       },
       {
@@ -417,10 +416,10 @@ function agreementEn(): LegalDocument {
         ],
       },
       {
-        title: '8. News and community',
+        title: '8. Compute technical community',
         paragraphs: [
-          'You are responsible for posts, images, video, comments, and other content and must hold the necessary rights. Illegal, infringing, false, fraudulent, privacy-invasive, malicious, or system-abusive content is prohibited.',
-          'You grant 算力星图 the necessary non-exclusive service-scope permission to display, transcode, review, and distribute submitted content. We may restrict or remove content, preserve evidence, and report as law requires. External video is also subject to the source platform rules.',
+          'The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You are responsible for posts and comments and must hold the necessary rights. Illegal, infringing, false, fraudulent, privacy-invasive, malicious, or system-abusive content is prohibited.',
+          'Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. You grant 算力星图 the necessary non-exclusive service-scope permission to display and review submitted content. We maintain reporting, moderation, blocking, takedown, evidence-preservation, and appeal mechanisms.',
         ],
       },
       {

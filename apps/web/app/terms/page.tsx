@@ -40,8 +40,8 @@ const termsSections: LegalSection[] = [
     title: { zh: "服务范围与当前模式", en: "Service scope and current mode" },
     paragraphs: [
       {
-        zh: "算力星图提供算力行情与资讯展示、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
-        en: "算力星图 provides compute-market and news displays, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, community and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
+        zh: "算力星图提供自有平台行情、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、算力技术社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
+        en: "算力星图 provides first-party platform market data, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, a compute technical community, and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
       },
       {
         zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由算力星图自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
@@ -69,11 +69,11 @@ const termsSections: LegalSection[] = [
   },
   {
     id: "market-data",
-    title: { zh: "行情、资讯与资源展示", en: "Market data, news and listings" },
+    title: { zh: "平台行情与资源展示", en: "Platform market data and listings" },
     paragraphs: [
       {
-        zh: "算力报价、K 线、均线、统计、榜单和资讯来自平台记录、KAI Pricing 或标明的第三方来源，用于市场观察和撮合参考。数据可能存在延迟、缺口、修正、来源差异或网络故障，不构成投资建议、收益承诺、即时库存、最终报价或必然成交结果。",
-        en: "Compute quotes, candlesticks, averages, statistics, rankings and news come from platform records, KAI Pricing or identified third-party sources and are provided for market observation and matching reference. Data may be delayed, incomplete, corrected, differ by source or be affected by network failures. It is not investment advice, a return promise, live inventory, a final quote or a guarantee of a completed transaction.",
+        zh: "算力报价、K 线、均线、统计和榜单来自平台记录或 KAI Pricing，用于市场观察和撮合参考。数据可能存在延迟、缺口、修正、来源差异或网络故障，不构成投资建议、收益承诺、即时库存、最终报价或必然成交结果。",
+        en: "Compute quotes, candlesticks, averages, statistics, and rankings come from platform records or KAI Pricing and are provided for market observation and matching reference. Data may be delayed, incomplete, corrected, differ by source or be affected by network failures. It is not investment advice, a return promise, live inventory, a final quote or a guarantee of a completed transaction.",
       },
       {
         zh: "资源配置、图片和商家描述由相应发布者负责。你应在确认方案前核对 GPU 型号、显存、数量、区域、网络、软件环境、时长、性能口径和验收方法，不得将页面样例视为未经确认的交付承诺。",
@@ -115,19 +115,19 @@ const termsSections: LegalSection[] = [
   },
   {
     id: "community",
-    title: { zh: "社区、资讯与用户内容", en: "Community, news and user content" },
+    title: { zh: "算力技术社区与用户内容", en: "Compute technical community and user content" },
     paragraphs: [
       {
-        zh: "你保留对原创内容依法享有的权利，并授予算力星图在提供、展示、审核、转码、备份和推广相应服务所需范围内的非独占许可。你确认有权发布所提交的文字、图片和视频，并对其真实性、合法性和授权负责。",
-        en: "You retain lawful rights in original content and grant 算力星图 a non-exclusive licence limited to providing, displaying, moderating, transcoding, backing up and promoting the relevant service. You confirm that you have the right to publish submitted text, images and videos and are responsible for their accuracy, legality and authorisation.",
+        zh: "当前社区仅用于算力产品、站内行情和技术交流，首版仅开放文字动态。你保留对原创内容依法享有的权利，并授予算力星图在提供、展示、审核、备份和推广相应服务所需范围内的非独占许可。",
+        en: "The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You retain lawful rights in original content and grant 算力星图 a non-exclusive licence limited to providing, displaying, moderating, backing up, and promoting the relevant service.",
       },
       {
         zh: "不得发布违法违规、诈骗、侵权、恶意营销、仇恨骚扰、淫秽暴力、恶意代码，或泄露身份证件、银行卡、密码、SSH 私钥及他人隐私的内容。平台可依法采取限流、隐藏、删除、暂停发布、保全证据或报告等措施，并为误判提供申诉渠道。",
         en: "Do not publish unlawful, fraudulent, infringing, maliciously promotional, hateful, harassing, obscene, violent or malicious-code content, or expose identity documents, bank cards, passwords, SSH private keys or another person's privacy. 算力星图 may lawfully limit reach, hide or remove content, suspend publishing, preserve evidence or report a matter, with an appeal channel for mistakes.",
       },
       {
-        zh: "第三方资讯和视频可能适用来源平台的额外条款。来源链接、播放可用性和评论数据可能由第三方变化，算力星图不取得其内容所有权，也不保证第三方服务永久可用。",
-        en: "Third-party news and video may be subject to the source platform's additional terms. Source links, playback availability and comment data may change at the third party. 算力星图 does not acquire ownership of that content or guarantee permanent third-party availability.",
+        zh: "不得利用社区从事新闻采编、新闻转载，或发布公共事务、时政、军事、外交及突发事件的新闻报道或评论。平台保留举报、审核、屏蔽、下架和申诉机制，并可依照适用规则限制或移除超出社区范围的内容。",
+        en: "Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. The platform maintains reporting, moderation, blocking, takedown, and appeal mechanisms and may restrict or remove content outside the community scope.",
       },
     ],
   },

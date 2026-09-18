@@ -4,6 +4,7 @@
     <view class="shell">
       <view class="card form">
         <textarea class="tarea" v-model="form.content" :placeholder="t('k_a5248a2b')" placeholder-class="ph" maxlength="500" />
+        <text class="scope-notice">{{ t('communityScopeNotice') }}</text>
         <view class="topic-row">
           <text class="topic-t"># {{ t('话题') }}</text>
           <input class="topic-i" v-model="form.topic" :placeholder="t('k_af4399f5')" placeholder-class="ph" />
@@ -55,6 +56,7 @@ async function onSubmit() {
 .card { padding: 32rpx; border: 1rpx solid var(--card-border); border-radius: var(--radius); background: var(--card); }
 .tarea { width: 100%; min-height: 240rpx; color: var(--text); font-size: 28rpx; line-height: 1.6; }
 .ph { color: var(--text-dim); }
+.scope-notice { display: block; margin: 18rpx 0 24rpx; color: var(--text-dim); font-size: 23rpx; line-height: 1.55; }
 .topic-row { display: flex; align-items: center; padding-top: 24rpx; border-top: 1rpx solid var(--border); }
 .topic-t { color: var(--primary); font-size: 26rpx; font-weight: 600; }
 .topic-i { flex: 1; margin-left: 16rpx; color: var(--text); font-size: 26rpx; }

@@ -26,7 +26,7 @@ const privacySections: LegalSection[] = [
     title: { zh: "适用范围与个人信息处理者", en: "Scope and data controller" },
     paragraphs: [
       {
-        zh: "本政策适用于算力星图网站、Android 与 iOS 客户端以及与账号、算力行情、需求撮合、商家协作、社区资讯和客服相关的服务。个人信息处理者为锆芯期算人工智能科技（上海）有限公司。",
+        zh: "本政策适用于算力星图网站、Android 与 iOS 客户端以及与账号、算力行情、需求撮合、商家协作、算力技术社区和客服相关的服务。个人信息处理者为锆芯期算人工智能科技（上海）有限公司。",
         en: "This policy applies to the 算力星图 website, Android and iOS apps, and related account, compute-market, request-matching, supplier, community and support services. The data controller is Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd.",
       },
       {
@@ -100,8 +100,8 @@ const privacySections: LegalSection[] = [
     title: { zh: "设备权限", en: "Device permissions" },
     items: [
       {
-        zh: "网络权限用于登录、获取行情、提交需求、加载资讯和同步业务状态，是联网服务的必要权限。",
-        en: "Network access is required to sign in, obtain market data, submit requests, load news and synchronise service status.",
+        zh: "网络权限用于登录、获取平台行情、提交需求、加载社区内容和同步业务状态，是联网服务的必要权限。",
+        en: "Network access is required to sign in, obtain platform market data, submit requests, load community content and synchronise service status.",
       },
       {
         zh: "相机、相册或图片访问仅在你主动拍摄、选择头像或上传身份认证资料时请求。当前审核版本关闭社区媒体发布且不申请麦克风权限；若未来启用含声音的视频录制，我们会先更新权限说明和适用规则。拒绝后仅相应拍摄或上传功能不可用。",
@@ -134,10 +134,6 @@ const privacySections: LegalSection[] = [
       {
         zh: "KAI 关联身份服务：仅在你主动选择 KAI 身份登录、注册或绑定时处理签发方、主体标识、授权状态、一次性票据，以及授权范围内返回的邮箱、姓名和头像，以创建或关联本地平台账号及展示你确认的资料；不接收外部账号密码。",
         en: "KAI linked-identity service: processes the issuer, subject identifier, authorisation state, one-time ticket, and the email address, name, and avatar returned within the authorised scope only when you choose KAI sign-in, registration, or linking, so that a local platform account can be created or linked and profile details you confirm can be displayed; it does not provide us with the external account password.",
-      },
-      {
-        zh: "哔哩哔哩视频服务：当你打开来源为哔哩哔哩的资讯视频时，播放请求会向其服务发送视频标识、IP 地址、浏览器或设备请求信息；其处理同时受其隐私规则约束。",
-        en: "Bilibili video service: when you open a news video sourced from Bilibili, the playback request sends the video identifier, IP address, and browser or device request data to its service. Its own privacy rules also apply.",
       },
       {
         zh: "网易 163 邮件服务：仅为发送邮箱验证码、找回链接或必要安全通知处理收件邮箱、邮件内容及投递状态；我们不会在公开页面披露内部发信账号或授权凭据。",

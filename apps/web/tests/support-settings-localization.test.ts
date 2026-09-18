@@ -10,12 +10,12 @@ test("English account display romanizes Chinese names without changing raw edita
   assert.equal(localizePersonName("陈志强", "zh-Hans"), "陈志强");
   assert.equal(localizePersonName("陈志强", "zh-Hant"), "陳志強");
   assert.equal(localizePersonName("alice_01", "en"), "alice_01");
-  assert.equal(localizePersonName("WOD资讯", "zh-Hans"), "算力星图资讯");
-  assert.equal(localizePersonName("WOD资讯", "zh-Hant"), "算力星图資訊");
-  assert.equal(localizePersonName("WOD资讯", "en"), "算力星图 News");
-  assert.equal(localizePersonName("ZTW资讯", "zh-Hans"), "算力星图资讯");
-  assert.equal(localizePersonName("ZTW资讯", "zh-Hant"), "算力星图資訊");
-  assert.equal(localizePersonName("ZTW资讯", "en"), "算力星图 News");
+  assert.equal(localizePersonName("WOD资讯", "zh-Hans"), "算力星图平台行情");
+  assert.equal(localizePersonName("WOD资讯", "zh-Hant"), "算力星圖平台行情");
+  assert.equal(localizePersonName("WOD资讯", "en"), "算力星图 Platform Market");
+  assert.equal(localizePersonName("ZTW资讯", "zh-Hans"), "算力星图平台行情");
+  assert.equal(localizePersonName("ZTW资讯", "zh-Hant"), "算力星圖平台行情");
+  assert.equal(localizePersonName("ZTW资讯", "en"), "算力星图 Platform Market");
   assert.equal(personNameInputValue("陈志强", "en", false), "Chen Zhiqiang");
   assert.equal(personNameSaveValue("陈志强", "Chen Zhiqiang", false), "陈志强");
   assert.equal(personNameSaveValue("陈志强", "Chen Z.", true), "Chen Z.");

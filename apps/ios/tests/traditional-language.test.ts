@@ -82,7 +82,7 @@ test('mobile entry points apply Traditional Chinese throughout the app', () => {
   assert.match(htmlEntry, /<title>算力星图<\/title>/)
   assert.equal(nativeLocale['app.name'], '算力星图')
   assert.equal(nativeLocale['tab.home'], '首頁')
-  assert.equal(nativeLocale['tab.community'], '資訊')
+  assert.equal(nativeLocale['tab.community'], '社群')
   assert.equal(uniLocale.common?.['uni.showModal.confirm'], '確定')
   assert.equal(uniLocale.common?.['uni.chooseImage.sourceType.album'], '從相簿選擇')
   assert.match(i18n, /normalizeStoredLanguage\(saved\)/)

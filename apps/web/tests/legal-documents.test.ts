@@ -35,7 +35,7 @@ test("privacy policy is a versioned trilingual disclosure matching implemented d
     "所有地区的用户",
     "香港存储、处理与必要传输",
     "单独同意",
-    "哔哩哔哩",
+    "算力技术社区",
     "网易 163 邮件服务",
     "30 分钟",
     "7 天",

@@ -50,6 +50,7 @@ from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
 from app.services.community_safety import (
     safe_public_display_name,
+    validate_public_community_post,
     validate_public_community_text,
 )
 from app.services.community_video import (
@@ -589,8 +590,7 @@ def create_post(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    content = validate_public_community_text(data.content)
-    topic = validate_public_community_text(data.topic, field_name="话题") if data.topic else None
+    content, topic = validate_public_community_post(data.content, data.topic)
     if (
         not settings.COMMUNITY_USER_MEDIA_ENABLED
         and (data.images or data.video or data.video_duration is not None)

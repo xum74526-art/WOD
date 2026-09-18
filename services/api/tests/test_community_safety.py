@@ -188,6 +188,20 @@ class CommunitySafetyEndpointTests(unittest.TestCase):
             0,
         )
 
+        out_of_scope_posts = (
+            "转载新闻：某公共事务最新进展",
+            "突发事件报道：现场情况持续更新",
+            "Breaking news about current affairs",
+        )
+        for content in out_of_scope_posts:
+            with self.subTest(content=content):
+                response = self.client.post(
+                    "/api/community/posts",
+                    json={"content": content, "topic": "GPU 交流"},
+                )
+                self.assertEqual(response.status_code, 400, response.text)
+                self.assertIn("社区仅限算力产品", response.text)
+
     def test_text_post_returns_success_and_inserts_exactly_one_row(self):
         before = self.db.query(Post).filter(Post.user_id == self.viewer.id).count()
         response = self.client.post(

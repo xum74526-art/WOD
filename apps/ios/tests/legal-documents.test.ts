@@ -24,7 +24,7 @@ function textOf(document: LegalDocument): string {
 }
 
 test('legal metadata identifies the operator, version, dates, filing and only approved phone', () => {
-  assert.equal(LEGAL_VERSION, '1.1')
+  assert.equal(LEGAL_VERSION, '1.2')
   assert.equal(LEGAL_UPDATED_AT, '2026-09-18')
   assert.equal(LEGAL_EFFECTIVE_AT, '2026-09-18')
   assert.equal(LEGAL_OPERATOR, '锆芯期算人工智能科技（上海）有限公司')
@@ -61,7 +61,7 @@ test('privacy policy covers actual data, permissions, processors, retention and 
     /所有地区的用户使用业务联网功能/,
     /无论选择中国大陆或其他服务地区.*独立勾选.*香港存储、处理与必要传输/,
     /不将这些信息用于广告或个性化推荐/,
-    /哔哩哔哩/,
+    /社区仅限算力产品|当前审核版本仅开放算力产品/,
     /网易 163 邮件服务/,
     /七相支付（Qixiang Pay）/,
     /三十分钟/,
