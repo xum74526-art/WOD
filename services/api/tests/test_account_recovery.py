@@ -178,9 +178,9 @@ class AccountRecoveryTests(unittest.TestCase):
             )
 
         message = deliver.call_args.args[0]
-        self.assertEqual(message["Subject"], "验证你的算力星图绑定邮箱")
+        self.assertEqual(message["Subject"], "验证你的KAI星算绑定邮箱")
         content = message.get_content()
-        self.assertIn("为算力星图账号绑定或更换邮箱", content)
+        self.assertIn("为KAI星算账号绑定或更换邮箱", content)
         self.assertIn("完成邮箱绑定", content)
         self.assertNotIn("找回邮箱", f"{message['Subject']}\n{content}")
 
@@ -198,8 +198,8 @@ class AccountRecoveryTests(unittest.TestCase):
 
         message = deliver.call_args.args[0]
         content = message.get_content()
-        self.assertEqual(message["Subject"], "重置你的算力星图密码")
-        self.assertIn("在算力星图 App", content)
+        self.assertEqual(message["Subject"], "重置你的KAI星算密码")
+        self.assertIn("在KAI星算 App", content)
         self.assertIn(
             "页面输入以下重置码：\nsynthetic-reset-token\n\n",
             content,
@@ -530,10 +530,10 @@ class AccountRecoveryTests(unittest.TestCase):
 
         message = deliver.call_args.args[0]
         self.assertEqual(message["To"], "notice@example.com")
-        self.assertEqual(message["Subject"], "你的算力星图密码已更新")
+        self.assertEqual(message["Subject"], "你的KAI星算密码已更新")
         content = message.get_content()
-        self.assertIn("算力星图账号密码", content)
-        self.assertIn("算力星图客服", content)
+        self.assertIn("KAI星算账号密码", content)
+        self.assertIn("KAI星算客服", content)
         self.assertNotIn("http://", content)
         self.assertNotIn("https://", content)
         self.assertNotIn("token", content.casefold())

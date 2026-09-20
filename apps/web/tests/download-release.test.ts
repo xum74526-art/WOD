@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-test("official Android download stays closed until the new 算力星图 APK metadata is complete", () => {
+test("official Android download stays closed until the new KAI星算 APK metadata is complete", () => {
   const page = fs.readFileSync(new URL("../app/download/page.tsx", import.meta.url), "utf8");
   const header = fs.readFileSync(new URL("../components/site-header.tsx", import.meta.url), "utf8");
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");

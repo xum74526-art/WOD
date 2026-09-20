@@ -46,7 +46,7 @@ test('Android uses the blocking native privacy template before app startup', () 
   assert.equal(privacyConfig.disagreeMode?.visitorEntry, false)
 })
 
-test('the startup prompt links to the public 算力星图 agreement and privacy policy', () => {
+test('the startup prompt links to the public KAI星算 agreement and privacy policy', () => {
   const expected = [
     'https://wod.kai.com/terms',
     'https://wod.kai.com/privacy/zh-cn',

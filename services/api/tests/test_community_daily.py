@@ -59,8 +59,8 @@ class CommunityDailyTests(unittest.TestCase):
         candidate = _internal_candidates(db, "2026-09-09", 1)[0]
 
         self.assertEqual(candidate.source_key, "wod-market")
-        self.assertEqual(candidate.source_name, "算力星图算力行情")
-        self.assertEqual(candidate.author, "算力星图")
+        self.assertEqual(candidate.source_name, "KAI星算算力行情")
+        self.assertEqual(candidate.author, "KAI星算")
         self.assertTrue(candidate.title.startswith("Compute Star Map tip"))
 
     def test_internal_brand_backfill_keeps_legacy_source_key(self):
@@ -74,10 +74,10 @@ class CommunityDailyTests(unittest.TestCase):
         db.query.return_value.filter.return_value.all.return_value = [post]
 
         self.assertEqual(_backfill_internal_branding(db), 1)
-        self.assertEqual(post.content, "价格来自算力星图最新站内行情，优惠码 WOD10 继续有效")
+        self.assertEqual(post.content, "价格来自KAI星算最新站内行情，优惠码 WOD10 继续有效")
         self.assertEqual(post.content_en, "Latest Compute Star Map market data")
-        self.assertEqual(post.source_name, "算力星图算力行情")
-        self.assertEqual(post.source_author, "算力星图")
+        self.assertEqual(post.source_name, "KAI星算算力行情")
+        self.assertEqual(post.source_author, "KAI星算")
 
     def test_existing_internal_author_is_renamed_without_changing_identity(self):
         user = SimpleNamespace(username="WOD资讯", phone="wod-community")
@@ -85,7 +85,7 @@ class CommunityDailyTests(unittest.TestCase):
         db.query.return_value.filter.return_value.first.return_value = user
 
         self.assertIs(_get_system_user(db), user)
-        self.assertEqual(user.username, "算力星图平台行情")
+        self.assertEqual(user.username, "KAI星算平台行情")
         self.assertEqual(user.phone, "wod-community")
         db.flush.assert_called_once_with()
 

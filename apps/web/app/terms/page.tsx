@@ -6,16 +6,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "用戶協議 | 算力星图",
-      description: "算力星图撮合服務、賬號、商家、內容和爭議處理的使用規則。",
+      title: "用戶協議 | KAI星算",
+      description: "KAI星算撮合服務、賬號、商家、內容和爭議處理的使用規則。",
     },
     "zh-Hans": {
-      title: "用户协议 | 算力星图",
-      description: "算力星图撮合服务、账号、商家、内容和争议处理的使用规则。",
+      title: "用户协议 | KAI星算",
+      description: "KAI星算撮合服务、账号、商家、内容和争议处理的使用规则。",
     },
     en: {
-      title: "Terms of Service | 算力星图",
-      description: "Rules for 算力星图 matching services, accounts, suppliers, content and dispute handling.",
+      title: "Terms of Service | KAI星算",
+      description: "Rules for KAI星算 matching services, accounts, suppliers, content and dispute handling.",
     },
   });
 }
@@ -26,8 +26,8 @@ const termsSections: LegalSection[] = [
     title: { zh: "协议主体与接受", en: "Parties and acceptance" },
     paragraphs: [
       {
-        zh: "本协议由你与算力星图运营主体锆芯期算人工智能科技（上海）有限公司共同订立，适用于算力星图网站、Android 和 iOS 客户端及相关服务。注册、登录、点击同意或继续使用服务，即表示你已阅读并同意本协议及与具体功能相关的有效规则。",
-        en: "This agreement is between you and the 算力星图 operator, Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd., and applies to the 算力星图 website, Android and iOS apps and related services. By registering, signing in, accepting, or continuing to use the service, you confirm that you have read and agree to this agreement and the effective rules for the feature used.",
+        zh: "本协议由你与KAI星算运营主体锆芯期算人工智能科技（上海）有限公司共同订立，适用于KAI星算网站、Android 和 iOS 客户端及相关服务。注册、登录、点击同意或继续使用服务，即表示你已阅读并同意本协议及与具体功能相关的有效规则。",
+        en: "This agreement is between you and the KAI星算 operator, Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd., and applies to the KAI星算 website, Android and iOS apps and related services. By registering, signing in, accepting, or continuing to use the service, you confirm that you have read and agree to this agreement and the effective rules for the feature used.",
       },
       {
         zh: "如你代表企业或其他组织使用服务，你确认已获得充分授权并有权使该主体受本协议约束。未满 18 周岁或不具备相应民事行为能力的人不得注册或使用交易和撮合服务。",
@@ -40,12 +40,12 @@ const termsSections: LegalSection[] = [
     title: { zh: "服务范围与当前模式", en: "Service scope and current mode" },
     paragraphs: [
       {
-        zh: "算力星图提供自有平台行情、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、算力技术社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
-        en: "算力星图 provides first-party platform market data, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, a compute technical community, and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
+        zh: "KAI星算提供自有平台行情、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、算力技术社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
+        en: "KAI星算 provides first-party platform market data, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, a compute technical community, and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
       },
       {
-        zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由算力星图自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
-        en: "Unless a separate written service document expressly states otherwise, a platform listing is not a sale, instant transaction or a promise that 算力星图 itself supplies all compute. The final confirmed order, proposal or contract governs the service, provider, price, term, acceptance, refund and responsibility.",
+        zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由KAI星算自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
+        en: "Unless a separate written service document expressly states otherwise, a platform listing is not a sale, instant transaction or a promise that KAI星算 itself supplies all compute. The final confirmed order, proposal or contract governs the service, provider, price, term, acceptance, refund and responsibility.",
       },
     ],
   },
@@ -62,8 +62,8 @@ const termsSections: LegalSection[] = [
         en: "Identity, company or supplier verification means only that submitted materials were reviewed under the rules then in effect; it does not guarantee credit, fulfilment capacity, resource quality or continuing compliance. You must not impersonate another person, lend, rent, sell or mass-register accounts.",
       },
       {
-        zh: "KAI 身份为外部统一身份。首次成功的 KAI 登录或注册会仅按 KAI 签发方和主体标识创建一个本地平台账号；不会按 KAI 返回的邮箱、手机号、昵称或头像自动合并既有账号。你可随后自愿设置本地手机号登录标识和密码；未接入短信验证时，该手机号不代表归属核验。找回邮箱仍须通过邮件验证码验证；首次 KAI 账号尚未设置本地密码时，可由近期 KAI 登录授权首次绑定邮箱。解绑或注销算力星图不会自动注销外部 KAI 账号。你不得向算力星图提交外部 KAI 密码。",
-        en: "KAI identity is an external unified identity. A first successful KAI sign-in or registration creates one local platform account only by KAI issuer and subject; it never automatically merges an existing account using KAI email, mobile number, nickname, or avatar. You may then choose a local mobile sign-in identifier and password; until SMS verification is available, that number does not prove ownership. Recovery email must still be verified by email code; a KAI-first account without a local password may use a recent KAI sign-in to authorise its first email binding. Unlinking or deleting 算力星图 does not automatically delete the external KAI account. Do not submit an external KAI password to 算力星图.",
+        zh: "KAI 身份为外部统一身份。首次成功的 KAI 登录或注册会仅按 KAI 签发方和主体标识创建一个本地平台账号；不会按 KAI 返回的邮箱、手机号、昵称或头像自动合并既有账号。你可随后自愿设置本地手机号登录标识和密码；未接入短信验证时，该手机号不代表归属核验。找回邮箱仍须通过邮件验证码验证；首次 KAI 账号尚未设置本地密码时，可由近期 KAI 登录授权首次绑定邮箱。解绑或注销KAI星算不会自动注销外部 KAI 账号。你不得向KAI星算提交外部 KAI 密码。",
+        en: "KAI identity is an external unified identity. A first successful KAI sign-in or registration creates one local platform account only by KAI issuer and subject; it never automatically merges an existing account using KAI email, mobile number, nickname, or avatar. You may then choose a local mobile sign-in identifier and password; until SMS verification is available, that number does not prove ownership. Recovery email must still be verified by email code; a KAI-first account without a local password may use a recent KAI sign-in to authorise its first email binding. Unlinking or deleting KAI星算 does not automatically delete the external KAI account. Do not submit an external KAI password to KAI星算.",
       },
     ],
   },
@@ -118,12 +118,12 @@ const termsSections: LegalSection[] = [
     title: { zh: "算力技术社区与用户内容", en: "Compute technical community and user content" },
     paragraphs: [
       {
-        zh: "当前社区仅用于算力产品、站内行情和技术交流，首版仅开放文字动态。你保留对原创内容依法享有的权利，并授予算力星图在提供、展示、审核、备份和推广相应服务所需范围内的非独占许可。",
-        en: "The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You retain lawful rights in original content and grant 算力星图 a non-exclusive licence limited to providing, displaying, moderating, backing up, and promoting the relevant service.",
+        zh: "当前社区仅用于算力产品、站内行情和技术交流，首版仅开放文字动态。你保留对原创内容依法享有的权利，并授予KAI星算在提供、展示、审核、备份和推广相应服务所需范围内的非独占许可。",
+        en: "The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You retain lawful rights in original content and grant KAI星算 a non-exclusive licence limited to providing, displaying, moderating, backing up, and promoting the relevant service.",
       },
       {
         zh: "不得发布违法违规、诈骗、侵权、恶意营销、仇恨骚扰、淫秽暴力、恶意代码，或泄露身份证件、银行卡、密码、SSH 私钥及他人隐私的内容。平台可依法采取限流、隐藏、删除、暂停发布、保全证据或报告等措施，并为误判提供申诉渠道。",
-        en: "Do not publish unlawful, fraudulent, infringing, maliciously promotional, hateful, harassing, obscene, violent or malicious-code content, or expose identity documents, bank cards, passwords, SSH private keys or another person's privacy. 算力星图 may lawfully limit reach, hide or remove content, suspend publishing, preserve evidence or report a matter, with an appeal channel for mistakes.",
+        en: "Do not publish unlawful, fraudulent, infringing, maliciously promotional, hateful, harassing, obscene, violent or malicious-code content, or expose identity documents, bank cards, passwords, SSH private keys or another person's privacy. KAI星算 may lawfully limit reach, hide or remove content, suspend publishing, preserve evidence or report a matter, with an appeal channel for mistakes.",
       },
       {
         zh: "不得利用社区从事新闻采编、新闻转载，或发布公共事务、时政、军事、外交及突发事件的新闻报道或评论。平台保留举报、审核、屏蔽、下架和申诉机制，并可依照适用规则限制或移除超出社区范围的内容。",
@@ -151,7 +151,7 @@ const termsSections: LegalSection[] = [
     items: [
       {
         zh: "不得利用服务实施违法计算、网络攻击、恶意扫描、侵入、传播恶意软件、洗钱、诈骗、侵权、绕过监管或其他损害国家安全、公共利益、平台或第三方权益的行为。",
-        en: "Do not use the service for unlawful computing, cyberattacks, malicious scanning, intrusion, malware distribution, money laundering, fraud, infringement, regulatory evasion, or conduct harming national security, the public interest, 算力星图 or a third party.",
+        en: "Do not use the service for unlawful computing, cyberattacks, malicious scanning, intrusion, malware distribution, money laundering, fraud, infringement, regulatory evasion, or conduct harming national security, the public interest, KAI星算 or a third party.",
       },
       {
         zh: "不得破坏接口、爬取非公开数据、绕过访问控制或能力开关、伪造请求来源、干扰行情和交易状态、批量占用资源、操纵评价或帮助他人规避限制。",
@@ -169,7 +169,7 @@ const termsSections: LegalSection[] = [
       },
       {
         zh: "一方因违反协议、故意或过失造成损失，应依法承担相应责任。任何免责或责任限制均不排除法律不得排除的消费者权益、人身损害责任，以及因故意或重大过失造成的责任。对商家与用户之间的独立履约争议，平台将依据记录协助协调，但不因此当然承担资源提供方的全部责任。",
-        en: "A party that causes loss through breach, intent or negligence bears responsibility under law. No disclaimer excludes mandatory consumer rights, liability for personal injury, or liability arising from intent or gross negligence. 算力星图 may assist with an independent fulfilment dispute between a supplier and user based on platform records, but does not thereby assume all responsibility of the resource provider.",
+        en: "A party that causes loss through breach, intent or negligence bears responsibility under law. No disclaimer excludes mandatory consumer rights, liability for personal injury, or liability arising from intent or gross negligence. KAI星算 may assist with an independent fulfilment dispute between a supplier and user based on platform records, but does not thereby assume all responsibility of the resource provider.",
       },
     ],
   },
@@ -182,8 +182,8 @@ const termsSections: LegalSection[] = [
         en: "Where there is a security risk, illegality, material breach, false data, a long-unresolved anomaly or an authority request, we may take necessary measures such as verification, feature restriction, suspension or termination and, where law permits, explain the reason and offer an appeal. Outstanding fulfilment, accounting, disputes and legal obligations do not automatically end when an account is disabled.",
       },
       {
-        zh: "你可停止使用或通过账号注销页面申请注销。系统会先提示需要处理的未结事项；注销完成后，账号不能继续登录，可删除资料按隐私政策清理，依法或为未结事项确需保留的记录仅在必要范围内受限保存。注销算力星图不会注销外部 KAI 账号。",
-        en: "You may stop using the service or request deletion on the account-deletion page. The system first identifies outstanding matters. After completion, the account can no longer sign in, deletable data is cleared under the privacy policy, and records required by law or an unresolved matter are retained only as necessary with restricted access. Deleting 算力星图 does not delete the external KAI account.",
+        zh: "你可停止使用或通过账号注销页面申请注销。系统会先提示需要处理的未结事项；注销完成后，账号不能继续登录，可删除资料按隐私政策清理，依法或为未结事项确需保留的记录仅在必要范围内受限保存。注销KAI星算不会注销外部 KAI 账号。",
+        en: "You may stop using the service or request deletion on the account-deletion page. The system first identifies outstanding matters. After completion, the account can no longer sign in, deletable data is cleared under the privacy policy, and records required by law or an unresolved matter are retained only as necessary with restricted access. Deleting KAI星算 does not delete the external KAI account.",
       },
     ],
   },
@@ -218,8 +218,8 @@ export default function TermsPage() {
     <SimplePage
       title="用户协议"
       titleEn="Terms of Service"
-      description="本协议说明算力星图当前撮合服务的使用规则、用户与商家责任，以及账号、内容和争议处理安排。"
-      descriptionEn="These terms govern 算力星图's current matching service, user and supplier responsibilities, accounts, content and dispute handling."
+      description="本协议说明KAI星算当前撮合服务的使用规则、用户与商家责任，以及账号、内容和争议处理安排。"
+      descriptionEn="These terms govern KAI星算's current matching service, user and supplier responsibilities, accounts, content and dispute handling."
     >
       <LegalDocument sections={termsSections} accountDeletionLink />
     </SimplePage>

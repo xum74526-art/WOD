@@ -11,7 +11,7 @@ const manifest = JSON.parse(read("./review-manifest.json"));
 const vercelConfig = JSON.parse(read("./vercel.json"));
 
 test("package is explicitly marked for static review", () => {
-  assert.equal(manifest.name, "算力星图");
+  assert.equal(manifest.name, "KAI星算");
   assert.equal(manifest.label, "静态审核");
   assert.equal(manifest.type, "static");
   assert.equal(manifest.backendRequired, false);

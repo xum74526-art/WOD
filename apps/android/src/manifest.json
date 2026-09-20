@@ -1,5 +1,5 @@
 {
-    "name" : "算力星图",
+    "name" : "KAI星算",
     "appid" : "__UNI__47CF9D3",
     "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hant",
@@ -58,7 +58,7 @@
         }
     },
     "h5" : {
-        "title" : "算力星图",
+        "title" : "KAI星算",
         "darkmode" : true,
         "themeLocation" : "theme.json",
         "router" : {

@@ -1,6 +1,6 @@
-# 算力星图 Android
+# KAI星算 Android
 
-这是“算力星图”的 Android 客户端源码，正式 applicationId 为 `com.kai.ztwstarmap`。
+这是“KAI星算”的 Android 客户端源码，正式 applicationId 为 `com.kai.ztwstarmap`。
 
 ## 共享客户端功能
 

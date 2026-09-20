@@ -1,11 +1,11 @@
 {
-    "name" : "算力星图",
+    "name" : "KAI星算",
     "appid" : "__UNI__47CF9D3",
     "description" : "算力资源撮合平台 App",
     "locale" : "zh-Hant",
     "vueVersion" : "3",
     "versionName" : "1.2.1",
-    "versionCode" : "123",
+    "versionCode" : "124",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
@@ -51,7 +51,7 @@
         }
     },
     "h5" : {
-        "title" : "算力星图",
+        "title" : "KAI星算",
         "darkmode" : true,
         "themeLocation" : "theme.json",
         "router" : {

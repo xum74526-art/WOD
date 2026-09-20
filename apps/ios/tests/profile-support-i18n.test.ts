@@ -17,12 +17,12 @@ const i18n = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf
 test('English profile edit localizes an untouched name without overwriting the stored nickname', () => {
   assert.equal(localizePersonName('陈志强', 'en'), 'Chen Zhiqiang')
   assert.equal(localizePersonName('custom-nickname', 'en'), 'custom-nickname')
-  assert.equal(localizePersonName('WOD资讯', 'zh-Hans'), '算力星图平台行情')
+  assert.equal(localizePersonName('WOD资讯', 'zh-Hans'), 'KAI星算平台行情')
   assert.equal(localizePersonName('WOD资讯', 'zh-Hant'), '算力星圖平台行情')
-  assert.equal(localizePersonName('WOD资讯', 'en'), '算力星图 Platform Market')
-  assert.equal(localizePersonName('ZTW资讯', 'zh-Hans'), '算力星图平台行情')
+  assert.equal(localizePersonName('WOD资讯', 'en'), 'KAI星算 Platform Market')
+  assert.equal(localizePersonName('ZTW资讯', 'zh-Hans'), 'KAI星算平台行情')
   assert.equal(localizePersonName('ZTW资讯', 'zh-Hant'), '算力星圖平台行情')
-  assert.equal(localizePersonName('ZTW资讯', 'en'), '算力星图 Platform Market')
+  assert.equal(localizePersonName('ZTW资讯', 'en'), 'KAI星算 Platform Market')
   assert.equal(profileUsernameDisplayValue('陈志强', '陈志强', false, 'zh-Hant'), '陈志强')
   assert.equal(profileUsernameSubmissionValue('陈志强', 'Chen Zhiqiang', false), '陈志强')
   assert.match(profileEdit, /originalUsername\.value = userStore\.userInfo\?\.username \|\| ''/)
@@ -41,7 +41,7 @@ test('support status copy stays positive and fully localized', () => {
   assert.doesNotMatch(i18n, /人工坐席和回复时限尚未配置|Human agents and a response SLA are not configured/)
   assert.match(supportPage, /displayBusinessReference\(ticket\.ticket_no\)/)
   assert.match(supportPage, /displayBusinessReference\(message\.ticket\.ticket_no\)/)
-  assert.equal(displayBusinessReference('WOD-20260910-4E9F8B'), '算力星图-20260910-4E9F8B')
+  assert.equal(displayBusinessReference('WOD-20260910-4E9F8B'), 'KAI星算-20260910-4E9F8B')
 })
 
 test('shared inquiry-mode labels stay aligned with Android wording', () => {
@@ -55,9 +55,9 @@ test('shared inquiry-mode labels stay aligned with Android wording', () => {
   assert.match(i18n, /recoveryEmailUnavailable: 'Email service is unavailable, so an email cannot be bound or changed right now\.'/)
 })
 
-test('only historical first-party news copy receives the 算力星图 display brand', () => {
-  assert.equal(localizeInternalBrandText('WOD 算力行情由 WOD平台发布', 'wod-market'), '算力星图 算力行情由 算力星图平台发布')
-  assert.equal(localizeInternalBrandText('ZTW 算力行情', 'wod-market'), '算力星图 算力行情')
+test('only historical first-party news copy receives the KAI星算 display brand', () => {
+  assert.equal(localizeInternalBrandText('WOD 算力行情由 WOD平台发布', 'wod-market'), 'KAI星算 算力行情由 KAI星算平台发布')
+  assert.equal(localizeInternalBrandText('ZTW 算力行情', 'wod-market'), 'KAI星算 算力行情')
   assert.equal(localizeInternalBrandText('WOD 算力行情', 'user-post'), 'WOD 算力行情')
   assert.equal(localizeInternalBrandText('兑换码 WOD10', 'wod-market'), '兑换码 WOD10')
 })

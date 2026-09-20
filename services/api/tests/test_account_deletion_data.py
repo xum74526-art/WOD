@@ -103,7 +103,7 @@ class AccountDeletionDataTests(unittest.TestCase):
         self.db.commit()
         self.assertEqual(self.codes(), set())
         actions = get_automatic_actions(self.db, self.user)
-        self.assertIn("退出全部设备并解除算力星图的 KAI 身份绑定", actions)
+        self.assertIn("退出全部设备并解除KAI星算的 KAI 身份绑定", actions)
         self.assertTrue(any("下架" in value for value in actions))
         self.assertEqual(self.product.status, "on")
 

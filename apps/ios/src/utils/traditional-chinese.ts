@@ -7,7 +7,7 @@ import OpenCC from 'opencc-js/cn2t'
 const convert = OpenCC.Converter({ from: 'cn', to: 'tw' })
 const cache = new Map<string, string>()
 const MAX_CACHE_SIZE = 800
-const REGISTERED_APP_NAME = '算力星图'
+const REGISTERED_APP_NAME = 'KAI星算'
 
 export function toTraditionalChinese(value: string): string {
   if (!value) return value

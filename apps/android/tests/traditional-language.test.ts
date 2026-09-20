@@ -50,8 +50,8 @@ test('the mobile converter covers fixed and runtime business terminology', () =>
     '設置、視頻上傳、賬號註銷、資產、卡時、聯繫我們',
   )
   assert.equal(
-    toTraditionalChinese('欢迎使用算力星图移动客户端'),
-    '歡迎使用算力星图移動客戶端',
+    toTraditionalChinese('欢迎使用KAI星算移动客户端'),
+    '歡迎使用KAI星算移動客戶端',
   )
 })
 
@@ -79,8 +79,8 @@ test('mobile entry points apply Traditional Chinese throughout the app', () => {
 
   assert.equal(manifest.locale, 'zh-Hant')
   assert.match(htmlEntry, /<html lang="zh-Hant">/)
-  assert.match(htmlEntry, /<title>算力星图<\/title>/)
-  assert.equal(nativeLocale['app.name'], '算力星图')
+  assert.match(htmlEntry, /<title>KAI星算<\/title>/)
+  assert.equal(nativeLocale['app.name'], 'KAI星算')
   assert.equal(nativeLocale['tab.home'], '首頁')
   assert.equal(nativeLocale['tab.community'], '社群')
   assert.equal(uniLocale.common?.['uni.showModal.confirm'], '確定')

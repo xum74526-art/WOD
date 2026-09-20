@@ -10,9 +10,9 @@ const PLATFORM_MARKET_NAMES = new Set([
   "WOD资讯",
   "ZTW资讯",
   "ZTW資訊",
-  "算力星图资讯",
-  "算力星图資訊",
-  "算力星图平台行情",
+  "KAI星算资讯",
+  "KAI星算資訊",
+  "KAI星算平台行情",
   "算力星圖平台行情",
 ]);
 
@@ -23,9 +23,9 @@ const PLATFORM_MARKET_NAMES = new Set([
  */
 export function localizePersonName(value: string | null | undefined, locale: KaiLocale) {
   const source = String(value ?? "").trim();
-  if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hans") return "算力星图平台行情";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hans") return "KAI星算平台行情";
   if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hant") return "算力星圖平台行情";
-  if (PLATFORM_MARKET_NAMES.has(source) && locale === "en") return "算力星图 Platform Market";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "en") return "KAI星算 Platform Market";
   if (source && locale === "zh-Hant") return toTraditionalChinese(source);
   if (!source || locale !== "en") return source;
   if (PERSON_EN[source]) return PERSON_EN[source];

@@ -45,7 +45,7 @@ test("Web authentication actions localize validation, KAI and success states", (
   }
 
   assert.match(panel, /localizedAuthError\(error, t\)/);
-  assert.match(panel, /首次完成 KAI 统一认证会自动创建算力星图账号/);
+  assert.match(panel, /首次完成 KAI 统一认证会自动创建KAI星算账号/);
   assert.match(panel, /\(isRegister \|\| method === "kai"\) && !acceptedTerms/);
   assert.match(panel, /\{\(isRegister \|\| method === "kai"\) && \(/);
   assert.doesNotMatch(panel, /identity_not_bound/);

@@ -50,7 +50,7 @@ export function PingxxCheckout() {
 
   return <main className="pingxx-checkout">
     <section className="pingxx-checkout__card">
-      <header><span><ShieldCheck size={18} /> 算力星图 SECURE CHECKOUT</span><b>{credential?.livemode ? "正式支付" : "Ping++ 模拟测试"}</b></header>
+      <header><span><ShieldCheck size={18} /> KAI星算 SECURE CHECKOUT</span><b>{credential?.livemode ? "正式支付" : "Ping++ 模拟测试"}</b></header>
       <div className="pingxx-checkout__body">
         <div className="pingxx-checkout__mark"><CreditCard size={30} /></div>
         <p>PAYMENT / {paymentNo}</p>

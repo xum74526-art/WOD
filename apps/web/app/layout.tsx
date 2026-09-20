@@ -15,8 +15,8 @@ import "./kai-ui.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "算力星图算力市場",
-    template: "%s | 算力星图",
+    default: "KAI星算算力市場",
+    template: "%s | KAI星算",
   },
   description: "比較、購買和管理真實 GPU 算力資源。",
 };

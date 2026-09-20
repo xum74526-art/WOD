@@ -116,7 +116,7 @@ class MaPayPaymentTests(unittest.TestCase):
             "trade_no": "MAPAY-TEST-0001",
             "out_trade_no": order.order_no,
             "type": "alipay",
-            "name": "算力星图钱包卡时充值",
+            "name": "KAI星算钱包卡时充值",
             "money": money,
             "trade_status": "TRADE_SUCCESS",
             "param": order.order_no,
@@ -242,7 +242,7 @@ class MaPayPaymentTests(unittest.TestCase):
             for key, value in re.findall(r'name="([^"]+)" value="([^"]*)"', page)
         }
         self.assertEqual(hidden_fields["type"], "alipay")
-        self.assertEqual(hidden_fields["name"], "算力星图钱包卡时充值")
+        self.assertEqual(hidden_fields["name"], "KAI星算钱包卡时充值")
         merchant_public = self.merchant_private.public_key()
         merchant_public.verify(
             base64.b64decode(hidden_fields.pop("sign"), validate=True),
@@ -262,7 +262,7 @@ class MaPayPaymentTests(unittest.TestCase):
         self.assertEqual(self.wallet.balance, Decimal("10.009980"))
         self.assertEqual(order.status, "paid")
         self.assertIsNotNone(order.credited_at)
-        self.assertIn("<title>算力星图</title>", checkout_html(self.db, token))
+        self.assertIn("<title>KAI星算</title>", checkout_html(self.db, token))
         credits = self.db.query(Ledger).filter(Ledger.ref_payment_order_id == order.id).all()
         self.assertEqual(len(credits), 1)
         self.assertEqual(credits[0].amount, Decimal("0.009980"))

@@ -6,11 +6,11 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App 名称 | 算力星图 |
+| App 名称 | KAI星算 |
 | DCloud AppID | `__UNI__47CF9D3` |
 | Bundle ID | `com.kai.ztwstarmap` |
 | Marketing Version | `1.2.1` |
-| Build | `123` |
+| Build | `124` |
 | 支持设备 | iPhone |
 | 生产 API | `https://wod.kai.com/api` |
 | 业务模式 | 算力需求撮合；直接交易、支付、充值和提现保持关闭 |

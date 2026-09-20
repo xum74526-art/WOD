@@ -1,7 +1,7 @@
 # GPU image attribution
 
 The following product photographs were downloaded from Wikimedia Commons and
-cropped/resized for the 算力星图 product cards. Trademark names identify the
+cropped/resized for the KAI星算 product cards. Trademark names identify the
 depicted hardware only and do not imply endorsement.
 
 | Local file | Source / author | License | Modification |
@@ -26,5 +26,5 @@ presented as exact board photography when exact reusable media was unavailable.
 model label remains authoritative and the image is illustrative.
 
 All other GPU images bundled with this project are owned by, or directly
-licensed for use to, the 算力星图 operator. They are not presented as Commons
+licensed for use to, the KAI星算 operator. They are not presented as Commons
 works and are outside the six attribution entries above.

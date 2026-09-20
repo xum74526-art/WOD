@@ -1,4 +1,4 @@
-"""SMTP delivery for 算力星图-owned email verification and password recovery."""
+"""SMTP delivery for KAI星算-owned email verification and password recovery."""
 
 from __future__ import annotations
 
@@ -90,17 +90,17 @@ def send_account_recovery_email(kind: RecoveryEmailKind, recipient: str, token: 
     """Send one recovery message; callers must never log its arguments."""
 
     if kind == "verify_email":
-        subject = "验证你的算力星图绑定邮箱"
-        intro = "你正在为算力星图账号绑定或更换邮箱。"
+        subject = "验证你的KAI星算绑定邮箱"
+        intro = "你正在为KAI星算账号绑定或更换邮箱。"
         action = "完成邮箱绑定"
     else:
-        subject = "重置你的算力星图密码"
-        intro = "我们收到了你的算力星图密码重置请求。"
+        subject = "重置你的KAI星算密码"
+        intro = "我们收到了你的KAI星算密码重置请求。"
         action = "设置新密码"
     message = _message(recipient, subject)
     if kind == "password_reset_email":
         message.set_content(
-            f"{intro}\n\n在算力星图 App 的“忘记密码”页面输入以下重置码：\n{token}\n\n"
+            f"{intro}\n\n在KAI星算 App 的“忘记密码”页面输入以下重置码：\n{token}\n\n"
             f"也可以使用网页版{action}：\n{_link(kind, token)}\n\n"
             "重置码和链接只能使用一次并会在短时间后失效。如果不是你本人操作，请忽略本邮件。"
         )
@@ -115,9 +115,9 @@ def send_account_recovery_email(kind: RecoveryEmailKind, recipient: str, token: 
 def send_password_changed_notice(recipient: str) -> None:
     """Notify a verified recovery address without including any secret link."""
 
-    message = _message(recipient, "你的算力星图密码已更新")
+    message = _message(recipient, "你的KAI星算密码已更新")
     message.set_content(
-        "你的算力星图账号密码刚刚完成重置，全部旧登录会话已退出。\n\n"
-        "如果这不是你本人操作，请立即联系算力星图客服。"
+        "你的KAI星算账号密码刚刚完成重置，全部旧登录会话已退出。\n\n"
+        "如果这不是你本人操作，请立即联系KAI星算客服。"
     )
     _deliver(message)

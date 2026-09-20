@@ -109,7 +109,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 ### 账号找回上线
 
-账号找回使用算力星图内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到算力星图账号。KAI 找回只认已经绑定的 `issuer + subject`。
+账号找回使用KAI星算内单独绑定并验证的邮箱；不会把 KAI 身份中的邮箱自动复制、匹配或合并到KAI星算账号。KAI 找回只认已经绑定的 `issuer + subject`。
 
 对已有数据库，先在备份副本执行只读检查，再运行范围受限的迁移：
 

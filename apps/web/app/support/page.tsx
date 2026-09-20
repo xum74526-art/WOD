@@ -7,16 +7,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "幫助與客服 | 算力星图",
-      description: "算力星图自助客服與帳號工單。",
+      title: "幫助與客服 | KAI星算",
+      description: "KAI星算自助客服與帳號工單。",
     },
     "zh-Hans": {
-      title: "帮助与客服 | 算力星图",
-      description: "算力星图自助客服与账号工单。",
+      title: "帮助与客服 | KAI星算",
+      description: "KAI星算自助客服与账号工单。",
     },
     en: {
-      title: "算力星图 Help & Support",
-      description: "算力星图 self-service support and account tickets.",
+      title: "KAI星算 Help & Support",
+      description: "KAI星算 self-service support and account tickets.",
     },
   });
 }

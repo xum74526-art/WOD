@@ -15,7 +15,7 @@ async function mockAccount(page: Page, guest = false, handler?: (path: string, b
     let response = await handler?.(url.pathname, body);
     if (!response && url.pathname === "/api/v1/auth/me") response = guest
       ? { status: 401 }
-      : { data: { user: { id: 1, display_name: "Mock 算力星图 account", email: null, email_verified: false, role: "personal" } } };
+      : { data: { user: { id: 1, display_name: "Mock KAI星算 account", email: null, email_verified: false, role: "personal" } } };
     if (!response && url.pathname === `${prefix}/eligibility`) response = guest ? { status: 401 } : { data: { eligible: true, blockers: [], automatic_actions: ["关闭未成交需求并撤回未成交报价"] } };
     if (!response && url.pathname === `${prefix}/verify`) response = { data: { ticket, expires_at: expires() } };
     if (response?.abort) { await route.abort("connectionfailed"); return; }
@@ -29,7 +29,7 @@ async function reachFinalConfirmation(page: Page) {
   const button = page.getByRole("button", { name: "验证身份并继续" });
   await expect(button).toBeDisabled();
   await expect(page.getByRole("checkbox")).not.toBeChecked();
-  await page.getByLabel("算力星图登录密码", { exact: true }).fill("mock-password-not-a-real-account");
+  await page.getByLabel("KAI星算登录密码", { exact: true }).fill("mock-password-not-a-real-account");
   await page.getByRole("checkbox").check();
   await button.click();
   await expect(page.getByRole("heading", { name: "最后确认" })).toBeVisible();
@@ -39,7 +39,7 @@ async function reachFinalConfirmation(page: Page) {
 test("public deletion entry works without an installed app or authenticated session", async ({ page }) => {
   await mockAccount(page, true);
   await page.goto("/account-deletion");
-  await expect(page.getByRole("heading", { name: "注销算力星图账号" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "注销KAI星算账号" })).toBeVisible();
   await expect(page.getByRole("link", { name: "登录后继续注销" })).toHaveAttribute("href", "/login?return_to=%2Faccount-deletion");
   await expect(page.getByText("即使已经卸载 App，也可以在此申请注销账号，无需重新安装。")).toBeVisible();
   await expect(page.getByRole("link", { name: "联系我们：+86 4001082026", exact: true })).toHaveCount(0);

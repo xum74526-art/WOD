@@ -15,12 +15,12 @@ function stringLeaves(value: unknown): string[] {
   return Object.values(value).flatMap(stringLeaves)
 }
 
-test('native package identity and icon paths use the 算力星图 Vue 3 source tree', () => {
-  assert.equal(manifest.name, '算力星图')
+test('native package identity and icon paths use the KAI星算 Vue 3 source tree', () => {
+  assert.equal(manifest.name, 'KAI星算')
   assert.equal(manifest.description, '算力资源撮合平台 App')
-  assert.equal(manifest.h5.title, '算力星图')
+  assert.equal(manifest.h5.title, 'KAI星算')
   assert.equal(manifest.versionName, '1.2.1')
-  assert.equal(manifest.versionCode, '123')
+  assert.equal(manifest.versionCode, '124')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
 
@@ -42,7 +42,7 @@ test('native transport refuses untrusted TLS certificates', () => {
   assert.deepEqual(manifest['app-plus'].ssl, { untrustedca: 'refuse' })
 })
 
-test('login, registration and the native icon present the 算力星图 brand', () => {
+test('login, registration and the native icon present the KAI星算 brand', () => {
   if (CLIENT_PLATFORM === 'ios') {
     const iosIcons = manifest['app-plus'].distribute.icons.ios
     for (const [iconPath, size] of [
@@ -63,6 +63,6 @@ test('login, registration and the native icon present the 算力星图 brand', (
   assert.match(loginPage, /src="\/static\/logo\/logo\.png"/)
   assert.match(loginPage, /t\('appName'\)/)
   assert.match(loginPage, /t\('算力资源撮合平台'\)/)
-  assert.equal([...i18n.matchAll(/appName: '算力星图'/g)].length, 2)
+  assert.equal([...i18n.matchAll(/appName: 'KAI星算'/g)].length, 2)
   assert.doesNotMatch(i18n, /appName: 'KAI'/)
 })

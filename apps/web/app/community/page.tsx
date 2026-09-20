@@ -18,9 +18,9 @@ export default async function CommunityPage({ searchParams }: { searchParams: Se
       <main className="public-data-page community-page">
         <header className="community-hero">
           <div className="community-hero__copy">
-            <p className="hero-eyebrow">算力星图 COMPUTE COMMUNITY</p>
+            <p className="hero-eyebrow">KAI星算 COMPUTE COMMUNITY</p>
             <h1><I18nText id="community.title" zh="看懂算力，再做选择"/></h1>
-            <p><I18nText id="community.description" zh="交流 GPU 使用、硬件配置和基础设施经验，并查看算力星图自有平台行情。"/></p>
+            <p><I18nText id="community.description" zh="交流 GPU 使用、硬件配置和基础设施经验，并查看KAI星算自有平台行情。"/></p>
           </div>
           <aside className="community-coverage" aria-label="社区内容范围">
             <header>

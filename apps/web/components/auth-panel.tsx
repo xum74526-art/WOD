@@ -292,10 +292,10 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           <div className="kai-auth">
             <div className="kai-auth__mark">KAI</div>
             <h2>{isRegister ? t("auth.kai.createTitle", "使用 KAI 身份创建账号") : t("auth.kai.signInTitle", "使用 KAI 身份登录")}</h2>
-            <p>{t("auth.kai.privacyDescription", "算力星图只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
+            <p>{t("auth.kai.privacyDescription", "KAI星算只接收统一身份结果，不会读取或保存你的 KAI 密码。")}</p>
             <div className="kai-auth__scope"><ShieldCheck size={17}/><span>{kaiConfigured === false
               ? t("auth.kai.credentialsMissing", "管理员尚未配置 KAI 客户端凭据")
-              : t("auth.kai.registrationScope", "首次完成 KAI 统一认证会自动创建算力星图账号；登录后可在账户设置中设置登录手机号与绑定邮箱。")}</span></div>
+              : t("auth.kai.registrationScope", "首次完成 KAI 统一认证会自动创建KAI星算账号；登录后可在账户设置中设置登录手机号与绑定邮箱。")}</span></div>
           </div>
         )}
         {(isRegister || method === "kai") && (
@@ -319,7 +319,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       </form>
 
       <div className="auth-panel__footer">
-        <p>{isRegister ? t("auth.already", "已经有算力星图账号？") : t("auth.new", "第一次使用算力星图？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
+        <p>{isRegister ? t("auth.already", "已经有KAI星算账号？") : t("auth.new", "第一次使用KAI星算？")}<Link href={switchHref}>{isRegister ? t("auth.backLogin", "返回登录") : t("auth.create", "创建账号")}</Link></p>
         <div><Link href="/privacy">{t("footer.privacy", "隐私说明")}</Link><Link href="/terms">{t("footer.terms", "用户协议")}</Link><Link href="/help">{t("auth.help", "登录帮助")}</Link></div>
         <ContactPhone />
       </div>

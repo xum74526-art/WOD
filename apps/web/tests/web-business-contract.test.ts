@@ -20,9 +20,9 @@ import {
 import { communityDisplayText } from "../lib/community-ui.ts";
 
 test("legacy community brand values are renamed for display without changing backend identifiers", () => {
-  assert.equal(communityDisplayText("WOD资讯", "wod-market"), "算力星图平台行情");
-  assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "算力星图 算力行情");
-  assert.equal(communityDisplayText("ZTW 算力行情", "wod-market"), "算力星图 算力行情");
+  assert.equal(communityDisplayText("WOD资讯", "wod-market"), "KAI星算平台行情");
+  assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "KAI星算 算力行情");
+  assert.equal(communityDisplayText("ZTW 算力行情", "wod-market"), "KAI星算 算力行情");
   assert.equal(communityDisplayText("WOD 行情更新", "user-post"), "WOD 行情更新");
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 
@@ -286,7 +286,7 @@ test("Web registration offers phone and KAI registration, with transparent first
   assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
   assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
   assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);
-  assert.match(panel, /首次完成 KAI 统一认证会自动创建算力星图账号/);
+  assert.match(panel, /首次完成 KAI 统一认证会自动创建KAI星算账号/);
   assert.doesNotMatch(panel, /identity_not_bound|PENDING_KAI_INTENT_KEY|KAI_REGISTRATION_NOTICE_KEY/);
   assert.match(panel, /isRegister \? t\("auth\.kai\.continueRegistration"/);
   assert.match(panel, /t\("auth\.kai\.signIn"/);

@@ -5,16 +5,16 @@ import { localizedPageMetadata } from "@/lib/server/localized-metadata";
 export function generateMetadata(): Promise<Metadata> {
   return localizedPageMetadata({
     "zh-Hant": {
-      title: "註冊 | 算力星图",
-      description: "建立算力星图帳號，統一使用 Web、iOS 與 Android。",
+      title: "註冊 | KAI星算",
+      description: "建立KAI星算帳號，統一使用 Web、iOS 與 Android。",
     },
     "zh-Hans": {
-      title: "注册 | 算力星图",
-      description: "创建算力星图账号，统一使用 Web、iOS 与 Android。",
+      title: "注册 | KAI星算",
+      description: "创建KAI星算账号，统一使用 Web、iOS 与 Android。",
     },
     en: {
-      title: "Create account | 算力星图",
-      description: "Create a 算力星图 account for Web, iOS, and Android.",
+      title: "Create account | KAI星算",
+      description: "Create a KAI星算 account for Web, iOS, and Android.",
     },
   });
 }

@@ -130,7 +130,7 @@ let leaving = false
 
 const copies = {
   'zh-Hans': {
-    appName: '算力星图', eyebrow: '隐私与数据保护', title: '请先完成隐私选择',
+    appName: 'KAI星算', eyebrow: '隐私与数据保护', title: '请先完成隐私选择',
     intro: '在应用发起账号恢复、更新检查、第三方内容加载等业务网络请求前，请阅读并作出选择。未同意时，应用仅显示本地法律文本，不会发送业务网络请求。',
     version: '法律文本版本', generalTitle: '用户协议与隐私政策',
     generalDescription: '请完整阅读本地展示的法律文本。政策说明了处理的信息、用途、第三方、保存期限、账号注销与权利行使方式。',
@@ -144,7 +144,7 @@ const copies = {
     incomplete: '请完成所有必选项', declinedTitle: '尚未同意', declinedContent: '应用不会发起业务网络请求。你可以继续阅读法律文本，或关闭应用后稍后再作选择。', understood: '知道了',
   },
   'zh-Hant': {
-    appName: '算力星图', eyebrow: '隱私與資料保護', title: '請先完成隱私選擇',
+    appName: 'KAI星算', eyebrow: '隱私與資料保護', title: '請先完成隱私選擇',
     intro: '在應用發起帳號恢復、更新檢查、第三方內容載入等業務網路請求前，請閱讀並作出選擇。未同意時，應用僅顯示本地法律文本，不會傳送業務網路請求。',
     version: '法律文本版本', generalTitle: '使用者協議與隱私政策',
     generalDescription: '請完整閱讀本地顯示的法律文本。政策說明了處理的資訊、用途、第三方、保存期限、帳號註銷與權利行使方式。',
@@ -158,7 +158,7 @@ const copies = {
     incomplete: '請完成所有必選項', declinedTitle: '尚未同意', declinedContent: '應用不會發起業務網路請求。你可以繼續閱讀法律文本，或關閉應用後稍後再作選擇。', understood: '知道了',
   },
   en: {
-    appName: '算力星图', eyebrow: 'Privacy and data protection', title: 'Make your privacy choices first',
+    appName: 'KAI星算', eyebrow: 'Privacy and data protection', title: 'Make your privacy choices first',
     intro: 'Before the app sends service network requests for account recovery, update checks, or third-party content loading, please read and make your choices. Until then, the app displays only bundled legal text and sends no service network request.',
     version: 'Legal text version', generalTitle: 'User Agreement and Privacy Policy',
     generalDescription: 'Read the bundled legal text in full. It explains the data processed, purposes, third parties, retention, account deletion, and how to exercise your rights.',

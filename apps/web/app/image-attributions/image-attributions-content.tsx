@@ -96,12 +96,12 @@ export function ImageAttributionsContent() {
           <p className="hero-eyebrow">IMAGE SOURCES / LICENSES</p>
           <h1>{label("图片来源与许可", "Image sources and licenses")}</h1>
           <p>{label(
-            "以下 GPU 图片来自 Wikimedia Commons，并依照各原作标注的许可在算力星图中使用。",
-            "The following GPU images come from Wikimedia Commons and are used in 算力星图 under the license identified for each original work.",
+            "以下 GPU 图片来自 Wikimedia Commons，并依照各原作标注的许可在KAI星算中使用。",
+            "The following GPU images come from Wikimedia Commons and are used in KAI星算 under the license identified for each original work.",
           )}</p>
           <p className={styles.notice}>{label(
-            "商标和型号名称仅用于说明图片所示硬件，不代表相关品牌对算力星图的认可或背书。",
-            "Trademark and model names identify the depicted hardware only and do not imply endorsement of 算力星图 by the relevant brands.",
+            "商标和型号名称仅用于说明图片所示硬件，不代表相关品牌对KAI星算的认可或背书。",
+            "Trademark and model names identify the depicted hardware only and do not imply endorsement of KAI星算 by the relevant brands.",
           )}</p>
         </header>
 
@@ -127,8 +127,8 @@ export function ImageAttributionsContent() {
         <section className={styles.directRights}>
           <h2>{label("其他项目图片", "Other project images")}</h2>
           <p>{label(
-            "此页面未单独列出的项目图片由算力星图运营方持有所有权或已取得直接使用授权。",
-            "Project images not individually listed on this page are owned by, or directly licensed for use to, the operator of 算力星图.",
+            "此页面未单独列出的项目图片由KAI星算运营方持有所有权或已取得直接使用授权。",
+            "Project images not individually listed on this page are owned by, or directly licensed for use to, the operator of KAI星算.",
           )}</p>
           <p>{label(
             "数据中心和专业型号可能复用同系列示意图；页面显示的型号文字是资源规格的准确信息。B100 当前复用 H200 数据中心系列示意图。",

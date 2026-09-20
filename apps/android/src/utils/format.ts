@@ -47,7 +47,7 @@ function stableDecimal(
   const negative = normalized < 0
   const absolute = Math.abs(normalized)
 
-  // 算力星图用户可见数值远小于 1e21；超出时保留安全的整数表达，避免 toFixed
+  // KAI星算用户可见数值远小于 1e21；超出时保留安全的整数表达，避免 toFixed
   // 返回科学计数法后被误当成小数拆分。
   const scale = 10 ** maximumFractionDigits
   // 先在目标精度上取整，抵消 1.005 这类二进制浮点值直接

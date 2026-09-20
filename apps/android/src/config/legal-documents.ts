@@ -49,7 +49,7 @@ const PRIVACY_ZH: LegalDocument = {
   title: '隐私政策',
   metadata: metadataZh(),
   introduction: [
-    '本政策适用于算力星图 Android 与 iOS 移动客户端（Android 包名：com.kai.ztwstarmap）。我们按照合法、正当、必要、诚信和最小化原则处理个人信息。请在注册、登录或使用服务前完整阅读本政策。',
+    '本政策适用于KAI星算 Android 与 iOS 移动客户端（Android 包名：com.kai.ztwstarmap）。我们按照合法、正当、必要、诚信和最小化原则处理个人信息。请在注册、登录或使用服务前完整阅读本政策。',
     '运营者及个人信息处理者为锆芯期算人工智能科技（上海）有限公司。若你不同意本政策，请停止注册或使用；拒绝非必要权限不会影响不依赖该权限的功能。',
   ],
   sections: [
@@ -81,7 +81,7 @@ const PRIVACY_ZH: LegalDocument = {
       title: '三、我们如何使用信息',
       paragraphs: [
         '我们仅在实现上述功能、履行协议、遵守法定义务、保障账号和系统安全、处理争议以及经你另行同意的范围内使用个人信息。若处理目的、方式或信息种类发生实质变化，我们会更新说明，并在依法需要时重新取得同意。',
-        '我们不会出售个人信息，不会以同意本政策为由强制你提供与当前功能无关的信息，也不会将个人信息用于与算力星图服务无关的自动化营销。',
+        '我们不会出售个人信息，不会以同意本政策为由强制你提供与当前功能无关的信息，也不会将个人信息用于与KAI星算服务无关的自动化营销。',
         '【敏感个人信息】身份证件和银行卡资料一旦泄露或滥用可能造成身份冒用或财产损失。我们仅在实名认证、商家准入或经你申请的银行卡业务等特定且充分必要的目的下处理，在对应页面说明必要性和拒绝影响并依法取得单独同意，采取加密、掩码、最小权限和访问审计等强化保护措施。拒绝后仅无法使用需要实名或银行卡的功能。精确的 SSH 等交付凭据按高风险业务秘密实施加密、最小权限和访问审计。',
       ],
     },
@@ -107,7 +107,7 @@ const PRIVACY_ZH: LegalDocument = {
     {
       title: '六、存储地点、跨境处理与期限',
       paragraphs: [
-        '当前算力星图核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。所有地区的用户使用业务联网功能时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。',
+        '当前KAI星算核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。所有地区的用户使用业务联网功能时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。',
         '境外接收环境的运营管理者为本政策所列运营主体，联系方式为上述电话；阿里云计算有限公司提供中国香港基础设施。处理目的为账号、撮合、社区、客服、履约、安全和故障处理，处理方式为传输、存储、查询、校验、备份、删除或匿名化，信息种类限于上一段。移动客户端在首次业务联网前通过独立且默认不勾选的选项取得单独同意；拒绝后不发起业务网络请求，你仍可阅读协议和政策、调整语言或退出，但无法使用登录、行情、撮合、社区和客服等联网功能。我们会依法履行个人信息保护影响评估及适用的出境安全评估、认证或标准合同程序；未满足适用法定条件时，不应启动相应出境处理。',
         '账号与业务资料仅在提供服务、处理争议或履行法定义务所需期间保留。找回邮箱验证码与密码重置凭据默认三十分钟失效，邮件投递终态记录在完成后按系统策略清理，默认不超过二十四小时。',
         '注销流程在本设备保存的专用恢复凭据、到期时间和内部账号编号最长保留七天，不包含密码或普通登录令牌。头像、证件、地址、社区、客服等资料在目的完成、用户删除或账号注销后删除或匿名化，但未履约、账务、结算、争议及依法必须保留的材料会在必要范围和期限内受限保留，不预设超出法律与业务需要的固定年限。',
@@ -124,7 +124,7 @@ const PRIVACY_ZH: LegalDocument = {
     {
       title: '八、你的权利',
       paragraphs: [
-        '你可以在“我的”和相应业务页面查阅、更正或删除可管理资料；在“系统设置 → 应用 → 算力星图 → 权限”撤回系统权限；在“我的 → 设置 → 隐私选择”点击“撤回并返回”撤回隐私同意。撤回后 App 停止后续业务网络请求并返回隐私选择页，再次同意前联网功能不可用；撤回不影响此前处理的合法性，也不会自动注销账号。',
+        '你可以在“我的”和相应业务页面查阅、更正或删除可管理资料；在“系统设置 → 应用 → KAI星算 → 权限”撤回系统权限；在“我的 → 设置 → 隐私选择”点击“撤回并返回”撤回隐私同意。撤回后 App 停止后续业务网络请求并返回隐私选择页，再次同意前联网功能不可用；撤回不影响此前处理的合法性，也不会自动注销账号。',
         '你可以从“我的 → 设置 → 注销账号”提交注销。未履约、争议或待结算事项需先处理；注销完成后全部设备会话失效、非必要资料会被清理，并解除本平台的 KAI 绑定，但不会删除其他 KAI 产品账号。注销不可恢复，重新注册不会继承原账号记录。',
         '为保障账号安全，我们可能要求核验身份。我们通常会在十五个工作日内答复；情况复杂或法律另有规定的，按适用规则处理。',
       ],
@@ -155,7 +155,7 @@ const PRIVACY_EN: LegalDocument = {
   title: 'Privacy Policy',
   metadata: metadataEn(),
   introduction: [
-    'This Policy applies to the 算力星图 Android and iOS apps (Android package: com.kai.ztwstarmap). We process personal information lawfully, fairly, in good faith, and only as necessary. Read it before registering, signing in, or using the service.',
+    'This Policy applies to the KAI星算 Android and iOS apps (Android package: com.kai.ztwstarmap). We process personal information lawfully, fairly, in good faith, and only as necessary. Read it before registering, signing in, or using the service.',
     `The operator and personal-information processor is ${LEGAL_OPERATOR}. If you do not agree, do not register or continue using the service. Refusing an optional permission affects only the feature that needs it.`,
   ],
   sections: [
@@ -206,7 +206,7 @@ const PRIVACY_EN: LegalDocument = {
     {
       title: '5. Storage location, cross-border processing, and retention',
       paragraphs: [
-        '算力星图 currently deploys its core API, database, and uploaded files in Alibaba Cloud Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfillment, security, troubleshooting, and legally required retention.',
+        'KAI星算 currently deploys its core API, database, and uploaded files in Alibaba Cloud Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfillment, security, troubleshooting, and legally required retention.',
         'The overseas receiving environment is operated and managed by the operator named here at the telephone above; Alibaba Cloud Computing Co., Ltd. supplies the Hong Kong infrastructure. Purposes are accounts, matching, community, support, fulfilment, security and troubleshooting; methods are transfer, storage, query, validation, backup, deletion or anonymisation. Before the first business network request, the app uses a separate unchecked choice to obtain separate consent. If declined, no business network request is made; you may still read legal texts, change language or exit, but connected sign-in, pricing, matching, community and support remain unavailable. We conduct the required impact assessment and applicable security assessment, certification or standard-contract procedure; processing should not start unless applicable legal conditions are met.',
         'Account and business data is retained only for service, dispute, or legal needs. Recovery verification and reset credentials expire in 30 minutes. Completed recovery-mail delivery records are normally removed within 24 hours.',
         'A deletion recovery capability, expiry, and internal account ID may remain on this device for up to seven days; it contains no password or normal login token. Profile, ID, address, community, and support data is deleted or anonymized when its purpose ends, you delete it, or the account is deleted. Unfulfilled, ledger, settlement, dispute, and legally required records remain restricted only for the necessary scope and period, without inventing a fixed financial term.',
@@ -223,8 +223,8 @@ const PRIVACY_EN: LegalDocument = {
     {
       title: '7. Your rights and account deletion',
       paragraphs: [
-        'Use Profile and the relevant service pages to access, correct or delete manageable data; use System Settings → Apps → 算力星图 → Permissions to revoke system permissions; and use Profile → Settings → Privacy Choices → Withdraw and Return to withdraw privacy consent. Withdrawal stops subsequent business network requests and returns to the privacy choice page until renewed consent. It does not invalidate earlier lawful processing or automatically delete the account.',
-        'Use Profile → Settings → Delete account. Active fulfillment, disputes, or unsettled matters must be resolved first. Completion invalidates all sessions, removes unnecessary data, and unlinks the 算力星图 KAI identity without deleting other KAI products. Deletion cannot be reversed and a new account does not inherit old records.',
+        'Use Profile and the relevant service pages to access, correct or delete manageable data; use System Settings → Apps → KAI星算 → Permissions to revoke system permissions; and use Profile → Settings → Privacy Choices → Withdraw and Return to withdraw privacy consent. Withdrawal stops subsequent business network requests and returns to the privacy choice page until renewed consent. It does not invalidate earlier lawful processing or automatically delete the account.',
+        'Use Profile → Settings → Delete account. Active fulfillment, disputes, or unsettled matters must be resolved first. Completion invalidates all sessions, removes unnecessary data, and unlinks the KAI星算 KAI identity without deleting other KAI products. Deletion cannot be reversed and a new account does not inherit old records.',
         'We may verify identity before acting on a request and normally respond within 15 working days, subject to applicable law and complex cases.',
       ],
     },
@@ -257,7 +257,7 @@ function agreementZh(): LegalDocument {
     title: '用户协议',
     metadata: metadataZh(),
     introduction: [
-      '本协议由你与锆芯期算人工智能科技（上海）有限公司就算力星图移动客户端及相关服务共同订立。请在注册、登录或使用前完整阅读，尤其是风险提示、责任限制、账号注销和争议解决条款。',
+      '本协议由你与锆芯期算人工智能科技（上海）有限公司就KAI星算移动客户端及相关服务共同订立。请在注册、登录或使用前完整阅读，尤其是风险提示、责任限制、账号注销和争议解决条款。',
       '点击同意、注册、登录或继续使用即表示你已阅读并接受本协议及届时适用的页面规则；如不同意，请停止注册或使用。',
     ],
     sections: [
@@ -373,8 +373,8 @@ function agreementEn(): LegalDocument {
     title: 'User Agreement',
     metadata: metadataEn(),
     introduction: [
-      `This Agreement is between you and ${LEGAL_OPERATOR} for the 算力星图 mobile applications and related services. Read it fully, especially the risk, liability, deletion, and dispute terms.`,
-      'By accepting, registering, signing in, or continuing to use 算力星图, you accept this Agreement and the rules shown for a feature. If you disagree, do not register or use the service.',
+      `This Agreement is between you and ${LEGAL_OPERATOR} for the KAI星算 mobile applications and related services. Read it fully, especially the risk, liability, deletion, and dispute terms.`,
+      'By accepting, registering, signing in, or continuing to use KAI星算, you accept this Agreement and the rules shown for a feature. If you disagree, do not register or use the service.',
     ],
     sections: [
       {
@@ -395,7 +395,7 @@ function agreementEn(): LegalDocument {
       {
         title: '3. Services and eligibility',
         paragraphs: [
-          '算力星图 provides KAI Pricing market references, compute-resource information, requirement submission, merchant proposals and counteroffers, confirmation, coordinated fulfillment, community, support, and history. Availability may change for compliance, qualifications, security, or operations.',
+          'KAI星算 provides KAI Pricing market references, compute-resource information, requirement submission, merchant proposals and counteroffers, confirmation, coordinated fulfillment, community, support, and history. Availability may change for compliance, qualifications, security, or operations.',
           'Identity verification, merchant application, publishing, sensitive operations, or fulfillment may require accurate additional materials. Approval means the materials met admission requirements at review time; it is not a guarantee of continuing capacity, hardware performance, or returns.',
         ],
       },
@@ -403,8 +403,8 @@ function agreementEn(): LegalDocument {
         title: '4. Market data and matchmaking',
         paragraphs: [
           'KAI Pricing and other quotes, charts, configurations, quantities, and historical data support observation and discussions only. They are not investment advice, live inventory, fixed quotations, transaction commitments, or return guarantees, and may be affected by upstream updates, networks, sample size, and time windows.',
-          'A requirement may include model, quantity, duration, region, contact, and notes. Submission is not an order, payment, or contract. Merchants with reviewed onboarding materials may propose plans, and 算力星图 may coordinate comparison and confirmation. Final scope, price, delivery, acceptance, fees, and liability must be confirmed by the relevant parties.',
-          'Buyer private contact details are not shown in the public market. Users must independently evaluate a plan and must not treat market data or coordination as 算力星图 assuming every counterparty obligation.',
+          'A requirement may include model, quantity, duration, region, contact, and notes. Submission is not an order, payment, or contract. Merchants with reviewed onboarding materials may propose plans, and KAI星算 may coordinate comparison and confirmation. Final scope, price, delivery, acceptance, fees, and liability must be confirmed by the relevant parties.',
+          'Buyer private contact details are not shown in the public market. Users must independently evaluate a plan and must not treat market data or coordination as KAI星算 assuming every counterparty obligation.',
         ],
       },
       transactionSection,
@@ -413,7 +413,7 @@ function agreementEn(): LegalDocument {
         paragraphs: [
           'Merchants must keep entity, contact, resource, lawful control, availability, price, and delivery details accurate. Review of onboarding materials is not certification of hardware, continuing inventory, returns, or every merchant statement.',
           'A merchant may submit only necessary SSH host, port, username, and credentials for confirmed fulfillment and must not reuse weak credentials or deliver a system it cannot lawfully provide. A buyer may use access only as agreed and must not reshare, scan, attack, bypass controls, or break law. Temporary credentials should be rotated or revoked promptly.',
-          '算力星图 may display or retain minimum delivery records for coordination and disputes. A party at fault remains responsible for inaccurate materials, out-of-scope use, or failure to follow security requirements.',
+          'KAI星算 may display or retain minimum delivery records for coordination and disputes. A party at fault remains responsible for inaccurate materials, out-of-scope use, or failure to follow security requirements.',
         ],
       },
       {
@@ -427,14 +427,14 @@ function agreementEn(): LegalDocument {
         title: '8. Compute technical community',
         paragraphs: [
           'The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You are responsible for posts and comments and must hold the necessary rights. Illegal, infringing, false, fraudulent, privacy-invasive, malicious, or system-abusive content is prohibited.',
-          'Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. You grant 算力星图 the necessary non-exclusive service-scope permission to display and review submitted content. We maintain reporting, moderation, blocking, takedown, evidence-preservation, and appeal mechanisms.',
+          'Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. You grant KAI星算 the necessary non-exclusive service-scope permission to display and review submitted content. We maintain reporting, moderation, blocking, takedown, evidence-preservation, and appeal mechanisms.',
         ],
       },
       {
         title: '9. Prohibited conduct',
         paragraphs: [
           'Fraud, money laundering, infringement, sham transactions, manipulation, malicious resource reservation, bypassing controls, unauthorized access, malware, network or API disruption, account resale, scraping non-public data, and conduct prohibited by law or harmful to others are forbidden.',
-          'Depending on severity, 算力星图 may warn, restrict features, remove content, suspend transactions or accounts, preserve evidence, and cooperate with authorities. Money, assets, and disputes remain governed by server records, applicable rules, and law.',
+          'Depending on severity, KAI星算 may warn, restrict features, remove content, suspend transactions or accounts, preserve evidence, and cooperate with authorities. Money, assets, and disputes remain governed by server records, applicable rules, and law.',
         ],
       },
       {
@@ -451,8 +451,8 @@ function agreementEn(): LegalDocument {
       {
         title: '12. Risk and liability',
         paragraphs: [
-          'Evaluate your own purpose, technical ability, budget, and risk tolerance. 算力星图 does not guarantee uninterrupted or error-free data, constant resource availability, merchant performance, or any return.',
-          '算力星图 remains liable where loss is caused by its intent or gross negligence as required by law. Effects caused by a user or counterparty, third-party or upstream interruption, network or device failure, force majeure, or events beyond reasonable control are allocated under law and fault. Nothing excludes liability that law does not permit us to limit.',
+          'Evaluate your own purpose, technical ability, budget, and risk tolerance. KAI星算 does not guarantee uninterrupted or error-free data, constant resource availability, merchant performance, or any return.',
+          'KAI星算 remains liable where loss is caused by its intent or gross negligence as required by law. Effects caused by a user or counterparty, third-party or upstream interruption, network or device failure, force majeure, or events beyond reasonable control are allocated under law and fault. Nothing excludes liability that law does not permit us to limit.',
         ],
       },
       {

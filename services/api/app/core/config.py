@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
-    # 算力星图-owned recovery email. This remains fail-closed until the private
+    # KAI星算-owned recovery email. This remains fail-closed until the private
     # deployment supplies encrypted-field and SMTP configuration.
     ACCOUNT_RECOVERY_EMAIL_ENABLED: bool = False
     ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN: str = "https://wod.kai.com"

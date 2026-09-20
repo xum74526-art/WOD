@@ -1,4 +1,4 @@
-# 算力星图静态审核页面
+# KAI星算静态审核页面
 
 > 标注：**静态审核**
 
@@ -24,7 +24,7 @@ python -m http.server 9200 --directory static-review
 ## 审核说明
 
 - 审核类型：静态页面审核
-- 页面名称：算力星图
+- 页面名称：KAI星算
 - 正式地址：`https://wod.kai.com/info`
 - 独立审核地址：`https://static-review.vercel.app`
 - 联系电话：`+86 4001082026`

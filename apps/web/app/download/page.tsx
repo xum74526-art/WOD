@@ -4,8 +4,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "下載算力星图 App",
-  description: "下載算力星图 Android App，或查看 iOS 與 Android 應用商店發佈狀態。",
+  title: "下載KAI星算 App",
+  description: "下載KAI星算 Android App，或查看 iOS 與 Android 應用商店發佈狀態。",
 };
 
 const androidVersion = "1.2.1";
@@ -25,12 +25,12 @@ export default function DownloadPage() {
       <SiteHeader />
       <main className="download-page__main">
         <header className="download-hero">
-          <p className="hero-eyebrow">算力星图 ANDROID / {androidVersion}</p>
+          <p className="hero-eyebrow">KAI星算 ANDROID / {androidVersion}</p>
           <h1>把算力市场<br />装进口袋</h1>
-          <p>网页与 App 使用同一个算力星图账号、余额、订单和算力数据。选择你的设备开始使用。</p>
+          <p>网页与 App 使用同一个KAI星算账号、余额、订单和算力数据。选择你的设备开始使用。</p>
         </header>
 
-        <section className="download-platforms" aria-label="算力星图 App 下载方式">
+        <section className="download-platforms" aria-label="KAI星算 App 下载方式">
           <article className="download-platform download-platform--android">
             <div className="download-platform__head">
               <span className="download-platform__icon"><AndroidLogo size={34} weight="fill" /></span>
@@ -78,7 +78,7 @@ export default function DownloadPage() {
         <aside className="download-security-note">
           <ShieldCheck size={21} weight="duotone" />
           <div>
-            <strong>只从算力星图官方页面安装</strong>
+            <strong>只从KAI星算官方页面安装</strong>
             <span>{androidReleaseReady ? `Android APK ${androidVersion} · ${androidApkSize}` : "新版 APK 尚未开放下载"}</span>
             {androidApkSha256 ? <code>SHA-256: {androidApkSha256}</code> : null}
           </div>

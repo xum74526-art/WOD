@@ -48,7 +48,7 @@ test('mobile matching promotion replaces wallet messaging and opens request comp
   assert.equal(HOME_NOTICES[0]?.textKey, 'homeNoticeHourly')
   assert.equal(requestPromotion?.route, '/pages/buy-request/index?compose=1')
   assert.equal(requestPromotion?.titleKey, 'homePromoRequestTitle')
-  assert.match(i18n, /homePromoRequestKicker: '算力星图 MATCHING'/)
+  assert.match(i18n, /homePromoRequestKicker: 'KAI星算 MATCHING'/)
   assert.match(i18n, /homePromoRequestTitle: '发布算力需求'/)
   assert.match(i18n, /homePromoRequestAction: '提交需求'/)
   assert.match(i18n, /homePromoRequestTitle: 'Post Compute Request'/)

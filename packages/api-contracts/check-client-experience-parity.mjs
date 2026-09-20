@@ -878,6 +878,9 @@ const allowedMobileDrift = new Set([
   // are intentionally Android-only platform assets.
   'src/androidPrivacy.json',
   'src/utils/client-platform.ts',
+  // Each client tracks its own released build code for platform-specific
+  // update prompts; iOS 123 and Android 122 are intentionally independent.
+  'src/utils/app-update.ts',
   'src/static/logo/logo-1024.png',
   // iPhone application icons use Apple's 60-point @2x/@3x sizes. Android
   // consumes the shared 72/96/144/192 density icons instead.
@@ -887,6 +890,10 @@ const allowedMobileDrift = new Set([
   // under a platform-specific DCloud field; the matching regression assertion
   // therefore cannot be byte-for-byte identical.
   'tests/manifest-branding.test.ts',
+  'tests/app-update.test.ts',
+  // The Android native-consent regression also checks androidPrivacy.json;
+  // iOS exercises the shared in-app legal-document flow without that asset.
+  'tests/legal-documents.test.ts',
   'tests/manifest-permissions.test.ts',
   'tests/privacy-startup.test.ts',
   // These assertions embed the platform name and therefore intentionally

@@ -192,15 +192,15 @@ export function AccountDeletion() {
     <SiteHeader authMode={started || Boolean(receipt) ? "guest" : "auto"} />
     <main className={`public-data-page ${styles.page}`}>
       <header className={styles.heading}>
-        <p className="hero-eyebrow">算力星图 / ACCOUNT</p>
-        <h1>{en ? "Delete your 算力星图 account" : "注销算力星图账号"}</h1>
+        <p className="hero-eyebrow">KAI星算 / ACCOUNT</p>
+        <h1>{en ? "Delete your KAI星算 account" : "注销KAI星算账号"}</h1>
         <p>{en ? "You can request account deletion here, even if you have uninstalled the app." : "即使已经卸载 App，也可以在此申请注销账号，无需重新安装。"}</p>
       </header>
       <section className={styles.card} aria-labelledby="deletion-notice-title">
         <h2 id="deletion-notice-title">{en ? "Before you continue" : "注销前，请了解"}</h2>
         <ul className={styles.noticeList}>
-          <li>{en ? "This deletes your 算力星图 account, not just signs you out. Once completed, this account cannot be restored." : "注销不是退出登录。注销完成后，此算力星图账号无法恢复。"}</li>
-          <li>{en ? "All 算力星图 sessions and its linked Kai sign-in will be disabled. This does not delete your external Kai account." : "所有算力星图登录会话将失效，Kai 登录关联将解除；这不会注销外部 Kai 统一身份账号。"}</li>
+          <li>{en ? "This deletes your KAI星算 account, not just signs you out. Once completed, this account cannot be restored." : "注销不是退出登录。注销完成后，此KAI星算账号无法恢复。"}</li>
+          <li>{en ? "All KAI星算 sessions and its linked Kai sign-in will be disabled. This does not delete your external Kai account." : "所有KAI星算登录会话将失效，Kai 登录关联将解除；这不会注销外部 Kai 统一身份账号。"}</li>
           <li>{en ? "Personal profile data and other deletable data will be cleared. Records required for outstanding obligations, disputes, audit or legal duties are retained only as necessary with restricted access." : "个人资料及可删除数据会被清理；履约、争议、审计或法定义务确需保留的记录，仅在必要范围内受限保存。"}</li>
           <li>{en ? "The server checks ongoing cooperation, active resources, balances and unsettled rewards. Deletion does not waive money or rewards owed to you." : "系统会检查未结束合作、使用中资源、余额及待结算返佣；不会以注销为由擅自清零资金或取消既有返佣。"}</li>
         </ul>
@@ -211,7 +211,7 @@ export function AccountDeletion() {
         <h2 id="deletion-action-title">{complete ? (en ? "Account deleted" : "账号已注销") : en ? "Request deletion" : "申请注销"}</h2>
         {error && <p className="commerce-error" role="alert">{error}</p>}
         {complete ? <div role="status">
-          <p>{en ? "The server confirmed that your 算力星图 account has been deleted. Its normal sign-in sessions are no longer valid." : "服务器已确认此算力星图账号注销完成，原有登录会话已失效。"}</p>
+          <p>{en ? "The server confirmed that your KAI星算 account has been deleted. Its normal sign-in sessions are no longer valid." : "服务器已确认此KAI星算账号注销完成，原有登录会话已失效。"}</p>
           {status.completed_at && <p className={styles.note}>{en ? "Completed at: " : "完成时间："}{new Date(status.completed_at).toLocaleString(en ? "en-US" : "zh-CN")}</p>}
           <a className="outline-link" href="/">{en ? "Back to home" : "返回首页"}</a>
         </div> : receipt ? <div aria-live="polite">
@@ -241,11 +241,11 @@ export function AccountDeletion() {
           </section>}
           <p className={styles.note}>{en ? "Only the deletion-specific receipt is saved, for up to 7 days. No password or normal sign-in token is stored. If this browser's storage is cleared, result recovery may require support." : "仅保存最长 7 天的注销专用查询凭据，不保存密码或普通登录令牌。清理浏览器数据后，可能需要通过客服核实结果。"}</p>
         </div> : guest ? <div>
-          <p>{en ? "Sign in to the 算力星图 account you want to delete, then verify your 算力星图 password on this page." : "请先登录要注销的算力星图账号，再在此页面验证算力星图登录密码。"}</p>
+          <p>{en ? "Sign in to the KAI星算 account you want to delete, then verify your KAI星算 password on this page." : "请先登录要注销的KAI星算账号，再在此页面验证KAI星算登录密码。"}</p>
           <Link className="commerce-primary" href={loginHref("/account-deletion")}>{en ? "Sign in to continue" : "登录后继续注销"}</Link>
         </div> : verification ? <section className={styles.confirmation} aria-labelledby="deletion-final-title">
           <h3 id="deletion-final-title">{en ? "Final confirmation" : "最后确认"}</h3>
-          <p>{en ? "Identity verified. Clicking the button below submits an irreversible request to delete this 算力星图 account. The server will check outstanding items again." : "身份已验证。点击下方按钮将正式申请注销此算力星图账号，完成后不可恢复。服务器仍会再次检查是否有未处理事项。"}</p>
+          <p>{en ? "Identity verified. Clicking the button below submits an irreversible request to delete this KAI星算 account. The server will check outstanding items again." : "身份已验证。点击下方按钮将正式申请注销此KAI星算账号，完成后不可恢复。服务器仍会再次检查是否有未处理事项。"}</p>
           <label className={styles.acknowledgment}><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy}/><span>{en ? "I have reviewed the notice and understand that this account cannot be restored after deletion." : "我已重新阅读注销说明，理解账号注销完成后无法恢复。"}</span></label>
           <div className={styles.actions}>
             <button type="button" className="outline-link" disabled={busy} onClick={() => { setVerification(null); setAcknowledged(false); }}>{en ? "Go back" : "返回"}</button>
@@ -256,14 +256,14 @@ export function AccountDeletion() {
           {blockers.length > 0 && <ul className={styles.blockers}>{blockers.map((item) => <li key={item.code}>{item.message}{item.count > 1 ? ` (${item.count})` : ""}</li>)}</ul>}
           {eligibility.automatic_actions.length > 0 && <div className={styles.note}><strong>{en ? "Included in the deletion process" : "确认注销后将一并处理"}</strong><ul>{eligibility.automatic_actions.map((action) => <li key={action}>{action}</li>)}</ul></div>}
           {eligibility.eligible && eligibility.verification_methods.includes("password") && <form className={styles.form} onSubmit={verify}>
-            <label htmlFor="deletion-password">{en ? "算力星图 sign-in password" : "算力星图登录密码"}</label>
+            <label htmlFor="deletion-password">{en ? "KAI星算 sign-in password" : "KAI星算登录密码"}</label>
             <input id="deletion-password" type="password" required autoComplete="current-password" maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy}/>
-            <p className={styles.note}>{en ? "Enter your 算力星图 password, not your external Kai password. SMS verification is not available in this version." : "请填写算力星图密码，不是外部 Kai 统一身份密码。本版不提供短信验证。"}</p>
-            <label className={styles.acknowledgment}><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy}/><span>{en ? "I have read the notice and understand that this 算力星图 account cannot be restored after deletion." : "我已阅读注销说明，理解此算力星图账号注销完成后无法恢复。"}</span></label>
+            <p className={styles.note}>{en ? "Enter your KAI星算 password, not your external Kai password. SMS verification is not available in this version." : "请填写KAI星算密码，不是外部 Kai 统一身份密码。本版不提供短信验证。"}</p>
+            <label className={styles.acknowledgment}><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy}/><span>{en ? "I have read the notice and understand that this KAI星算 account cannot be restored after deletion." : "我已阅读注销说明，理解此KAI星算账号注销完成后无法恢复。"}</span></label>
             <button className={styles.dangerButton} type="submit" disabled={busy || !acknowledged || !password}>{busy ? (en ? "Verifying…" : "验证中…") : en ? "Verify identity and continue" : "验证身份并继续"}</button>
           </form>}
           {eligibility.eligible && eligibility.verification_methods.includes("kai") && <div className={styles.form}>
-            <p className={styles.note}>{en ? "Sign in to your linked KAI identity again. 算力星图 never receives your KAI password." : "前往已绑定的 KAI 身份重新登录确认。算力星图不会接收你的 KAI 密码。"}</p>
+            <p className={styles.note}>{en ? "Sign in to your linked KAI identity again. KAI星算 never receives your KAI password." : "前往已绑定的 KAI 身份重新登录确认。KAI星算不会接收你的 KAI 密码。"}</p>
             <button className="outline-link" type="button" disabled={busy} onClick={() => void startKaiVerification()}>{busy ? (en ? "Opening KAI…" : "正在打开 KAI…") : en ? "Verify with KAI" : "使用 KAI 身份验证"}</button>
           </div>}
           {eligibility.eligible && eligibility.verification_methods.length === 0 && <p className={styles.note}>{en ? "No online verification method is available for this account. Link KAI identity or recover a local password first." : "当前账号没有可用的在线身份验证方式，请先绑定 KAI 身份或恢复本地密码。"}</p>}

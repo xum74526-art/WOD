@@ -20,11 +20,11 @@ export function SupplierDashboard() {
   }, []);
 
   return <section className="workspace-page supplier-overview">
-    <div className="workspace-page__head"><p>算力星图 SUPPLIER / OPERATIONS</p><h1>{data?.company_name || "共享商家后台"}</h1><span>商品、库存、订单、交付和收益全部来自统一算力星图 API。</span></div>
+    <div className="workspace-page__head"><p>KAI星算 SUPPLIER / OPERATIONS</p><h1>{data?.company_name || "共享商家后台"}</h1><span>商品、库存、订单、交付和收益全部来自统一KAI星算 API。</span></div>
     {error && <div className="commerce-error">{error}</div>}
     {data && <div className="metric-strip"><div><Cube size={19}/><span>在售商品</span><strong>{data.product_count}</strong></div><div><Receipt size={19}/><span>待交付</span><strong>{data.pending_orders}</strong></div><div><Wallet size={19}/><span>今日收益</span><strong>{data.today_revenue.toFixed(2)}</strong></div><div><Wallet size={19}/><span>累计收益</span><strong>{data.total_revenue.toFixed(2)}</strong></div></div>}
     <div className="supplier-operation-line"><span>工作顺序</span><strong>登记商品</strong><i>→</i><strong>买家下单</strong><i>→</i><strong>商家交付 SSH</strong><i>→</i><strong>买家确认</strong></div>
     <div className="role-overview-grid">{operations.map(({ eyebrow, title, description, href, icon: Icon }) => <Link href={href} key={href}><header><Icon size={22}/><small>{eyebrow}</small></header><h2>{title}</h2><p>{description}</p><footer>进入处理 <ArrowRight size={16}/></footer></Link>)}</div>
-    <div className="workspace-service-note">Web 不运行独立商家数据库；所有修改都写回统一算力星图 API。</div>
+    <div className="workspace-service-note">Web 不运行独立商家数据库；所有修改都写回统一KAI星算 API。</div>
   </section>;
 }

@@ -1,18 +1,18 @@
-# 算力星图 / KAI Monorepo
+# KAI星算 / KAI Monorepo
 
-算力星图是面向算力资源信息、需求撮合与商家协作的多端平台。本仓库同时维护 FastAPI 业务后端、独立数据采集服务、Next.js Web、iOS/Android 客户端、OpenAPI 契约以及静态审核页面。
+KAI星算是面向算力资源信息、需求撮合与商家协作的多端平台。本仓库同时维护 FastAPI 业务后端、独立数据采集服务、Next.js Web、iOS/Android 客户端、OpenAPI 契约以及静态审核页面。
 
 ## 命名说明
 
-- **算力星图**：用户看到的 App 与平台名称。
+- **KAI星算**：用户看到的 App 与平台名称。
 - **KAI**：仓库内部、服务前缀、统一身份以及 KAI Pricing 行情源沿用的名称。
-- KAI Pricing 是行情与商品数据来源之一，不等同于算力星图自营资源或第三方商家。
+- KAI Pricing 是行情与商品数据来源之一，不等同于KAI星算自营资源或第三方商家。
 
-正式 Android applicationId 与 iOS Bundle ID 统一为 `com.kai.ztwstarmap`。生产域名 `wod.kai.com`、DCloud AppID、API 路径、数据源键、本地存储键以及已有订单/工单/邀请码前缀仍是兼容标识，不是对外品牌，不得做全局替换。旧 Android 包 `com.kai.wod` 仅保留独立的历史更新通道；由于 Android 不允许不同 applicationId 原位覆盖，它不能指向新的算力星图 APK。
+正式 Android applicationId 与 iOS Bundle ID 统一为 `com.kai.ztwstarmap`。生产域名 `wod.kai.com`、DCloud AppID、API 路径、数据源键、本地存储键以及已有订单/工单/邀请码前缀仍是兼容标识，不是对外品牌，不得做全局替换。旧 Android 包 `com.kai.wod` 仅保留独立的历史更新通道；由于 Android 不允许不同 applicationId 原位覆盖，它不能指向新的KAI星算 APK。
 
 ## 当前发布模式
 
-算力星图当前面向审核和资质准备的构建采用**撮合模式**：保留平台行情、曲线、算力技术社区、需求提交、商家报价、双方合作确认、平台协调交付和历史记录查询；新直接交易、充值、提现和支付能力默认关闭。社区只用于算力产品、站内行情与技术交流，不提供新闻采编、新闻转载、公共事务或突发事件报道服务。
+KAI星算当前面向审核和资质准备的构建采用**撮合模式**：保留平台行情、曲线、算力技术社区、需求提交、商家报价、双方合作确认、平台协调交付和历史记录查询；新直接交易、充值、提现和支付能力默认关闭。社区只用于算力产品、站内行情与技术交流，不提供新闻采编、新闻转载、公共事务或突发事件报道服务。
 
 相关代码、接口和账务模型没有删除，而是由服务端能力开关与移动端构建开关共同控制。只有资质、支付回调、对账、退款和运营流程全部验证后，才可发布启用直接交易的新版本。完整规则见 [`docs/COMMERCE_MODES.md`](docs/COMMERCE_MODES.md)。
 

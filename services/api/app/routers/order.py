@@ -393,7 +393,7 @@ def create_order(
             raise BizError("不能购买自己上架的算力资源", status_code=409)
     purchasable, unavailable_reason = product_purchase_availability(p, db)
     if not purchasable:
-        raise BizError(unavailable_reason or "该资源暂不可在算力星图内下单", status_code=409)
+        raise BizError(unavailable_reason or "该资源暂不可在KAI星算内下单", status_code=409)
     _ensure_current_market_product(p, db)
     source = product_market_source(p)
     _validate_expected_unit_price(p, source, data.expected_unit_price_card_hours)
@@ -929,7 +929,7 @@ def renew_order(
                 raise BizError("商家算力续费需重新下单并完成交付验收", status_code=409)
             purchasable, unavailable_reason = product_purchase_availability(p, db)
             if not purchasable:
-                raise BizError(unavailable_reason or "该资源暂不可在算力星图内续费", status_code=409)
+                raise BizError(unavailable_reason or "该资源暂不可在KAI星算内续费", status_code=409)
             _ensure_current_market_product(p, db)
             quantity = max(int(o.quantity or 1), 1)
             if o.purchase_hours is not None:

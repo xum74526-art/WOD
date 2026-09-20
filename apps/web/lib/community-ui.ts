@@ -46,8 +46,8 @@ export function communityDisplayText(value?: string | null, sourceKey?: string |
   const source = String(value || "");
   if (sourceKey !== "wod-market") return source;
   return source
-    .replace(/(?:WOD|ZTW)(?:资讯|資訊)/g, "算力星图平台行情")
-    .replace(/(^|[^A-Z0-9_-])(?:WOD|ZTW)(?=$|[^A-Z0-9_-])/g, "$1算力星图");
+    .replace(/(?:WOD|ZTW)(?:资讯|資訊)/g, "KAI星算平台行情")
+    .replace(/(^|[^A-Z0-9_-])(?:WOD|ZTW)(?=$|[^A-Z0-9_-])/g, "$1KAI星算");
 }
 
 export function communityShareText(post: {

@@ -129,7 +129,7 @@ test("community share copy matches the app and includes the source", () => {
     communityShareText({ content: "  KAI 行情更新  ", source_url: "https://example.com/source" }),
     "KAI 行情更新\nhttps://example.com/source",
   );
-  assert.equal(communityShareText({ content: "WOD 算力行情", source_key: "wod-market" }), "算力星图 算力行情");
+  assert.equal(communityShareText({ content: "WOD 算力行情", source_key: "wod-market" }), "KAI星算 算力行情");
   assert.equal(communityShareText({ content: "WOD 算力行情", source_key: "user-post" }), "WOD 算力行情");
   assert.equal(communityShareText({ content: "x".repeat(120) }).length, 100);
 });

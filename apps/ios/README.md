@@ -1,6 +1,6 @@
-# 算力星图 iOS
+# KAI星算 iOS
 
-这是算力星图的 iOS 客户端源码，正式 Bundle ID 为 `com.kai.ztwstarmap`。
+这是KAI星算的 iOS 客户端源码，正式 Bundle ID 为 `com.kai.ztwstarmap`。
 
 ## 共享客户端功能
 

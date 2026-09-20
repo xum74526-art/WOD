@@ -422,7 +422,7 @@ test('community list opens video details before playback and preserves comments'
   assert.equal((locale.match(/videoOpenExternalHint:/g) || []).length, 2)
 })
 
-test('legacy internal market sources always display the current 算力星图 brand', () => {
+test('legacy internal market sources always display the current KAI星算 brand', () => {
   const indexPage = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
   const detailPage = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
   const locale = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
@@ -433,8 +433,8 @@ test('legacy internal market sources always display the current 算力星图 bra
     assert.match(page, /localizeInternalBrandText\(topic, (?:post|value)\.source_key\)/)
     assert.doesNotMatch(page, /return 'WOD Market'/)
   }
-  assert.match(locale, /ztwMarketName: '算力星图算力行情'/)
-  assert.match(locale, /ztwMarketName: '算力星图 Compute Market'/)
+  assert.match(locale, /ztwMarketName: 'KAI星算算力行情'/)
+  assert.match(locale, /ztwMarketName: 'KAI星算 Compute Market'/)
 })
 
 test('the app manifest enables the native VideoPlayer module', () => {

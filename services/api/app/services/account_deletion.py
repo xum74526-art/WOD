@@ -96,9 +96,9 @@ def _issue_deletion_ticket(db: Session, user: User) -> dict:
 
 def verify_deletion_password(db: Session, user: User, password: str) -> dict:
     if not has_usable_local_password(user):
-        raise BizError("此账号没有可用的算力星图密码，请使用已绑定的 KAI 身份验证")
+        raise BizError("此账号没有可用的KAI星算密码，请使用已绑定的 KAI 身份验证")
     if not verify_password(password, user.password):
-        raise BizError("原密码不正确，请使用算力星图账号密码验证")
+        raise BizError("原密码不正确，请使用KAI星算账号密码验证")
     lock_active_user(db, user.id)
     # Re-read after the lock: a password change may have won the race.
     db.refresh(user)
