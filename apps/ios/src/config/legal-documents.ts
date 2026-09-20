@@ -15,9 +15,9 @@ export interface LegalDocument {
   sections: LegalSection[]
 }
 
-export const LEGAL_VERSION = '1.2'
-export const LEGAL_UPDATED_AT = '2026-09-18'
-export const LEGAL_EFFECTIVE_AT = '2026-09-18'
+export const LEGAL_VERSION = '1.3'
+export const LEGAL_UPDATED_AT = '2026-09-20'
+export const LEGAL_EFFECTIVE_AT = '2026-09-20'
 export const LEGAL_OPERATOR = '锆芯期算人工智能科技（上海）有限公司'
 export const LEGAL_ADDRESS = '上海市浦东新区川南奉公路5058号3幢一层（集中登记地）'
 export const LEGAL_ICP_FILING = '沪ICP备2026046279号-1'
@@ -49,7 +49,7 @@ const PRIVACY_ZH: LegalDocument = {
   title: '隐私政策',
   metadata: metadataZh(),
   introduction: [
-    '本政策适用于算力星图移动客户端。我们重视你的个人信息与隐私，并按照合法、正当、必要和诚信原则处理个人信息。请在注册、登录或使用服务前完整阅读本政策。',
+    '本政策适用于算力星图 Android 与 iOS 移动客户端（Android 包名：com.kai.ztwstarmap）。我们按照合法、正当、必要、诚信和最小化原则处理个人信息。请在注册、登录或使用服务前完整阅读本政策。',
     '运营者及个人信息处理者为锆芯期算人工智能科技（上海）有限公司。若你不同意本政策，请停止注册或使用；拒绝非必要权限不会影响不依赖该权限的功能。',
   ],
   sections: [
@@ -62,17 +62,19 @@ const PRIVACY_ZH: LegalDocument = {
         '4. 个人资料与实名认证：昵称、头像、真实姓名、证件号码、证件正反面图片、格式校验结果及审核状态，用于个人资料展示、实名认证、商家准入和风险控制。证件图片仅供受权人员核验；服务器使用本地 Tesseract OCR 生成比对结果，不将证件图片发送给第三方 OCR 服务。',
         '5. 业务资料：银行卡登记信息以加密方式保存并仅展示掩码；地址信息用于用户主动选择的业务联系或交付。买方需求可能包含联系人、电话、算力型号、数量、期限、地区和需求说明；商家资料可能包含主体、联系人、资源、设备和交付信息。',
         '6. 撮合、订单与交付：需求、报价、反报价、方案确认、订单、卡时或账务记录、结算、退款、争议及历史状态，用于撮合沟通、履约、对账、售后和争议处理。商家提交的 SSH 地址、端口、用户名和凭据仅用于经确认的交付，并按角色限制展示。',
-        '7. 社区：当前审核版本仅开放算力产品、站内行情与技术交流相关的文字动态、评论、点赞、举报及互动记录。公开发布的内容会向其他用户展示，请勿上传证件、银行卡、密码或其他不宜公开的信息。',
+        '7. 社区：你主动发布的文字、图片或视频，以及评论、点赞、关注、举报和互动记录，用于内容展示、互动和内容安全。公开发布的昵称、头像和内容会向其他用户展示，请勿上传证件、银行卡、密码或其他不宜公开的信息。',
         '8. 客服与工单：咨询内容、工单、附件、处理状态和必要的账号关联信息，用于答复问题、跟进服务及处理投诉。',
-        '9. 设备、网络和日志：应用版本、设备型号、操作系统版本、IP 地址、网络状态、崩溃与操作日志，以及运行环境实际提供的设备标识符，用于运行应用、兼容性分析、安全防护、故障诊断和防止滥用。我们不以此建立与服务无关的画像。',
+        '9. 设备、网络和日志：在你同意政策并使用联网功能后，App 或基础运行框架自动记录设备品牌和型号、操作系统及版本、屏幕分辨率、设备语言、时区、App 名称、包名和版本、IP 地址、网络类型和状态、User-Agent、请求时间、接口结果、崩溃及异常日志；Android 运行框架还会读取 Android ID、OAID（以系统实际提供为准），用于兼容适配、网络连接、故障分析、反滥用和账号安全。DCloud 统计已关闭，不用于广告、用户画像或个性化推荐；我们不读取 IMEI、IMSI、SIM 卡序列号、通讯录、精确位置或其他应用安装列表。',
+        '10. 剪贴板：App 不在后台或启动时读取剪贴板。只有当你点击“复制”按钮时，才会把你选择的订单号、主机地址或其他页面文字写入系统剪贴板。',
       ],
     },
     {
       title: '二、系统权限',
       paragraphs: [
-        '1. 网络权限用于登录、获取平台行情与社区内容、提交需求、上传内容和联系客服。',
-        '2. 当你主动上传头像或身份认证资料时，Android 可能申请照片/媒体访问权限并调用系统拍摄入口，iOS 可能申请相机或照片权限。当前审核版本关闭社区媒体发布且不申请麦克风权限；若未来启用含声音的视频录制，我们会先更新权限说明和适用规则。相关权限不会在无关场景调用，你可在系统设置中撤回。',
-        '3. 我们不申请通讯录权限，也不持续获取精确位置。关闭某项可选权限后，只会影响依赖该权限的拍摄、选择或上传功能。',
+        '1. 网络访问和网络状态用于连接 API、登录、获取行情、提交需求、加载社区内容、上传你选择的资料和同步业务状态，仅在你同意政策后由业务请求调用。',
+        '2. 当你主动选择头像、实名认证资料、社区图片或视频时，Android 通过系统照片选择器申请“所选照片和视频”访问（READ_MEDIA_VISUAL_USER_SELECTED），iOS 在相同场景申请照片访问。拒绝后仅相应选择或上传功能不可用。',
+        '3. 当你主动选择系统拍摄入口时，由系统相机完成拍摄并把你确认的结果返回 App，不会在后台开启相机。当前 Android 安装包不直接声明持续相机权限，Android、iOS 均不为当前功能申请麦克风权限。',
+        '4. 部分 vivo 设备包含桌面角标兼容权限，仅用于显示 App 图标未读数量，不读取通知内容。当前版本不申请通讯录、短信、通话记录、精确位置、麦克风、电话状态、安装其他应用或读取其他应用列表权限。你可在系统设置中撤回已授予权限。',
       ],
     },
     {
@@ -80,18 +82,19 @@ const PRIVACY_ZH: LegalDocument = {
       paragraphs: [
         '我们仅在实现上述功能、履行协议、遵守法定义务、保障账号和系统安全、处理争议以及经你另行同意的范围内使用个人信息。若处理目的、方式或信息种类发生实质变化，我们会更新说明，并在依法需要时重新取得同意。',
         '我们不会出售个人信息，不会以同意本政策为由强制你提供与当前功能无关的信息，也不会将个人信息用于与算力星图服务无关的自动化营销。',
-        '身份证件和银行卡资料属于敏感个人信息，一旦泄露或滥用可能造成身份冒用或财产损失。我们仅在实名认证、经授权的银行卡业务等特定且充分必要的目的下处理，并在进入对应功能时依法取得单独同意，采取加密、掩码、最小权限和访问审计等强化保护措施。精确的 SSH 等交付凭据按高敏业务秘密实施加密、最小权限和访问审计，但不在尚未实现单独同意的流程中宣称已取得该同意。',
+        '【敏感个人信息】身份证件和银行卡资料一旦泄露或滥用可能造成身份冒用或财产损失。我们仅在实名认证、商家准入或经你申请的银行卡业务等特定且充分必要的目的下处理，在对应页面说明必要性和拒绝影响并依法取得单独同意，采取加密、掩码、最小权限和访问审计等强化保护措施。拒绝后仅无法使用需要实名或银行卡的功能。精确的 SSH 等交付凭据按高风险业务秘密实施加密、最小权限和访问审计。',
       ],
     },
     {
       title: '四、受托处理与第三方服务',
       paragraphs: [
-        '1. 阿里云中国香港区域（cn-hongkong）：作为云基础设施受托方，为核心 API、数据库、上传文件、备份与安全防护提供计算和存储能力，可能处理本政策列明的账号、实名、业务、内容及日志信息。服务区域位于中国香港特别行政区。',
-        '2. DCloud uni-app 基础运行框架（开发者：数字天堂（北京）网络技术有限公司）：在你同意隐私政策后，为应用运行、页面渲染、兼容性、安全和故障分析，可能处理设备品牌与型号、操作系统、应用版本、网络类型、IP 地址、User-Agent、运行日志，以及打包组件可能涉及的 OAID。本项目不将这些信息用于广告或个性化推荐；实际范围以后续正式安装包检测结果和应用内第三方 SDK 清单为准。',
-        '3. KAI 统一身份服务：仅在你主动选择 KAI 登录、注册或绑定时处理授权请求、关联身份标识、回跳参数、一次性凭据，以及授权范围内返回的邮箱、姓名和头像，用于登录、创建或关联本平台账号及展示基础资料；本平台不接收外部 KAI 密码。',
-        '4. 网易 163 邮件服务：当你绑定找回邮箱、获取验证码或重置密码时，用于投递必要邮件，可能处理收件邮箱、邮件内容、投递时间与状态。SMTP 授权信息仅保存在服务端，不向客户端公开。',
-        '5. 七相支付（Qixiang Pay）：当前审核版默认关闭在线支付。仅在未来直接交易能力由服务端和客户端同时启用、你主动发起支付且已完成必要提示时，才会处理完成支付所需的订单号、金额、回调状态等最少信息。',
-        '我们会通过合同、权限控制和安全要求约束受托方。第三方作为独立处理者时，其服务还受其公开规则约束；具体功能未启用或你未主动使用时，不会因本条说明而自动向其提供业务资料。',
+        '当前发布构建不接入广告、个性化推荐、一键登录、地图定位或支付 SDK。第三方服务未启用或你未主动使用对应功能时，不会因列入清单而自动收到该功能的业务资料。',
+        '1. DCloud App 引擎 / uni-app（SDK 名称：uni-app 5+ App；开发者：数字天堂（北京）网络技术有限公司；构建版本：5.02 / NPM 3.0.0-5020420260813003）：用于跨平台运行、页面渲染、网络连接、媒体选择与播放、兼容性和异常分析；在同意政策后通过 SDK 自动处理设备品牌型号、操作系统、屏幕参数、设备语言、时区、App 名称/包名/版本、网络类型、IP 地址、User-Agent、Android ID、OAID、运行和异常日志，并使用网络状态及用户触发的所选照片/视频权限。隐私规则：https://dcloud.io/license/appprivacy.html；合规说明：https://ask.dcloud.net.cn/article/39484。',
+        '2. DCloud 默认本地组件 Weex、Fresco 和 Glide（版本随 DCloud 5.02 构建基座）：用于本地页面渲染、图片解码、展示与缓存，处理页面资源 URL、你选择的图片及本机图片缓存；不独立建立账号，也不由本项目配置向组件开发者服务器上传个人信息。组件说明：https://ask.dcloud.net.cn/article/39484。',
+        '3. KAI 统一身份服务（服务域名及提供方标识：auth.kai.com）：仅在你主动选择 KAI 登录、注册或绑定时，通过浏览器 OAuth/OIDC 页面处理授权请求参数、IP 地址、浏览器信息、登录状态和你授权返回的主体标识、邮箱、姓名、头像，用于身份认证与账号关联；不向本平台提供 KAI 密码。独立处理规则：https://auth.kai.com/privacy。',
+        '4. 网易 163 邮箱服务（提供者：广州网易计算机系统有限公司）：仅在你请求邮箱验证码、找回链接或必要安全通知时，由服务端通过 SMTP 处理收件邮箱、邮件正文、发送时间和投递状态；客户端不保存 SMTP 授权凭据。隐私规则：https://mail.163.com/html/agreement/doc.html。',
+        '5. 阿里云中国香港区域（提供者：阿里云计算有限公司；区域标识：cn-hongkong）：作为云基础设施受托方，为核心 API、数据库、文件存储、备份和安全防护提供计算与存储，按运营者指令处理本政策列明的账号、实名、业务、社区、客服、设备网络和日志信息。隐私规则：https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html。',
+        '6. Tesseract OCR（开源本地组件）：部署在平台自管服务环境，仅对你主动提交的证件图像进行文字识别并生成核验辅助结果，不向 Tesseract 项目或其他 OCR 服务商传输证件图像。',
       ],
     },
     {
@@ -105,10 +108,10 @@ const PRIVACY_ZH: LegalDocument = {
       title: '六、存储地点、跨境处理与期限',
       paragraphs: [
         '当前算力星图核心 API、数据库及上传文件部署在阿里云中国香港区域（cn-hongkong）。所有地区的用户使用业务联网功能时，本政策列明的账号、找回邮箱、KAI 关联、实名与银行卡、地址、撮合交易与 SSH 交付、社区客服、设备网络及日志信息，会通过加密传输发送至中国香港特别行政区并在那里存储和处理，用于提供服务、履约、安全防护、故障处理及依法保存。',
-        '该中国香港服务环境由本政策所列运营主体控制，云基础设施服务商为阿里云；处理目的、方式和信息种类限于本政策所列范围。移动客户端无论选择中国大陆或其他服务地区，都会在业务网络请求前通过独立勾选要求你明确确认上述香港存储、处理与必要传输，所选地区仍保存在本机用于适用规则判断。你可通过账号功能或上述联系电话向运营主体行使相关权利。对于依法构成向境外提供个人信息的场景，我们将在传输前完成适用的个人信息保护影响评估和其他法定程序并取得单独同意；本政策的一般同意不替代该单独同意。',
+        '境外接收环境的运营管理者为本政策所列运营主体，联系方式为上述电话；阿里云计算有限公司提供中国香港基础设施。处理目的为账号、撮合、社区、客服、履约、安全和故障处理，处理方式为传输、存储、查询、校验、备份、删除或匿名化，信息种类限于上一段。移动客户端在首次业务联网前通过独立且默认不勾选的选项取得单独同意；拒绝后不发起业务网络请求，你仍可阅读协议和政策、调整语言或退出，但无法使用登录、行情、撮合、社区和客服等联网功能。我们会依法履行个人信息保护影响评估及适用的出境安全评估、认证或标准合同程序；未满足适用法定条件时，不应启动相应出境处理。',
         '账号与业务资料仅在提供服务、处理争议或履行法定义务所需期间保留。找回邮箱验证码与密码重置凭据默认三十分钟失效，邮件投递终态记录在完成后按系统策略清理，默认不超过二十四小时。',
         '注销流程在本设备保存的专用恢复凭据、到期时间和内部账号编号最长保留七天，不包含密码或普通登录令牌。头像、证件、地址、社区、客服等资料在目的完成、用户删除或账号注销后删除或匿名化，但未履约、账务、结算、争议及依法必须保留的材料会在必要范围和期限内受限保留，不预设超出法律与业务需要的固定年限。',
-        '在法律法规要求时，网络安全日志按要求保留。备份会在受控周期内覆盖；如从备份恢复，系统会重新执行已完成的注销清理。期限届满后，我们会删除或匿名化相关信息。',
+        '网络和安全日志通常保存六个月；法律要求更长或安全事件、投诉、争议尚未完成时，在法定或处理所需期限内限制保存。备份会在受控周期内覆盖；如从备份恢复，系统会重新执行已完成的注销清理。期限届满后，我们会删除或匿名化相关信息。',
       ],
     },
     {
@@ -121,7 +124,7 @@ const PRIVACY_ZH: LegalDocument = {
     {
       title: '八、你的权利',
       paragraphs: [
-        '你可以在个人中心查看或更正资料、管理找回邮箱、删除符合条件的银行卡和地址、管理发布内容、撤回系统权限，或联系我们申请访问、更正、复制、删除、限制处理、解释处理规则及撤回同意。撤回同意不影响此前基于同意进行处理的合法性。',
+        '你可以在“我的”和相应业务页面查阅、更正或删除可管理资料；在“系统设置 → 应用 → 算力星图 → 权限”撤回系统权限；在“我的 → 设置 → 隐私选择”点击“撤回并返回”撤回隐私同意。撤回后 App 停止后续业务网络请求并返回隐私选择页，再次同意前联网功能不可用；撤回不影响此前处理的合法性，也不会自动注销账号。',
         '你可以从“我的 → 设置 → 注销账号”提交注销。未履约、争议或待结算事项需先处理；注销完成后全部设备会话失效、非必要资料会被清理，并解除本平台的 KAI 绑定，但不会删除其他 KAI 产品账号。注销不可恢复，重新注册不会继承原账号记录。',
         '为保障账号安全，我们可能要求核验身份。我们通常会在十五个工作日内答复；情况复杂或法律另有规定的，按适用规则处理。',
       ],
@@ -152,7 +155,7 @@ const PRIVACY_EN: LegalDocument = {
   title: 'Privacy Policy',
   metadata: metadataEn(),
   introduction: [
-    'This Policy applies to the 算力星图 mobile applications. We process personal information lawfully, fairly, only as necessary, and in good faith. Please read it before registering, signing in, or using the service.',
+    'This Policy applies to the 算力星图 Android and iOS apps (Android package: com.kai.ztwstarmap). We process personal information lawfully, fairly, in good faith, and only as necessary. Read it before registering, signing in, or using the service.',
     `The operator and personal-information processor is ${LEGAL_OPERATOR}. If you do not agree, do not register or continue using the service. Refusing an optional permission affects only the feature that needs it.`,
   ],
   sections: [
@@ -165,27 +168,32 @@ const PRIVACY_EN: LegalDocument = {
         'Profile and verification data may include your nickname, avatar, legal name, national ID number, front and back ID images, validation results, and review status. Server-side local Tesseract OCR produces comparison results; ID images are not sent to a third-party OCR provider.',
         'Business data may include encrypted and masked bank-card details, addresses, buyer contact and compute requirements, merchant identity and contact materials, resource and device descriptions, and delivery details.',
         'Matchmaking, order, and fulfillment data may include requirements, proposals, counteroffers, confirmations, orders, CH or ledger entries, settlement, refunds, disputes, history, and seller-provided SSH host, port, username, and credentials. SSH details are role-restricted and used only for confirmed fulfillment.',
-        'Community and support data includes text posts, comments, reactions, reports, support conversations, tickets, attachments, and status. The current review release limits community publishing to text about compute products, first-party platform market updates, and technical discussion. Public content is visible to other users, so never post IDs, cards, passwords, or other sensitive data.',
-        'Technical data may include app version, device model, operating-system version, IP address, network state, crash and operation logs, and device identifiers actually made available by the runtime. We use it for compatibility, security, troubleshooting, and abuse prevention, not unrelated profiling.',
+        'Community and support data includes text, images or videos that you publish, comments, likes, follows, reports, support conversations, tickets, attachments and status. It is used for content display, interaction, content safety, enquiries and complaints. Public nickname, avatar and content are visible to others, so never post IDs, cards, passwords or delivery credentials.',
+        'After consent and when connected features are used, the app or base runtime automatically records device brand/model, OS and version, screen resolution, device language, time zone, app name/package/version, IP address, network type/state, User-Agent, request time, API result, crash/error logs, and on Android, Android ID and OAID where the system supplies them. They support compatibility, connectivity, security and troubleshooting. DCloud statistics are disabled. We do not use this data for ads, profiling or personalised recommendations and do not read IMEI, IMSI, SIM serial number, contacts, precise location or installed-app lists.',
+        'The app does not read the clipboard in the background or at startup. It writes an order number, host address or other selected text to the system clipboard only when you tap Copy.',
       ],
     },
     {
       title: '2. System permissions',
       paragraphs: [
-        'Network access supports sign-in, pricing, content, requirements, uploads, and support. When you actively upload an avatar or identity-verification material, Android may request photo/media access and may invoke a system capture entry, while iOS may request camera or photo access. The current review build disables community media publishing and does not request microphone access. If video recording with sound is enabled later, we will first update the permission notice and applicable terms.',
-        'We do not request contacts access or continuously collect precise location. You may withdraw optional permissions in system settings without affecting unrelated features.',
+        'Internet and network-state access supports APIs, sign-in, pricing, requests, community content, selected uploads and status synchronisation, and is used by business requests only after consent.',
+        'On Android, selected-photo-and-video access (READ_MEDIA_VISUAL_USER_SELECTED) is requested through the system picker only when you choose an avatar, identity material, community image or video. iOS requests photo access in the same scenarios. Refusal affects only the relevant selection or upload.',
+        'When you choose the system capture entry, the system camera captures and returns only the result you confirm and is not opened in the background. The current Android package does not declare ongoing camera access, and neither mobile app requests microphone access for current features.',
+        'A compatibility permission on some vivo devices displays an unread badge and does not read notification content. The current release does not request contacts, SMS, call log, precise location, microphone, phone state, app-installation or installed-app-list permissions. Revoke granted permissions in system settings.',
       ],
     },
     {
       title: '3. Use, entrusted processing, and third parties',
       paragraphs: [
         'We use data only to provide the described services, perform agreements, comply with law, secure accounts and systems, resolve disputes, or as separately authorized. We do not sell personal information or use it for unrelated automated marketing.',
-        'Identity documents and bank-card details are sensitive personal information. Misuse or disclosure may create identity or financial risk. We process them only for specific and strictly necessary purposes such as identity review or an authorized card function, obtain separate consent in the relevant feature where required by law, and apply enhanced encryption, masking, least-privilege, and access-audit safeguards. Precise SSH and other delivery credentials are protected as high-risk business secrets through encryption, least privilege, and access auditing; we do not claim separate consent where that workflow is not implemented.',
-        'Alibaba Cloud Hong Kong region (cn-hongkong), as the contracted cloud-infrastructure provider, supplies compute, storage, backup, and security capabilities for the core API, database, and uploaded files, and may process the account, identity, business, content, and log data described in this Policy. The service region is Hong Kong SAR.',
-        'The DCloud uni-app base runtime (developer: Digital Paradise (Beijing) Network Technology Co., Ltd.) may, after you accept this Policy, process device brand and model, operating system, app version, network type, IP address, User-Agent, runtime logs, and OAID that may be present in packaged components for runtime compatibility, security, and troubleshooting. 算力星图 does not use this data for advertising or personalized recommendations. The final scope follows inspection of the released package and the in-app third-party SDK list.',
-        'KAI identity services process authorization requests, linked identifiers, return parameters, one-time credentials, and the email address, name, and avatar returned within the authorized scope only when you initiate sign-in, registration, or binding, so that a platform account can be created or linked and basic profile information displayed. We never receive your external KAI password.',
-        'NetEase 163 mail services deliver verification and password-recovery messages and may process recipient address, message, delivery time, and status. SMTP credentials remain server-side. QiXiang Pay is disabled by default in the review build; minimum order, amount, and callback data is processed only if direct trading is later enabled on both server and client, you initiate payment, and the required notice is shown.',
-        'We contractually restrict processors. An independent third party is also governed by its own published rules. A listed integration does not receive business data unless the feature is enabled and you use it.',
+        'SENSITIVE PERSONAL INFORMATION: identity documents and bank-card details may create identity or financial risk if misused. We process them only for specific and strictly necessary identity, supplier-admission or requested card functions, explain necessity and refusal impact and obtain separate consent on the relevant page, and apply encryption, masking, least privilege and access auditing. Refusal affects only identity- or card-dependent features. SSH delivery credentials are protected as high-risk business secrets.',
+        'The current release contains no advertising, personalised-recommendation, one-click-login, mapping or payment SDK. A service does not receive feature data merely because it is listed here.',
+        'DCloud App Engine / uni-app (SDK: uni-app 5+ App; developer: Digital Paradise (Beijing) Network Technology Co., Ltd.; build 5.02 / NPM 3.0.0-5020420260813003) supports runtime, rendering, networking, media selection/playback, compatibility and error analysis. After consent it processes device brand/model, OS, screen parameters, language, time zone, app name/package/version, network type, IP, User-Agent, Android ID, OAID and runtime/error logs. Rules: https://dcloud.io/license/appprivacy.html and https://ask.dcloud.net.cn/article/39484.',
+        'DCloud default local components Weex, Fresco and Glide, with versions bundled by the DCloud 5.02 build base, render pages and decode, display and cache images locally. They process resource URLs, selected images and local cache and are not configured by this app to upload personal data to their developers. Details: https://ask.dcloud.net.cn/article/39484.',
+        'KAI identity service (service domain/provider identifier: auth.kai.com) processes OAuth/OIDC request parameters, IP, browser data, sign-in state, and the subject, email, name and avatar you authorise it to return only when you choose KAI sign-in, registration or linking. We never receive the KAI password. Rules: https://auth.kai.com/privacy.',
+        'NetEase 163 Mail (provider: Guangzhou NetEase Computer System Co., Ltd.) processes recipient address, message, send time and delivery state by server-side SMTP only when you request a code, recovery link or necessary security notice. SMTP credentials remain server-side. Rules: https://mail.163.com/html/agreement/doc.html.',
+        'Alibaba Cloud Hong Kong region (provider: Alibaba Cloud Computing Co., Ltd.; cn-hongkong) supplies compute, database, file storage, backup and security and processes the listed account, identity, business, community, support, device/network and log data under the operator’s instructions. Rules: https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202107091605_49213.html.',
+        'Tesseract OCR is deployed in an operator-controlled service environment and locally recognises identity images you submit. It does not send those images to the Tesseract project or another OCR provider.',
       ],
     },
     {
@@ -199,10 +207,10 @@ const PRIVACY_EN: LegalDocument = {
       title: '5. Storage location, cross-border processing, and retention',
       paragraphs: [
         '算力星图 currently deploys its core API, database, and uploaded files in Alibaba Cloud Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfillment, security, troubleshooting, and legally required retention.',
-        'The Hong Kong service environment is controlled by the operator named in this Policy, with Alibaba Cloud providing the cloud infrastructure. Purposes, methods, and data categories are limited to those described here. In the mobile apps, whether you select mainland China or another service region, an independent checkbox requires your explicit confirmation of that Hong Kong storage, processing, and necessary transfer before the app starts its business network requests; the region choice remains stored on your device to determine applicable rules. You may exercise your rights through account features or the contact number above. Where the transfer is legally treated as an overseas provision of personal information, we will complete the applicable personal-information protection impact assessment and other required procedure before transfer and obtain separate consent; general acceptance of this Policy does not replace that separate consent.',
+        'The overseas receiving environment is operated and managed by the operator named here at the telephone above; Alibaba Cloud Computing Co., Ltd. supplies the Hong Kong infrastructure. Purposes are accounts, matching, community, support, fulfilment, security and troubleshooting; methods are transfer, storage, query, validation, backup, deletion or anonymisation. Before the first business network request, the app uses a separate unchecked choice to obtain separate consent. If declined, no business network request is made; you may still read legal texts, change language or exit, but connected sign-in, pricing, matching, community and support remain unavailable. We conduct the required impact assessment and applicable security assessment, certification or standard-contract procedure; processing should not start unless applicable legal conditions are met.',
         'Account and business data is retained only for service, dispute, or legal needs. Recovery verification and reset credentials expire in 30 minutes. Completed recovery-mail delivery records are normally removed within 24 hours.',
         'A deletion recovery capability, expiry, and internal account ID may remain on this device for up to seven days; it contains no password or normal login token. Profile, ID, address, community, and support data is deleted or anonymized when its purpose ends, you delete it, or the account is deleted. Unfulfilled, ledger, settlement, dispute, and legally required records remain restricted only for the necessary scope and period, without inventing a fixed financial term.',
-        'Security logs are retained when and for as long as law requires. Backups are overwritten on a controlled cycle, and completed deletion cleanup is reapplied after restoration. Expired data is deleted or anonymized.',
+        'Network and security logs are normally retained for six months. Where law requires longer retention or an incident, complaint or dispute remains unresolved, access is restricted for the required period. Backups are overwritten on a controlled cycle, completed deletions are reapplied after restoration, and expired data is deleted or anonymized.',
       ],
     },
     {
@@ -215,7 +223,7 @@ const PRIVACY_EN: LegalDocument = {
     {
       title: '7. Your rights and account deletion',
       paragraphs: [
-        'You can view or correct profile data, manage recovery email, delete eligible cards and addresses, manage content, withdraw system permissions, or contact us to request access, correction, copies, deletion, restriction, an explanation, or withdrawal of consent. Withdrawal does not affect processing already lawfully completed.',
+        'Use Profile and the relevant service pages to access, correct or delete manageable data; use System Settings → Apps → 算力星图 → Permissions to revoke system permissions; and use Profile → Settings → Privacy Choices → Withdraw and Return to withdraw privacy consent. Withdrawal stops subsequent business network requests and returns to the privacy choice page until renewed consent. It does not invalidate earlier lawful processing or automatically delete the account.',
         'Use Profile → Settings → Delete account. Active fulfillment, disputes, or unsettled matters must be resolved first. Completion invalidates all sessions, removes unnecessary data, and unlinks the 算力星图 KAI identity without deleting other KAI products. Deletion cannot be reversed and a new account does not inherit old records.',
         'We may verify identity before acting on a request and normally respond within 15 working days, subject to applicable law and complex cases.',
       ],

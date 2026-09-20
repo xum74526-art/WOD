@@ -7,11 +7,11 @@
     "zh-Hant": "服務協議與隱私政策",
     "en": "Terms and Privacy Policy"
   },
-  "message": "歡迎使用算力星图。為向您提供帳號登入、算力行情、資源撮合、算力技術社群與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」，即表示您已閱讀並同意。 進入應用後，所有使用者都還需對在中國香港儲存、處理及必要傳輸個人資訊作出單獨確認。",
+  "message": "算力星图由锆芯期算人工智能科技（上海）有限公司運營。為提供帳號登入、算力行情、資源撮合、算力技術社群及客服，我們會在您同意後處理帳號資料、裝置型號、系統與應用版本、IP 與網路資訊、Android ID/OAID，以及您主動提交的內容；拒絕前不發起業務網路請求。請閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隱私政策》</a>（版本 1.3，2026-09-20）。進入應用後，還需對中國香港儲存、處理及必要傳輸作出單獨選擇。",
   "messageLocales": {
-    "zh-Hans": "欢迎使用算力星图。为向您提供账号登录、算力行情、资源撮合、算力技术社区与客服服务，我们会按照政策处理必要的账号资料、设备与网络信息，以及您主动提交的内容。请在使用前阅读<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>。点击“同意并继续”，即表示您已阅读并同意。 进入应用后，所有用户都还需对在中国香港存储、处理及必要传输个人信息作出单独确认。",
-    "zh-Hant": "歡迎使用算力星图。為向您提供帳號登入、算力行情、資源撮合、算力技術社群與客服服務，我們會按照政策處理必要的帳號資料、裝置與網路資訊，以及您主動提交的內容。請在使用前閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>。點擊「同意並繼續」，即表示您已閱讀並同意。 進入應用後，所有使用者都還需對在中國香港儲存、處理及必要傳輸個人資訊作出單獨確認。",
-    "en": "Welcome to 算力星图. To provide account access, compute pricing, resource matching, community content, and support, we process necessary account data, device and network information, and content you submit. Before continuing, please read the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a>. Tap Accept and Continue only if you agree. After entering the app, every user must separately confirm the storage and processing of personal information, and any necessary transfer, in Hong Kong SAR."
+    "zh-Hans": "算力星图由锆芯期算人工智能科技（上海）有限公司运营。为提供账号登录、算力行情、资源撮合、算力技术社区及客服，我们会在你同意后处理账号资料、设备型号、系统与应用版本、IP 与网络信息、Android ID/OAID，以及你主动提交的内容；拒绝前不发起业务网络请求。请阅读<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隐私政策》</a>（版本 1.3，2026-09-20）。进入应用后，还需对中国香港存储、处理及必要传输作出单独选择。",
+    "zh-Hant": "算力星图由锆芯期算人工智能科技（上海）有限公司運營。為提供帳號登入、算力行情、資源撮合、算力技術社群及客服，我們會在您同意後處理帳號資料、裝置型號、系統與應用版本、IP 與網路資訊、Android ID/OAID，以及您主動提交的內容；拒絕前不發起業務網路請求。請閱讀<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隱私政策》</a>（版本 1.3，2026-09-20）。進入應用後，還需對中國香港儲存、處理及必要傳輸作出單獨選擇。",
+    "en": "算力星图 is operated by Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd. After consent, account data, device model, OS and app version, IP/network data, Android ID/OAID, and submitted content are processed for sign-in, pricing, matching, community and support; no business network request is made before acceptance. Read the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy/zh-cn\">Privacy Policy</a> (v1.3, 2026-09-20). A separate choice for Hong Kong storage, processing and necessary transfer follows in the app."
   },
   "buttonAccept": "同意並繼續",
   "buttonAcceptLocales": {
@@ -34,11 +34,11 @@
       "zh-Hant": "確認提示",
       "en": "Confirmation"
     },
-    "message": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入算力星图。若您仍不同意，應用將退出。",
+    "message": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隱私政策》</a>才能進入算力星图。若仍不同意，應用不會收集業務資料或發起業務網路請求，並將退出。",
     "messageLocales": {
-      "zh-Hans": "您需要先同意<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy\">《隐私政策》</a>才能进入算力星图。若您仍不同意，应用将退出。",
-      "zh-Hant": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy\">《隱私政策》</a>才能進入算力星图。若您仍不同意，應用將退出。",
-      "en": "You must accept the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy\">Privacy Policy</a> before entering 算力星图. If you still do not agree, the app will exit."
+      "zh-Hans": "你需要先同意<a href=\"https://wod.kai.com/terms\">《用户协议》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隐私政策》</a>才能进入算力星图。若仍不同意，应用不会收集业务资料或发起业务网络请求，并将退出。",
+      "zh-Hant": "您需要先同意<a href=\"https://wod.kai.com/terms\">《使用者協議》</a>和<a href=\"https://wod.kai.com/privacy/zh-cn\">《隱私政策》</a>才能進入算力星图。若仍不同意，應用不會收集業務資料或發起業務網路請求，並將退出。",
+      "en": "You must accept the <a href=\"https://wod.kai.com/terms\">User Agreement</a> and <a href=\"https://wod.kai.com/privacy/zh-cn\">Privacy Policy</a> before entering 算力星图. If you decline, the app makes no business network request and exits."
     },
     "buttonAccept": "同意並繼續",
     "buttonAcceptLocales": {

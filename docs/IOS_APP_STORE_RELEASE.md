@@ -77,7 +77,7 @@ git diff --check
 - API 发布环境中 `COMMUNITY_USER_MEDIA_ENABLED=false`；
 - 生产 API 的 `/api/v1/health` 正常；
 - API、Web 和移动端来自同一提交并已完成服务器部署验收；
-- `https://wod.kai.com/privacy` 与 `https://wod.kai.com/terms` 展示的版本、更新日期和正文与 App 内置法律文本一致；
+- `https://wod.kai.com/privacy/zh-cn` 与 `https://wod.kai.com/terms` 展示的版本、更新日期和正文与 App 内置法律文本一致；
 - `https://wod.kai.com/image-attributions` 可公开访问，App 设置中的“图片来源与许可”能够打开并展示简体中文、繁体中文和英文署名；
 - 普通用户和商家审核账号可用，验证码、KYC 或待审核状态不会阻断 Apple 审核员；
 - 审核账号不要求审核员提交真实身份证或银行卡；
@@ -137,7 +137,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 
 | 字段 | 地址 |
 |---|---|
-| Privacy Policy URL | `https://wod.kai.com/privacy` |
+| Privacy Policy URL | `https://wod.kai.com/privacy/zh-cn` |
 | Support URL | `https://wod.kai.com/contact` |
 | User Privacy Choices / Account Deletion | `https://wod.kai.com/account-deletion` |
 | Terms / EULA | `https://wod.kai.com/terms` |
@@ -184,7 +184,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 >
 > KAI 登录由[同一经营主体/实际关系说明]提供，用于本平台统一账号。若该说明不成立，请在提交前完成 Sign in with Apple 评估和必要实现。
 >
-> 隐私政策：https://wod.kai.com/privacy；支持：https://wod.kai.com/contact；账号注销说明：https://wod.kai.com/account-deletion。
+> 隐私政策：https://wod.kai.com/privacy/zh-cn；支持：https://wod.kai.com/contact；账号注销说明：https://wod.kai.com/account-deletion。
 
 ## TestFlight 顺序
 

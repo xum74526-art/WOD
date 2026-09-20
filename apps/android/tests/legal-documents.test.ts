@@ -24,9 +24,9 @@ function textOf(document: LegalDocument): string {
 }
 
 test('legal metadata identifies the operator, version, dates, filing and only approved phone', () => {
-  assert.equal(LEGAL_VERSION, '1.2')
-  assert.equal(LEGAL_UPDATED_AT, '2026-09-18')
-  assert.equal(LEGAL_EFFECTIVE_AT, '2026-09-18')
+  assert.equal(LEGAL_VERSION, '1.3')
+  assert.equal(LEGAL_UPDATED_AT, '2026-09-20')
+  assert.equal(LEGAL_EFFECTIVE_AT, '2026-09-20')
   assert.equal(LEGAL_OPERATOR, '锆芯期算人工智能科技（上海）有限公司')
   assert.equal(LEGAL_ADDRESS, '上海市浦东新区川南奉公路5058号3幢一层（集中登记地）')
   assert.equal(LEGAL_ICP_FILING, '沪ICP备2026046279号-1')
@@ -52,27 +52,37 @@ test('privacy policy covers actual data, permissions, processors, retention and 
     /Tesseract OCR/,
     /银行卡/,
     /SSH/,
-    /Android.*照片\/媒体/,
-    /当前审核版本.*不申请麦克风权限/,
-    /DCloud uni-app 基础运行框架/,
+    /com\.kai\.ztwstarmap/,
+    /READ_MEDIA_VISUAL_USER_SELECTED/,
+    /均不为当前功能申请麦克风权限/,
+    /DCloud App 引擎 \/ uni-app/,
+    /3\.0\.0-5020420260813003/,
+    /Android ID/,
     /OAID/,
+    /剪贴板/,
+    /不读取 IMEI、IMSI/,
     /阿里云中国香港区域/,
     /cn-hongkong/,
     /所有地区的用户使用业务联网功能/,
-    /无论选择中国大陆或其他服务地区.*独立勾选.*香港存储、处理与必要传输/,
-    /不将这些信息用于广告或个性化推荐/,
-    /社区仅限算力产品|当前审核版本仅开放算力产品/,
-    /网易 163 邮件服务/,
-    /七相支付（Qixiang Pay）/,
+    /独立且默认不勾选的选项取得单独同意/,
+    /不用于广告、用户画像或个性化推荐/,
+    /文字、图片或视频/,
+    /网易 163 邮箱服务/,
+    /广州网易计算机系统有限公司/,
+    /auth\.kai\.com\/privacy/,
+    /dcloud\.io\/license\/appprivacy\.html/,
     /三十分钟/,
     /二十四小时/,
     /最长保留七天/,
-    /属于敏感个人信息/,
+    /通常保存六个月/,
+    /【敏感个人信息】/,
     /依法取得单独同意/,
+    /隐私选择.*撤回并返回/,
     /账号注销/,
     /年满十八周岁/,
   ]) assert.match(privacy, requirement)
   assert.doesNotMatch(privacy, /个人信息原则上存储在中华人民共和国境内|Data is generally stored on servers in mainland China/)
+  assert.doesNotMatch(privacy, /实际范围以后续正式安装包检测结果|可能涉及的 OAID|七相支付|Qixiang Pay/)
   assert.ok(getLegalDocument('privacy', 'zh-Hans').sections.length >= 9)
 })
 
@@ -101,9 +111,9 @@ test('Traditional Chinese is the default-ready presentation and English is compl
   const englishPrivacy = textOf(getLegalDocument('privacy', 'en'))
   const englishAgreement = textOf(getLegalDocument('agreement', 'en'))
   assert.match(englishPrivacy, /Privacy Policy/)
-  assert.match(englishPrivacy, /DCloud uni-app base runtime/)
-  assert.match(englishPrivacy, /email address, name, and avatar returned by KAI/)
-  assert.match(englishPrivacy, /whether you select mainland China or another service region.*independent checkbox/)
+  assert.match(englishPrivacy, /DCloud App Engine \/ uni-app/)
+  assert.match(englishPrivacy, /auth\.kai\.com/)
+  assert.match(englishPrivacy, /separate unchecked choice/)
   assert.match(englishPrivacy, /Contact us: \+86 4001082026/)
   assert.match(englishAgreement, /User Agreement/)
   assert.match(englishAgreement, /Current matchmaking mode and conditional direct trading/)
@@ -117,6 +127,15 @@ test('the legal page renders document metadata and settings exposes both entries
   assert.doesNotMatch(page, /directTradeEnabled|useCommerceStore/)
   assert.match(page, /v-for="item in document.metadata"/)
   assert.match(page, /v-for="section in document.sections"/)
+  assert.match(page, /isSensitiveParagraph/)
   assert.match(settings, /nav\('\/pages\/agreement\/index\?type=agreement'\)/)
   assert.match(settings, /nav\('\/pages\/agreement\/index\?type=privacy'\)/)
+})
+
+test('Android native privacy dialog links to the fixed Simplified Chinese review policy', () => {
+  const nativePrivacy = readFileSync(new URL('../src/androidPrivacy.json', import.meta.url), 'utf8')
+  assert.match(nativePrivacy, /https:\/\/wod\.kai\.com\/privacy\/zh-cn/)
+  assert.match(nativePrivacy, /版本 1\.3，2026-09-20/)
+  assert.match(nativePrivacy, /锆芯期算人工智能科技（上海）有限公司/)
+  assert.doesNotMatch(nativePrivacy, /https:\/\/wod\.kai\.com\/privacy\\"/)
 })

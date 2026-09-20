@@ -20,25 +20,31 @@ test("privacy policy is a versioned trilingual disclosure matching implemented d
     "锆芯期算人工智能科技（上海）有限公司",
     "上海市浦东新区川南奉公路5058号3幢一层（集中登记地）",
     "沪ICP备2026046279号-1",
-    "2026-09-18",
+    "2026-09-20",
     "联系我们：+86 4001082026",
     "邮箱找回",
-    "KAI 身份关联",
-    "授权范围内的邮箱、姓名和头像",
+    "KAI 统一身份登录与绑定",
+    "邮箱、姓名和头像",
     "Tesseract",
     "银行卡",
     "SSH",
-    "DCloud uni-app 基础运行框架",
+    "DCloud App 引擎 / uni-app",
+    "3.0.0-5020420260813003",
+    "Android ID",
     "OAID",
+    "READ_MEDIA_VISUAL_USER_SELECTED",
+    "剪贴板",
     "阿里云中国香港区域",
     "cn-hongkong",
-    "所有地区的用户",
-    "香港存储、处理与必要传输",
+    "境外接收环境",
+    "独立且默认不勾选",
     "单独同意",
     "算力技术社区",
-    "网易 163 邮件服务",
+    "网易 163 邮箱服务",
     "30 分钟",
     "7 天",
+    "6 个月",
+    "【敏感个人信息】",
     "未成年人保护",
   ]) assert.match(source, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 
@@ -47,8 +53,18 @@ test("privacy policy is a versioned trilingual disclosure matching implemented d
   assert.match(privacy, /"zh-Hans": \{/);
   assert.match(privacy, /en: \{/);
   assert.match(renderer, /href="tel:\+864001082026"/);
+  assert.match(renderer, /localeOverride/);
+  assert.match(renderer, /legal-document__sensitive/);
   assert.doesNotMatch(privacy, /个人信息主要在中华人民共和国境内存储|Data is generally stored on servers in mainland China/);
+  assert.doesNotMatch(privacy, /以后续.*安装包检测结果|可能涉及的 OAID|七相支付|Qixiang Pay/);
   assert.doesNotMatch(source, /access@kai\.com|mailto:|正式隐私政策需要|上线前公布|Formal privacy policy requires/);
+});
+
+test("Xiaomi review policy is fixed Simplified Chinese and has no public-site shell", () => {
+  const review = read("../app/privacy/zh-cn/page.tsx");
+  assert.match(review, /localeOverride="zh-Hans"/);
+  assert.match(review, /privacySections/);
+  assert.doesNotMatch(review, /SimplePage|SiteHeader|SiteFooter|下载|二维码/);
 });
 
 test("terms describe the live matchmaking mode without inventing enabled payments or guarantees", () => {

@@ -14,6 +14,7 @@ import {
 export type LegalText = {
   zh: string;
   en: string;
+  sensitive?: boolean;
 };
 
 export type LegalSection = {
@@ -26,10 +27,12 @@ export type LegalSection = {
 type LegalDocumentProps = {
   sections: LegalSection[];
   accountDeletionLink?: boolean;
+  localeOverride?: "zh-Hans" | "zh-Hant" | "en";
 };
 
-export function LegalDocument({ sections, accountDeletionLink = false }: LegalDocumentProps) {
-  const { locale } = useI18n();
+export function LegalDocument({ sections, accountDeletionLink = false, localeOverride }: LegalDocumentProps) {
+  const { locale: selectedLocale } = useI18n();
+  const locale = localeOverride || selectedLocale;
   const text = (copy: LegalText) => {
     if (locale === "en") return copy.en;
     return locale === "zh-Hant" ? toTraditionalLegalText(copy.zh) : copy.zh;
@@ -49,8 +52,8 @@ export function LegalDocument({ sections, accountDeletionLink = false }: LegalDo
         {sections.map((section, index) => (
           <section id={section.id} key={section.id}>
             <h2><span>{String(index + 1).padStart(2, "0")}</span>{text(section.title)}</h2>
-            {section.paragraphs?.map((paragraph, paragraphIndex) => <p key={`${section.id}-p-${paragraphIndex}`}>{text(paragraph)}</p>)}
-            {section.items?.length ? <ul>{section.items.map((item, itemIndex) => <li key={`${section.id}-i-${itemIndex}`}>{text(item)}</li>)}</ul> : null}
+            {section.paragraphs?.map((paragraph, paragraphIndex) => <p className={paragraph.sensitive ? "legal-document__sensitive" : undefined} key={`${section.id}-p-${paragraphIndex}`}>{text(paragraph)}</p>)}
+            {section.items?.length ? <ul>{section.items.map((item, itemIndex) => <li className={item.sensitive ? "legal-document__sensitive" : undefined} key={`${section.id}-i-${itemIndex}`}>{text(item)}</li>)}</ul> : null}
           </section>
         ))}
       </div>

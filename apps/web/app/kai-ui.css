@@ -545,6 +545,7 @@ html[data-color-mode="dark"] .ui-language-popover {
 .legal-document__sections ul { max-width: 720px; margin: 0; padding: 0; display: grid; gap: 12px; list-style: none; }
 .legal-document__sections li { position: relative; padding-left: 18px; color: var(--foreground); font-size: 15px; line-height: 1.7; }
 .legal-document__sections li::before { content: ""; position: absolute; top: .72em; left: 0; width: 6px; height: 6px; background: var(--accent); }
+.legal-document__sensitive { padding: 14px 16px !important; border-left: 3px solid #b42318; color: var(--ink) !important; background: color-mix(in srgb, #b42318 7%, var(--layer-01)); font-weight: 650; }
 .legal-document__contact { padding: 22px; border: 1px solid var(--border-subtle); background: var(--accent-soft); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px 24px; }
 .legal-document__contact > div { min-width: 0; }
 .legal-document__contact strong { color: var(--ink); font-size: 15px; }
@@ -552,6 +553,11 @@ html[data-color-mode="dark"] .ui-language-popover {
 .legal-document__contact > a { min-height: 44px; padding: 0 16px; border: 1px solid var(--border-interactive); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font: 600 12px var(--font-mono); }
 .legal-document__contact > a:last-child:not(:nth-child(2)) { grid-column: 2; }
 .legal-document__contact > a:hover { color: var(--text-on-color); background: var(--accent); }
+.privacy-review-page { min-height: 100vh; padding: 48px max(24px, calc((100vw - 1040px) / 2)) 72px; color: var(--foreground); background: var(--background); }
+.privacy-review-page > header { padding-bottom: 28px; border-bottom: 1px solid var(--border-strong); }
+.privacy-review-page > header p { margin: 0 0 10px; color: var(--accent); font: 600 11px/1.4 var(--font-mono); letter-spacing: .1em; }
+.privacy-review-page > header h1 { margin: 0; color: var(--ink); font-size: clamp(32px, 5vw, 54px); line-height: 1.1; }
+.privacy-review-page .legal-document { margin-top: 28px; }
 
 /* Forms */
 :where(

@@ -18,7 +18,7 @@
 
         <view v-for="section in document.sections" :key="section.title" class="section">
           <text class="h2">{{ section.title }}</text>
-          <text v-for="paragraph in section.paragraphs" :key="paragraph" class="p">{{ paragraph }}</text>
+          <text v-for="paragraph in section.paragraphs" :key="paragraph" class="p" :class="{ sensitive: isSensitiveParagraph(paragraph) }">{{ paragraph }}</text>
         </view>
       </view>
     </scroll-view>
@@ -35,6 +35,12 @@ import { useI18nStore } from '@/store/i18n'
 const i18n = useI18nStore()
 const kind = ref<LegalDocumentKind>('agreement')
 const document = computed(() => getLegalDocument(kind.value, i18n.lang))
+
+function isSensitiveParagraph(paragraph: string) {
+  return paragraph.startsWith('【敏感个人信息】')
+    || paragraph.startsWith('【敏感個人資訊】')
+    || paragraph.startsWith('SENSITIVE PERSONAL INFORMATION')
+}
 
 onLoad((options) => {
   kind.value = options?.type === 'privacy' ? 'privacy' : 'agreement'
@@ -54,5 +60,6 @@ onLoad((options) => {
 .section { display: block; }
 .h2 { display: block; margin: 34rpx 0 16rpx; color: var(--text); font-size: 30rpx; font-weight: 750; line-height: 1.45; }
 .p { display: block; margin-bottom: 14rpx; color: var(--text-sub); font-size: 25rpx; line-height: 1.82; text-align: justify; }
+.p.sensitive { padding: 20rpx 22rpx; border-left: 6rpx solid var(--down); border-radius: 0 12rpx 12rpx 0; color: var(--text); background: var(--primary-soft); font-weight: 650; }
 .intro-p:last-child, .p:last-child { margin-bottom: 0; }
 </style>

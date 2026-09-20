@@ -49,7 +49,7 @@ test('Android uses the blocking native privacy template before app startup', () 
 test('the startup prompt links to the public 算力星图 agreement and privacy policy', () => {
   const expected = [
     'https://wod.kai.com/terms',
-    'https://wod.kai.com/privacy',
+    'https://wod.kai.com/privacy/zh-cn',
   ]
   assert.deepEqual(linksIn(privacyConfig.message), expected)
   assert.deepEqual(linksIn(privacyConfig.second?.message), expected)
@@ -63,12 +63,13 @@ test('the startup prompt links to the public 算力星图 agreement and privacy 
   }
 })
 
-test('the native startup prompt explains the separate Hong Kong processing choice for every user', () => {
-  assert.match(privacyConfig.message || '', /點擊「同意並繼續」，即表示您已閱讀並同意。/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /点击“同意并继续”，即表示您已阅读并同意。/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /點擊「同意並繼續」，即表示您已閱讀並同意。/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /所有用户.*中国香港.*单独确认/)
-  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /所有使用者.*中國香港.*單獨確認/)
+test('the native startup prompt identifies the operator, processing and separate Hong Kong choice', () => {
+  assert.match(privacyConfig.message || '', /锆芯期算人工智能科技（上海）有限公司/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /Android ID\/OAID/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /Android ID\/OAID/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /中国香港.*单独选择/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hant'] || '', /中國香港.*單獨選擇/)
+  assert.match(privacyConfig.messageLocales?.['zh-Hans'] || '', /版本 1\.3，2026-09-20/)
   assert.doesNotMatch(privacyConfig.message || '', /上述內容。/)
   assert.doesNotMatch(privacyConfig.messageLocales?.['zh-Hans'] || '', /上述内容。/)
 })
