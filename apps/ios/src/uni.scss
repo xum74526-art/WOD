@@ -1,0 +1,154 @@
+/* 算力星图双模式设计令牌 —— 浅色(极简白净) + 深色(深空科技) */
+/* SCSS 变量(编译时)保留兼容，CSS 变量(运行时)支持主题切换 */
+
+/* === SCSS 编译时变量（兼容旧代码） === */
+$wod-primary: #18AFC4;
+$wod-up: #16A34A;
+$wod-down: #EF4444;
+$wod-radius: 24rpx;
+$uni-primary: #18AFC4;
+$uni-success: #16A34A;
+$uni-error: #EF4444;
+
+/* === CSS 运行时变量 === */
+:root {
+  color-scheme: light;
+  /* 浅色模式 — 极简白净 */
+  --bg: #FFFFFF;
+  --bg-2: #F8F9FA;
+  --card: #F8F9FA;
+  --card-border: rgba(0, 0, 0, 0.06);
+  --home-card: #F6F8F8;
+  --home-card-soft: #F8FAFA;
+  --home-card-border: rgba(14, 52, 60, 0.075);
+  --home-card-shadow: 0 8rpx 24rpx rgba(17, 92, 103, 0.045);
+  --text: #111111;
+  --text-sub: #999999;
+  --text-dim: #CCCCCC;
+  --primary: #18AFC4;
+  --primary-soft: rgba(24, 175, 196, 0.10);
+  --up: #16A34A;
+  --up-soft: rgba(22, 163, 74, 0.10);
+  --down: #EF4444;
+  --down-soft: rgba(239, 68, 68, 0.10);
+  --divider: rgba(0, 0, 0, 0.06);
+  --border: rgba(0, 0, 0, 0.08);
+  --radius: 24rpx;
+  --shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.04);
+  --nav-bg: #FFFFFF;
+  --tab-bg: #FFFFFF;
+  --input-bg: #F8F9FA;
+  --safe-top: var(--status-bar-height, env(safe-area-inset-top));
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+/* 深色模式 — 深空科技 */
+:root.dark,
+body.dark,
+page.dark,
+.dark {
+  color-scheme: dark;
+  --bg: #0A0E14;
+  --bg-2: #11161E;
+  --card: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --home-card: rgba(255, 255, 255, 0.07);
+  --home-card-soft: #131820;
+  --home-card-border: rgba(255, 255, 255, 0.10);
+  --home-card-shadow: 0 8rpx 26rpx rgba(0, 0, 0, 0.26);
+  --text: #E8EDF2;
+  --text-sub: #6B7785;
+  --text-dim: #3A4452;
+  --primary: #00D4FF;
+  --primary-soft: rgba(0, 212, 255, 0.12);
+  --up: #00FF88;
+  --up-soft: rgba(0, 255, 136, 0.10);
+  --down: #FF3B3B;
+  --down-soft: rgba(255, 59, 59, 0.10);
+  --divider: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.3);
+  --nav-bg: #0A0E14;
+  --tab-bg: #0A0E14;
+  --input-bg: rgba(255, 255, 255, 0.04);
+}
+
+/* === 全局基础样式 === */
+* { box-sizing: border-box; }
+page, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); transition: background 0.3s, color 0.3s; }
+button, input { font: inherit; }
+view, text { box-sizing: border-box; }
+
+/* 全局强制覆盖：uni-app TabBar/导航栏深色适配 */
+.dark .uni-tabbar,
+.dark uni-tabbar,
+.dark .uni-tabbar-bottom,
+.dark .uni-tabbar .uni-tabbar__item .uni-tabbar__label,
+.dark uni-tabbar .uni-tabbar__item .uni-tabbar__label {
+  background-color: var(--tab-bg) !important;
+  color: var(--text-dim) !important;
+}
+.dark .uni-tabbar .uni-tabbar__item--active .uni-tabbar__label,
+.dark uni-tabbar .uni-tabbar__item--active .uni-tabbar__label {
+  color: var(--primary) !important;
+}
+.dark .uni-page-head,
+.dark uni-page-head,
+.dark .uni-page-head-hd,
+.dark .uni-page-head-bd { background-color: var(--nav-bg) !important; }
+.dark .uni-page-head .uni-page-head__title,
+.dark uni-page-head .uni-page-head__title { color: var(--text) !important; }
+.dark .uni-page-head-btn,
+.dark uni-page-head-btn { color: var(--text) !important; }
+
+/* TabBar 边框 */
+.dark .uni-tabbar,
+.dark uni-tabbar { border-top-color: var(--divider) !important; }
+
+/* 全局 input 深色适配 */
+.dark input,
+.dark textarea,
+.dark .uni-input-input,
+.dark .uni-textarea-textarea { color: var(--text) !important; background: var(--input-bg) !important; }
+.dark input::placeholder,
+.dark .uni-input-placeholder { color: var(--text-dim) !important; }
+
+/* 全局 switch/picker 深色适配 */
+.dark .uni-switch-input { background-color: var(--card) !important; }
+.dark .uni-picker { color: var(--text) !important; }
+
+/* 全局 modal 深色适配 */
+.dark .uni-modal,
+.dark .uni-popup { background: var(--bg) !important; }
+.dark .uni-modal .uni-modal__title { color: var(--text) !important; }
+.dark .uni-modal .uni-modal__content { color: var(--text) !important; }
+.safe-top { padding-top: var(--safe-top); }
+.safe-bottom { padding-bottom: var(--safe-bottom); }
+.page-shell { min-height: 100vh; padding: calc(28rpx + var(--safe-top)) 32rpx calc(132rpx + var(--safe-bottom)); }
+
+/* === SCSS 变量映射到 CSS 变量（兼容旧代码） === */
+$wod-bg: var(--bg);
+$wod-bg-2: var(--bg-2);
+$wod-card: var(--card);
+$wod-card-2: var(--bg-2);
+$wod-text: var(--text);
+$wod-text-sub: var(--text-sub);
+$wod-text-dim: var(--text-dim);
+$wod-border: var(--border);
+$wod-divider: var(--divider);
+$wod-up-soft: var(--up-soft);
+$wod-down-soft: var(--down-soft);
+$wod-grad: var(--bg);
+$wod-grad-card: var(--card);
+$wod-grad-deep: var(--bg-2);
+$uni-text-color: var(--text);
+$uni-bg-color: var(--bg);
+
+/* === 全局卡片样式 === */
+.card {
+  background: var(--card);
+  border: 1rpx solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.muted { color: var(--text-sub); }

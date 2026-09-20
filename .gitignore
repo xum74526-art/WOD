@@ -1,0 +1,82 @@
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.der
+*.jks
+*.keystore
+*.provisionprofile
+infra/secrets/runtime/
+!infra/secrets/examples/*.pem
+infra/production.env
+infra/local.env
+infra/ip.env
+
+# Databases, uploads, backups and runtime data
+*.db
+*.db-*
+*.sqlite*
+uploads/
+backups/
+database/backups/
+.runtime/
+.cache/
+
+# Python
+.venv/
+.venv*/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node, Next.js and uni-app
+node_modules/
+.next/
+out/
+dist/
+unpackage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test and QA output
+playwright-report/
+test-results/
+blob-report/
+playwright/.auth/
+qa/
+coverage/
+
+# Mobile packaging and signing output
+*.ipa
+*.apk
+*.aab
+*.mobileprovision
+DerivedData/
+*.xcarchive
+*.dSYM/
+xcuserdata/
+*.xcuserstate
+.gradle/
+local.properties
+*.iml
+
+# Editors and operating systems
+.hbuilderx/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.swp

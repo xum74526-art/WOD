@@ -1,0 +1,60 @@
+import {
+  normalizeNativeApiBase,
+  resolvePublicWebUrl as resolvePublicWebUrlFromApiBase,
+} from '@/utils/api-base'
+
+// H5 预览走 Vite 的同源 /api 代理；Android 正式包只接受 HTTPS 云端 API。
+const APP_API_BASE = normalizeNativeApiBase(import.meta.env.VITE_KAI_APP_API_BASE)
+let API_BASE = '/api'
+// #ifndef H5
+API_BASE = APP_API_BASE
+// #endif
+
+/** Resolve an API-relative persisted media URL on both H5 and native App. */
+export function resolveApiMediaUrl(value?: string | null): string {
+  const source = String(value || '').trim()
+  if (!source) return ''
+  if (/^https:\/\//i.test(source)) return source
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(source)) return source
+
+  const base = API_BASE.replace(/\/$/, '')
+  if (source.startsWith('/api/')) {
+    const apiRoot = base.endsWith('/api') ? base.slice(0, -4) : base
+    return `${apiRoot}${source}`
+  }
+  // Community media is intentionally exposed by a narrow API route. The
+  // persisted value stays deployment-independent while H5 and App resolve it
+  // below their own API base (/api/uploads/... or /wod-api/api/uploads/...).
+  if (source.startsWith('/uploads/community/')) {
+    return `${base}${source}`
+  }
+  if (source.startsWith('/user/') || source.startsWith('user/')) {
+    return `${base}/${source.replace(/^\//, '')}`
+  }
+  // Legacy temp-file paths are device/session scoped and must not be rendered
+  // after a restart. Falling back to initials is safer than a broken image.
+  return ''
+}
+
+/** Resolve a backend route returned by the API for H5 and native App. */
+export function resolveBackendUrl(value?: string | null): string {
+  const source = String(value || '').trim()
+  if (!source) return ''
+  if (/^https:\/\//i.test(source)) return source
+  if (!source.startsWith('/api/')) return ''
+  if (/^https:\/\//i.test(API_BASE)) {
+    const apiRoot = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE
+    return `${apiRoot}${source}`
+  }
+  // #ifdef H5
+  if (typeof window !== 'undefined') return `${window.location.origin}${source}`
+  // #endif
+  return source
+}
+
+/** Resolve a Web page on the same HTTPS deployment as this App's API. */
+export function resolvePublicWebUrl(path: string): string {
+  return resolvePublicWebUrlFromApiBase(path, APP_API_BASE)
+}
+
+export { API_BASE }

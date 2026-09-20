@@ -1,0 +1,87 @@
+/* 算力星图双模式 CSS 变量 — 纯 CSS */
+
+/* 浅色模式 */
+:root {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --bg-2: #F8F9FA;
+  --card: #F8F9FA;
+  --card-border: rgba(0, 0, 0, 0.06);
+  --text: #111111;
+  --text-sub: #999999;
+  --text-dim: #CCCCCC;
+  --primary: #18AFC4;
+  --primary-soft: rgba(24, 175, 196, 0.10);
+  --up: #16A34A;
+  --up-soft: rgba(22, 163, 74, 0.10);
+  --down: #EF4444;
+  --down-soft: rgba(239, 68, 68, 0.10);
+  --divider: rgba(0, 0, 0, 0.06);
+  --border: rgba(0, 0, 0, 0.08);
+  --radius: 24rpx;
+  --shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.04);
+  --nav-bg: #FFFFFF;
+  --tab-bg: #FFFFFF;
+  --input-bg: #F8F9FA;
+}
+
+/* 深色模式 */
+:root.dark,
+body.dark,
+page.dark,
+.dark {
+  color-scheme: dark;
+  --bg: #0A0E14;
+  --bg-2: #11161E;
+  --card: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --text: #E8EDF2;
+  --text-sub: #6B7785;
+  --text-dim: #3A4452;
+  --primary: #00D4FF;
+  --primary-soft: rgba(0, 212, 255, 0.12);
+  --up: #00FF88;
+  --up-soft: rgba(0, 255, 136, 0.10);
+  --down: #FF3B3B;
+  --down-soft: rgba(255, 59, 59, 0.10);
+  --divider: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.3);
+  --nav-bg: #0A0E14;
+  --tab-bg: #0A0E14;
+  --input-bg: rgba(255, 255, 255, 0.04);
+}
+
+/* 全局卡片 */
+.card {
+  background: var(--card);
+  border: 1rpx solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* TabBar */
+.uni-tabbar, uni-tabbar {
+  background-color: var(--tab-bg) !important;
+  border-top: 1rpx solid var(--divider) !important;
+  bottom: 0 !important;
+  position: fixed !important;
+  height: 120rpx !important;
+}
+.uni-tabbar .uni-tabbar__item,
+uni-tabbar .uni-tabbar__item { padding-top: 10rpx !important; }
+.uni-tabbar .uni-tabbar__label,
+uni-tabbar .uni-tabbar__label { color: var(--text-dim) !important; font-size: 24rpx !important; font-weight: 500 !important; }
+.uni-tabbar .uni-tabbar__item--active .uni-tabbar__label,
+uni-tabbar .uni-tabbar__item--active .uni-tabbar__label { color: var(--primary) !important; font-size: 24rpx !important; font-weight: 600 !important; }
+
+/* 导航栏 */
+.uni-page-head, uni-page-head { background-color: var(--nav-bg) !important; }
+.uni-page-head .uni-page-head__title,
+uni-page-head .uni-page-head__title { color: var(--text) !important; }
+
+/* Input */
+input, textarea { color: var(--text) !important; }
+input::placeholder { color: var(--text-dim) !important; }
+.dark input, .dark textarea { color: var(--text) !important; }
+.dark input::placeholder { color: var(--text-dim) !important; }

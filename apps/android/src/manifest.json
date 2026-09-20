@@ -1,0 +1,72 @@
+{
+    "name" : "算力星图",
+    "appid" : "__UNI__47CF9D3",
+    "description" : "算力资源撮合平台 App",
+    "locale" : "zh-Hant",
+    "vueVersion" : "3",
+    "versionName" : "1.2.1",
+    "versionCode" : "122",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "ssl" : {
+            "untrustedca" : "refuse"
+        },
+        "modules" : {
+            "VideoPlayer" : {}
+        },
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
+        "safearea" : {
+            "background" : "#FFFFFF",
+            "backgroundDark" : "#0A0E14",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        },
+        "uniStatistics" : {
+            "enable" : false
+        },
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.kai.ztwstarmap",
+                "schemes" : "kai",
+                "minSdkVersion" : 23,
+                "targetSdkVersion" : 36,
+                "abiFilters" : [ "arm64-v8a", "armeabi-v7a" ],
+                "usesCleartextTraffic" : false,
+                "permissionPhoneState" : {
+                    "request" : "none"
+                },
+                "excludePermissions" : [
+                    "<uses-permission android:name=\"android.permission.INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_PHONE_STATE\"/>"
+                ]
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "src/static/logo/logo-72.png",
+                    "xhdpi" : "src/static/logo/logo-96.png",
+                    "xxhdpi" : "src/static/logo/logo-144.png",
+                    "xxxhdpi" : "src/static/logo/logo-192.png"
+                }
+            },
+            "ios" : {
+                "dSYMs" : false
+            }
+        }
+    },
+    "h5" : {
+        "title" : "算力星图",
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
+        "router" : {
+            "mode" : "history",
+            "base" : "/"
+        },
+        "devServer" : {
+            "port" : 9001
+        }
+    }
+}

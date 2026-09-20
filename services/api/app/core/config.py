@@ -1,0 +1,356 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_SECRET_KEY = "wod-dev-secret-key-change-in-production-9f8a7b6c5d4e3f2a1b0c"
+
+
+class Settings(BaseSettings):
+    DATABASE_URL: str = "sqlite:///./wod.db"  # 本地默认 SQLite；生产可配置 PostgreSQL URL
+    SECRET_KEY: str = DEFAULT_SECRET_KEY
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    # 算力星图-owned recovery email. This remains fail-closed until the private
+    # deployment supplies encrypted-field and SMTP configuration.
+    ACCOUNT_RECOVERY_EMAIL_ENABLED: bool = False
+    ACCOUNT_RECOVERY_PUBLIC_WEB_ORIGIN: str = "https://wod.kai.com"
+    ACCOUNT_RECOVERY_VERIFY_TTL_SECONDS: int = 1800
+    ACCOUNT_RECOVERY_RESET_TTL_SECONDS: int = 1800
+    ACCOUNT_RECOVERY_KAI_TTL_SECONDS: int = 600
+    ACCOUNT_RECOVERY_SMTP_HOST: str = ""
+    ACCOUNT_RECOVERY_SMTP_PORT: int = 587
+    ACCOUNT_RECOVERY_SMTP_USERNAME: str = ""
+    ACCOUNT_RECOVERY_SMTP_PASSWORD: str = ""
+    ACCOUNT_RECOVERY_SMTP_FROM: str = ""
+    ACCOUNT_RECOVERY_SMTP_STARTTLS: bool = True
+    ACCOUNT_RECOVERY_SMTP_SSL: bool = False
+    ACCOUNT_RECOVERY_SMTP_TIMEOUT_SECONDS: float = 10.0
+    # Recovery messages use a persistent transactional outbox. Provider
+    # failures are retried by the API scheduler without keeping plaintext
+    # recipients or reset tokens in the database or process logs.
+    ACCOUNT_RECOVERY_MAIL_WORKER_SECONDS: int = 10
+    ACCOUNT_RECOVERY_MAIL_BATCH_SIZE: int = 10
+    ACCOUNT_RECOVERY_MAIL_MAX_ATTEMPTS: int = 5
+    ACCOUNT_RECOVERY_MAIL_RETRY_BASE_SECONDS: int = 30
+    ACCOUNT_RECOVERY_MAIL_RETRY_MAX_SECONDS: int = 900
+    ACCOUNT_RECOVERY_MAIL_LEASE_SECONDS: int = 120
+    ACCOUNT_RECOVERY_MAIL_RETENTION_SECONDS: int = 86400
+    # Stable public client identifiers mapped to server-owned source labels.
+    # Clients submit only an identifier; arbitrary platform headers are never
+    # used for attribution. Unknown identifiers are rejected, while omitted
+    # identifiers remain "legacy" during the installed-client transition.
+    AUTH_CLIENT_PLATFORM_MAP: str = "web=web,ios=ios,android=android,admin=admin"
+    # Public native-app release metadata. Update these values only after the
+    # corresponding package is available at the trusted HTTPS address. Android
+    # keeps a separate legacy channel because changing applicationId creates a
+    # second app instead of an in-place update.
+    APP_ANDROID_APPLICATION_ID: str = "com.kai.ztwstarmap"
+    APP_ANDROID_RELEASE_ENABLED: bool = False
+    APP_ANDROID_LATEST_VERSION_NAME: str = "1.2.1"
+    APP_ANDROID_LATEST_VERSION_CODE: int = 121
+    APP_ANDROID_UPDATE_URL: str = "https://wod.kai.com/download/suanlixingtu.apk"
+    APP_ANDROID_RELEASE_NOTES_ZH: str = ""
+    APP_ANDROID_RELEASE_NOTES_EN: str = ""
+    APP_ANDROID_LEGACY_APPLICATION_ID: str = "com.kai.wod"
+    APP_ANDROID_LEGACY_RELEASE_ENABLED: bool = True
+    APP_ANDROID_LEGACY_LATEST_VERSION_NAME: str = "1.2.1"
+    APP_ANDROID_LEGACY_LATEST_VERSION_CODE: int = 121
+    APP_ANDROID_LEGACY_UPDATE_URL: str = "https://wod.kai.com/download/wod.apk"
+    APP_ANDROID_LEGACY_RELEASE_NOTES_ZH: str = ""
+    APP_ANDROID_LEGACY_RELEASE_NOTES_EN: str = ""
+    # iOS stays unavailable until an official App Store page exists.
+    APP_IOS_APPLICATION_ID: str = "com.kai.ztwstarmap"
+    APP_IOS_RELEASE_ENABLED: bool = False
+    APP_IOS_LATEST_VERSION_NAME: str = ""
+    APP_IOS_LATEST_VERSION_CODE: int = 0
+    APP_IOS_UPDATE_URL: str = ""
+    APP_IOS_RELEASE_NOTES_ZH: str = ""
+    APP_IOS_RELEASE_NOTES_EN: str = ""
+    APP_IOS_LEGACY_APPLICATION_ID: str = "com.kai.wod"
+    APP_IOS_LEGACY_RELEASE_ENABLED: bool = False
+    APP_IOS_LEGACY_LATEST_VERSION_NAME: str = ""
+    APP_IOS_LEGACY_LATEST_VERSION_CODE: int = 0
+    APP_IOS_LEGACY_UPDATE_URL: str = ""
+    APP_IOS_LEGACY_RELEASE_NOTES_ZH: str = ""
+    APP_IOS_LEGACY_RELEASE_NOTES_EN: str = ""
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:9000"
+    # Sensitive fields are encrypted at rest. Every environment, including
+    # local development, requires a stable dedicated Fernet key that is not
+    # derived from or equal to SECRET_KEY.
+    SENSITIVE_DATA_KEY: str = ""
+    # Empty uses backend/uploads locally. Containers set this to a persistent
+    # private volume such as /data/uploads.
+    UPLOAD_ROOT: str = ""
+    ID_PHOTO_MAX_BYTES: int = 5 * 1024 * 1024
+    # Local ID-card text recognition is an OCR pre-check only.  It never marks
+    # an account verified; a platform administrator must still review the
+    # documents.
+    # Keep disabled until the server image contains Tesseract with chi_sim.
+    ID_OCR_ENABLED: bool = False
+    ID_OCR_TESSERACT_CMD: str = "tesseract"
+    ID_OCR_LANGUAGES: str = "chi_sim+eng"
+    ID_OCR_TIMEOUT_SECONDS: float = 10.0
+    ID_OCR_QUEUE_TIMEOUT_SECONDS: float = 2.0
+    ID_OCR_MAX_CONCURRENCY: int = 2
+    ID_OCR_MAX_PIXELS: int = 20_000_000
+    ID_OCR_MAX_OUTPUT_CHARS: int = 50_000
+    AVATAR_MAX_BYTES: int = 2 * 1024 * 1024
+    # The first public review release accepts text posts only. Keep media
+    # uploads and media-bearing posts fail-closed until image/video moderation
+    # is staffed and verified in production.
+    COMMUNITY_USER_MEDIA_ENABLED: bool = False
+    COMMUNITY_IMAGE_MAX_BYTES: int = 5 * 1024 * 1024
+    COMMUNITY_VIDEO_MAX_BYTES: int = 20 * 1024 * 1024
+    # Every newly uploaded community video is normalized to a cross-platform
+    # MP4 profile before it can be referenced by a post.
+    COMMUNITY_VIDEO_MAX_DURATION_SECONDS: int = 300
+    COMMUNITY_VIDEO_TRANSCODE_TIMEOUT_SECONDS: int = 180
+    COMMUNITY_VIDEO_TRANSCODE_CONCURRENCY: int = 1
+    # The first public review release exposes only KAI-operated catalogue rows.
+    # Keep third-party merchant storefronts and listings private until their
+    # post-approval edits have a staffed moderation and reporting workflow.
+    THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED: bool = False
+    # Direct checkout and other in-app transaction commitments stay disabled
+    # until the required company qualifications and payment rails are ready.
+    # Inquiry submission and human follow-up remain available independently.
+    DIRECT_TRADE_ENABLED: bool = False
+    # Demand publication, supplier quoting and platform coordination are a
+    # separate capability from wallet-backed direct trade. Keep this enabled
+    # for the qualification-pending launch so clients can submit enquiries
+    # while every financial commitment remains fail-closed.
+    MATCHMAKING_ENABLED: bool = True
+    # Structured SSH delivery is an independently switchable, server-enforced
+    # matchmaking capability. Payloads are encrypted with the application's
+    # sensitive-data key and are never written to orders, events or logs.
+    MATCHMAKING_CREDENTIAL_ESCROW_ENABLED: bool = True
+    # Keep payment actions visible but do not simulate money movement before a
+    # real payment and settlement provider has been connected.
+    PAYMENT_SERVICE_ENABLED: bool = False
+    # Recharge, bank-card verification, and payout are separate capabilities.
+    # Enabling the MaPay collection gateway must never silently enable either
+    # bank-card collection or money transfers.
+    # Internal manual bank-card review and payout workflow. These switches
+    # are intentionally independent from collection gateways and future
+    # automated payout providers.  Both default to off so a deployment cannot
+    # begin collecting card details or accepting withdrawal requests merely by
+    # enabling wallet recharge.
+    MANUAL_BANK_CARD_ENABLED: bool = False
+    MANUAL_PAYOUT_ENABLED: bool = False
+    PAYOUT_CARD_HOUR_RMB_RATE: float = 1.002
+    PAYOUT_FEE_RATE: float = 0.0
+    PAYOUT_MIN_CARD_HOURS: float = 10.0
+    PAYOUT_MAX_CARD_HOURS: float = 100000.0
+    PAYOUT_RECEIPT_MAX_BYTES: int = 5 * 1024 * 1024
+    # Full payout instructions are sensitive. Finance must use the short-lived,
+    # one-time proof returned by the reveal endpoint when recording a payment.
+    PAYOUT_INSTRUCTION_REVEAL_TTL_SECONDS: int = 300
+    # Confirmed ZTW merchant sales settle independently from promotional
+    # reward card-hours and synthetic asset revenue. Ten percent = 1000 bps.
+    MERCHANT_SERVICE_FEE_BPS: int = 1000
+    # Reserved order funds cannot remain frozen forever. Pending delivery is
+    # refunded, a delivered order auto-confirms if the buyer raises no dispute,
+    # and an unresolved dispute defaults to a buyer refund after the SLA.
+    ORDER_DELIVERY_TIMEOUT_HOURS: int = 24
+    ORDER_CONFIRMATION_TIMEOUT_HOURS: int = 24
+    ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS: int = 72
+    # Existing pending/delivering rows may reflect manual agreements. They are
+    # never auto-migrated into the new SLA until operations explicitly opts in.
+    ORDER_LEGACY_PENDING_MIGRATION_ENABLED: bool = False
+    CARD_HOUR_RMB_RATE: float = 1.002
+    # MaPay is retired for new collection.  ``MAPAY_ENABLED`` remains only as
+    # a fail-closed legacy deployment signal so an old environment cannot
+    # silently become the active gateway.  Historical callback/query support
+    # has its own switch and can coexist with Qixiang collection.
+    MAPAY_ENABLED: bool = False
+    MAPAY_LEGACY_RECONCILIATION_ENABLED: bool = False
+    MAPAY_BASE_URL: str = "https://mzf.mapay.cc/xpay/epayn"
+    MAPAY_PID: str = ""
+    MAPAY_MERCHANT_PRIVATE_KEY_PATH: str = ""
+    MAPAY_PLATFORM_PUBLIC_KEY_PATH: str = ""
+    MAPAY_NOTIFY_URL: str = ""
+    MAPAY_PUBLIC_API_BASE_URL: str = ""
+    # Comma-separated channels verified as usable for this merchant account.
+    # Keep empty until each channel has passed a real provider-side check.
+    MAPAY_PAYMENT_TYPES: str = ""
+    MAPAY_HTTP_TIMEOUT: float = 10.0
+    # MaPay hosted orders expire after roughly five minutes.  ZTW uses the
+    # same deadline so it never presents an already-invalid checkout as open.
+    MAPAY_CHECKOUT_TTL_SECONDS: int = 300
+    # Human-readable MaPay addtime/endtime values use the provider timezone.
+    MAPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
+    MAPAY_MIN_AMOUNT_CNY: float = 10.0
+    MAPAY_MAX_AMOUNT_CNY: float = 50000.0
+    # QiXiang Pay (EasyPay-compatible) wallet recharge collection. Keep the
+    # provider disabled until the fixed wod.kai.com notify/return URLs are deployed.
+    QIXIANGPAY_ENABLED: bool = False
+    # The merchant console has a separate refund-API permission.  Collection
+    # readiness must never imply that original-rail refunds are authorized.
+    QIXIANGPAY_REFUND_ENABLED: bool = False
+    QIXIANGPAY_BASE_URL: str = "https://api.payqixiang.cn"
+    QIXIANGPAY_PID: str = ""
+    QIXIANGPAY_KEY: str = ""
+    QIXIANGPAY_NOTIFY_URL: str = ""
+    QIXIANGPAY_RETURN_URL: str = ""
+    # Fixed first-party API base used to return an absolute checkout URL to
+    # native clients. Startup rejects an alternate origin.
+    QIXIANGPAY_PUBLIC_API_BASE_URL: str = ""
+    QIXIANGPAY_PAYMENT_TYPES: str = ""
+    QIXIANGPAY_DEVICE: str = "jump"
+    QIXIANGPAY_HTTP_TIMEOUT: float = 10.0
+    QIXIANGPAY_MAX_RESPONSE_BYTES: int = 256 * 1024
+    # Forwarded client IP headers are accepted only from these immediate peers.
+    QIXIANGPAY_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
+    # Exact HTTPS hosts accepted from the provider create-order response.
+    # Wildcards and suffix matching are deliberately unsupported.
+    PAYMENT_CHECKOUT_ALLOWED_HOSTS: str = "api.payqixiang.cn"
+    QIXIANGPAY_CHECKOUT_TTL_SECONDS: int = 300
+    QIXIANGPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
+    QIXIANGPAY_MIN_AMOUNT_CNY: float = 10.0
+    QIXIANGPAY_MAX_AMOUNT_CNY: float = 50000.0
+    # Payment risk and reconciliation bounds are enforced server-side.  The
+    # scheduler remains disabled until provider-side sandbox/production
+    # evidence has been completed.
+    PAYMENT_MAX_PENDING_ORDERS_PER_USER: int = 5
+    PAYMENT_DAILY_RECHARGE_LIMIT_CNY: float = 50000.0
+    PAYMENT_RECONCILIATION_ENABLED: bool = False
+    PAYMENT_RECONCILIATION_INTERVAL_SECONDS: int = 60
+    PAYMENT_RECONCILIATION_BATCH_SIZE: int = 20
+    PAYMENT_RECONCILIATION_MIN_AGE_SECONDS: int = 30
+    PAYMENT_RECONCILIATION_MAX_AGE_SECONDS: int = 7 * 24 * 60 * 60
+    PAYMENT_REFUND_SUBMISSION_TIMEOUT_SECONDS: int = 300
+    # Disabled until metered compute output and an auditable settlement source
+    # are connected. Never create wallet income from a configured percentage.
+    REVENUE_SETTLEMENT_ENABLED: bool = False
+    # Registration/invite/consumer/supplier rebates remain disabled until an
+    # auditable verification and settlement policy is connected.
+    REWARD_SERVICE_ENABLED: bool = False
+    # In-app card-hour rewards are spendable only inside ZTW and are always
+    # non-withdrawable, independently of recharge or payout configuration.
+    # They use dedicated ledger types so legacy synthetic rewards stay excluded.
+    CLOSED_TEST_REWARD_ENABLED: bool = False
+    # Versioned reward programs are deliberately independent. Enabling one
+    # never activates legacy reward ledger rows or either of the other
+    # programs. Existing deployments must opt in to each writer explicitly.
+    CONSUMER_REWARD_ENABLED: bool = False
+    SUPPLIER_REWARD_ENABLED: bool = False
+    INVITE_REWARD_ENABLED: bool = False
+    # Invitation V2 is independent from the retired first-order percentage
+    # writer. It uses verified identity, daily qualification slots and
+    # cash-backed consumption snapshots.
+    INVITE_V2_ENABLED: bool = False
+    # Emergency settlement pause. Program switches above stop new accruals;
+    # this separate switch controls payment of already-promised accruals.
+    REWARD_SETTLEMENT_ENABLED: bool = False
+    REWARD_TIMEZONE: str = "Asia/Shanghai"
+    # Station/in-app messages work without an external provider. Native push
+    # stays explicitly unavailable until deployment enables a provider.
+    PUSH_SERVICE_ENABLED: bool = False
+    PUSH_PROVIDER: str = ""
+    # KAI Pricing is the only active third-party market source.  It publishes
+    # native CNY prices per GPU-hour and does not require provider credentials.
+    KAI_PRICING_API_BASE_URL: str = "https://pricing.kai.com"
+    KAI_PRICING_REFRESH_SECONDS: int = 300
+    KAI_PRICING_HTTP_TIMEOUT: float = 10.0
+    KAI_PRICING_MAX_RESPONSE_BYTES: int = 2 * 1024 * 1024
+    # Keep idle sockets shorter than the five-minute publication cadence and
+    # reserve bounded time for httpcore to close a cancelled response.  If a
+    # generation still cannot unwind, the runner may quarantine one old pool
+    # and atomically publish a fresh client; restart rate limits prevent leaks.
+    KAI_PRICING_HTTP_KEEPALIVE_SECONDS: float = 30.0
+    KAI_PRICING_HTTP_CLEANUP_GRACE: float = 0.75
+    KAI_PRICING_HTTP_MAX_RETIRED_GENERATIONS: int = 1
+    KAI_PRICING_HTTP_RESTART_LIMIT: int = 3
+    KAI_PRICING_HTTP_RESTART_WINDOW_SECONDS: int = 300
+    # A second independently wedged generation cannot be healed safely inside
+    # one process without leaking connection pools.  The production unit is
+    # supervised with Restart=always, so escalate only after this grace period.
+    KAI_PRICING_HTTP_FAIL_FAST_ENABLED: bool = False
+    KAI_PRICING_HTTP_FAIL_FAST_SECONDS: float = 30.0
+    KAI_CANDLE_HTTP_TIMEOUT: float = 6.0
+    KAI_CANDLE_TOTAL_TIMEOUT: float = 15.0
+    KAI_CANDLE_MAX_RESPONSE_BYTES: int = 1024 * 1024
+    KAI_CANDLE_MAX_TOTAL_BYTES: int = 6 * 1024 * 1024
+    KAI_CANDLE_MAX_PRODUCTS: int = 8
+    KAI_RANKING_MAX_PRODUCTS: int = 24
+    KAI_CANDLE_MAX_WORKERS: int = 4
+    KAI_CANDLE_CACHE_SECONDS: int = 300
+    # KAI exposes a maximum configurable GPU count, not live inventory.  This
+    # separate cap is the only stock that the manual fulfilment workflow may
+    # reserve and restore.
+    KAI_CLOSED_TEST_INITIAL_STOCK: int = 3
+    # The API is the sole market-database writer. External collectors submit
+    # normalized batches through an authenticated internal endpoint.
+    MARKET_INGESTION_ENABLED: bool = False
+    MARKET_INGESTION_TOKEN: str = ""
+    VAST_STALE_SECONDS: int = 1800
+    VAST_DELETE_AFTER_HOURS: int = 48
+    VAST_HISTORY_DAYS: int = 90
+    MARKET_SYNC_SECONDS: int = 10
+    MARKET_HISTORY_DAYS: int = 30
+    # KAI publishes current-price revisions on a five-minute validity window.
+    # Persist each new publication, including an unchanged price, without
+    # requesting the provider faster than its documented cadence.
+    MARKET_UNCHANGED_SNAPSHOT_SECONDS: int = 300
+    MARKET_CANDLE_SYNC_SECONDS: int = 300
+    # Bound one scheduled run without permanently excluding models. Jobs are
+    # selected oldest-first, so every GPU identity eventually receives the
+    # same official 1h/4h/1d history coverage.
+    MARKET_CANDLE_SYNC_MAX_JOBS: int = 36
+    MARKET_CANDLE_HISTORY_DAYS: int = 100
+    PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
+    # Authenticated users allowed to fulfil KAI-backed manually delivered orders.
+    # Use comma-separated numeric user IDs.  KAI purchases fail closed when no
+    # configured ID resolves to an existing fulfilment operator account.
+    PLATFORM_FULFILLMENT_USER_IDS: str = ""
+    # Support AI adapter. Empty provider/key keeps the built-in FAQ and durable
+    # ticket service fully usable in truthful "self_service" mode.
+    AI_PROVIDER: str = ""
+    AI_API_KEY: str = ""
+    AI_BASE_URL: str = ""
+    AI_MODEL: str = ""
+    AI_HTTP_TIMEOUT: float = 20.0
+    # Legacy DeepSeek-compatible fields remain supported for existing servers.
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
+    # Third-party aggregated content is a separate server-owned publication
+    # policy. Client query parameters can narrow results but cannot enable it.
+    COMMUNITY_AGGREGATED_CONTENT_ENABLED: bool = False
+    # 社区每日公开资讯（全部来源均需在代码白名单内）
+    COMMUNITY_ONLINE_ENABLED: bool = True
+    COMMUNITY_DAILY_TARGET: int = 10
+    COMMUNITY_DAILY_VIDEO_TARGET: int = 5
+    COMMUNITY_PUBLISH_HOUR: int = 8
+    COMMUNITY_PUBLISH_MINUTE: int = 30
+    COMMUNITY_TIMEZONE: str = "Asia/Shanghai"
+    COMMUNITY_HTTP_TIMEOUT: float = 10.0
+    # Kai OAuth 2.1 / OpenID Connect. Credentials and redirect addresses must
+    # be supplied by deployment environment variables; empty values disable it.
+    KAI_AUTH_ISSUER: str = ""
+    # OAuth/OIDC endpoints are hosted below /api/auth while the signed token
+    # issuer is the origin itself. Keep those two values separate so ID-token
+    # and authorization-response issuer validation follows OIDC metadata.
+    KAI_AUTH_ENDPOINT_BASE: str = ""
+    KAI_AUTH_CLIENT_ID: str = ""
+    KAI_AUTH_CLIENT_SECRET: str = ""
+    KAI_AUTH_CALLBACK_URL: str = ""
+    KAI_AUTH_APP_RETURN_URL: str = ""
+    # Exact, comma-separated browser/app return URLs allowed to start a Kai
+    # flow. The legacy APP_RETURN_URL remains the default and is always allowed.
+    KAI_AUTH_ALLOWED_RETURN_URLS: str = ""
+    KAI_AUTH_SCOPES: str = "openid profile email"
+    KAI_AUTH_FLOW_TTL_SECONDS: int = 600
+    KAI_AUTH_TICKET_TTL_SECONDS: int = 120
+    # KAI sessions may replace a local-password prompt only during this short
+    # window for KAI-first accounts that do not have a local password yet.
+    KAI_AUTH_REAUTH_MAX_AGE_SECONDS: int = 600
+    KAI_AUTH_HTTP_TIMEOUT: float = 10.0
+
+    # Ignore retired AutoDL keys that may remain temporarily in a private
+    # deployment environment during a rolling upgrade.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+
+settings = Settings()
+
+
+def get_cors_origins() -> list[str]:
+    return [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]

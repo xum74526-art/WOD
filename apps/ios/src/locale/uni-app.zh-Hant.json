@@ -1,0 +1,31 @@
+{
+  "common": {
+    "uni.app.quit": "再按一次退出應用",
+    "uni.async.error": "連線逾時，點擊重試",
+    "uni.showActionSheet.cancel": "取消",
+    "uni.showModal.cancel": "取消",
+    "uni.showModal.confirm": "確定",
+    "uni.chooseImage.cancel": "取消",
+    "uni.chooseImage.sourceType.album": "從相簿選擇",
+    "uni.chooseImage.sourceType.camera": "拍攝",
+    "uni.chooseVideo.cancel": "取消",
+    "uni.chooseVideo.sourceType.album": "從相簿選擇",
+    "uni.chooseVideo.sourceType.camera": "拍攝",
+    "uni.previewImage.cancel": "取消",
+    "uni.previewImage.button.save": "儲存圖片",
+    "uni.previewImage.save.success": "圖片已儲存",
+    "uni.previewImage.save.fail": "圖片儲存失敗",
+    "uni.setClipboardData.success": "已複製",
+    "uni.scanCode.title": "掃碼",
+    "uni.scanCode.album": "相簿",
+    "uni.scanCode.fail": "辨識失敗",
+    "uni.scanCode.flash.on": "開啟閃光燈",
+    "uni.scanCode.flash.off": "關閉閃光燈",
+    "uni.picker.done": "完成",
+    "uni.picker.cancel": "取消",
+    "uni.button.feedback.title": "問題回報",
+    "uni.button.feedback.send": "傳送"
+  },
+  "ios": {},
+  "android": {}
+}

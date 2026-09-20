@@ -1,0 +1,60 @@
+{
+  "name": "kai-android",
+  "version": "1.2.1",
+  "description": "KAI Android client",
+  "scripts": {
+    "dev:h5": "uni",
+    "build:h5": "uni build",
+    "dev:app": "uni -p app",
+    "build:app": "uni build -p app",
+    "build:android": "uni build -p app",
+    "test:market": "node --experimental-strip-types --test tests/market-list.test.ts",
+    "test:format": "node --experimental-strip-types --test tests/format.test.ts",
+    "test:i18n": "node scripts/check-i18n.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5020420260813003",
+    "@dcloudio/uni-app-plus": "3.0.0-5020420260813003",
+    "@dcloudio/uni-components": "3.0.0-5020420260813003",
+    "@dcloudio/uni-h5": "3.0.0-5020420260813003",
+    "@vue/devtools-api": "8.2.1",
+    "opencc-js": "^1.4.2",
+    "pinia": "^4.0.0",
+    "pinyin-pro": "3.28.1",
+    "vue": "3.5.41",
+    "vue-i18n": "11.4.8"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/uni-cli-shared": "3.0.0-5020420260813003",
+    "@dcloudio/uni-stacktracey": "3.0.0-5020420260813003",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5020420260813003",
+    "@vue/runtime-core": "3.5.41",
+    "rollup": "4.62.5",
+    "sass": "^1.77.0",
+    "typescript": "^5.4.0",
+    "vite": "6.4.3",
+    "vue-tsc": "^2.0.0"
+  },
+  "overrides": {
+    "@babel/core": "7.29.7",
+    "@dcloudio/uni-cli-shared": {
+      "@intlify/core-base": "9.14.5",
+      "@intlify/message-compiler": "9.14.5",
+      "@intlify/runtime": "9.14.5",
+      "@intlify/shared": "9.14.5",
+      "@intlify/vue-devtools": "9.14.5"
+    },
+    "adm-zip": "0.6.1",
+    "esbuild": "0.25.12",
+    "express": "4.22.3",
+    "jpeg-js": "0.4.4",
+    "postcss": "8.5.26",
+    "postcss-selector-parser": "6.1.3",
+    "qs": "6.16.0",
+    "rollup": "4.62.5",
+    "ws": "8.21.3"
+  }
+}

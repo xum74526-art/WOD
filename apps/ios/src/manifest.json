@@ -1,0 +1,65 @@
+{
+    "name" : "算力星图",
+    "appid" : "__UNI__47CF9D3",
+    "description" : "算力资源撮合平台 App",
+    "locale" : "zh-Hant",
+    "vueVersion" : "3",
+    "versionName" : "1.2.1",
+    "versionCode" : "123",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "ssl" : {
+            "untrustedca" : "refuse"
+        },
+        "modules" : {
+            "Invocation" : {},
+            "VideoPlayer" : {}
+        },
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
+        "safearea" : {
+            "background" : "#FFFFFF",
+            "backgroundDark" : "#0A0E14",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        },
+        "uniStatistics" : {
+            "enable" : false
+        },
+        "distribute" : {
+            "icons" : {
+                "ios" : {
+                    "appstore" : "src/static/logo/logo-1024.png",
+                    "iphone" : {
+                        "app@2x" : "src/static/logo/logo-120.png",
+                        "app@3x" : "src/static/logo/logo-180.png"
+                    }
+                }
+            },
+            "ios" : {
+                "appid" : "com.kai.ztwstarmap",
+                "devices" : "iphone",
+                "dSYMs" : true,
+                "urltypes" : "kai",
+                "privacyDescription" : {
+                    "NSPhotoLibraryUsageDescription" : "用于选择头像或身份认证资料。",
+                    "NSCameraUsageDescription" : "用于拍摄头像或身份认证资料。"
+                }
+            }
+        }
+    },
+    "h5" : {
+        "title" : "算力星图",
+        "darkmode" : true,
+        "themeLocation" : "theme.json",
+        "router" : {
+            "mode" : "history",
+            "base" : "/"
+        },
+        "devServer" : {
+            "port" : 9000
+        }
+    }
+}

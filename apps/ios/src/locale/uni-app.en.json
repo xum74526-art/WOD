@@ -1,0 +1,31 @@
+{
+  "common": {
+    "uni.app.quit": "Press again to exit",
+    "uni.async.error": "Connection timed out. Tap to retry.",
+    "uni.showActionSheet.cancel": "Cancel",
+    "uni.showModal.cancel": "Cancel",
+    "uni.showModal.confirm": "Confirm",
+    "uni.chooseImage.cancel": "Cancel",
+    "uni.chooseImage.sourceType.album": "Choose from Album",
+    "uni.chooseImage.sourceType.camera": "Take Photo",
+    "uni.chooseVideo.cancel": "Cancel",
+    "uni.chooseVideo.sourceType.album": "Choose from Album",
+    "uni.chooseVideo.sourceType.camera": "Record Video",
+    "uni.previewImage.cancel": "Cancel",
+    "uni.previewImage.button.save": "Save Image",
+    "uni.previewImage.save.success": "Image saved",
+    "uni.previewImage.save.fail": "Could not save image",
+    "uni.setClipboardData.success": "Copied",
+    "uni.scanCode.title": "Scan Code",
+    "uni.scanCode.album": "Album",
+    "uni.scanCode.fail": "Could not recognize code",
+    "uni.scanCode.flash.on": "Turn flash on",
+    "uni.scanCode.flash.off": "Turn flash off",
+    "uni.picker.done": "Done",
+    "uni.picker.cancel": "Cancel",
+    "uni.button.feedback.title": "Feedback",
+    "uni.button.feedback.send": "Send"
+  },
+  "ios": {},
+  "android": {}
+}

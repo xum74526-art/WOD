@@ -1,0 +1,13 @@
+{
+  "name": "算力星图",
+  "label": "静态审核",
+  "entry": "index.html",
+  "type": "static",
+  "backendRequired": false,
+  "externalNetworkAccess": false,
+  "storage": "browser-local-only",
+  "canonicalUrl": "https://wod.kai.com/info",
+  "reviewUrl": "https://static-review.vercel.app",
+  "deploymentProvider": "vercel",
+  "preparedAt": "2026-09-17"
+}
