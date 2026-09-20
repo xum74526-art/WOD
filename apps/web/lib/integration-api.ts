@@ -25,17 +25,6 @@ export type PaymentIntent = {
   version: number;
 };
 
-export type PaymentCredential = {
-  payment_no: string;
-  provider: "pingxx";
-  status: string;
-  channel: string;
-  livemode: boolean;
-  charge: Record<string, unknown>;
-  return_url: string;
-  expires_at: string | null;
-};
-
 export type WalletSnapshot = {
   provider: ProviderDescriptor;
   balances: Array<{ currency: string; available: string; frozen: string }>;
@@ -99,36 +88,6 @@ export type PrivateFilesSnapshot = {
 
 export function getWalletSnapshot() {
   return apiRequest<WalletSnapshot>("/api/v1/account/wallet");
-}
-
-export function createPaymentIntent(
-  amount: string,
-  currency = "CNY",
-  paymentChannel = "alipay_pc_direct",
-) {
-  return apiRequest<PaymentIntent>("/api/v1/payments/intents", {
-    method: "POST",
-    headers: { "Idempotency-Key": crypto.randomUUID() },
-    body: JSON.stringify({
-      amount,
-      currency,
-      purpose: "wallet_recharge",
-      payment_channel: paymentChannel,
-    }),
-  });
-}
-
-export function getPaymentCredential(paymentNo: string) {
-  return apiRequest<PaymentCredential>(
-    `/api/v1/payments/${encodeURIComponent(paymentNo)}/credential`,
-  );
-}
-
-export function reconcilePayment(paymentNo: string) {
-  return apiRequest<{ payment: PaymentIntent; reconciled: boolean }>(
-    `/api/v1/payments/${encodeURIComponent(paymentNo)}/reconcile`,
-    { method: "POST" },
-  );
 }
 
 export function getKycSnapshot() {

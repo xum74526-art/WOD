@@ -294,6 +294,7 @@
         "type": "object"
       },
       "BankCardIn": {
+        "additionalProperties": false,
         "properties": {
           "bank_name": {
             "anyOf": [
@@ -335,11 +336,16 @@
               }
             ],
             "title": "Phone"
+          },
+          "sensitive_consent": {
+            "title": "Sensitive Consent",
+            "type": "boolean"
           }
         },
         "required": [
           "card_number",
-          "holder"
+          "holder",
+          "sensitive_consent"
         ],
         "title": "BankCardIn",
         "type": "object"
@@ -3156,6 +3162,190 @@
         "title": "PasswordResetRequestIn",
         "type": "object"
       },
+      "PaymentInstructionsOut": {
+        "properties": {
+          "amount_cny": {
+            "title": "Amount Cny",
+            "type": "number"
+          },
+          "bank_name": {
+            "title": "Bank Name",
+            "type": "string"
+          },
+          "bank_verified": {
+            "const": false,
+            "enum": [
+              false
+            ],
+            "title": "Bank Verified",
+            "type": "boolean"
+          },
+          "card_number": {
+            "title": "Card Number",
+            "type": "string"
+          },
+          "holder": {
+            "title": "Holder",
+            "type": "string"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "order_no": {
+            "title": "Order No",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "reveal_expires_at": {
+            "format": "date-time",
+            "title": "Reveal Expires At",
+            "type": "string"
+          },
+          "reveal_token": {
+            "title": "Reveal Token",
+            "type": "string"
+          },
+          "verification_mode": {
+            "const": "format_only",
+            "enum": [
+              "format_only"
+            ],
+            "title": "Verification Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "order_no",
+          "bank_name",
+          "card_number",
+          "holder",
+          "phone",
+          "amount_cny",
+          "verification_mode",
+          "bank_verified",
+          "reveal_token",
+          "reveal_expires_at",
+          "notice"
+        ],
+        "title": "PaymentInstructionsOut",
+        "type": "object"
+      },
+      "PaymentInstructionsResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PaymentInstructionsOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "PaymentInstructionsResponse",
+        "type": "object"
+      },
+      "PaymentRefundCreateIn": {
+        "properties": {
+          "client_request_id": {
+            "maxLength": 64,
+            "minLength": 12,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_request_id",
+          "reason"
+        ],
+        "title": "PaymentRefundCreateIn",
+        "type": "object"
+      },
+      "PaymentRefundResolveIn": {
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "note"
+        ],
+        "title": "PaymentRefundResolveIn",
+        "type": "object"
+      },
+      "PaymentReviewDecisionIn": {
+        "properties": {
+          "action": {
+            "enum": [
+              "credit",
+              "refund"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 12,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "note"
+        ],
+        "title": "PaymentReviewDecisionIn",
+        "type": "object"
+      },
       "PhoneLoginSetupIn": {
         "properties": {
           "password": {
@@ -3866,6 +4056,20 @@
               }
             ],
             "title": "Amount Cny"
+          },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 12,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
           },
           "payment_type": {
             "enum": [
@@ -5660,6 +5864,182 @@
         ]
       }
     },
+    "/api/admin/payment-refunds": {
+      "get": {
+        "operationId": "payment_refunds_api_admin_payment_refunds_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Payment Refunds",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/payment-refunds/{refund_id}": {
+      "get": {
+        "operationId": "payment_refund_detail_api_admin_payment_refunds__refund_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "refund_id",
+            "required": true,
+            "schema": {
+              "title": "Refund Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Payment Refund Detail",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/payment-refunds/{refund_id}/resolve": {
+      "post": {
+        "operationId": "resolve_payment_refund_api_admin_payment_refunds__refund_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "refund_id",
+            "required": true,
+            "schema": {
+              "title": "Refund Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRefundResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Resolve Payment Refund",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/recharge-orders": {
       "get": {
         "operationId": "recharge_orders_api_admin_recharge_orders_get",
@@ -5771,6 +6151,161 @@
           }
         ],
         "summary": "Recharge Orders",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/recharge-orders/{payment_order_id}": {
+      "get": {
+        "operationId": "recharge_order_detail_api_admin_recharge_orders__payment_order_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_order_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Recharge Order Detail",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/recharge-orders/{payment_order_id}/refunds": {
+      "post": {
+        "operationId": "create_payment_refund_api_admin_recharge_orders__payment_order_id__refunds_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_order_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRefundCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Payment Refund",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/recharge-orders/{payment_order_id}/review": {
+      "post": {
+        "operationId": "review_recharge_order_api_admin_recharge_orders__payment_order_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_order_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentReviewDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Review Recharge Order",
         "tags": [
           "admin"
         ]
@@ -9274,6 +9809,7 @@
     },
     "/api/finance/withdrawals/{order_id}/mark-failed": {
       "post": {
+        "description": "Before payment instructions are claimed, an administrator may fail the request. After claim, only the assigned payout operator may fail and release its frozen funds.",
         "operationId": "withdrawal_failed_api_finance_withdrawals__order_id__mark_failed_post",
         "parameters": [
           {
@@ -9383,8 +9919,9 @@
       }
     },
     "/api/finance/withdrawals/{order_id}/payment-instructions": {
-      "get": {
-        "operationId": "payment_instructions_api_finance_withdrawals__order_id__payment_instructions_get",
+      "post": {
+        "description": "The first non-approving administrator to reveal these instructions is atomically and durably assigned as the sole payout operator. Later reveals and mark-paid requests are restricted to that same administrator.",
+        "operationId": "payment_instructions_api_finance_withdrawals__order_id__payment_instructions_post",
         "parameters": [
           {
             "in": "path",
@@ -9410,7 +9947,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentInstructionsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -10813,48 +11352,6 @@
         ]
       }
     },
-    "/api/payments/mapay/checkout/{token}": {
-      "get": {
-        "operationId": "checkout_api_payments_mapay_checkout__token__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "token",
-            "required": true,
-            "schema": {
-              "title": "Token",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Checkout",
-        "tags": [
-          "payment"
-        ]
-      }
-    },
     "/api/payments/mapay/config": {
       "get": {
         "operationId": "payment_config_api_payments_mapay_config_get",
@@ -11009,50 +11506,6 @@
         ]
       }
     },
-    "/api/payments/mapay/recharge-orders": {
-      "post": {
-        "operationId": "create_payment_api_payments_mapay_recharge_orders_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RechargePaymentCreateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Create Payment",
-        "tags": [
-          "payment"
-        ]
-      }
-    },
     "/api/payments/qixiang/checkout/{token}": {
       "get": {
         "operationId": "checkout_api_payments_qixiang_checkout__token__get",
@@ -11068,7 +11521,7 @@
           }
         ],
         "responses": {
-          "307": {
+          "303": {
             "description": "Successful Response"
           },
           "422": {

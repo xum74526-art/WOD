@@ -11,6 +11,8 @@ export interface BankCardItem {
   status: 'registered' | 'pending_review' | 'active' | 'rejected' | 'disabled'
   verification_mode: 'format_only' | 'manual_review' | 'legacy_unvalidated'
   bank_verified: false
+  consent_recorded: boolean
+  consent_version: string | null
   reject_reason?: string | null
   created_at?: string | null
   reviewed_at?: string | null
@@ -24,10 +26,11 @@ export function getBankCardConfig() {
     binding_enabled: boolean
     mode: 'format_only' | 'manual_review'
     bank_verified: false
+    consent_version: string
     notice?: string
   }>({ url: '/bank-cards/config' })
 }
-export function addBankCard(data: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean }) {
+export function addBankCard(data: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean; sensitive_consent: boolean }) {
   return request<BankCardItem>({ url: '/bank-cards', method: 'POST', data })
 }
 export function setDefaultCard(id: number) {

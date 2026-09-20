@@ -14,7 +14,12 @@ from app.core.sensitive import (
     sensitive_capability_enabled,
 )
 from app.db.session import get_db
-from app.models.bank_card import BankCard, REGISTERED_CARD_STATUSES, public_bank_card_status
+from app.models.bank_card import (
+    BANK_CARD_SENSITIVE_CONSENT_VERSION,
+    BankCard,
+    REGISTERED_CARD_STATUSES,
+    public_bank_card_status,
+)
 from app.models.verification import Verification
 from app.models.user import User
 from app.models.withdrawal import WithdrawalOrder
@@ -25,7 +30,6 @@ from app.services.auth_session import normalize_platform
 
 router = APIRouter(prefix="/api/bank-cards", tags=["bank-card"])
 
-
 def _mask_phone(phone: str | None) -> str | None:
     if not phone or len(phone) < 7:
         return None
@@ -34,6 +38,10 @@ def _mask_phone(phone: str | None) -> str | None:
 
 def _card_out(card: BankCard) -> dict:
     plain_phone = reveal(card.phone)
+    current_consent = bool(
+        card.consent_at
+        and card.consent_version == BANK_CARD_SENSITIVE_CONSENT_VERSION
+    )
     return {
         "id": card.id,
         "bank_name": card.bank_name,
@@ -45,6 +53,8 @@ def _card_out(card: BankCard) -> dict:
         "status": public_bank_card_status(card.status),
         "verification_mode": card.verification_mode or "legacy_unvalidated",
         "bank_verified": False,
+        "consent_recorded": current_consent,
+        "consent_version": card.consent_version if current_consent else None,
         "reject_reason": card.review_reason,
         "reviewed_at": card.reviewed_at,
         "created_at": card.created_at,
@@ -65,7 +75,11 @@ def bank_card_config(user: User = Depends(get_current_user)):
         "binding_enabled": sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED),
         "mode": "format_only",
         "bank_verified": False,
-        "notice": "银行卡仅完成格式、Luhn 与实名姓名一致性登记，未经银行验证",
+        "consent_version": BANK_CARD_SENSITIVE_CONSENT_VERSION,
+        "notice": (
+            "银行卡信息将加密保存，仅用于人工打款与复核；登记仅完成格式、"
+            "Luhn 与实名姓名一致性检查，未经银行验证"
+        ),
     })
 
 
@@ -78,6 +92,11 @@ def add_card(
 ):
     if not sensitive_capability_enabled(settings.MANUAL_BANK_CARD_ENABLED):
         raise BizError("银行卡登记服务尚未启用", status_code=503)
+    if data.sensitive_consent is not True:
+        raise BizError(
+            "请先单独同意银行卡敏感信息用于加密登记、人工打款和复核",
+            status_code=400,
+        )
     # 1. 卡号Luhn校验
     if not luhn_check(data.card_number):
         raise BizError("卡号校验失败，请检查卡号是否正确")
@@ -113,7 +132,32 @@ def add_card(
             None,
         )
     if existing:
-        raise BizError("该银行卡已登记")
+        if existing.status not in REGISTERED_CARD_STATUSES:
+            raise BizError("该银行卡已登记但当前不可用，请联系人工处理", status_code=409)
+        if (
+            existing.consent_at
+            and existing.consent_version == BANK_CARD_SENSITIVE_CONSENT_VERSION
+        ):
+            raise BizError("该银行卡已登记")
+        # Historical rows can predate the dedicated sensitive-data consent.
+        # Re-entering the same card with explicit consent upgrades that exact
+        # row; it never creates a duplicate or silently re-enables a disabled
+        # card.
+        existing.bank_name = bank_name
+        existing.card_number = protect(normalized_number)
+        existing.phone = protect(data.phone)
+        existing.card_fingerprint = card_fingerprint
+        existing.verification_mode = "format_only"
+        existing.consent_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        existing.consent_version = BANK_CARD_SENSITIVE_CONSENT_VERSION
+        existing.last_modified_platform = normalize_platform(platform)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise BizError("该银行卡同意记录更新冲突", status_code=409) from None
+        db.refresh(existing)
+        return success(_card_out(existing))
     has_default = db.query(BankCard).filter(
         BankCard.user_id == user.id,
         BankCard.status.in_(REGISTERED_CARD_STATUSES),
@@ -126,6 +170,8 @@ def add_card(
         is_default=bool((data.is_default or not has_default) and not has_default),
         card_fingerprint=card_fingerprint, status="registered",
         verification_mode="format_only",
+        consent_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        consent_version=BANK_CARD_SENSITIVE_CONSENT_VERSION,
         created_platform=source_platform,
         last_modified_platform=source_platform,
     )
@@ -153,6 +199,11 @@ def set_default(
     ).first()
     if not c:
         raise BizError("仅已登记且未停用的银行卡可设为默认卡", status_code=404)
+    if (
+        not c.consent_at
+        or c.consent_version != BANK_CARD_SENSITIVE_CONSENT_VERSION
+    ):
+        raise BizError("该银行卡需重新确认敏感信息使用同意后才能设为默认卡", status_code=409)
     db.query(BankCard).filter(BankCard.user_id == user.id).update({"is_default": False})
     c.is_default = True
     c.last_modified_platform = normalize_platform(platform)

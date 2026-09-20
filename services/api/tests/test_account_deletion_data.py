@@ -16,6 +16,7 @@ from app.models import (
     ExternalAuthTicket, ExternalIdentity, Follow, InviteCode, InviteRecord,
     Ledger, Like, MerchantSettlement, Notification, NotificationPreference,
     OfflinePurchase, Order, OrderFundingAllocation, OrderRenewal, PaymentOrder,
+    PaymentRefund,
     Post, Product, RewardAccrual, Supplier, SupportConversation, SupportMessage,
     SupportTicket, User, Verification, Wallet, WithdrawalOrder,
 )
@@ -249,6 +250,52 @@ class AccountDeletionDataTests(unittest.TestCase):
         payment.status = "paid"
         payment.credited_at = self.now
         payment.provider_checkout_url = "https://pay.invalid/old"
+        self.db.flush()
+        self.assertNotIn("unsettled_payments", self.codes())
+
+    def test_only_succeeded_original_rail_refund_is_a_safe_payment_terminal(self):
+        payment = PaymentOrder(
+            order_no="REFUNDED",
+            user_id=self.user.id,
+            provider="qixiangpay",
+            amount_cny=Decimal("10.00"),
+            card_hours=Decimal("10.000000"),
+            card_hour_rate=Decimal("1.000000"),
+            checkout_token_hash="r" * 64,
+            expires_at=self.now,
+            status="refunded",
+            provider_status="TRADE_SUCCESS",
+        )
+        self.db.add(payment)
+        self.db.flush()
+        self.assertIn("unsettled_payments", self.codes())
+
+        refund = PaymentRefund(
+            refund_no="KAIRACCOUNTDELETE0001",
+            payment_order_id=payment.id,
+            actor_user_id=self.other.id,
+            client_request_id="refund-account-delete-0001",
+            amount_cny=payment.amount_cny,
+            card_hours=payment.card_hours,
+            status="failed",
+            wallet_hold_status="released",
+            previous_payment_status="review",
+            reason="账户注销前退款核对",
+            attempt_count=1,
+        )
+        self.db.add(refund)
+        self.db.flush()
+        self.assertIn("unsettled_payments", self.codes())
+
+        for unsafe_status in ("submitting", "unknown"):
+            refund.status = unsafe_status
+            payment.status = "refund_unknown" if unsafe_status == "unknown" else "refund_pending"
+            self.db.flush()
+            self.assertIn("unsettled_payments", self.codes())
+
+        refund.status = "succeeded"
+        refund.wallet_hold_status = "not_required"
+        payment.status = "refunded"
         self.db.flush()
         self.assertNotIn("unsettled_payments", self.codes())
 

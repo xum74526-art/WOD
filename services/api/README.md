@@ -29,9 +29,14 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+第一条输出只用于 `SECRET_KEY`，第二条输出只用于 `SENSITIVE_DATA_KEY`；不得把后者设为
+前者的 SHA-256/Fernet 派生值。密钥生成后立即存入受控密钥库及其备份，并在整个持久数据
+生命期保持稳定。不要在日常发布中重新生成或覆盖；轮换前必须先实施审计过的双密钥重加密迁移。
+
 然后：
 
 ```powershell
+python preflight_sensitive_storage.py
 python init_db.py
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
@@ -42,7 +47,9 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 docker build -t kai-api .
 ```
 
-镜像包含 FFmpeg、Tesseract、`chi_sim` 与 `eng`。入口脚本会拒绝空的必需变量和源码内置开发密钥，并在启动前执行 `init_db.py`。
+镜像包含 FFmpeg、Tesseract、`chi_sim` 与 `eng`。入口脚本会先执行不连接数据库的
+`preflight_sensitive_storage.py`，拒绝空密钥、源码内置开发密钥、无效 Fernet 密钥或从
+`SECRET_KEY` 派生的密钥，通过后才允许执行 schema 检查和 `init_db.py`。
 
 ## 数据目录
 
@@ -94,7 +101,7 @@ KAI K 线同步与 Vast Collector 相互独立。默认每 5 分钟更新一次�
 ## 测试
 
 ```powershell
-python -m compileall -q app init_db.py
+python -m compileall -q app init_db.py preflight_sensitive_storage.py
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 

@@ -139,7 +139,7 @@ export function AdminWithdrawalWorkspace() {
     <div className="workspace-page__head">
       <p>FINANCE / PAYOUTS</p>
       <h1>提现结算</h1>
-      <span>审核、收款信息揭示、打款凭证和最终入账全部使用统一财务状态机。</span>
+      <span>审核与付款确认必须由两名不同管理员完成；审批后首位查看完整收款信息的非审批管理员会被锁定为唯一付款经办人，其他人不得接管、转账或解冻。</span>
     </div>
     <div className="refund-toolbar">
       <select value={status} onChange={(event) => changeStatus(event.target.value)}>

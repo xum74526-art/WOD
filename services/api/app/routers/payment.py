@@ -3,12 +3,12 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_platform, get_current_user
+from app.core.config import settings
+from app.core.rate_limit import limit_payment_callback, limit_payment_query
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.payment import RechargePaymentCreateIn
 from app.services.mapay import (
-    checkout_html,
-    create_recharge_order,
     handle_notification,
     payment_status,
     public_config,
@@ -26,26 +26,24 @@ router = APIRouter(prefix="/api/payments/mapay", tags=["payment"])
 @router.get("/config")
 def payment_config(user: User = Depends(get_current_user)):
     config = public_config()
-    config["enabled"] = bool(config.get("enabled") and recharge_enabled())
+    config["enabled"] = False
+    config["new_collection_retired"] = True
+    config["legacy_reconciliation_enabled"] = bool(
+        settings.MAPAY_LEGACY_RECONCILIATION_ENABLED
+    )
     return success(config)
 
 
-@router.post("/recharge-orders")
+@router.post("/recharge-orders", include_in_schema=False)
 def create_payment(
     data: RechargePaymentCreateIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
-    require_recharge_enabled()
-    return success(
-        create_recharge_order(
-            db,
-            user.id,
-            data.amount_cny,
-            payment_type=data.payment_type,
-            created_platform=normalize_platform(platform),
-        )
+    raise BizError(
+        "MaPay 已停止创建新充值订单，请使用七相支付",
+        status_code=410,
     )
 
 
@@ -64,17 +62,13 @@ def query_payment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    limit_payment_query(user.id)
     return success(query_provider_and_reconcile(db, get_owned_order(db, user.id, order_no)))
 
 
-@router.get("/checkout/{token}", response_class=HTMLResponse)
+@router.get("/checkout/{token}", response_class=HTMLResponse, include_in_schema=False)
 def checkout(token: str, db: Session = Depends(get_db)):
-    response = HTMLResponse(checkout_html(db, token))
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    return response
+    raise BizError("MaPay 新收银台已停用；历史订单仅支持查询", status_code=410)
 
 
 async def _notification_params(request: Request) -> dict:
@@ -87,6 +81,7 @@ async def _notification_params(request: Request) -> dict:
 
 async def _notify(request: Request, db: Session):
     try:
+        limit_payment_callback("mapay")
         awaitable_params = await _notification_params(request)
         handle_notification(db, awaitable_params)
         return PlainTextResponse("success")

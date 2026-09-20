@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowClockwise, ChartLine, Coins, Gear, Gift, HardDrives, Receipt, TrendUp } from "@phosphor-icons/react";
 import { useI18n } from "@/components/locale-root";
 import { errorMessage } from "@/lib/commerce-ui";
 import { getSupplierProfile, getSupplierRebate, getSupplierRevenueBundle, getSupplierStats, getUserRebate, updateSupplierProfile, type RebateSummary, type SupplierProfile, type SupplierRebate, type SupplierRevenueRecord, type SupplierStats, type SupplierWallet } from "@/lib/mobile-business-api";
 import { localizeRebateHint, rebateTierRange } from "@/lib/product-purchase";
+import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 
 export type MobileSupplierSection = "revenue" | "analytics" | "rebates" | "settings";
 const amount = (value: unknown) => {
@@ -15,6 +17,8 @@ const amount = (value: unknown) => {
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("zh-CN") : "—");
 
 function SupplierRevenue() {
+  const { capabilities } = usePlatformCapabilities();
+  const withdrawalEntryEnabled = capabilities.direct_trade_enabled === true && capabilities.withdraw_enabled === true;
   const [wallet, setWallet] = useState<SupplierWallet | null>(null);
   const [rows, setRows] = useState<SupplierRevenueRecord[]>([]);
   const [error, setError] = useState("");
@@ -91,7 +95,9 @@ function SupplierRevenue() {
           <div className="mobile-inline-empty">暂无订单收益记录</div>
         )}
       </section>
-      {!wallet?.payment_service_enabled && <div className="workspace-service-note">商家结算服务当前未启用；Web 不会创建模拟提现记录。</div>}
+      {withdrawalEntryEnabled
+        ? <div className="workspace-service-note">已结算的商家收益进入统一钱包。<Link className="primary-link" href="/account/wallet">前往钱包申请提现</Link></div>
+        : <div className="workspace-service-note">新提现申请当前未开放；已结算收益和历史提现记录仍可在统一钱包查看。<Link className="outline-link" href="/account/wallet">查看钱包记录</Link></div>}
     </>
   );
 }

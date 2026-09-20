@@ -10,6 +10,8 @@ import {
 } from '../src/utils/bank-card.ts'
 
 const bankCardPage = readFileSync(new URL('../src/pages/bank-cards/index.vue', import.meta.url), 'utf8')
+const bankCardApi = readFileSync(new URL('../src/api/bank-card.ts', import.meta.url), 'utf8')
+const walletActions = readFileSync(new URL('../src/components/direct-trade/DirectTradeWalletActions.vue', import.meta.url), 'utf8')
 
 test('registered and historical safe states remain usable without claiming bank verification', () => {
   for (const status of ['registered', 'pending_review', 'active']) {
@@ -42,4 +44,15 @@ test('unverified users see only the real-name verification card after loading', 
   assert.doesNotMatch(bankCardPage, /class="notice-card"/)
   assert.doesNotMatch(bankCardPage, /class="service-warning"/)
   assert.doesNotMatch(bankCardPage, /bankCardRegistrationTitle|bankCardRegistrationNotice/)
+})
+
+test('bank-card registration sends the explicit sensitive-data consent to the server', () => {
+  assert.match(bankCardPage, /sensitive_consent: consent\.value/)
+  assert.match(bankCardApi, /sensitive_consent: boolean/)
+  assert.match(bankCardApi, /consent_recorded: boolean/)
+  assert.match(bankCardApi, /consent_version: string \| null/)
+  assert.doesNotMatch(bankCardApi, /consent_at/)
+  assert.match(bankCardPage, /bankCardConsentRenewalRequired/)
+  assert.match(bankCardPage, /card\.consent_recorded && isRegisteredStatus/)
+  assert.match(walletActions, /isRegisteredBankCardStatus\(card\.status\) && card\.consent_recorded/)
 })

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from tempfile import TemporaryDirectory
 
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -55,6 +56,8 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
                 "ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS",
                 "ORDER_LEGACY_PENDING_MIGRATION_ENABLED",
                 "MERCHANT_SERVICE_FEE_BPS",
+                "SECRET_KEY",
+                "SENSITIVE_DATA_KEY",
             )
         }
         settings.CONSUMER_REWARD_ENABLED = False
@@ -67,6 +70,8 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
         settings.ORDER_DISPUTE_REVIEW_TIMEOUT_HOURS = 72
         settings.ORDER_LEGACY_PENDING_MIGRATION_ENABLED = False
         settings.MERCHANT_SERVICE_FEE_BPS = 1000
+        settings.SECRET_KEY = "unit-test-order-lifecycle-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
 
         self.buyer = User(phone="13900002001", username="买家", password="!")
         self.seller = User(

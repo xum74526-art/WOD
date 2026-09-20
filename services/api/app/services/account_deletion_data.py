@@ -31,7 +31,7 @@ from app.models import (
     ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity, Follow, InviteCode,
     InviteRecord, Like, MerchantSettlement, Notification, NotificationPreference,
     OfflinePurchase, Order, OrderFundingAllocation, OrderRenewal,
-    PaymentInstructionGrant, PaymentOrder, Post, Product, RewardAccrual, Supplier,
+    PaymentInstructionGrant, PaymentOrder, PaymentRefund, Post, Product, RewardAccrual, Supplier,
     SupportConversation, SupportMessage, SupportTicket, User, Verification,
     Wallet, WithdrawalOrder,
 )
@@ -129,11 +129,19 @@ def get_deletion_blockers(db: Session, user: User) -> list[dict]:
                 ("TRADE_CLOSED", "TRADE_FAILED", "PAYERROR"))),
         ),
     )
+    succeeded_refunds = db.query(PaymentRefund.payment_order_id).filter(
+        PaymentRefund.status == "succeeded"
+    )
+    safe_refunded_terminal = and_(
+        PaymentOrder.status == "refunded",
+        PaymentOrder.id.in_(succeeded_refunds),
+    )
     # Explicitly coalesce nullable status expressions: SQL NOT UNKNOWN would
     # otherwise silently drop ambiguous rows rather than fail closed.
     add("unsettled_payments", "存在未确认、未关闭或待复核的充值支付，请联系平台核对；本地超时不代表支付平台已关闭订单。",
         db.query(PaymentOrder).filter(PaymentOrder.user_id == user.id, ~or_(
             and_(PaymentOrder.status == "paid", PaymentOrder.credited_at.isnot(None)),
+            safe_refunded_terminal,
             func.coalesce(safe_unpaid_terminal, False),
         )))
     add("unsettled_withdrawals", "存在待审核或待打款的提现，请先完成核对。",

@@ -24,7 +24,12 @@ npm ci --prefix apps/android
 
 ## 启动 API（仅后端开发）
 
+先为本地私有 `.env` 独立生成长随机 `SECRET_KEY` 和 Fernet `SENSITIVE_DATA_KEY`。
+两者不得复用或相互派生；一旦写入持久数据库就必须在受控密钥库与备份中稳定保留，
+不得在重装、重启或日常发布时重新生成。需要轮换时先设计可回滚的双密钥重加密迁移。
+
 ```bash
+(cd services/api && .venv/bin/python preflight_sensitive_storage.py)
 (cd services/api && .venv/bin/python init_db.py)
 (cd services/api && \
   MARKET_HISTORY_SYNC_ENABLED=false \

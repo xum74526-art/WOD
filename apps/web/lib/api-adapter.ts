@@ -6,6 +6,11 @@ import { isValidMarketLatestPayload } from "@/lib/market-latest-payload";
 import { notificationActionPath } from "@/lib/notification-navigation";
 import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
+import {
+  allowedPaymentCheckoutRedirect,
+  paymentCheckoutAllowedHosts,
+  paymentCheckoutClientIp,
+} from "@/lib/server/payment-checkout-policy";
 import { accountDeletionMethods, accountDeletionProxyOptions, type AccountDeletionOperation } from "@/lib/account-deletion-proxy";
 import { deletionRevokesNormalSession } from "@/lib/account-deletion-flow";
 import { safeReturnPath } from "@/lib/auth-navigation";
@@ -284,10 +289,16 @@ async function proxyWithdrawalReceipt(request: NextRequest, orderId: string) {
 }
 
 async function proxyCheckout(request: NextRequest, provider: "mapay" | "qixiang", token: string) {
+  if (provider !== "qixiang") {
+    return apiError("旧支付链接已停用，请返回钱包重新发起充值", 410, "legacy_checkout_disabled");
+  }
   let response: Response;
   try {
+    const headers = new Headers({ Accept: "application/json" });
+    const clientIp = paymentCheckoutClientIp(request.headers);
+    if (clientIp) headers.set("X-Real-IP", clientIp);
     response = await fetch(`${resolveApiOrigin()}/api/payments/${provider}/checkout/${encodeURIComponent(token)}`, {
-      headers: { Accept: "text/html" },
+      headers,
       cache: "no-store",
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),
@@ -296,29 +307,19 @@ async function proxyCheckout(request: NextRequest, provider: "mapay" | "qixiang"
     return new NextResponse("支付页面暂时无法打开", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
   const location = response.headers.get("location");
-  if (response.status >= 300 && response.status < 400 && location) {
-    let destination: URL;
-    try { destination = new URL(location); }
-    catch { return apiError("支付平台返回了无效收银台地址", 502); }
-    if (destination.protocol !== "https:" || destination.username || destination.password) {
+  if (response.status === 303 && location) {
+    const destination = allowedPaymentCheckoutRedirect(location, paymentCheckoutAllowedHosts());
+    if (!destination) {
       return apiError("支付平台返回了无效收银台地址", 502);
     }
-    const redirect = NextResponse.redirect(destination, response.status);
+    const redirect = NextResponse.redirect(destination, 303);
     redirect.headers.set("Cache-Control", "private, no-store");
     redirect.headers.set("Referrer-Policy", "no-referrer");
     redirect.headers.set("X-Content-Type-Options", "nosniff");
     return redirect;
   }
-  return new NextResponse(response.body, {
-    status: response.status,
-    headers: {
-      "Content-Type": response.headers.get("content-type") || "text/html; charset=utf-8",
-      "Cache-Control": "private, no-store",
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY",
-    },
-  });
+  const status = response.status >= 400 && response.status < 500 ? response.status : 502;
+  return apiError("支付页面暂时无法打开，请返回钱包查询订单状态", status, "checkout_unavailable");
 }
 
 function product(value: unknown) {
@@ -754,6 +755,8 @@ async function accountSummary(request: NextRequest) {
     supplier_status: profile.supplier_status,
     services: {
       payment: Boolean(wallet.payment_service_enabled || wallet.recharge_service_enabled),
+      recharge: Boolean(wallet.recharge_service_enabled),
+      withdraw: Boolean(wallet.withdraw_service_enabled),
       kyc: text(verification.status) === "verified",
     },
   });
@@ -772,7 +775,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
   const path = requestedPath.startsWith("mobile/")
     ? `canonical/${requestedPath.slice("mobile/".length)}`
     : requestedPath;
-  const checkout = path.match(/^canonical\/payments\/(mapay|qixiang)\/checkout\/([A-Za-z0-9_-]+)$/);
+  const checkout = path.match(/^canonical\/payments\/(mapay|qixiang)\/checkout\/([A-Za-z0-9_-]{32,128})$/);
   if (checkout && request.method === "GET") return proxyCheckout(request, checkout[1] as "mapay" | "qixiang", checkout[2]);
   const avatar = path.match(/^canonical\/user\/avatars\/(avatar_\d+\.(?:jpg|png|webp))$/);
   if (avatar && request.method === "GET") return proxyAvatar(request, avatar[1]);

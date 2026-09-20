@@ -535,12 +535,87 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'enabled wallet payment and authoritative return verification',
+    evidence: [
+      {
+        client: 'Web wallet capability gates and server verification',
+        file: 'apps/web/components/payment-workspace.tsx',
+        patterns: [
+          'const rechargeEntryEnabled = directTradeEnabled && capabilities.recharge_enabled === true',
+          'const withdrawalEntryEnabled = directTradeEnabled && capabilities.withdraw_enabled === true',
+          'createRechargePayment(normalizedValue, recharge.payment_type, intent.requestId)',
+          'isRegisteredBankCardStatus(card.status) && card.consent_recorded',
+          'order = await queryRechargePayment(orderNo)',
+        ],
+      },
+      {
+        client: 'Web dedicated payment return',
+        file: 'apps/web/app/payment/qixiang/return/page.tsx',
+        patterns: [
+          'router.replace("/account/wallet")',
+          '向平台查询订单状态',
+          '到账结果只以服务端验签和钱包入账记录为准',
+        ],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} fail-closed payment capability gates`,
+          file: `apps/${client}/src/store/commerce.ts`,
+          patterns: [
+            'DIRECT_TRADE_BUILD_ENABLED',
+            'directTradeEnabled.value && capabilities.value.payment_enabled === true',
+            'paymentEnabled.value && capabilities.value.recharge_enabled === true',
+            'directTradeEnabled.value && capabilities.value.withdraw_enabled === true',
+          ],
+        },
+        {
+          client: `${client} recharge and manual-withdrawal entries`,
+          file: `apps/${client}/src/components/direct-trade/DirectTradeWalletActions.vue`,
+          patterns: [
+            'financialRequestId(',
+            'createRechargePayment(amount, sheet.paymentType, requestId)',
+            'getWithdrawalConfig(), getBankCards()',
+            'isRegisteredBankCardStatus(card.status) && card.consent_recorded',
+            'createWithdrawal({',
+            'client_request_id: requestId',
+            "() => emit('paymentReturned')",
+          ],
+        },
+        {
+          client: `${client} dedicated HTTPS payment return`,
+          file: `apps/${client}/src/utils/payment-checkout.ts`,
+          patterns: [
+            "QIXIANGPAY_RETURN_URL = 'https://wod.kai.com/payment/qixiang/return'",
+            'isPaymentReturnUrl(eventUrl)',
+            "checkout.close('none')",
+            'onReturn?.()',
+          ],
+        },
+        {
+          client: `${client} wallet server verification after return`,
+          file: `apps/${client}/src/pages/wallet/index.vue`,
+          patterns: [
+            '@payment-returned="handleDirectPaymentReturned"',
+            'void refreshPendingPayment(false, true)',
+            'payment = await queryRechargePayment(orderNo, true)',
+            'server-authoritative',
+          ],
+        },
+      ]),
+    ],
+  },
+  {
     name: 'withdrawal unavailable feedback',
     evidence: [
       {
         client: 'Web',
         file: 'apps/web/components/mobile-supplier-operations.tsx',
-        patterns: ['!wallet?.payment_service_enabled', '商家结算服务当前未启用', '不会创建模拟提现记录'],
+        patterns: [
+          'capabilities.direct_trade_enabled === true && capabilities.withdraw_enabled === true',
+          'withdrawalEntryEnabled',
+          '新提现申请当前未开放',
+          '已结算收益和历史提现记录仍可在统一钱包查看',
+        ],
       },
       {
         client: 'Android',
@@ -878,8 +953,8 @@ const allowedMobileDrift = new Set([
   // are intentionally Android-only platform assets.
   'src/androidPrivacy.json',
   'src/utils/client-platform.ts',
-  // Each client tracks its own released build code for platform-specific
-  // update prompts; iOS 123 and Android 122 are intentionally independent.
+  // Android and iOS advance their store build numbers independently while
+  // sharing the same update policy and API contract.
   'src/utils/app-update.ts',
   'src/static/logo/logo-1024.png',
   // iPhone application icons use Apple's 60-point @2x/@3x sizes. Android
@@ -891,8 +966,8 @@ const allowedMobileDrift = new Set([
   // therefore cannot be byte-for-byte identical.
   'tests/manifest-branding.test.ts',
   'tests/app-update.test.ts',
-  // The Android native-consent regression also checks androidPrivacy.json;
-  // iOS exercises the shared in-app legal-document flow without that asset.
+  // Android also verifies its native pre-WebView privacy configuration here;
+  // iOS has no androidPrivacy.json equivalent.
   'tests/legal-documents.test.ts',
   'tests/manifest-permissions.test.ts',
   'tests/privacy-startup.test.ts',

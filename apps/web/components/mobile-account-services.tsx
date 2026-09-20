@@ -120,7 +120,7 @@ function BankCardWorkspace() {
     if (!consent) { setError("请先同意银行卡登记与人工复核说明"); return; }
     const created = await act(() => addBankCard({
       bank_name: form.bank_name.trim(), card_number: cardNumber, holder: form.holder,
-      phone: form.phone, is_default: rows.length === 0,
+      phone: form.phone, is_default: rows.length === 0, sensitive_consent: consent,
     }));
     if (created) {
       setForm({ bank_name: "", card_number: "", holder: verification.real_name || "", phone: "" });
@@ -143,9 +143,9 @@ function BankCardWorkspace() {
       <section className="mobile-record-panel">
         <header><Bank size={20}/><div><small>SETTLEMENT CARDS</small><h2>已绑定银行卡</h2></div><b>{rows.length}</b></header>
         {rows.length ? rows.map((card) => <article className="mobile-bank-row" key={card.id}>
-          <span><strong>{card.bank_name || "银行卡"} ···· {card.card_last4 || card.card_number.slice(-4)}</strong><small>{card.holder} · {statusLabel(card.status)}{card.is_default ? " · 默认卡" : ""}</small>{card.reject_reason && <small className="finance-review-reason">驳回原因：{card.reject_reason}</small>}</span>
+          <span><strong>{card.bank_name || "银行卡"} ···· {card.card_last4 || card.card_number.slice(-4)}</strong><small>{card.holder} · {statusLabel(card.status)}{card.is_default ? " · 默认卡" : ""}</small>{!card.consent_recorded && isRegisteredBankCardStatus(card.status) && <small className="finance-review-reason">需在右侧重新提交同一张卡并勾选同意后，才可用于提现。</small>}{card.reject_reason && <small className="finance-review-reason">驳回原因：{card.reject_reason}</small>}</span>
           <div>
-            {!card.is_default && isRegisteredBankCardStatus(card.status) && <button disabled={busy} onClick={() => void act(() => setDefaultBankCard(card.id))}>设为默认</button>}
+            {!card.is_default && card.consent_recorded && isRegisteredBankCardStatus(card.status) && <button disabled={busy} onClick={() => void act(() => setDefaultBankCard(card.id))}>设为默认</button>}
             {card.status !== "disabled" && <button className="danger" disabled={busy} onClick={() => { if (window.confirm("确定停用这张银行卡？")) void act(() => deleteBankCard(card.id)); }}><Trash size={14}/>停用</button>}
           </div>
         </article>) : <div className="mobile-inline-empty">还没有绑定银行卡</div>}
@@ -156,7 +156,7 @@ function BankCardWorkspace() {
         <label>银行卡号<input inputMode="numeric" maxLength={19} value={form.card_number} onChange={(event) => setForm({ ...form, card_number: event.target.value.replace(/\D/g, "").slice(0, 19) })} required/></label>
         <label>开户银行<input value={form.bank_name} onChange={(event) => setForm({ ...form, bank_name: event.target.value })} required/></label>
         <label>预留手机号<input inputMode="tel" maxLength={11} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value.replace(/\D/g, "").slice(0, 11) })} required/></label>
-        <label className="bank-card-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)}/> 我确认银行卡为本人所有，并同意平台进行格式校验和人工复核。</label>
+        <label className="bank-card-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)}/> 我确认收款银行卡属于本人，并同意平台为人工打款与复核而加密保存和使用；此登记不代表银行验证。</label>
         <button className="commerce-primary" disabled={busy || !identityReady || !consent || config?.binding_enabled === false}>{busy ? "保存中…" : config?.binding_enabled === false ? "绑定服务未开放" : !identityReady ? "请先完成实名认证" : "登记银行卡"}</button>
         <p>{config?.notice || "银行卡登记不代表银行已完成真实性验证；审核通过后才可用于提现。"}</p>
       </form>

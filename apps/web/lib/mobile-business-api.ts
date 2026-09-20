@@ -105,6 +105,8 @@ export type BankCard = {
   is_default: boolean;
   status: "registered" | "pending_review" | "active" | "rejected" | "disabled";
   verification_mode: "format_only" | "manual_review" | "legacy_unvalidated";
+  consent_recorded: boolean;
+  consent_version: string | null;
   reject_reason?: string | null;
   created_at?: string | null;
 };
@@ -113,6 +115,7 @@ export type BankCardConfig = {
   binding_enabled: boolean;
   mode: "format_only" | "manual_review";
   bank_verified: false;
+  consent_version: string;
   notice?: string;
 };
 
@@ -183,7 +186,7 @@ export type RechargePaymentOrder = {
   order_no: string;
   provider?: "qixiangpay" | "mapay" | string;
   channel?: string | null;
-  status: "pending" | "paid" | "expired" | "failed" | "review" | "late_paid_review" | string;
+  status: "pending" | "paid" | "expired" | "failed" | "review" | "late_paid_review" | "refund_pending" | "refund_unknown" | "refunded" | string;
   amount_cny: number;
   card_hours: number;
   checkout_url?: string | null;
@@ -409,7 +412,7 @@ export function getBankCardBundle() {
   ]);
 }
 
-export function addBankCard(input: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean }) {
+export function addBankCard(input: { bank_name?: string; card_number: string; holder: string; phone?: string; is_default?: boolean; sensitive_consent: boolean }) {
   return apiRequest<BankCard>(canonicalApiPath("/bank-cards"), { method: "POST", body: JSON.stringify(input) });
 }
 
@@ -465,10 +468,10 @@ export function getRechargePaymentConfig() {
   return apiRequest<RechargePaymentConfig>(canonicalApiPath("/payments/qixiang/config"));
 }
 
-export function createRechargePayment(amount_cny: number, payment_type: "alipay" | "wxpay") {
+export function createRechargePayment(amount_cny: number, payment_type: "alipay" | "wxpay", client_request_id: string) {
   return apiRequest<RechargePaymentOrder>(canonicalApiPath("/payments/qixiang/recharge-orders"), {
     method: "POST",
-    body: JSON.stringify({ amount_cny, payment_type }),
+    body: JSON.stringify({ amount_cny, payment_type, client_request_id }),
   });
 }
 

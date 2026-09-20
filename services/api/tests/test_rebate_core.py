@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -42,6 +43,8 @@ class RebateCoreTests(unittest.TestCase):
         self.original_supplier = settings.SUPPLIER_REWARD_ENABLED
         self.original_invite = settings.INVITE_REWARD_ENABLED
         self.original_reward_settlement = settings.REWARD_SETTLEMENT_ENABLED
+        self.original_secret = settings.SECRET_KEY
+        self.original_sensitive_key = settings.SENSITIVE_DATA_KEY
         settings.REWARD_SERVICE_ENABLED = False
         settings.CLOSED_TEST_REWARD_ENABLED = False
         settings.CONSUMER_REWARD_ENABLED = True
@@ -50,6 +53,8 @@ class RebateCoreTests(unittest.TestCase):
         settings.REWARD_SETTLEMENT_ENABLED = True
         settings.DIRECT_TRADE_ENABLED = True
         settings.REVENUE_SETTLEMENT_ENABLED = False
+        settings.SECRET_KEY = "unit-test-rebate-core-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
 
         self.inviter = User(
             phone="13900000051", username="邀请人", password="!", phone_bound=True,
@@ -109,6 +114,8 @@ class RebateCoreTests(unittest.TestCase):
         settings.SUPPLIER_REWARD_ENABLED = self.original_supplier
         settings.INVITE_REWARD_ENABLED = self.original_invite
         settings.REWARD_SETTLEMENT_ENABLED = self.original_reward_settlement
+        settings.SECRET_KEY = self.original_secret
+        settings.SENSITIVE_DATA_KEY = self.original_sensitive_key
         self.db.close()
 
     def _complete_order(self) -> int:

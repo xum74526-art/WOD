@@ -73,6 +73,50 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
     ["/api/payments/qixiang/orders/{order_no}/cancel", "post"],
     ["/api/payments/qixiang/checkout/{token}", "get"],
   ] as const) operation(path, method);
+  const recharge = bodySchema("/api/payments/qixiang/recharge-orders", "post");
+  const rechargeRequestId = recharge.properties?.client_request_id?.anyOf?.find((item) => item.type === "string");
+  assert.deepEqual(
+    { minLength: rechargeRequestId?.minLength, maxLength: rechargeRequestId?.maxLength, pattern: rechargeRequestId?.pattern },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
+  assert.equal(recharge.required?.includes("client_request_id") ?? false, false);
+  assert.equal(contract.paths["/api/payments/mapay/recharge-orders"]?.post, undefined);
+  assert.equal(contract.paths["/api/payments/mapay/checkout/{token}"]?.get, undefined);
+});
+
+test("administrator payment operations match the canonical backend", () => {
+  for (const [path, method] of [
+    ["/api/admin/recharge-orders", "get"],
+    ["/api/admin/recharge-orders/{payment_order_id}", "get"],
+    ["/api/admin/recharge-orders/{payment_order_id}/review", "post"],
+    ["/api/admin/recharge-orders/{payment_order_id}/refunds", "post"],
+    ["/api/admin/payment-refunds", "get"],
+    ["/api/admin/payment-refunds/{refund_id}", "get"],
+    ["/api/admin/payment-refunds/{refund_id}/resolve", "post"],
+  ] as const) operation(path, method);
+
+  const review = bodySchema("/api/admin/recharge-orders/{payment_order_id}/review", "post");
+  assert.deepEqual(review.required, ["action", "note"]);
+  const reviewRequestId = review.properties?.client_request_id?.anyOf?.find((item) => item.type === "string");
+  assert.deepEqual(
+    { minLength: reviewRequestId?.minLength, maxLength: reviewRequestId?.maxLength, pattern: reviewRequestId?.pattern },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
+
+  const refund = bodySchema("/api/admin/recharge-orders/{payment_order_id}/refunds", "post");
+  assert.deepEqual(refund.required, ["client_request_id", "reason"]);
+  assert.deepEqual(
+    {
+      minLength: refund.properties?.client_request_id?.minLength,
+      maxLength: refund.properties?.client_request_id?.maxLength,
+      pattern: refund.properties?.client_request_id?.pattern,
+    },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
+
+  const resolution = bodySchema("/api/admin/payment-refunds/{refund_id}/resolve", "post");
+  assert.deepEqual(resolution.required, ["outcome", "note"]);
+  assert.equal(resolution.properties?.client_request_id, undefined);
 });
 
 test("buy-request creation exposes a backwards-compatible retry key", () => {

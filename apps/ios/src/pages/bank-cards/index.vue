@@ -28,12 +28,13 @@
           <view class="card-meta">
             <text>{{ t('cardholderValue', { name: card.holder }) }}</text>
             <text v-if="card.phone">{{ t('reservedPhoneValue', { phone: card.phone }) }}</text>
+            <text v-if="!card.consent_recorded && isRegisteredStatus(card.status)" class="reject-reason">{{ t('bankCardConsentRenewalRequired') }}</text>
           </view>
           <text v-if="!isRegisteredStatus(card.status) && card.reject_reason" class="reject-reason">{{ t('reviewReasonValue', { reason: tr(card.reject_reason) }) }}</text>
           <view class="card-actions">
             <view class="card-action-meta">
               <text v-if="card.is_default" class="default-label">{{ t('defaultBankCard') }}</text>
-              <text v-else-if="isRegisteredStatus(card.status)" class="action-link" @tap="onDefault(card.id)">{{ t('setDefault') }}</text>
+              <text v-else-if="card.consent_recorded && isRegisteredStatus(card.status)" class="action-link" @tap="onDefault(card.id)">{{ t('setDefault') }}</text>
               <text class="manual-label">{{ t('bankNotVerifiedBadge') }}</text>
             </view>
             <text v-if="card.status !== 'disabled'" class="delete-link" @tap="onDelete(card.id)">{{ t('disableBankCard') }}</text>
@@ -150,7 +151,7 @@ async function onAdd() {
   if (!/^1\d{10}$/.test(form.phone)) return uni.showToast({ title: t('enterValidReservedPhone'), icon: 'none' })
   submitting.value = true
   try {
-    await addBankCard({ ...form, is_default: list.value.length === 0 })
+    await addBankCard({ ...form, is_default: list.value.length === 0, sensitive_consent: consent.value })
     uni.showToast({ title: t('bankCardRegistered'), icon: 'success' })
     showForm.value = false
     form.bank_name = ''; form.card_number = ''; form.phone = ''; detectedBank.value = ''; consent.value = false

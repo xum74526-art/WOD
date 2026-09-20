@@ -95,9 +95,9 @@
 
         <text v-if="showFailureReason(order)" class="status-reason">{{ tr(order.failure_reason) }}</text>
 
-        <view v-if="order.can_query || order.can_cancel || commerce.directTradeEnabled" class="order-actions">
+        <view v-if="rechargeCanQuery(order) || rechargeCanCancel(order) || commerce.directTradeEnabled" class="order-actions">
           <view
-            v-if="order.can_query"
+            v-if="rechargeCanQuery(order)"
             class="query-button"
             :class="{ disabled: Boolean(queryingOrderNo || cancelingOrderNo) }"
             :aria-disabled="Boolean(queryingOrderNo || cancelingOrderNo)"
@@ -105,7 +105,7 @@
             @tap="queryOrder(order)"
           >{{ queryingOrderNo === order.order_no ? t('checkingPaymentStatus') : t('checkPaymentStatus') }}</view>
           <view
-            v-if="order.can_cancel"
+            v-if="rechargeCanCancel(order)"
             class="cancel-button"
             :class="{ disabled: Boolean(queryingOrderNo || cancelingOrderNo) }"
             :aria-disabled="Boolean(queryingOrderNo || cancelingOrderNo)"
@@ -142,10 +142,10 @@ import DirectTradeRechargeRestartAction from '@/components/direct-trade/DirectTr
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
 import { formatMoney, formatNumber } from '@/utils/format'
-import { rechargeHistoryPresentation } from '@/utils/recharge-payment'
+import { rechargeCanCancel, rechargeCanQuery, rechargeHistoryPresentation } from '@/utils/recharge-payment'
 import { displayBusinessReference } from '@/utils/display-reference'
 
-type RechargeStatusFilter = '' | 'pending' | 'paid' | 'review' | 'canceled' | 'expired' | 'failed'
+type RechargeStatusFilter = '' | 'pending' | 'paid' | 'review' | 'refund_pending' | 'refund_unknown' | 'refunded' | 'canceled' | 'expired' | 'failed'
 
 const { t, tr } = useI18nStore()
 const commerce = useCommerceStore()
@@ -165,6 +165,9 @@ const filters: Array<{ value: RechargeStatusFilter; label: string }> = [
   { value: 'pending', label: 'statusPendingPayment' },
   { value: 'paid', label: 'statusCompleted' },
   { value: 'review', label: 'statusProcessing' },
+  { value: 'refund_pending', label: 'rechargeRefundPending' },
+  { value: 'refund_unknown', label: 'rechargeRefundUnknown' },
+  { value: 'refunded', label: 'rechargeRefunded' },
   { value: 'canceled', label: 'statusCanceled' },
   { value: 'expired', label: 'statusExpired' },
   { value: 'failed', label: 'statusFailed' },
@@ -254,7 +257,7 @@ function copyOrderNumber(orderNo: string) {
 }
 
 async function queryOrder(order: RechargePaymentOrder) {
-  if (queryingOrderNo.value || cancelingOrderNo.value) return
+  if (queryingOrderNo.value || cancelingOrderNo.value || !rechargeCanQuery(order)) return
   queryingOrderNo.value = order.order_no
   try {
     const refreshed = await queryRechargePayment(order.order_no, true)
@@ -282,7 +285,7 @@ function confirmCancelOrder(): Promise<boolean> {
 }
 
 async function cancelOrder(order: RechargePaymentOrder) {
-  if (queryingOrderNo.value || cancelingOrderNo.value || !order.can_cancel) return
+  if (queryingOrderNo.value || cancelingOrderNo.value || !rechargeCanCancel(order)) return
   if (!await confirmCancelOrder()) return
   cancelingOrderNo.value = order.order_no
   try {

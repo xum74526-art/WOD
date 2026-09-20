@@ -495,7 +495,8 @@ test("Web wallet keeps safe history actions and capability-gates future money mo
 
   assert.match(wallet, /paymentQueryNotice\(order\)/);
   assert.match(wallet, /queryRechargePayment\(row\.order_no\)/);
-  assert.match(wallet, /row\.can_cancel/);
+  assert.match(wallet, /rechargeCanQuery\(row\)/);
+  assert.match(wallet, /rechargeCanCancel\(row\)/);
   assert.match(wallet, /cancelRechargePayment\(row\.order_no\)/);
   assert.match(wallet, /queryRechargePayment\(pendingPayment\.order_no\)/);
   assert.match(wallet, /credited_at/);
@@ -534,7 +535,6 @@ test("Web matchmaking selection requests platform coordination without creating 
   const buyRequestApi = fs.readFileSync(new URL("../lib/mobile-buy-request-api.ts", import.meta.url), "utf8");
   const requestPage = fs.readFileSync(new URL("../app/account/requests/page.tsx", import.meta.url), "utf8");
   const paymentPage = fs.readFileSync(new URL("../app/payment/[paymentNo]/page.tsx", import.meta.url), "utf8");
-  const paymentGate = fs.readFileSync(new URL("../components/capability-payment-checkout.tsx", import.meta.url), "utf8");
 
   assert.match(workspace, /contact: form\.contact\.trim\(\)/);
   assert.match(workspace, /normalizeBuyRequestContactPhone\(form\.phone\)/);
@@ -553,20 +553,27 @@ test("Web matchmaking selection requests platform coordination without creating 
   assert.match(workspace, /当前未创建资金订单/);
   assert.match(requestPage, /positiveNumber\(query\.product_id\)/);
   assert.match(requestPage, /gpu_model: first\(query\.gpu_model\)/);
-  assert.match(paymentPage, /CapabilityPaymentCheckout/);
-  assert.match(paymentGate, /capabilities\.direct_trade_enabled === true && capabilities\.payment_enabled === true/);
-  assert.match(paymentGate, /<PingxxCheckout/);
-  assert.match(paymentGate, /在线支付暂未开放/);
+  assert.match(paymentPage, /redirect\("\/account\/wallet"\)/);
 });
 
 test("Web bank cards require identity, consent, validation, and eligible default cards", () => {
   const source = fs.readFileSync(new URL("../components/mobile-account-services.tsx", import.meta.url), "utf8");
+  const paymentSource = fs.readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
+  const apiSource = fs.readFileSync(new URL("../lib/mobile-business-api.ts", import.meta.url), "utf8");
 
   assert.match(source, /getVerification\(\)/);
   assert.match(source, /verification\?\.status !== "verified"/);
   assert.match(source, /readOnly placeholder="完成实名认证后自动填写"/);
   assert.match(source, /luhnCheckCardNumber\(cardNumber\)/);
   assert.match(source, /type="checkbox" checked=\{consent\}/);
+  assert.match(source, /为人工打款与复核而加密保存和使用/);
+  assert.match(source, /sensitive_consent: consent/);
+  assert.match(apiSource, /sensitive_consent: boolean/);
+  assert.match(apiSource, /consent_recorded: boolean/);
+  assert.match(apiSource, /consent_version: string \| null/);
+  assert.doesNotMatch(apiSource, /consent_at/);
   assert.match(source, /card\.reject_reason/);
   assert.match(source, /isRegisteredBankCardStatus\(card\.status\)/);
+  assert.match(source, /!card\.consent_recorded/);
+  assert.match(paymentSource, /isRegisteredBankCardStatus\(card\.status\) && card\.consent_recorded/);
 });

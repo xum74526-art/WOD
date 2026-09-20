@@ -23,6 +23,7 @@ RUN pip install --upgrade pip \
 
 COPY app ./app
 COPY init_db.py ./init_db.py
+COPY preflight_sensitive_storage.py ./preflight_sensitive_storage.py
 COPY migrate_account_deletion.py ./migrate_account_deletion.py
 COPY migrate_account_recovery.py ./migrate_account_recovery.py
 COPY docker-entrypoint.sh /usr/local/bin/kai-api-entrypoint

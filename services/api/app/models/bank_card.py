@@ -11,6 +11,7 @@ from app.db.base import Base
 # Keep them eligible during the transition, but expose them as ``registered``
 # and never as bank-verified.
 REGISTERED_CARD_STATUSES = ("registered", "pending_review", "active")
+BANK_CARD_SENSITIVE_CONSENT_VERSION = "bank-card-sensitive-v1"
 
 
 def public_bank_card_status(status: str | None) -> str:
@@ -38,6 +39,10 @@ class BankCard(Base):
     review_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Historical cards may predate the dedicated sensitive-data consent flow.
+    # New registrations always set both fields on the server.
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy", index=True
     )

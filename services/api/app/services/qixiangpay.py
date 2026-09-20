@@ -5,6 +5,8 @@ import hmac
 import ipaddress
 import json
 import math
+import base64
+import re
 import secrets
 import threading
 from datetime import datetime, timedelta, timezone
@@ -13,13 +15,14 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
-from sqlalchemy import or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, or_, text, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import DEFAULT_SECRET_KEY, settings
 from app.models.ledger import Ledger
 from app.models.payment import PaymentOrder
+from app.models.user import User
 from app.models.wallet import Wallet
 from app.services.notification_service import create_notification
 from app.utils.response import BizError
@@ -28,6 +31,10 @@ from app.services.auth_session import normalize_platform
 
 PROVIDER = "qixiangpay"
 SUCCESS_STATUS = "TRADE_SUCCESS"
+OFFICIAL_GATEWAY_BASE_URL = "https://api.payqixiang.cn"
+CANONICAL_NOTIFY_URL = "https://wod.kai.com/api/payments/qixiang/notify"
+CANONICAL_RETURN_URL = "https://wod.kai.com/payment/qixiang/return"
+CANONICAL_PUBLIC_API_BASE_URL = "https://wod.kai.com/api"
 SUPPORTED_PAYMENT_TYPES = frozenset({"alipay", "wxpay"})
 PAYMENT_TIME_FIELDS = ("endtime",)
 PAYMENT_ORDER_STATUSES = frozenset({
@@ -38,11 +45,25 @@ PAYMENT_ORDER_STATUSES = frozenset({
     "review",
     "late_paid_review",
     "canceled",
+    "refund_pending",
+    "refund_unknown",
+    "refunded",
+})
+AUTO_CREDIT_STATUSES = frozenset({"pending", "expired", "failed"})
+REVIEW_CLAIM_STATUSES = frozenset({"pending", "expired", "failed", "canceled"})
+REFUND_PROTECTED_STATUSES = frozenset({
+    "refund_pending",
+    "refund_unknown",
+    "refunded",
 })
 _CHECKOUT_CREATE_LOCK = threading.Lock()
 CREATE_PENDING = "CREATE_PENDING"
 CREATE_UNKNOWN = "CREATE_UNKNOWN"
 CREATE_FAILED = "CREATE_FAILED"
+
+
+class ProviderRefundUncertain(BizError):
+    """The refund request may have reached Qixiang and must not be retried."""
 
 
 def utc_now() -> datetime:
@@ -120,13 +141,49 @@ def _provider_http_timeout_seconds() -> float:
     return min(max(timeout, 1.0), 55.0)
 
 
-def _https_url_configured(value: str) -> bool:
-    parsed = urlparse(str(value or ""))
-    return bool(
-        parsed.scheme == "https"
-        and parsed.hostname
-        and not parsed.username
-        and not parsed.password
+def official_gateway_base_url_configured(value: str) -> bool:
+    """Keep provider credentials pinned to Qixiang's documented API origin."""
+    return str(value or "").strip() == OFFICIAL_GATEWAY_BASE_URL
+
+
+def canonical_notify_url_configured(value: str) -> bool:
+    """The provider must return signed payment data only to KAI's fixed route."""
+    return str(value or "").strip() == CANONICAL_NOTIFY_URL
+
+
+def dedicated_return_url_configured(value: str) -> bool:
+    """Match the exact return URL intercepted by both native applications."""
+    return str(value or "").strip() == CANONICAL_RETURN_URL
+
+
+def canonical_public_api_base_url_configured(value: str) -> bool:
+    """Native checkout URLs must stay on KAI's fixed first-party API origin."""
+    return str(value or "").strip() == CANONICAL_PUBLIC_API_BASE_URL
+
+
+_CHECKOUT_HOSTNAME = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*"
+    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
+
+
+def configured_checkout_hosts() -> tuple[str, ...]:
+    hosts: list[str] = []
+    for raw_host in str(settings.PAYMENT_CHECKOUT_ALLOWED_HOSTS or "").split(","):
+        host = raw_host.strip().lower().rstrip(".")
+        if host and _CHECKOUT_HOSTNAME.fullmatch(host) and host not in hosts:
+            hosts.append(host)
+    return tuple(hosts)
+
+
+def checkout_host_configuration_valid() -> bool:
+    raw_hosts = [
+        value.strip().lower().rstrip(".")
+        for value in str(settings.PAYMENT_CHECKOUT_ALLOWED_HOSTS or "").split(",")
+        if value.strip()
+    ]
+    return bool(raw_hosts) and all(
+        _CHECKOUT_HOSTNAME.fullmatch(host) for host in raw_hosts
     )
 
 
@@ -136,10 +193,17 @@ def provider_configured() -> bool:
         and settings.QIXIANGPAY_ENABLED
         and str(settings.QIXIANGPAY_PID or "").strip()
         and str(settings.QIXIANGPAY_KEY or "")
-        and _https_url_configured(settings.QIXIANGPAY_BASE_URL)
-        and _https_url_configured(settings.QIXIANGPAY_NOTIFY_URL)
-        and _https_url_configured(settings.QIXIANGPAY_RETURN_URL)
+        and str(settings.SECRET_KEY or "").strip()
+        and settings.SECRET_KEY != DEFAULT_SECRET_KEY
+        and official_gateway_base_url_configured(settings.QIXIANGPAY_BASE_URL)
+        and canonical_notify_url_configured(settings.QIXIANGPAY_NOTIFY_URL)
+        and dedicated_return_url_configured(settings.QIXIANGPAY_RETURN_URL)
+        and canonical_public_api_base_url_configured(
+            settings.QIXIANGPAY_PUBLIC_API_BASE_URL
+        )
+        and checkout_host_configuration_valid()
         and configured_payment_types()
+        and str(settings.QIXIANGPAY_DEVICE or "").strip().lower() == "jump"
     )
 
 
@@ -156,6 +220,7 @@ def public_config() -> dict:
         "checkout_mode": "hosted_page",
         "checkout_ttl_seconds": checkout_ttl_seconds(),
         "payment_types": list(configured_payment_types()),
+        "refund_enabled": provider_refund_configured(),
     }
 
 
@@ -206,6 +271,7 @@ def _payment_out(order: PaymentOrder, checkout_url: str | None = None) -> dict:
         "paid_at": _iso_utc(order.paid_at),
         "credited_at": _iso_utc(order.credited_at),
         "updated_at": _iso_utc(order.updated_at),
+        "client_request_id": order.client_request_id,
     }
 
 
@@ -292,6 +358,65 @@ def expire_pending_payment_orders(db: Session, *, now: datetime | None = None) -
     return int(count or 0)
 
 
+def _serialize_recharge_creation(db: Session, user_id: int) -> tuple[bool, object]:
+    """Lock one user's recharge admission checks until this transaction ends.
+
+    FastAPI authentication has normally caused a SQLAlchemy autobegin before
+    this service runs.  With pysqlite, a SELECT-only autobegin does not start a
+    physical SQLite transaction, so ``BEGIN IMMEDIATE`` can still be issued on
+    the same connection without discarding the caller's transaction state.  If
+    a physical transaction already exists, a no-op user-row UPDATE upgrades it
+    to a cross-connection write lock without rolling back caller-owned writes.
+
+    PostgreSQL and other databases that support row locks serialize on the
+    stable ``users`` row.  The returned transaction identity lets the caller
+    release only an SQLite transaction that this helper physically started.
+    """
+
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        connection = db.connection()
+        connection_proxy = connection.connection
+        driver_connection = getattr(
+            connection_proxy, "driver_connection", connection_proxy
+        )
+        physical_transaction_exists = bool(
+            getattr(driver_connection, "in_transaction", False)
+        )
+        caller_has_pending_state = bool(db.new or db.dirty or db.deleted)
+        owns_physical_transaction = (
+            not physical_transaction_exists and not caller_has_pending_state
+        )
+        try:
+            if owns_physical_transaction:
+                connection.execute(text("BEGIN IMMEDIATE"))
+            else:
+                # An existing physical transaction may contain caller-owned
+                # writes. Pending ORM changes likewise belong to the caller and
+                # must not be discarded by a later rollback merely to release
+                # our lock, so start/upgrade the current transaction in place.
+                # This no-op UPDATE acquires SQLite's database write lock before
+                # any pending-count or daily-amount admission read.
+                result = connection.execute(
+                    update(User.__table__)
+                    .where(User.id == user_id)
+                    .values(id=User.id)
+                )
+                if result.rowcount != 1:
+                    raise BizError("用户不存在", status_code=404)
+        except OperationalError as exc:
+            message = str(exc).lower()
+            if "locked" in message or "busy" in message:
+                raise BizError("充值订单创建繁忙，请稍后重试", status_code=409) from None
+            raise
+        return owns_physical_transaction, db.get_transaction()
+
+    locked_user = db.query(User.id).filter(User.id == user_id).with_for_update().first()
+    if not locked_user:
+        raise BizError("用户不存在", status_code=404)
+    return False, db.get_transaction()
+
+
 def create_recharge_order(
     db: Session,
     user_id: int,
@@ -299,6 +424,7 @@ def create_recharge_order(
     *,
     payment_type: str | None,
     created_platform: str = "legacy",
+    client_request_id: str | None = None,
 ) -> dict:
     if not provider_configured():
         raise BizError("七相支付尚未完成配置", status_code=503)
@@ -312,29 +438,146 @@ def create_recharge_order(
     if rate <= 0:
         raise BizError("卡时兑换率配置无效", status_code=503)
 
-    token = secrets.token_urlsafe(32)
-    platform = normalize_platform(created_platform)
-    order = PaymentOrder(
-        order_no=f"KAIQ{datetime.now():%Y%m%d%H%M%S}{secrets.token_hex(4).upper()}",
-        user_id=user_id,
-        provider=PROVIDER,
-        channel=channel,
-        status="pending",
-        amount_cny=amount,
-        card_hours=(amount / rate).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
-        card_hour_rate=rate,
-        checkout_token_hash=hashlib.sha256(token.encode()).hexdigest(),
-        created_platform=platform,
-        last_modified_platform=platform,
-        expires_at=utc_now() + timedelta(seconds=checkout_ttl_seconds()),
+    normalized_request_id = str(client_request_id or "").strip() or None
+    if normalized_request_id and not re.fullmatch(
+        r"[A-Za-z0-9._:-]{12,64}", normalized_request_id
+    ):
+        raise BizError("充值请求幂等键格式无效", status_code=400)
+    request_hash = hashlib.sha256(
+        f"{PROVIDER}|{channel}|{amount:.2f}".encode("utf-8")
+    ).hexdigest()
+
+    def checkout_token_for(order_no: str) -> str:
+        digest = hmac.new(
+            settings.SECRET_KEY.encode("utf-8"),
+            f"payment-checkout|{PROVIDER}|{order_no}".encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+        return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+    def payment_output(existing: PaymentOrder, token_value: str) -> dict:
+        checkout_path = f"/api/payments/qixiang/checkout/{token_value}"
+        base = str(settings.QIXIANGPAY_PUBLIC_API_BASE_URL or "").rstrip("/")
+        checkout_url = (
+            f"{base}/payments/qixiang/checkout/{token_value}"
+            if base else checkout_path
+        )
+        return _payment_out(existing, checkout_url)
+
+    def persist_serialized_order() -> dict:
+        if normalized_request_id:
+            existing = db.query(PaymentOrder).filter(
+                PaymentOrder.user_id == user_id,
+                PaymentOrder.provider == PROVIDER,
+                PaymentOrder.client_request_id == normalized_request_id,
+            ).first()
+            if existing:
+                if existing.create_request_hash != request_hash:
+                    raise BizError("充值幂等键已用于不同的金额或支付方式", status_code=409)
+                return payment_output(existing, checkout_token_for(existing.order_no))
+
+        now = utc_now()
+        pending_limit = min(max(int(settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER), 1), 20)
+        pending_count = db.query(func.count(PaymentOrder.id)).filter(
+            PaymentOrder.user_id == user_id,
+            PaymentOrder.provider == PROVIDER,
+            PaymentOrder.status == "pending",
+            PaymentOrder.credited_at.is_(None),
+            PaymentOrder.expires_at > now,
+        ).scalar()
+        if int(pending_count or 0) >= pending_limit:
+            raise BizError("未完成的充值订单过多，请先完成或等待订单过期", status_code=429)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        daily_total = db.query(func.coalesce(func.sum(PaymentOrder.amount_cny), 0)).filter(
+            PaymentOrder.user_id == user_id,
+            PaymentOrder.provider == PROVIDER,
+            PaymentOrder.created_at >= day_start,
+            PaymentOrder.status.notin_(("failed", "canceled")),
+        ).scalar()
+        daily_limit = Decimal(str(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY)).quantize(
+            Decimal("0.01")
+        )
+        if Decimal(str(daily_total or 0)) + amount > daily_limit:
+            raise BizError("今日充值申请金额已达到上限", status_code=429)
+
+        platform = normalize_platform(created_platform)
+        order_no = f"KAIQ{datetime.now():%Y%m%d%H%M%S}{secrets.token_hex(4).upper()}"
+        token = (
+            checkout_token_for(order_no)
+            if normalized_request_id
+            else secrets.token_urlsafe(32)
+        )
+        order = PaymentOrder(
+            order_no=order_no,
+            user_id=user_id,
+            provider=PROVIDER,
+            client_request_id=normalized_request_id,
+            create_request_hash=request_hash if normalized_request_id else None,
+            channel=channel,
+            status="pending",
+            amount_cny=amount,
+            card_hours=(amount / rate).quantize(
+                Decimal("0.000001"), rounding=ROUND_HALF_UP
+            ),
+            card_hour_rate=rate,
+            checkout_token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            created_platform=platform,
+            last_modified_platform=platform,
+            expires_at=now + timedelta(seconds=checkout_ttl_seconds()),
+        )
+        db.add(order)
+        try:
+            db.flush()
+            from app.services.payment_operations import record_payment_event
+
+            record_payment_event(
+                db,
+                order.id,
+                "payment_order_created",
+                dedupe_key=f"payment:{order.id}:created",
+                actor_type="user",
+                actor_user_id=user_id,
+                source=platform,
+                to_status="pending",
+                detail={
+                    "provider": PROVIDER,
+                    "channel": channel,
+                    "amount_cny": f"{amount:.2f}",
+                },
+            )
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            if not normalized_request_id:
+                raise
+            existing = db.query(PaymentOrder).filter(
+                PaymentOrder.user_id == user_id,
+                PaymentOrder.provider == PROVIDER,
+                PaymentOrder.client_request_id == normalized_request_id,
+            ).first()
+            if not existing:
+                raise BizError("充值订单创建冲突，请稍后重试", status_code=409) from exc
+            if existing.create_request_hash != request_hash:
+                raise BizError("充值幂等键已用于不同的金额或支付方式", status_code=409) from exc
+            return payment_output(existing, checkout_token_for(existing.order_no))
+        db.refresh(order)
+        return payment_output(order, token)
+
+    owns_sqlite_transaction, serialized_transaction = _serialize_recharge_creation(
+        db, user_id
     )
-    db.add(order)
-    db.commit()
-    db.refresh(order)
-    checkout_path = f"/api/payments/qixiang/checkout/{token}"
-    base = str(settings.QIXIANGPAY_PUBLIC_API_BASE_URL or "").rstrip("/")
-    checkout_url = f"{base}/payments/qixiang/checkout/{token}" if base else checkout_path
-    return _payment_out(order, checkout_url)
+    try:
+        return persist_serialized_order()
+    finally:
+        # Release only a physical SQLite transaction started by this function.
+        # Never roll back a pre-existing caller transaction or a new transaction
+        # opened by the post-commit refresh above.
+        if (
+            owns_sqlite_transaction
+            and db.in_transaction()
+            and db.get_transaction() is serialized_transaction
+        ):
+            db.rollback()
 
 
 def get_owned_order(db: Session, user_id: int, order_no: str) -> PaymentOrder:
@@ -479,7 +722,7 @@ def resolve_checkout_client_ip(
 
 def _gateway_url(path: str) -> str:
     base = str(settings.QIXIANGPAY_BASE_URL or "").rstrip("/")
-    if not _https_url_configured(base):
+    if not official_gateway_base_url_configured(base):
         raise BizError("七相支付网关地址配置无效", status_code=503)
     return f"{base}/{path.lstrip('/')}"
 
@@ -501,11 +744,17 @@ def _provider_json(response: httpx.Response, error_message: str) -> dict:
 def _validated_checkout_url(value: object) -> str:
     url = str(value or "").strip()
     parsed = urlparse(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        port = -1
     if not (
         parsed.scheme == "https"
         and parsed.hostname
+        and parsed.hostname.lower().rstrip(".") in configured_checkout_hosts()
         and not parsed.username
         and not parsed.password
+        and port in (None, 443)
         and len(url) <= 1024
     ):
         raise BizError("支付平台返回了无效收银台地址", status_code=502)
@@ -666,7 +915,7 @@ def _checkout_redirect_url_locked(db: Session, token: str, *, client_ip: str | N
         "name": "KAI钱包卡时充值",
         "money": f"{order.amount_cny:.2f}",
         "clientip": _client_ip(client_ip),
-        "device": "jump",
+        "device": str(settings.QIXIANGPAY_DEVICE).strip().lower(),
         "param": order.order_no,
         "sign_type": "MD5",
     }
@@ -814,6 +1063,37 @@ def _provider_paid_at(params: dict) -> tuple[datetime | None, bool]:
     return None, False
 
 
+def _record_success_during_refund(
+    db: Session,
+    order: PaymentOrder,
+    trade_no: str,
+) -> bool:
+    if order.status not in REFUND_PROTECTED_STATUSES:
+        return False
+    from app.services.payment_operations import record_payment_event
+
+    record_payment_event(
+        db,
+        order.id,
+        "provider_success_during_refund",
+        dedupe_key=(
+            f"payment:{order.id}:success-during-refund:"
+            f"{hashlib.sha256(trade_no.encode('utf-8')).hexdigest()[:16]}"
+        ),
+        source="provider_callback",
+        from_status=order.status,
+        to_status=order.status,
+        detail={"provider": PROVIDER, "provider_status": SUCCESS_STATUS},
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent redeliveries can race on the audit dedupe constraint.  The
+        # order remains untouched either way, so a duplicate is safe to ignore.
+        db.rollback()
+    return True
+
+
 def _payment_deadline_decision(
     order: PaymentOrder,
     params: dict,
@@ -870,6 +1150,7 @@ def _record_success_for_review(
     claimed = db.query(PaymentOrder).filter(
         PaymentOrder.id == order.id,
         PaymentOrder.credited_at.is_(None),
+        PaymentOrder.status.in_(REVIEW_CLAIM_STATUSES),
         or_(
             PaymentOrder.provider_trade_no.is_(None),
             PaymentOrder.provider_trade_no == trade_no,
@@ -877,8 +1158,25 @@ def _record_success_for_review(
     ).update(updates, synchronize_session=False)
     if claimed == 0:
         db.rollback()
+        current = db.query(PaymentOrder).filter(
+            PaymentOrder.id == order.id
+        ).populate_existing().first()
+        if current:
+            _record_success_during_refund(db, current, trade_no)
         return False
     try:
+        from app.services.payment_operations import record_payment_event
+
+        record_payment_event(
+            db,
+            order.id,
+            "payment_requires_review",
+            dedupe_key=f"payment:{order.id}:review:{status}:{trade_no}",
+            source="provider",
+            from_status=order.status,
+            to_status=status,
+            detail={"provider": PROVIDER, "provider_status": SUCCESS_STATUS, "reason": reason},
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -892,6 +1190,9 @@ def credit_verified_payment(
     params: dict,
     *,
     observed_at: datetime | None = None,
+    review_override: bool = False,
+    actor_user_id: int | None = None,
+    review_note: str | None = None,
 ) -> bool:
     """Credit a verified callback/query success at most once."""
     _validate_provider_payment(order, params)
@@ -901,6 +1202,12 @@ def credit_verified_payment(
 
     now = observed_at or utc_now()
     decision, paid_at, reason = _payment_deadline_decision(order, params, observed_at=now)
+    if review_override:
+        if order.status not in {"review", "late_paid_review"}:
+            raise BizError("充值订单不在待复核状态", status_code=409)
+        decision = "credit"
+        paid_at = order.paid_at or paid_at or now
+        reason = None
     if decision != "credit":
         return _record_success_for_review(
             db,
@@ -918,7 +1225,9 @@ def credit_verified_payment(
     claimed = db.query(PaymentOrder).filter(
         PaymentOrder.id == order.id,
         PaymentOrder.credited_at.is_(None),
-        PaymentOrder.status != "canceled",
+        PaymentOrder.status.in_(
+            ("review", "late_paid_review") if review_override else AUTO_CREDIT_STATUSES
+        ),
         or_(
             PaymentOrder.provider_trade_no.is_(None),
             PaymentOrder.provider_trade_no == trade_no,
@@ -938,7 +1247,11 @@ def credit_verified_payment(
     )
     if claimed == 0:
         db.rollback()
-        current = db.query(PaymentOrder).filter(PaymentOrder.id == order.id).first()
+        current = db.query(PaymentOrder).filter(
+            PaymentOrder.id == order.id
+        ).populate_existing().first()
+        if current and _record_success_during_refund(db, current, trade_no):
+            return False
         if current and current.status == "canceled" and current.credited_at is None:
             return _record_success_for_review(
                 db,
@@ -976,6 +1289,25 @@ def credit_verified_payment(
         action_url="/pages/wallet/index",
         dedupe_key=f"payment:{payment_order_id}:credited",
     )
+    from app.services.payment_operations import record_payment_event
+
+    record_payment_event(
+        db,
+        payment_order_id,
+        "payment_credited_after_review" if review_override else "payment_credited",
+        dedupe_key=f"payment:{payment_order_id}:credited",
+        actor_type="admin" if actor_user_id else "system",
+        actor_user_id=actor_user_id,
+        source="admin" if actor_user_id else "provider",
+        from_status=order.status,
+        to_status="paid",
+        detail={
+            "provider": PROVIDER,
+            "amount_cny": f"{amount_cny:.2f}",
+            "card_hours": str(card_hours),
+            "review_note": review_note if actor_user_id else None,
+        },
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -987,14 +1319,35 @@ def credit_verified_payment(
     return True
 
 
-def _provider_query_configured() -> bool:
+def _provider_callback_configured() -> bool:
     return bool(
-        settings.PAYMENT_SERVICE_ENABLED
-        and settings.QIXIANGPAY_ENABLED
+        settings.QIXIANGPAY_ENABLED
         and str(settings.QIXIANGPAY_PID or "").strip()
         and str(settings.QIXIANGPAY_KEY or "")
-        and _https_url_configured(settings.QIXIANGPAY_BASE_URL)
     )
+
+
+def _provider_query_configured() -> bool:
+    return bool(
+        _provider_callback_configured()
+        and official_gateway_base_url_configured(settings.QIXIANGPAY_BASE_URL)
+    )
+
+
+def provider_refund_configured() -> bool:
+    return bool(settings.QIXIANGPAY_REFUND_ENABLED and _provider_query_configured())
+
+
+def assert_provider_refund_ready(order: PaymentOrder) -> None:
+    _require_provider_order(order)
+    if not provider_refund_configured():
+        raise BizError("七相支付退款能力尚未启用或配置不完整", status_code=503)
+    if not order.provider_trade_no and not order.order_no:
+        raise BizError("充值订单缺少可退款的上游订单标识", status_code=409)
+    if order.credited_at is None and order.status not in {
+        "review", "late_paid_review", "refund_pending", "refund_unknown"
+    }:
+        raise BizError("充值订单尚未确认支付，不能退款", status_code=409)
 
 
 def _query_provider_payload(db: Session, order: PaymentOrder) -> dict:
@@ -1042,7 +1395,66 @@ def _provider_reports_success(payload: dict) -> bool:
         return False
 
 
+def submit_provider_refund(order: PaymentOrder) -> dict:
+    """Submit the official full-order refund request.
+
+    Qixiang documents ``POST api.php?act=refund`` with pid/key, one of
+    trade_no/out_trade_no and money.  It does not document a refund-query or
+    idempotency field, so transport uncertainty must be resolved manually and
+    must never be retried automatically.
+    """
+    assert_provider_refund_ready(order)
+    fields = {
+        "pid": str(settings.QIXIANGPAY_PID).strip(),
+        "key": settings.QIXIANGPAY_KEY,
+        "money": f"{Decimal(order.amount_cny).quantize(Decimal('0.01')):.2f}",
+    }
+    if order.provider_trade_no:
+        fields["trade_no"] = order.provider_trade_no
+    else:
+        fields["out_trade_no"] = order.order_no
+    try:
+        response = httpx.post(
+            _gateway_url("api.php"),
+            params={"act": "refund"},
+            data=fields,
+            headers={"Accept": "application/json"},
+            timeout=_provider_http_timeout_seconds(),
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        # The request body contains KEY.  Never chain/log the HTTP exception.
+        raise ProviderRefundUncertain(
+            "七相支付退款结果不确定，需在商户后台核对",
+            status_code=502,
+        ) from None
+    try:
+        payload = _provider_json(response, "七相支付退款结果无法识别，需在商户后台核对")
+    except BizError:
+        raise ProviderRefundUncertain(
+            "七相支付退款结果无法识别，需在商户后台核对",
+            status_code=502,
+        ) from None
+    raw_code = payload.get("code")
+    code = str(raw_code).strip() if raw_code is not None else ""
+    if isinstance(raw_code, bool) or not re.fullmatch(r"-?\d+", code):
+        # A parseable JSON object is not evidence of a definitive rejection.
+        # Missing or malformed status fields may be a WAF/error envelope after
+        # the provider already accepted the refund, so keep the wallet hold.
+        raise ProviderRefundUncertain(
+            "七相支付退款结果字段异常，需在商户后台核对",
+            status_code=502,
+        )
+    return {
+        "success": code in {"0", "1"},
+        "code": code,
+        "msg": str(payload.get("msg") or "")[:160],
+    }
+
+
 def handle_notification(db: Session, params: dict) -> bool:
+    if not _provider_callback_configured():
+        raise BizError("七相支付历史回调能力尚未启用或配置不完整", status_code=503)
     if not verify_params(params):
         raise BizError("支付通知签名无效")
     order_no = str(params.get("out_trade_no") or "")
@@ -1051,6 +1463,15 @@ def handle_notification(db: Session, params: dict) -> bool:
         raise BizError("充值订单不存在", status_code=404)
     _require_provider_order(order)
     status = str(params.get("trade_status") or "")
+    if status == SUCCESS_STATUS and order.status in REFUND_PROTECTED_STATUSES:
+        # The provider can redeliver its original payment callback while an
+        # original-rail refund is pending or already complete.  Verify the
+        # payment identity, but never let that callback reopen review or credit
+        # the wallet after the refund saga has claimed the order.
+        _validate_provider_payment(order, params)
+        trade_no = _provider_trade_no(db, order, params)
+        _record_success_during_refund(db, order, trade_no)
+        return True
     if status != SUCCESS_STATUS:
         _validate_provider_payment(order, params)
         trade_no = _provider_trade_no(db, order, params)
@@ -1076,6 +1497,18 @@ def handle_notification(db: Session, params: dict) -> bool:
             ),
         ).update(updates, synchronize_session=False)
         if changed:
+            from app.services.payment_operations import record_payment_event
+
+            record_payment_event(
+                db,
+                order.id,
+                "provider_query_unpaid",
+                dedupe_key=f"payment:{order.id}:provider-unpaid:{trade_no}",
+                source="provider_query",
+                from_status=order.status,
+                to_status=updates.get(PaymentOrder.status, order.status),
+                detail={"provider": PROVIDER, "provider_status": "0"},
+            )
             db.commit()
         else:
             db.rollback()

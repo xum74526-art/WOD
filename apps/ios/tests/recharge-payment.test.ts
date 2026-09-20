@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   createRechargeRestartRoute,
@@ -52,6 +53,34 @@ test('pending order becomes locally expired at zero but paid order is processing
   assert.equal(rechargeUiState({ status: 'cancelled' }, 0), 'canceled')
 })
 
+test('credited refund states stay distinct and never become recharge success', () => {
+  const credited_at = '2026-08-20T02:03:00Z'
+  const cases = [
+    ['refund_pending', 'rechargeRefundPending', 'reviewing'],
+    ['refund_unknown', 'rechargeRefundUnknown', 'danger'],
+    ['refunded', 'rechargeRefunded', 'danger'],
+  ] as const
+
+  for (const [status, labelKey, tone] of cases) {
+    const order = { status, credited_at, can_query: true, can_cancel: true }
+    assert.equal(rechargeUiState(order, 0), status)
+    assert.notEqual(rechargeUiState(order, 0), 'success')
+    assert.deepEqual(rechargeHistoryPresentation(order), { state: status, labelKey, tone })
+    assert.equal(rechargeCanQuery(order), false)
+    assert.equal(rechargeCanCancel(order), false)
+    assert.equal(rechargeCanRestart(order, null), false)
+  }
+})
+
+test('refund copy and local dismissal are wired without a money action', () => {
+  const messages = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
+  const wallet = readFileSync(new URL('../src/pages/wallet/index.vue', import.meta.url), 'utf8')
+  assert.match(messages, /rechargeRefundPending: '退款提交中'/)
+  assert.match(messages, /rechargeRefundUnknown: '结果待核验'/)
+  assert.match(messages, /rechargeRefunded: '已退款'/)
+  assert.match(wallet, /canDismissPaymentState[\s\S]*?'refund_pending'[\s\S]*?'refund_unknown'[\s\S]*?'refunded'/)
+})
+
 test('history only marks a recharge completed after it is credited', () => {
   assert.deepEqual(rechargeHistoryPresentation({ status: 'paid' }), {
     state: 'processing',
@@ -73,14 +102,16 @@ test('history only marks a recharge completed after it is credited', () => {
   })
 })
 
-test('recharge actions follow server state and never allow paid cancellation', () => {
+test('recharge actions require an explicit backend capability', () => {
   assert.equal(rechargeCanCancel({ status: 'pending', can_cancel: true }), true)
   assert.equal(rechargeCanCancel({ status: 'pending', can_cancel: false }), false)
+  assert.equal(rechargeCanCancel({ status: 'pending' }), false)
   assert.equal(rechargeCanCancel({ status: 'paid', can_cancel: true }), false)
   assert.equal(rechargeCanCancel({ status: 'review', can_cancel: true }), false)
   assert.equal(rechargeCanCancel({ status: 'pending', credited_at: '2026-08-20T02:03:00Z', can_cancel: true }), false)
   assert.equal(rechargeCanQuery({ status: 'pending', can_query: true }), true)
   assert.equal(rechargeCanQuery({ status: 'pending', can_query: false }), false)
+  assert.equal(rechargeCanQuery({ status: 'pending' }), false)
   assert.equal(rechargeCanRestart({ status: 'pending' }, 10_000), false)
   assert.equal(rechargeCanRestart({ status: 'paid' }, null), false)
   assert.equal(rechargeCanRestart({ status: 'failed' }, null), true)

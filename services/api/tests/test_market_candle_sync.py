@@ -73,7 +73,7 @@ class MarketCandleSyncTests(unittest.TestCase):
 
         async def exercise_lifespan():
             with patch("app.main.BackgroundScheduler", SchedulerProbe), patch(
-                "app.main.assert_sensitive_capabilities_secure",
+                "app.main.assert_sensitive_storage_secure",
             ), patch("app.main.assert_reward_configuration_safe"), patch(
                 "app.main.assert_merchant_settlement_configuration_safe",
             ):

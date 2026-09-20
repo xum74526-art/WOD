@@ -129,9 +129,6 @@ class PlatformCapabilityTests(unittest.TestCase):
             "qixiang recharge": lambda: create_qixiang_payment(
                 recharge, self.user, self.db, "android"
             ),
-            "legacy mapay recharge": lambda: create_mapay_payment(
-                recharge, self.user, self.db, "android"
-            ),
             "withdrawal": lambda: create_withdrawal(
                 withdrawal, self.user, self.db, "android"
             ),
@@ -147,10 +144,16 @@ class PlatformCapabilityTests(unittest.TestCase):
                     {RECHARGE_DISABLED_MESSAGE, WITHDRAWAL_DISABLED_MESSAGE},
                 )
 
-    def test_existing_recharge_checkout_remains_available_for_in_flight_orders(self):
-        with patch("app.routers.payment.checkout_html", return_value="<html></html>"):
-            response = mapay_checkout("existing-token", self.db)
-        self.assertEqual(response.status_code, 200)
+        with self.assertRaises(BizError) as retired:
+            create_mapay_payment(recharge, self.user, self.db, "android")
+        self.assertEqual(retired.exception.status_code, 410)
+        self.assertIn("停止创建", retired.exception.msg)
+
+    def test_qixiang_checkout_remains_available_but_mapay_checkout_is_tombstoned(self):
+        with self.assertRaises(BizError) as retired:
+            mapay_checkout("existing-token", self.db)
+        self.assertEqual(retired.exception.status_code, 410)
+        self.assertIn("历史订单仅支持查询", retired.exception.msg)
 
         with patch(
             "app.routers.qixiang_payment.checkout_redirect_url",

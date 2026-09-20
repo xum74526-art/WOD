@@ -11,10 +11,25 @@ from app.core.config import DEFAULT_SECRET_KEY, settings
 _PREFIX = "enc:v1:"
 
 
+class SensitiveDataDecryptionError(RuntimeError):
+    """Raised when an encrypted value cannot be authenticated with known keys."""
+
+
+def _legacy_secret_derived_key(secret: str | None = None) -> bytes:
+    """Return the key used by releases that fell back to SECRET_KEY.
+
+    This is intentionally decrypt-only compatibility. New ciphertext and
+    fingerprints must always use the independently managed Fernet key.
+    """
+    source = settings.SECRET_KEY if secret is None else secret
+    return base64.urlsafe_b64encode(hashlib.sha256(source.encode("utf-8")).digest())
+
+
 def sensitive_security_errors() -> tuple[str, ...]:
-    """Return non-secret configuration errors for PII-bearing capabilities."""
+    """Return non-secret configuration errors for sensitive-data storage."""
     problems: list[str] = []
-    secret = settings.SECRET_KEY.strip()
+    raw_secret = settings.SECRET_KEY
+    secret = raw_secret.strip()
     configured_key = settings.SENSITIVE_DATA_KEY.strip()
     if not secret or hmac.compare_digest(secret, DEFAULT_SECRET_KEY):
         problems.append("default_secret_key")
@@ -24,8 +39,20 @@ def sensitive_security_errors() -> tuple[str, ...]:
         try:
             key_bytes = configured_key.encode("ascii")
             Fernet(key_bytes)
-            derived = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
-            if hmac.compare_digest(key_bytes, derived):
+            known_insecure_keys = {
+                _legacy_secret_derived_key(raw_secret),
+                _legacy_secret_derived_key(secret),
+                _legacy_secret_derived_key(DEFAULT_SECRET_KEY),
+            }
+            for reused_secret in (raw_secret, secret):
+                try:
+                    known_insecure_keys.add(reused_secret.encode("ascii"))
+                except UnicodeEncodeError:
+                    pass
+            if any(
+                hmac.compare_digest(key_bytes, insecure)
+                for insecure in known_insecure_keys
+            ):
                 problems.append("sensitive_data_key_not_independent")
         except (UnicodeEncodeError, ValueError):
             problems.append("invalid_sensitive_data_key")
@@ -34,6 +61,17 @@ def sensitive_security_errors() -> tuple[str, ...]:
 
 def sensitive_capability_enabled(configured: bool) -> bool:
     return bool(configured) and not sensitive_security_errors()
+
+
+def assert_sensitive_storage_secure() -> None:
+    """Fail closed unless persistent sensitive storage has independent keys."""
+    problems = sensitive_security_errors()
+    if problems:
+        raise RuntimeError(
+            "Sensitive storage requires a non-default SECRET_KEY and an "
+            "independent valid SENSITIVE_DATA_KEY; errors="
+            + ",".join(problems)
+        )
 
 
 def assert_sensitive_capabilities_secure() -> None:
@@ -47,29 +85,66 @@ def assert_sensitive_capabilities_secure() -> None:
     ]
     if not enabled:
         return
-    problems = sensitive_security_errors()
-    if problems:
+    try:
+        assert_sensitive_storage_secure()
+    except RuntimeError as exc:
         raise RuntimeError(
-            "Sensitive capabilities require a non-default SECRET_KEY and an "
-            "independent valid SENSITIVE_DATA_KEY; enabled="
+            "Sensitive capabilities require secure storage; enabled="
             + ",".join(enabled)
-            + "; errors="
-            + ",".join(problems)
-        )
+            + "; "
+            + str(exc)
+        ) from exc
 
 
-def _key() -> bytes:
-    configured = settings.SENSITIVE_DATA_KEY.strip()
-    if configured:
-        return configured.encode("ascii")
-    digest = hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest()
-    return base64.urlsafe_b64encode(digest)
+def _primary_fernet() -> Fernet:
+    assert_sensitive_storage_secure()
+    return Fernet(settings.SENSITIVE_DATA_KEY.strip().encode("ascii"))
+
+
+def _decrypt(value: str) -> tuple[str, bool]:
+    """Return plaintext and whether the legacy SECRET-derived key was used."""
+    try:
+        token = value[len(_PREFIX):].encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise SensitiveDataDecryptionError(
+            "Encrypted sensitive value is malformed and cannot be authenticated"
+        ) from exc
+
+    primary = _primary_fernet()
+    try:
+        return primary.decrypt(token).decode("utf-8"), False
+    except (InvalidToken, UnicodeDecodeError):
+        pass
+
+    # Releases before the independent-key storage gate could persist enc:v1
+    # using SHA-256(SECRET_KEY). Keep that key decrypt-only so a migration can
+    # authenticate and immediately re-encrypt those rows with the primary key.
+    legacy_keys = (
+        _legacy_secret_derived_key(),
+        _legacy_secret_derived_key(DEFAULT_SECRET_KEY),
+    )
+    last_error: Exception | None = None
+    for legacy_key in dict.fromkeys(legacy_keys):
+        try:
+            return Fernet(legacy_key).decrypt(token).decode("utf-8"), True
+        except (InvalidToken, UnicodeDecodeError) as exc:
+            last_error = exc
+    raise SensitiveDataDecryptionError(
+        "Encrypted sensitive value cannot be authenticated with the configured "
+        "or legacy key; refusing to alter the row"
+    ) from last_error
 
 
 def protect(value: str | None) -> str | None:
-    if value is None or value == "" or value.startswith(_PREFIX):
+    if value is None or value == "":
         return value
-    token = Fernet(_key()).encrypt(value.encode("utf-8")).decode("ascii")
+    primary = _primary_fernet()
+    if value.startswith(_PREFIX):
+        plaintext, used_legacy_key = _decrypt(value)
+        if not used_legacy_key:
+            return value
+        value = plaintext
+    token = primary.encrypt(value.encode("utf-8")).decode("ascii")
     return _PREFIX + token
 
 
@@ -79,17 +154,18 @@ def reveal(value: str | None) -> str:
     if not value.startswith(_PREFIX):
         # Legacy local rows remain readable and are encrypted on the next write.
         return value
-    try:
-        token = value[len(_PREFIX):].encode("ascii")
-        return Fernet(_key()).decrypt(token).decode("utf-8")
-    except (InvalidToken, ValueError):
-        return ""
+    plaintext, _used_legacy_key = _decrypt(value)
+    return plaintext
 
 
 def fingerprint(value: str) -> str:
     normalized = "".join(value.split()).upper()
     material = ("wod:sensitive-fingerprint:v1|" + normalized).encode("utf-8")
-    return hmac.new(_key(), material, hashlib.sha256).hexdigest()
+    # Validate before computing anything that could be persisted. In
+    # particular, never generate new fingerprints from SECRET_KEY.
+    assert_sensitive_storage_secure()
+    key = settings.SENSITIVE_DATA_KEY.strip().encode("ascii")
+    return hmac.new(key, material, hashlib.sha256).hexdigest()
 
 
 def mask_id_card(value: str) -> str:

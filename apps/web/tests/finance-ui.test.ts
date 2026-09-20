@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   canPrepareRechargeRestart,
@@ -7,7 +8,11 @@ import {
   minimumRechargeAmountCny,
   minimumWithdrawalCardHours,
   rechargeBlocksNewOrder,
+  rechargeCanCancel,
+  rechargeCanPay,
+  rechargeCanQuery,
   rechargeCanRestart,
+  rechargeUiLabel,
   rechargeUiState,
 } from "../lib/finance-ui.ts";
 
@@ -27,6 +32,59 @@ test("recharge only succeeds after the backend has credited card hours", () => {
   assert.equal(rechargeUiState({ status: "paid", credited_at: "2026-08-24T01:00:00" }), "success");
   assert.equal(rechargeBlocksNewOrder({ status: "paid" }), true);
   assert.equal(rechargeBlocksNewOrder(null), false);
+});
+
+test("refund states take precedence over credited_at and never render as recharge success", () => {
+  const creditedAt = "2026-08-24T01:00:00";
+  const cases = [
+    ["refund_pending", "退款提交中"],
+    ["refund_unknown", "结果待核验"],
+    ["refunded", "已退款"],
+  ] as const;
+
+  for (const [status, label] of cases) {
+    const order = { status, credited_at: creditedAt };
+    assert.equal(rechargeUiState(order), status);
+    assert.notEqual(rechargeUiState(order), "success");
+    assert.equal(rechargeUiLabel(order), label);
+  }
+});
+
+test("recharge actions require an explicit backend capability", () => {
+  assert.equal(rechargeCanPay({ status: "pending" }), false);
+  assert.equal(rechargeCanPay({ status: "pending", can_pay: true }), true);
+  assert.equal(rechargeCanPay({ status: "refunded", credited_at: "2026-08-24T01:00:00", can_pay: true }), false);
+  assert.equal(rechargeCanQuery({ status: "pending" }), false);
+  assert.equal(rechargeCanQuery({ status: "pending", can_query: true }), true);
+  assert.equal(rechargeCanCancel({ status: "pending" }), false);
+  assert.equal(rechargeCanCancel({ status: "pending", can_cancel: true }), true);
+});
+
+test("credited refund states reject money actions even when backend flags are inconsistent", () => {
+  for (const status of ["refund_pending", "refund_unknown", "refunded"] as const) {
+    const order = {
+      status,
+      credited_at: "2026-08-24T01:00:00",
+      can_pay: true,
+      can_query: true,
+      can_cancel: true,
+    };
+    assert.equal(rechargeCanPay(order), false);
+    assert.equal(rechargeCanQuery(order), false);
+    assert.equal(rechargeCanCancel(order), false);
+    assert.equal(rechargeCanRestart(order), false);
+  }
+});
+
+test("wallet buttons use the defensive capability helpers instead of raw flags", () => {
+  const workspace = readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /rechargeCanPay\(pendingPayment\)/);
+  assert.match(workspace, /rechargeCanQuery\(pendingPayment\)/);
+  assert.match(workspace, /rechargeCanCancel\(pendingPayment\)/);
+  assert.match(workspace, /rechargeCanQuery\(row\)/);
+  assert.match(workspace, /rechargeCanCancel\(row\)/);
+  assert.doesNotMatch(workspace, /can_query !== false|can_pay !== false/);
+  assert.match(workspace, /rechargeEntryEnabled && rechargeCanRestart\(pendingPayment\) && <button/);
 });
 
 test("only terminal failed recharge orders can restart", () => {

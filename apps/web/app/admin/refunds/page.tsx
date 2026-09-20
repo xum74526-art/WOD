@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { AdminRefundWorkspace } from "@/components/admin-refund-workspace";
+import { AdminPaymentOperationsWorkspace } from "@/components/admin-payment-operations-workspace";
 
-export const metadata: Metadata = { title: "退款處理" };
-export default function AdminRefundsPage() { return <AdminRefundWorkspace />; }
+export const metadata: Metadata = { title: "充值與人民幣原路退款 · 管理控制檯" };
+
+export default function AdminRefundsPage() { return <AdminPaymentOperationsWorkspace />; }

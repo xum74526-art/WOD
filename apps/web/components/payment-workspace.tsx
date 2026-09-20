@@ -9,7 +9,11 @@ import {
   minimumRechargeAmountCny,
   minimumWithdrawalCardHours,
   rechargeBlocksNewOrder,
+  rechargeCanCancel,
+  rechargeCanPay,
+  rechargeCanQuery,
   rechargeCanRestart,
+  rechargeUiLabel,
   rechargeUiState,
 } from "@/lib/finance-ui";
 import {
@@ -18,21 +22,29 @@ import {
   type BankCard, type MobileLedgerItem, type MobileWallet, type RechargePaymentConfig,
   type RechargePaymentOrder, type WithdrawalConfig, type WithdrawalOrder,
 } from "@/lib/mobile-business-api";
+import {
+  clearClientRequestIntent,
+  clientRequestFingerprint,
+  ensureClientRequestIntent,
+  readClientRequestIntent,
+  saveClientRequestIntent,
+  type ClientRequestIntent,
+} from "@/lib/client-request-intent";
+import { qixiangCheckoutHref } from "@/lib/payment-checkout-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 
 const PENDING_PAYMENT_KEY = "wod-web-pending-recharge";
+const RECHARGE_INTENT_KEY = "wod-web-recharge-request-intent";
+const WITHDRAWAL_INTENT_KEY = "wod-web-withdrawal-request-intent";
 type PendingRechargeSession = { order_no?: string; checkout_url?: string | null; expires_at?: string | null };
 const amount = (value: unknown) => { const n = Number(value || 0); return Number.isFinite(n) ? n.toFixed(2) : "0.00"; };
 
-function checkoutHref(checkoutUrl: string) {
-  const parsed = new URL(checkoutUrl, window.location.origin);
-  const match = parsed.pathname.match(/(?:^|\/)api\/payments\/(mapay|qixiang)\/checkout\/([A-Za-z0-9_-]+)$/);
-  return match ? `/api/v1/canonical/payments/${match[1]}/checkout/${match[2]}` : parsed.toString();
+function requestIntentStorage() {
+  try { return window.sessionStorage; } catch { return null; }
 }
 
 function paymentLabel(order?: RechargePaymentOrder | null) {
-  const state = rechargeUiState(order);
-  return ({ pending: "等待支付", processing: order?.status === "late_paid_review" ? "超时到账复核中" : "支付确认中", success: "充值成功", expired: "支付已过期", failed: "支付失败", canceled: "已取消" } as Record<string, string>)[state];
+  return rechargeUiLabel(order);
 }
 
 function paymentQueryNotice(order: RechargePaymentOrder) {
@@ -76,6 +88,8 @@ export function PaymentWorkspace() {
   const checkingPayment = useRef(false);
   const creatingRecharge = useRef(false);
   const creatingWithdrawal = useRef(false);
+  const rechargeIntent = useRef<ClientRequestIntent | null>(null);
+  const withdrawalIntent = useRef<ClientRequestIntent | null>(null);
   const rechargeFormRef = useRef<HTMLFormElement>(null);
 
   const load = useCallback(async () => {
@@ -102,7 +116,9 @@ export function PaymentWorkspace() {
     }
     if (withdrawalResult.status === "fulfilled") {
       const [config, page, bankCards] = withdrawalResult.value;
-      const selectable = bankCards.filter((card) => isRegisteredBankCardStatus(card.status));
+      const selectable = bankCards.filter((card) => (
+        isRegisteredBankCardStatus(card.status) && card.consent_recorded
+      ));
       setWithdrawalConfig(config); setWithdrawals(page.items || []); setWithdrawalTotal(page.total || 0); setCards(selectable);
       setWithdrawal((value) => ({
         ...value,
@@ -125,7 +141,7 @@ export function PaymentWorkspace() {
     try {
       let order = await getRechargePayment(orderNo);
       let providerQueryFailed = false;
-      if (rechargeBlocksNewOrder(order) && order.can_query !== false) {
+      if (rechargeBlocksNewOrder(order) && rechargeCanQuery(order)) {
         try { order = await queryRechargePayment(orderNo); }
         catch (reason) {
           providerQueryFailed = true;
@@ -169,25 +185,44 @@ export function PaymentWorkspace() {
     if (!Number.isFinite(value) || value < rechargeMinimum || value > Number(paymentConfig?.max_amount_cny || Infinity)) {
       setError(`充值金额须在 ${amount(rechargeMinimum)} 至 ${amount(paymentConfig?.max_amount_cny)} 元之间`); return;
     }
+    const normalizedValue = Number(value.toFixed(2));
     if (!paymentTypes.includes(recharge.payment_type)) { setError("当前支付渠道未启用"); return; }
     if (rechargeBlocksNewOrder(pendingPayment)) {
       setMessage("当前充值仍在等待支付或入账，请继续支付、查询状态，或使用“更换充值金额”。");
       return;
     }
     const rate = Number(paymentConfig?.card_hour_rmb_rate || 0);
-    const cardHours = rate > 0 ? value / rate : 0;
-    if (!window.confirm(`请确认充值金额：¥ ${amount(value)}\n预计到账：${amount(cardHours)} 卡时\n\n确认金额无误后再前往支付。`)) return;
+    const cardHours = rate > 0 ? normalizedValue / rate : 0;
+    if (!window.confirm(`请确认充值金额：¥ ${amount(normalizedValue)}\n预计到账：${amount(cardHours)} 卡时\n\n确认金额无误后再前往支付。`)) return;
     creatingRecharge.current = true;
     setBusy("recharge"); setError(""); setMessage("");
     try {
-      const order = await createRechargePayment(value, recharge.payment_type);
+      const fingerprint = clientRequestFingerprint([normalizedValue.toFixed(2), recharge.payment_type]);
+      const storage = requestIntentStorage();
+      const intent = ensureClientRequestIntent(
+        rechargeIntent.current || (storage ? readClientRequestIntent(storage, RECHARGE_INTENT_KEY) : null),
+        fingerprint,
+        "recharge",
+      );
+      rechargeIntent.current = intent;
+      if (storage) saveClientRequestIntent(storage, RECHARGE_INTENT_KEY, intent);
+      const order = await createRechargePayment(normalizedValue, recharge.payment_type, intent.requestId);
+      rechargeIntent.current = null;
+      if (storage) clearClientRequestIntent(storage, RECHARGE_INTENT_KEY);
       setPendingPayment(order);
       setRechargeOrders((rows) => [order, ...rows.filter((row) => row.order_no !== order.order_no)]);
       setRechargeTotal((total) => total + 1);
       setRechargePage(1);
       setRechargeStatus(""); setRechargeSearchInput(""); setRechargeOrderNo("");
       localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ order_no: order.order_no, checkout_url: order.checkout_url, expires_at: order.expires_at }));
-      if (order.checkout_url) window.location.assign(checkoutHref(order.checkout_url)); else await load();
+      if (order.checkout_url) {
+        const href = qixiangCheckoutHref(order.checkout_url, window.location.origin);
+        if (!href) {
+          setError("支付服务返回了无法识别的收银台地址，请勿继续跳转并联系平台处理。");
+          return;
+        }
+        window.location.assign(href);
+      } else await load();
     } catch (reason) { setError(errorMessage(reason)); } finally { creatingRecharge.current = false; setBusy(""); }
   }
 
@@ -199,12 +234,24 @@ export function PaymentWorkspace() {
     if (!Number.isFinite(value) || value < withdrawalMinimum || value > Number(withdrawalConfig?.max_card_hours || Infinity)) {
       setError(`提现卡时须在 ${amount(withdrawalMinimum)} 至 ${amount(withdrawalConfig?.max_card_hours)} 之间`); return;
     }
-    if (value > Number(wallet?.withdrawable_balance || 0)) { setError("提现金额超过当前可提现余额"); return; }
+    const normalizedValue = Number(value.toFixed(2));
+    if (normalizedValue > Number(wallet?.withdrawable_balance || 0)) { setError("提现金额超过当前可提现余额"); return; }
     if (!card) { setError("请选择状态可用的银行卡"); return; }
     creatingWithdrawal.current = true;
     setBusy("withdraw"); setError("");
     try {
-      await createWithdrawal({ amount_card_hours: value, bank_card_id: card.id, client_request_id: crypto.randomUUID() });
+      const fingerprint = clientRequestFingerprint([normalizedValue.toFixed(2), card.id]);
+      const storage = requestIntentStorage();
+      const intent = ensureClientRequestIntent(
+        withdrawalIntent.current || (storage ? readClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY) : null),
+        fingerprint,
+        "withdrawal",
+      );
+      withdrawalIntent.current = intent;
+      if (storage) saveClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY, intent);
+      await createWithdrawal({ amount_card_hours: normalizedValue, bank_card_id: card.id, client_request_id: intent.requestId });
+      withdrawalIntent.current = null;
+      if (storage) clearClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY);
       setWithdrawal((current) => ({ ...current, amount: "" }));
       setWithdrawalPage(1); setWithdrawalStatus(""); setTab("withdrawals"); await load();
     } catch (reason) { setError(errorMessage(reason)); } finally { creatingWithdrawal.current = false; setBusy(""); }
@@ -217,6 +264,7 @@ export function PaymentWorkspace() {
   }
 
   async function refreshRechargeOrder(row: RechargePaymentOrder) {
+    if (!rechargeCanQuery(row)) return;
     setBusy(`recharge-query-${row.order_no}`); setError(""); setMessage("");
     try {
       const order = await queryRechargePayment(row.order_no);
@@ -229,7 +277,7 @@ export function PaymentWorkspace() {
   }
 
   async function cancelRechargeOrder(row: RechargePaymentOrder) {
-    if (!row.can_cancel) {
+    if (!rechargeCanCancel(row)) {
       setMessage("七相支付没有主动关闭订单接口。支付时限内不能安全取消，请在倒计时结束并查询确认未支付后再取消。");
       return;
     }
@@ -296,7 +344,14 @@ export function PaymentWorkspace() {
   function continueCheckout() {
     try {
       const stored = JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || "null") as { checkout_url?: string } | null;
-      if (stored?.checkout_url) window.location.assign(checkoutHref(stored.checkout_url));
+      if (stored?.checkout_url) {
+        const href = qixiangCheckoutHref(stored.checkout_url, window.location.origin);
+        if (!href) {
+          setError("已保存的收银台地址无效，请查询订单状态或联系平台处理。");
+          return;
+        }
+        window.location.assign(href);
+      }
     } catch { localStorage.removeItem(PENDING_PAYMENT_KEY); }
   }
 
@@ -319,14 +374,14 @@ export function PaymentWorkspace() {
     {message && <div className="commerce-success">{message}</div>}
     <div className="mobile-data-spine"><article><small>可用余额</small><strong>{amount(wallet.balance)}</strong><span>卡时</span></article><article><small>可提现余额</small><strong>{amount(wallet.withdrawable_balance)}</strong><span>已结算收益</span></article><article><small>提现冻结</small><strong>{amount(wallet.withdraw_frozen)}</strong><span>卡时</span></article><article><small>累计收益</small><strong>{amount(wallet.total_income)}</strong><span>卡时</span></article></div>
     {pendingPayment && <section className={`wallet-payment-state state-${pendingState}`}>
-      <div>{pendingState === "success" ? <CheckCircle size={28}/> : ["failed", "expired", "canceled"].includes(pendingState) ? <WarningCircle size={28}/> : <ClockCountdown size={28}/>}<span><small>RECHARGE ORDER · {pendingPayment.order_no}</small><strong>{paymentLabel(pendingPayment)}</strong><em>¥ {amount(pendingPayment.amount_cny)} · {amount(pendingPayment.card_hours)} 卡时{pendingPayment.failure_reason ? ` · ${pendingPayment.failure_reason}` : ""}</em></span></div>
+      <div>{pendingState === "success" ? <CheckCircle size={28}/> : ["failed", "expired", "canceled", "refund_unknown", "refunded"].includes(pendingState) ? <WarningCircle size={28}/> : <ClockCountdown size={28}/>}<span><small>RECHARGE ORDER · {pendingPayment.order_no}</small><strong>{paymentLabel(pendingPayment)}</strong><em>¥ {amount(pendingPayment.amount_cny)} · {amount(pendingPayment.card_hours)} 卡时{pendingPayment.failure_reason ? ` · ${pendingPayment.failure_reason}` : ""}</em></span></div>
       {pendingState === "pending" && <b>{Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:{(remainingSeconds % 60).toString().padStart(2, "0")}</b>}
       <nav>
-        {rechargeEntryEnabled && pendingState === "pending" && pendingPayment.can_pay !== false && <button onClick={continueCheckout}>继续支付</button>}
-        {rechargeEntryEnabled && pendingState === "pending" && <button onClick={() => void replaceRechargeAmount()} disabled={busy === "payment-replace" || paymentChecking}>{busy === "payment-replace" || paymentChecking ? "查询中…" : "更换充值金额"}</button>}
-        {pendingPayment.can_query !== false && pendingState !== "success" && pendingState !== "canceled" && <button onClick={() => void refreshPayment(true)} disabled={paymentChecking}>{paymentChecking ? "查询中…" : "查询状态"}</button>}
-        {pendingState !== "success" && pendingState !== "processing" && pendingState !== "canceled" && <button className="danger" onClick={() => void cancelRechargeOrder(pendingPayment)} disabled={!pendingPayment.can_cancel || busy === `recharge-cancel-${pendingPayment.order_no}`} title={pendingPayment.can_cancel ? "取消前会再次确认订单未支付" : "支付时限内不能安全取消；倒计时结束并查询后可取消"}>{busy === `recharge-cancel-${pendingPayment.order_no}` ? "取消中…" : "取消订单"}</button>}
-        {rechargeEntryEnabled && <button onClick={() => restartRecharge(pendingPayment)} disabled={!rechargeCanRestart(pendingPayment)} title={rechargeCanRestart(pendingPayment) ? "使用相同金额和支付方式重新填写" : "订单结束或取消后才能再来一单"}>再来一单</button>}
+        {rechargeEntryEnabled && pendingState === "pending" && rechargeCanPay(pendingPayment) && <button onClick={continueCheckout}>继续支付</button>}
+        {rechargeEntryEnabled && pendingState === "pending" && rechargeCanQuery(pendingPayment) && <button onClick={() => void replaceRechargeAmount()} disabled={busy === "payment-replace" || paymentChecking}>{busy === "payment-replace" || paymentChecking ? "查询中…" : "更换充值金额"}</button>}
+        {rechargeCanQuery(pendingPayment) && <button onClick={() => void refreshPayment(true)} disabled={paymentChecking}>{paymentChecking ? "查询中…" : "查询状态"}</button>}
+        {rechargeCanCancel(pendingPayment) && <button className="danger" onClick={() => void cancelRechargeOrder(pendingPayment)} disabled={busy === `recharge-cancel-${pendingPayment.order_no}`} title="取消前会再次确认订单未支付">{busy === `recharge-cancel-${pendingPayment.order_no}` ? "取消中…" : "取消订单"}</button>}
+        {rechargeEntryEnabled && rechargeCanRestart(pendingPayment) && <button onClick={() => restartRecharge(pendingPayment)} title="使用相同金额和支付方式重新填写">再来一单</button>}
         {!["pending", "processing"].includes(pendingState) && <button onClick={dismissPayment}>完成</button>}
       </nav>
     </section>}
@@ -339,7 +394,7 @@ export function PaymentWorkspace() {
       {tab === "recharges" && <form className="refund-toolbar" onSubmit={applyRechargeSearch}>
         <input aria-label="搜索充值订单号" placeholder="输入完整充值订单号" value={rechargeSearchInput} onChange={(event) => setRechargeSearchInput(event.target.value)} />
         <select aria-label="充值状态" value={rechargeStatus} onChange={(event) => { setRechargePage(1); setRechargeStatus(event.target.value); }}>
-          <option value="">全部状态</option><option value="pending">等待支付</option><option value="paid">支付确认中</option><option value="review">复核中</option><option value="late_paid_review">超时到账复核</option><option value="canceled">已取消</option><option value="expired">已过期</option><option value="failed">支付失败</option>
+          <option value="">全部状态</option><option value="pending">等待支付</option><option value="paid">支付确认中</option><option value="review">复核中</option><option value="late_paid_review">超时到账复核</option><option value="refund_pending">退款提交中</option><option value="refund_unknown">结果待核验</option><option value="refunded">已退款</option><option value="canceled">已取消</option><option value="expired">已过期</option><option value="failed">支付失败</option>
         </select>
         <button type="submit">查询订单</button>
         {(rechargeOrderNo || rechargeSearchInput) && <button type="button" onClick={() => { setRechargeSearchInput(""); setRechargeOrderNo(""); setRechargePage(1); }}>清除</button>}
@@ -356,8 +411,8 @@ export function PaymentWorkspace() {
           <b>{paymentLabel(row)}</b>
           <span><strong>{row.channel === "wxpay" ? "微信支付" : row.channel === "alipay" ? "支付宝" : row.channel || "—"}</strong><small>创建：{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</small><small>{row.paid_at ? `支付：${new Date(row.paid_at).toLocaleString("zh-CN")}` : `到期：${row.expires_at ? new Date(row.expires_at).toLocaleString("zh-CN") : "—"}`}</small></span>
           <time className="wallet-order-actions">
-            {row.can_query !== false && rechargeUiState(row) !== "success" && rechargeUiState(row) !== "canceled" && <button disabled={busy === `recharge-query-${row.order_no}`} onClick={() => void refreshRechargeOrder(row)}>{busy === `recharge-query-${row.order_no}` ? "查询中…" : "查询状态"}</button>}
-            {!["success", "processing", "canceled"].includes(rechargeUiState(row)) && <button className="danger" disabled={!row.can_cancel || busy === `recharge-cancel-${row.order_no}`} title={row.can_cancel ? "取消前会再次确认订单未支付" : "支付时限内不能安全取消"} onClick={() => void cancelRechargeOrder(row)}>{busy === `recharge-cancel-${row.order_no}` ? "取消中…" : "取消订单"}</button>}
+            {rechargeCanQuery(row) && <button disabled={busy === `recharge-query-${row.order_no}`} onClick={() => void refreshRechargeOrder(row)}>{busy === `recharge-query-${row.order_no}` ? "查询中…" : "查询状态"}</button>}
+            {rechargeCanCancel(row) && <button className="danger" disabled={busy === `recharge-cancel-${row.order_no}`} title="取消前会再次确认订单未支付" onClick={() => void cancelRechargeOrder(row)}>{busy === `recharge-cancel-${row.order_no}` ? "取消中…" : "取消订单"}</button>}
             {rechargeEntryEnabled && rechargeCanRestart(row) && <button onClick={() => restartRecharge(row)}>再来一单</button>}
           </time>
         </article>) : <div className="mobile-inline-empty">暂无充值订单</div>

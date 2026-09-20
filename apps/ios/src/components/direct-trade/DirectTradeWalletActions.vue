@@ -64,6 +64,7 @@ import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/
 import { isRegisteredBankCardStatus } from '@/utils/bank-card'
 import { resolveBackendUrl } from '@/utils/config'
 import { fmtCardHours, formatMoney, formatNumber } from '@/utils/format'
+import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
 import { openPaymentCheckout } from '@/utils/payment-checkout'
 import {
   DEFAULT_RECHARGE_TTL_SECONDS,
@@ -83,10 +84,12 @@ const props = defineProps<{
   rechargePrefill?: RechargePrefill | null
   openWithdrawal?: boolean
 }>()
-const emit = defineEmits<{ paymentStarted: []; walletUpdated: [] }>()
+const emit = defineEmits<{ paymentStarted: []; paymentReturned: []; walletUpdated: [] }>()
 const { t } = useI18nStore()
 const commerce = useCommerceStore()
 const PENDING_PAYMENT_KEY = 'wod-pending-recharge-order'
+const RECHARGE_REQUEST_INTENT_KEY = 'wod-recharge-request-intent'
+const WITHDRAWAL_REQUEST_INTENT_KEY = 'wod-withdrawal-request-intent'
 const quickAmounts = [MINIMUM_RECHARGE_CNY, 50, 100]
 const submitting = ref(false)
 const withdrawConfig = ref<WithdrawalConfig | null>(null)
@@ -161,7 +164,9 @@ async function openWithdraw() {
   const [configResult, cardsResult] = await Promise.allSettled([getWithdrawalConfig(), getBankCards()])
   if (configResult.status === 'fulfilled') withdrawConfig.value = configResult.value
   if (cardsResult.status === 'fulfilled') {
-    bankCards.value = cardsResult.value.filter(card => isRegisteredBankCardStatus(card.status)).map(card => ({
+    bankCards.value = cardsResult.value.filter(card => (
+      isRegisteredBankCardStatus(card.status) && card.consent_recorded
+    )).map(card => ({
       ...card,
       displayName: `${t(card.bank_name)} (${card.card_number})`,
     }))
@@ -178,6 +183,17 @@ function closeSheet() { sheet.type = '' }
 function onCardChange(event: { detail: { value: number } }) { cardIndex.value = Number(event.detail.value) || 0 }
 function goBankCards() { closeSheet(); nav('/pages/bank-cards/index') }
 
+function financialRequestId(storageKey: string, fingerprint: string, prefix: string): string {
+  const generated = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const intent = ensureClientRequestIntent(
+    uni.getStorageSync(storageKey),
+    fingerprint,
+    generated,
+  )
+  uni.setStorageSync(storageKey, intent)
+  return intent.requestId
+}
+
 async function submitRecharge() {
   const raw = String(sheet.amount || '').trim()
   const amount = Number(raw)
@@ -191,7 +207,12 @@ async function submitRecharge() {
   }
   submitting.value = true
   try {
-    const payment = await createRechargePayment(amount, sheet.paymentType)
+    const requestId = financialRequestId(
+      RECHARGE_REQUEST_INTENT_KEY,
+      `${amount.toFixed(2)}|${sheet.paymentType}`,
+      'recharge',
+    )
+    const payment = await createRechargePayment(amount, sheet.paymentType, requestId)
     const checkoutUrl = resolveBackendUrl(payment.checkout_url)
     if (!checkoutUrl) throw new Error('invalid checkout url')
     const session: StoredRechargeSession = {
@@ -202,9 +223,14 @@ async function submitRecharge() {
       successNotified: false,
     }
     uni.setStorageSync(PENDING_PAYMENT_KEY, session)
+    uni.removeStorageSync(RECHARGE_REQUEST_INTENT_KEY)
     closeSheet()
     emit('paymentStarted')
-    openPaymentCheckout(checkoutUrl, () => uni.showToast({ title: t('paymentStartFailed'), icon: 'none' }))
+    openPaymentCheckout(
+      checkoutUrl,
+      () => uni.showToast({ title: t('paymentStartFailed'), icon: 'none' }),
+      () => emit('paymentReturned'),
+    )
   } finally {
     submitting.value = false
   }
@@ -224,11 +250,17 @@ async function submitWithdrawal() {
   if (!card || submitting.value) return
   submitting.value = true
   try {
+    const requestId = financialRequestId(
+      WITHDRAWAL_REQUEST_INTENT_KEY,
+      `${amount.toFixed(6)}|${card.id}`,
+      'withdraw',
+    )
     const order = await createWithdrawal({
       amount_card_hours: amount,
       bank_card_id: card.id,
-      client_request_id: `wd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      client_request_id: requestId,
     })
+    uni.removeStorageSync(WITHDRAWAL_REQUEST_INTENT_KEY)
     closeSheet()
     emit('walletUpdated')
     uni.showToast({ title: t('withdrawalSubmitted'), icon: 'success' })

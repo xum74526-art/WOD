@@ -17,6 +17,7 @@
           :recharge-prefill="directRechargePrefill"
           :open-withdrawal="directWithdrawRequested"
           @payment-started="handleDirectPaymentStarted"
+          @payment-returned="handleDirectPaymentReturned"
           @wallet-updated="handleDirectWalletUpdated"
         />
       </view>
@@ -72,7 +73,7 @@
             @tap="requestCancelPayment"
           >{{ cancelingPayment ? t('cancelingRechargeOrder') : t('cancelRechargeOrder') }}</view>
         </view>
-        <view v-if="paymentCardState === 'success'" class="payment-state-actions">
+        <view v-if="canDismissPaymentState" class="payment-state-actions">
           <view class="payment-action primary" role="button" @tap="dismissPaymentState">{{ t('done') }}</view>
         </view>
       </view>
@@ -177,6 +178,7 @@ let pageActive = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let expiryRefreshOrderNo = ''
+let paymentReturnRefreshQueued = false
 
 const paymentCardState = computed<RechargeUiState>(() => (
   pendingPayment.value
@@ -192,6 +194,9 @@ const paymentStateTitle = computed(() => paymentNeedsReview.value
   pending: 'rechargeAwaitingPayment',
   processing: 'rechargeProcessing',
   success: 'rechargeCredited',
+  refund_pending: 'rechargeRefundPending',
+  refund_unknown: 'rechargeRefundUnknown',
+  refunded: 'rechargeRefunded',
   failed: 'rechargeFailed',
   expired: 'rechargeExpired',
   canceled: 'rechargeCanceled',
@@ -200,6 +205,9 @@ const paymentStateBadge = computed(() => t({
   pending: 'statusPendingPayment',
   processing: 'statusProcessing',
   success: 'statusCompleted',
+  refund_pending: 'rechargeRefundPending',
+  refund_unknown: 'rechargeRefundUnknown',
+  refunded: 'rechargeRefunded',
   failed: 'statusFailed',
   expired: 'statusExpired',
   canceled: 'statusCanceled',
@@ -215,6 +223,9 @@ const paymentStateDetail = computed(() => {
       pending: 'pendingPaymentVerificationHint',
       processing: 'processingPaymentVerificationHint',
       success: 'successfulPaymentVerificationHint',
+      refund_pending: 'refundPendingPaymentVerificationHint',
+      refund_unknown: 'refundUnknownPaymentVerificationHint',
+      refunded: 'refundedPaymentVerificationHint',
       failed: 'failedPaymentVerificationHint',
       expired: 'expiredPaymentVerificationHint',
       canceled: 'canceledPaymentVerificationHint',
@@ -226,6 +237,12 @@ const canQueryPayment = computed(() => Boolean(
 ))
 const canCancelPayment = computed(() => Boolean(
   commerce.historyReadEnabled && pendingPayment.value && rechargeCanCancel(pendingPayment.value),
+))
+const canDismissPaymentState = computed(() => (
+  paymentCardState.value === 'success'
+  || paymentCardState.value === 'refund_pending'
+  || paymentCardState.value === 'refund_unknown'
+  || paymentCardState.value === 'refunded'
 ))
 let resumePromise: Promise<void> | null = null
 
@@ -314,6 +331,16 @@ function handleDirectPaymentStarted() {
   paymentSession.value = null
   hydratePaymentSession()
   void refreshPendingPayment(true, false)
+}
+
+function handleDirectPaymentReturned() {
+  // The HTTPS return is only a signal to close the hosted checkout. Payment
+  // success remains server-authoritative and must be confirmed by get/query.
+  if (checkingStatus.value) {
+    paymentReturnRefreshQueued = true
+    return
+  }
+  void refreshPendingPayment(false, true)
 }
 
 function handleDirectWalletUpdated() {
@@ -416,7 +443,7 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
     const stateBeforeQuery = paymentCardState.value
     if (queryProvider
       && commerce.historyReadEnabled
-      && payment.can_query !== false
+      && rechargeCanQuery(payment)
       && (stateBeforeQuery === 'pending' || stateBeforeQuery === 'processing' || stateBeforeQuery === 'expired')) {
       try {
         payment = await queryRechargePayment(orderNo, true)
@@ -441,6 +468,12 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
         ? 'paymentPending'
         : paymentCardState.value === 'processing'
           ? 'paymentProcessing'
+          : paymentCardState.value === 'refund_pending'
+            ? 'rechargeRefundPending'
+            : paymentCardState.value === 'refund_unknown'
+              ? 'rechargeRefundUnknown'
+              : paymentCardState.value === 'refunded'
+                ? 'rechargeRefunded'
           : 'paymentNotCompleted'
       uni.showToast({ title: t(message), icon: 'none' })
     }
@@ -449,6 +482,10 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
   } finally {
     checkingStatus.value = false
     startPaymentTracking()
+    if (paymentReturnRefreshQueued) {
+      paymentReturnRefreshQueued = false
+      void refreshPendingPayment(false, true)
+    }
   }
 }
 
@@ -533,7 +570,9 @@ function goWithdrawals() { nav('/pages/withdrawals/index') }
 .payment-state.state-success { border-color: rgba(15, 157, 88, 0.28); }
 .payment-state.state-failed,
 .payment-state.state-expired,
-.payment-state.state-canceled { border-color: rgba(220, 73, 73, 0.24); }
+.payment-state.state-canceled,
+.payment-state.state-refund_unknown,
+.payment-state.state-refunded { border-color: rgba(220, 73, 73, 0.24); }
 .payment-state-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; }
 .payment-state-title { display: block; color: var(--text); font-size: 27rpx; font-weight: 700; }
 .payment-state-sub { display: block; color: var(--text-sub); font-size: 23rpx; margin-top: 6rpx; }
@@ -541,7 +580,9 @@ function goWithdrawals() { nav('/pages/withdrawals/index') }
 .state-success .payment-state-badge { color: var(--up); background: rgba(15, 157, 88, 0.1); }
 .state-failed .payment-state-badge,
 .state-expired .payment-state-badge,
-.state-canceled .payment-state-badge { color: var(--down); background: rgba(220, 73, 73, 0.09); }
+.state-canceled .payment-state-badge,
+.state-refund_unknown .payment-state-badge,
+.state-refunded .payment-state-badge { color: var(--down); background: rgba(220, 73, 73, 0.09); }
 .payment-deadline { min-height: 66rpx; margin-top: 18rpx; padding: 0 18rpx; display: flex; align-items: center; justify-content: space-between; color: var(--text-sub); background: var(--bg-2); border-radius: 14rpx; font-size: 23rpx; }
 .payment-countdown { color: var(--text); font-size: 30rpx; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1rpx; }
 .payment-order-number { min-height: 76rpx; margin-top: 14rpx; padding: 13rpx 16rpx; display: flex; align-items: center; justify-content: space-between; gap: 18rpx; background: var(--bg-2); border-radius: 14rpx; }

@@ -72,8 +72,9 @@ class Settings(BaseSettings):
     APP_IOS_LEGACY_RELEASE_NOTES_ZH: str = ""
     APP_IOS_LEGACY_RELEASE_NOTES_EN: str = ""
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:9000"
-    # Sensitive fields are encrypted at rest. Set a dedicated Fernet key in
-    # production; local development falls back to a key derived from SECRET_KEY.
+    # Sensitive fields are encrypted at rest. Every environment, including
+    # local development, requires a stable dedicated Fernet key that is not
+    # derived from or equal to SECRET_KEY.
     SENSITIVE_DATA_KEY: str = ""
     # Empty uses backend/uploads locally. Containers set this to a persistent
     # private volume such as /data/uploads.
@@ -154,7 +155,12 @@ class Settings(BaseSettings):
     # never auto-migrated into the new SLA until operations explicitly opts in.
     ORDER_LEGACY_PENDING_MIGRATION_ENABLED: bool = False
     CARD_HOUR_RMB_RATE: float = 1.002
+    # MaPay is retired for new collection.  ``MAPAY_ENABLED`` remains only as
+    # a fail-closed legacy deployment signal so an old environment cannot
+    # silently become the active gateway.  Historical callback/query support
+    # has its own switch and can coexist with Qixiang collection.
     MAPAY_ENABLED: bool = False
+    MAPAY_LEGACY_RECONCILIATION_ENABLED: bool = False
     MAPAY_BASE_URL: str = "https://mzf.mapay.cc/xpay/epayn"
     MAPAY_PID: str = ""
     MAPAY_MERCHANT_PRIVATE_KEY_PATH: str = ""
@@ -173,15 +179,18 @@ class Settings(BaseSettings):
     MAPAY_MIN_AMOUNT_CNY: float = 10.0
     MAPAY_MAX_AMOUNT_CNY: float = 50000.0
     # QiXiang Pay (EasyPay-compatible) wallet recharge collection. Keep the
-    # provider disabled until the public HTTPS notify/return URLs are deployed.
+    # provider disabled until the fixed wod.kai.com notify/return URLs are deployed.
     QIXIANGPAY_ENABLED: bool = False
+    # The merchant console has a separate refund-API permission.  Collection
+    # readiness must never imply that original-rail refunds are authorized.
+    QIXIANGPAY_REFUND_ENABLED: bool = False
     QIXIANGPAY_BASE_URL: str = "https://api.payqixiang.cn"
     QIXIANGPAY_PID: str = ""
     QIXIANGPAY_KEY: str = ""
     QIXIANGPAY_NOTIFY_URL: str = ""
     QIXIANGPAY_RETURN_URL: str = ""
-    # Optional public API origin (normally ending in /api) used to return an
-    # absolute first-party checkout URL to native clients.
+    # Fixed first-party API base used to return an absolute checkout URL to
+    # native clients. Startup rejects an alternate origin.
     QIXIANGPAY_PUBLIC_API_BASE_URL: str = ""
     QIXIANGPAY_PAYMENT_TYPES: str = ""
     QIXIANGPAY_DEVICE: str = "jump"
@@ -189,10 +198,24 @@ class Settings(BaseSettings):
     QIXIANGPAY_MAX_RESPONSE_BYTES: int = 256 * 1024
     # Forwarded client IP headers are accepted only from these immediate peers.
     QIXIANGPAY_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
+    # Exact HTTPS hosts accepted from the provider create-order response.
+    # Wildcards and suffix matching are deliberately unsupported.
+    PAYMENT_CHECKOUT_ALLOWED_HOSTS: str = "api.payqixiang.cn"
     QIXIANGPAY_CHECKOUT_TTL_SECONDS: int = 300
     QIXIANGPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
     QIXIANGPAY_MIN_AMOUNT_CNY: float = 10.0
     QIXIANGPAY_MAX_AMOUNT_CNY: float = 50000.0
+    # Payment risk and reconciliation bounds are enforced server-side.  The
+    # scheduler remains disabled until provider-side sandbox/production
+    # evidence has been completed.
+    PAYMENT_MAX_PENDING_ORDERS_PER_USER: int = 5
+    PAYMENT_DAILY_RECHARGE_LIMIT_CNY: float = 50000.0
+    PAYMENT_RECONCILIATION_ENABLED: bool = False
+    PAYMENT_RECONCILIATION_INTERVAL_SECONDS: int = 60
+    PAYMENT_RECONCILIATION_BATCH_SIZE: int = 20
+    PAYMENT_RECONCILIATION_MIN_AGE_SECONDS: int = 30
+    PAYMENT_RECONCILIATION_MAX_AGE_SECONDS: int = 7 * 24 * 60 * 60
+    PAYMENT_REFUND_SUBMISSION_TIMEOUT_SECONDS: int = 300
     # Disabled until metered compute output and an auditable settlement source
     # are connected. Never create wallet income from a configured percentage.
     REVENUE_SETTLEMENT_ENABLED: bool = False

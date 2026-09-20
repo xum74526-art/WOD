@@ -3,6 +3,12 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_platform, get_current_user
+from app.core.rate_limit import (
+    limit_payment_callback,
+    limit_payment_checkout,
+    limit_payment_create,
+    limit_payment_query,
+)
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.payment import RechargePaymentCreateIn
@@ -51,6 +57,7 @@ def create_payment(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    limit_payment_create(user.id)
     require_recharge_enabled()
     return success(
         create_recharge_order(
@@ -59,6 +66,7 @@ def create_payment(
             data.amount_cny,
             payment_type=data.payment_type,
             created_platform=normalize_platform(platform),
+            client_request_id=data.client_request_id,
         )
     )
 
@@ -102,6 +110,7 @@ def query_payment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    limit_payment_query(user.id)
     order = get_owned_order(db, user.id, order_no)
     if order.provider == legacy_mapay.PROVIDER:
         return success(legacy_mapay.query_provider_and_reconcile(db, order))
@@ -116,15 +125,17 @@ def cancel_payment(
     db: Session = Depends(get_db),
     platform: str = Depends(get_current_platform),
 ):
+    limit_payment_query(user.id)
     order = get_owned_order(db, user.id, order_no)
     if order.provider != PROVIDER:
         raise BizError("历史充值订单不能通过七相支付网关取消", status_code=409)
     return success(cancel_recharge_order(db, order, platform=normalize_platform(platform)))
 
 
-@router.get("/checkout/{token}", response_class=RedirectResponse)
-@legacy_router.get("/checkout/{token}", response_class=RedirectResponse)
+@router.get("/checkout/{token}", response_class=RedirectResponse, status_code=303)
+@legacy_router.get("/checkout/{token}", response_class=RedirectResponse, status_code=303)
 def checkout(token: str, request: Request, db: Session = Depends(get_db)):
+    limit_payment_checkout(token)
     client_ip = resolve_checkout_client_ip(
         request.client.host if request.client else None,
         x_real_ip=request.headers.get("x-real-ip"),
@@ -150,6 +161,7 @@ async def _notification_params(request: Request) -> dict:
 
 async def _notify(request: Request, db: Session):
     try:
+        limit_payment_callback(PROVIDER)
         handle_notification(db, await _notification_params(request))
         return PlainTextResponse("success")
     except BizError:

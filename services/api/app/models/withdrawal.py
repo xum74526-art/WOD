@@ -38,6 +38,13 @@ class WithdrawalOrder(Base):
     failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # The first non-approving administrator who reveals payment instructions
+    # owns the external bank-transfer step for the lifetime of this request.
+    # This durable binding prevents two finance operators from both paying the
+    # same request before either one reaches the final database CAS.
+    payout_actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     bank_reference: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     paid_amount_cny: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

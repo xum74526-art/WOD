@@ -1,5 +1,7 @@
 export const QIXIANGPAY_REFERER = 'https://api.payqixiang.cn'
+export const QIXIANGPAY_RETURN_URL = 'https://wod.kai.com/payment/qixiang/return'
 export const PAYMENT_APP_URL_MATCH = '^(alipays|alipay|weixin)://.*'
+export const PAYMENT_CHECKOUT_INTERCEPT_MATCH = '^(?:(?:alipays?|weixin)://.*|https://wod\\.kai\\.com/payment/qixiang/return(?:[?#][^\\s]*)?)$'
 
 export type PaymentCheckoutFailureCode =
   | 'invalid-checkout-url'
@@ -13,6 +15,7 @@ export interface PaymentCheckoutFailure {
 }
 
 export type PaymentCheckoutFailureHandler = (failure: PaymentCheckoutFailure) => void
+export type PaymentCheckoutReturnHandler = () => void
 
 interface PaymentUrlLoadingEvent {
   url?: unknown
@@ -41,6 +44,7 @@ interface NativePaymentWebview {
   ): void
   loadURL(url: string, additionalHttpHeaders?: Record<string, string>): void
   show(animation?: string): void
+  close(animation?: string): void
 }
 
 export interface NativePaymentRuntime {
@@ -97,6 +101,12 @@ export function isPaymentAppUrl(value: unknown): value is string {
   return typeof value === 'string' && /^(?:alipays?|weixin):\/\//i.test(value.trim())
 }
 
+export function isPaymentReturnUrl(value: unknown): value is string {
+  return typeof value === 'string'
+    && value === value.trim()
+    && /^https:\/\/wod\.kai\.com\/payment\/qixiang\/return(?:[?#][^\s]*)?$/.test(value)
+}
+
 function interceptedPaymentUrl(event: unknown): string {
   if (!event || typeof event !== 'object') return ''
   const candidate = (event as PaymentUrlLoadingEvent).url
@@ -112,6 +122,7 @@ export function openNativePaymentCheckout(
   runtime: NativePaymentRuntime,
   value: string,
   onError?: PaymentCheckoutFailureHandler,
+  onReturn?: PaymentCheckoutReturnHandler,
 ): boolean {
   const target = normalizePaymentCheckoutUrl(value)
   if (!target) {
@@ -132,12 +143,23 @@ export function openNativePaymentCheckout(
       additionalHttpHeaders: headers,
     })
 
+    let returnHandled = false
     checkout.overrideUrlLoading({
       effect: 'instant',
       mode: 'reject',
-      match: PAYMENT_APP_URL_MATCH,
+      match: PAYMENT_CHECKOUT_INTERCEPT_MATCH,
       exclude: 'none',
     }, (event: unknown) => {
+      const eventUrl = event && typeof event === 'object'
+        ? (event as PaymentUrlLoadingEvent).url
+        : undefined
+      if (isPaymentReturnUrl(eventUrl)) {
+        if (returnHandled) return
+        returnHandled = true
+        try { checkout.close('none') } catch {}
+        try { onReturn?.() } catch {}
+        return
+      }
       const paymentUrl = interceptedPaymentUrl(event)
       if (!paymentUrl) return
       const handleOpenError = (error: unknown) => {
@@ -196,9 +218,10 @@ export function openH5PaymentCheckout(
 export function openPaymentCheckout(
   value: string,
   onError?: PaymentCheckoutFailureHandler,
+  onReturn?: PaymentCheckoutReturnHandler,
 ): boolean {
   // #ifdef APP-PLUS
-  return openNativePaymentCheckout(plus as unknown as NativePaymentRuntime, value, onError)
+  return openNativePaymentCheckout(plus as unknown as NativePaymentRuntime, value, onError, onReturn)
   // #endif
 
   // #ifdef H5

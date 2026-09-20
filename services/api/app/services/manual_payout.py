@@ -14,18 +14,25 @@ import os
 import re
 import secrets
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.sensitive import fingerprint, last_four, reveal
-from app.models.bank_card import BankCard, REGISTERED_CARD_STATUSES, public_bank_card_status
+from app.models.bank_card import (
+    BANK_CARD_SENSITIVE_CONSENT_VERSION,
+    BankCard,
+    REGISTERED_CARD_STATUSES,
+    public_bank_card_status,
+)
 from app.models.ledger import Ledger
 from app.models.user import User
 from app.models.verification import Verification
@@ -46,6 +53,7 @@ FINAL_WITHDRAWAL_STATUSES = ("paid", "rejected", "failed", "canceled")
 ALL_WITHDRAWAL_STATUSES = ACTIVE_WITHDRAWAL_STATUSES + FINAL_WITHDRAWAL_STATUSES
 AMOUNT_QUANTUM = Decimal("0.000001")
 CNY_QUANTUM = Decimal("0.01")
+_PAYOUT_ACTOR_CLAIM_LOCK = threading.Lock()
 
 
 def utc_now() -> datetime:
@@ -226,6 +234,7 @@ def _payment_instruction_snapshot(order: WithdrawalOrder, card: BankCard) -> str
     material = {
         "withdrawal_id": order.id,
         "order_version": order.version,
+        "payout_actor_id": order.payout_actor_id,
         "bank_card_id": card.id,
         "card_fingerprint": fingerprint(reveal(card.card_number)),
         "phone_fingerprint": fingerprint(reveal(card.phone)),
@@ -239,6 +248,83 @@ def _payment_instruction_snapshot(order: WithdrawalOrder, card: BankCard) -> str
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def assert_payout_duty_separation(order: WithdrawalOrder, actor: User) -> None:
+    """Require a second administrator to reveal and confirm an approved payout."""
+    if order.reviewed_by is None:
+        raise BizError("提现申请缺少独立审批记录，请刷新后重试", status_code=409)
+    if int(order.reviewed_by) == int(actor.id):
+        raise BizError("审批人与打款确认人必须为不同管理员", status_code=409)
+
+
+def assert_payout_actor_binding(order: WithdrawalOrder, actor: User) -> None:
+    """Require the durable external-transfer assignment to match ``actor``."""
+    assert_payout_duty_separation(order, actor)
+    if order.payout_actor_id is None:
+        raise BizError("提现申请尚未认领付款经办人，请先受控查看付款信息", status_code=409)
+    if int(order.payout_actor_id) != int(actor.id):
+        raise BizError("该提现申请已由其他财务经办人认领", status_code=409)
+
+
+def claim_payout_actor(db: Session, order: WithdrawalOrder, actor: User) -> bool:
+    """Atomically and durably assign the only operator allowed to pay ``order``.
+
+    The assignment commits before any complete bank-card value is returned.
+    Keeping this as a separate durable boundary means a response failure can be
+    retried by the same operator without reopening the request to a second
+    external bank transfer. Production PostgreSQL is protected by the compare-
+    and-swap predicate; the process lock closes the same-process SQLite gap in
+    the supported single-worker deployment.
+    """
+    with _PAYOUT_ACTOR_CLAIM_LOCK:
+        try:
+            current = db.query(WithdrawalOrder).filter(
+                WithdrawalOrder.id == order.id
+            ).populate_existing().first()
+            if not current:
+                raise BizError("提现申请不存在", status_code=404)
+            if current.status != "manual_payment_pending":
+                raise BizError("仅待人工打款申请可查看付款信息", status_code=409)
+            assert_payout_duty_separation(current, actor)
+            if current.payout_actor_id is not None:
+                if int(current.payout_actor_id) == int(actor.id):
+                    return False
+                raise BizError("该提现申请已由其他财务经办人认领", status_code=409)
+
+            claimed = db.query(WithdrawalOrder).filter(
+                WithdrawalOrder.id == current.id,
+                WithdrawalOrder.status == "manual_payment_pending",
+                WithdrawalOrder.reviewed_by.isnot(None),
+                WithdrawalOrder.reviewed_by != actor.id,
+                WithdrawalOrder.payout_actor_id.is_(None),
+            ).update({
+                WithdrawalOrder.payout_actor_id: actor.id,
+                WithdrawalOrder.version: WithdrawalOrder.version + 1,
+                WithdrawalOrder.last_modified_platform: "admin",
+            }, synchronize_session=False)
+            if claimed != 1:
+                db.rollback()
+                latest = db.query(WithdrawalOrder).filter(
+                    WithdrawalOrder.id == order.id
+                ).populate_existing().first()
+                if latest and latest.payout_actor_id == actor.id:
+                    return False
+                raise BizError("该提现申请已由其他财务经办人认领或状态已变化", status_code=409)
+            record_audit(
+                db,
+                actor.id,
+                "withdrawal.payout_actor.claim",
+                "withdrawal",
+                current.id,
+                {"reviewed_by": current.reviewed_by},
+            )
+            db.commit()
+            db.refresh(order)
+            return True
+        except Exception:
+            db.rollback()
+            raise
+
+
 def issue_payment_instruction_grant(
     db: Session,
     order: WithdrawalOrder,
@@ -246,6 +332,7 @@ def issue_payment_instruction_grant(
     actor: User,
 ) -> tuple[str, datetime, int]:
     """Create a short-lived one-time proof for this exact reveal operation."""
+    assert_payout_actor_binding(order, actor)
     token = secrets.token_urlsafe(32)
     expires_at = utc_now() + timedelta(seconds=_payment_instruction_ttl_seconds())
     grant = PaymentInstructionGrant(
@@ -268,6 +355,7 @@ def _consume_payment_instruction_grant(
     actor: User,
     token: str,
 ) -> None:
+    assert_payout_actor_binding(order, actor)
     normalized = token.strip()
     if not normalized or len(normalized) > 512:
         raise BizError("付款信息查看凭证无效或已过期，请重新受控查看", status_code=409)
@@ -326,6 +414,14 @@ def create_withdrawal(
     ).first()
     if not card:
         raise BizError("请选择已登记且未停用的银行卡")
+    if (
+        not card.consent_at
+        or card.consent_version != BANK_CARD_SENSITIVE_CONSENT_VERSION
+    ):
+        raise BizError(
+            "该银行卡缺少当前敏感信息使用同意，请重新登记确认后再申请提现",
+            status_code=409,
+        )
     if verification.real_name != card.holder:
         raise BizError("收款人姓名与已通过的实名认证不一致")
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).first()
@@ -435,20 +531,45 @@ def _unfreeze_to_status(
     reason: str,
     actor: User | None,
     platform: str,
+    payout_actor_guard_id: int | None = None,
 ) -> None:
-    changed = db.query(WithdrawalOrder).filter(
+    filters = [
         WithdrawalOrder.id == order.id,
         WithdrawalOrder.status.in_(allowed_from),
-    ).update({
+    ]
+    if payout_actor_guard_id is not None:
+        # Whichever state transition commits first wins. A failure may precede
+        # assignment, but once an operator has claimed the external transfer,
+        # no other administrator may release its frozen funds.
+        filters.append(or_(
+            WithdrawalOrder.payout_actor_id.is_(None),
+            WithdrawalOrder.payout_actor_id == payout_actor_guard_id,
+        ))
+    changed = db.query(WithdrawalOrder).filter(*filters).update({
         WithdrawalOrder.status: status,
         WithdrawalOrder.failure_reason: reason,
-        WithdrawalOrder.reviewed_by: actor.id if actor else order.reviewed_by,
-        WithdrawalOrder.reviewed_at: utc_now(),
+        WithdrawalOrder.reviewed_by: (
+            actor.id if actor and status == "rejected" else order.reviewed_by
+        ),
+        WithdrawalOrder.reviewed_at: (
+            utc_now() if actor and status == "rejected" else order.reviewed_at
+        ),
         WithdrawalOrder.version: WithdrawalOrder.version + 1,
         WithdrawalOrder.last_modified_platform: normalize_platform(platform),
     }, synchronize_session=False)
     if changed != 1:
         db.rollback()
+        if payout_actor_guard_id is not None:
+            latest = db.query(WithdrawalOrder).filter(
+                WithdrawalOrder.id == order.id
+            ).first()
+            if (
+                latest
+                and latest.status in allowed_from
+                and latest.payout_actor_id is not None
+                and int(latest.payout_actor_id) != int(payout_actor_guard_id)
+            ):
+                raise BizError("该提现申请已由其他财务经办人认领", status_code=409)
         raise BizError("申请状态已变化，请刷新", status_code=409)
     amount = Decimal(order.amount_card_hours)
     restored = db.query(Wallet).filter(
@@ -496,10 +617,19 @@ def fail_withdrawal(
     *,
     platform: str = "legacy",
 ) -> None:
-    _unfreeze_to_status(
-        db, order, status="failed", allowed_from=("manual_payment_pending",), reason=reason,
-        actor=actor, platform=platform,
-    )
+    with _PAYOUT_ACTOR_CLAIM_LOCK:
+        current = db.query(WithdrawalOrder).filter(
+            WithdrawalOrder.id == order.id
+        ).populate_existing().first()
+        if current and current.payout_actor_id is not None and int(
+            current.payout_actor_id
+        ) != int(actor.id):
+            db.rollback()
+            raise BizError("该提现申请已由其他财务经办人认领", status_code=409)
+        _unfreeze_to_status(
+            db, order, status="failed", allowed_from=("manual_payment_pending",), reason=reason,
+            actor=actor, platform=platform, payout_actor_guard_id=actor.id,
+        )
 
 
 def cancel_withdrawal(
@@ -540,6 +670,7 @@ def mark_paid(
     reveal_token: str,
     platform: str = "legacy",
 ) -> None:
+    assert_payout_actor_binding(order, actor)
     if not payee_confirmed:
         raise BizError("请先确认已核对收款人姓名与银行卡登记信息")
     reference = bank_reference.strip()
@@ -573,6 +704,9 @@ def mark_paid(
     changed = db.query(WithdrawalOrder).filter(
         WithdrawalOrder.id == order.id,
         WithdrawalOrder.status == "manual_payment_pending",
+        WithdrawalOrder.reviewed_by.isnot(None),
+        WithdrawalOrder.reviewed_by != actor.id,
+        WithdrawalOrder.payout_actor_id == actor.id,
     ).update({
         WithdrawalOrder.status: "paid",
         WithdrawalOrder.bank_reference: reference,

@@ -2,9 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  PAYMENT_APP_URL_MATCH,
+  PAYMENT_CHECKOUT_INTERCEPT_MATCH,
   QIXIANGPAY_REFERER,
+  QIXIANGPAY_RETURN_URL,
   isPaymentAppUrl,
+  isPaymentReturnUrl,
   normalizePaymentCheckoutUrl,
   openH5PaymentCheckout,
   openNativePaymentCheckout,
@@ -21,6 +23,7 @@ interface FakeWebviewCapture {
   loadedUrl: string
   loadHeaders: Record<string, string>
   animation: string
+  closeAnimation: string
 }
 
 function fakeNativeRuntime() {
@@ -32,6 +35,7 @@ function fakeNativeRuntime() {
     loadedUrl: '',
     loadHeaders: {},
     animation: '',
+    closeAnimation: '',
   }
   const opened: Array<{ url: string; fail?: (error: unknown) => void }> = []
   const runtime: NativePaymentRuntime = {
@@ -56,6 +60,9 @@ function fakeNativeRuntime() {
           },
           show(animation = '') {
             capture.animation = animation
+          },
+          close(animation = '') {
+            capture.closeAnimation = animation
           },
         }
       },
@@ -83,6 +90,17 @@ test('payment-app scheme matching covers Alipay and WeChat only', () => {
   assert.equal(isPaymentAppUrl('javascript:alert(1)'), false)
 })
 
+test('payment return matching accepts only the dedicated HTTPS origin and path', () => {
+  assert.equal(isPaymentReturnUrl(QIXIANGPAY_RETURN_URL), true)
+  assert.equal(isPaymentReturnUrl(`${QIXIANGPAY_RETURN_URL}?result=success&out_trade_no=example`), true)
+  assert.equal(isPaymentReturnUrl(`${QIXIANGPAY_RETURN_URL}#complete`), true)
+  assert.equal(isPaymentReturnUrl('https://wod.kai.com/account/wallet?result=success'), false)
+  assert.equal(isPaymentReturnUrl('https://wod.kai.com.evil.example/payment/qixiang/return'), false)
+  assert.equal(isPaymentReturnUrl('https://wod.kai.com/payment/qixiang/return/extra'), false)
+  assert.equal(isPaymentReturnUrl(` ${QIXIANGPAY_RETURN_URL}`), false)
+  assert.equal(isPaymentReturnUrl('kai://auth'), false)
+})
+
 test('native checkout uses a restricted internal WebView with Qixiang Referer', () => {
   const { runtime, capture } = fakeNativeRuntime()
   const target = 'https://wod.kai.com/api/payments/qixiang/checkout/token'
@@ -97,12 +115,45 @@ test('native checkout uses a restricted internal WebView with Qixiang Referer', 
   assert.deepEqual(capture.overrideOptions, {
     effect: 'instant',
     mode: 'reject',
-    match: PAYMENT_APP_URL_MATCH,
+    match: PAYMENT_CHECKOUT_INTERCEPT_MATCH,
     exclude: 'none',
   })
   assert.equal(capture.loadedUrl, target)
   assert.deepEqual(capture.loadHeaders, { Referer: QIXIANGPAY_REFERER })
   assert.equal(capture.animation, 'pop-in')
+})
+
+test('dedicated HTTPS return closes checkout once and asks the wallet to verify server state', () => {
+  const { runtime, capture, opened } = fakeNativeRuntime()
+  let returns = 0
+  openNativePaymentCheckout(
+    runtime,
+    'https://wod.kai.com/api/payments/qixiang/checkout/token',
+    undefined,
+    () => { returns += 1 },
+  )
+
+  capture.intercepted?.({ url: `${QIXIANGPAY_RETURN_URL}?result=success` })
+  capture.intercepted?.({ url: `${QIXIANGPAY_RETURN_URL}?result=failed` })
+  assert.equal(capture.closeAnimation, 'none')
+  assert.equal(returns, 1)
+  assert.equal(opened.length, 0)
+})
+
+test('lookalike HTTPS returns never close checkout or trigger verification', () => {
+  const { runtime, capture } = fakeNativeRuntime()
+  let returns = 0
+  openNativePaymentCheckout(
+    runtime,
+    'https://wod.kai.com/api/payments/qixiang/checkout/token',
+    undefined,
+    () => { returns += 1 },
+  )
+
+  capture.intercepted?.({ url: 'https://wod.kai.com.evil.example/payment/qixiang/return?result=success' })
+  capture.intercepted?.({ url: 'https://wod.kai.com/payment/qixiang/return/extra?result=success' })
+  assert.equal(capture.closeAnimation, '')
+  assert.equal(returns, 0)
 })
 
 test('intercepted payment schemes go to native runtime and report launch failure', () => {

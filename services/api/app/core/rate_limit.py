@@ -73,6 +73,11 @@ recovery_confirm_global_rate_limit = SlidingWindowRateLimiter(limit=600, window_
 recovery_confirm_token_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=600)
 recovery_binding_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
 phone_login_setup_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=600)
+payment_create_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=60)
+payment_query_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
+payment_checkout_rate_limit = SlidingWindowRateLimiter(limit=20, window_seconds=60)
+payment_callback_rate_limit = SlidingWindowRateLimiter(limit=3000, window_seconds=60)
+payment_admin_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
 
 
 def _identity_key(value: str) -> str:
@@ -139,3 +144,24 @@ def limit_recovery_email_binding(user_id: int) -> None:
 
 def limit_phone_login_setup(user_id: int) -> None:
     phone_login_setup_rate_limit.check(f"phone-login-setup:{int(user_id)}")
+
+
+def limit_payment_create(user_id: int) -> None:
+    payment_create_rate_limit.check(f"payment-create:{int(user_id)}")
+
+
+def limit_payment_query(user_id: int) -> None:
+    payment_query_rate_limit.check(f"payment-query:{int(user_id)}")
+
+
+def limit_payment_checkout(token: str) -> None:
+    digest = hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+    payment_checkout_rate_limit.check(f"payment-checkout:{digest}")
+
+
+def limit_payment_callback(provider: str) -> None:
+    payment_callback_rate_limit.check(f"payment-callback:{provider[:24]}")
+
+
+def limit_payment_admin(user_id: int) -> None:
+    payment_admin_rate_limit.check(f"payment-admin:{int(user_id)}")

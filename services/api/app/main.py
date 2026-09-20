@@ -10,13 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_cors_origins, settings
-from app.core.sensitive import assert_sensitive_capabilities_secure
+from app.core.sensitive import assert_sensitive_storage_secure
 from app.routers import account_recovery, address, admin, asset, auth, bank_card, buy_request, chat, community, coupon, finance, internal_ingestion, invite, market, notification, offline_purchase, onboarding, order, payment, platform, product, qixiang_payment, revenue, supplier, user, verification, wallet, withdrawal
 from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
 from app.services.market_candle_sync import dispatch_market_candle_sync, sync_market_candles
 from app.services.merchant_settlement import assert_merchant_settlement_configuration_safe
+from app.services.payment_gateway import assert_payment_configuration_safe
+from app.services.payment_reconciliation import reconcile_payments_job
 from app.services.reward_entitlements import settle_reward_entitlements_job
 from app.services.reward_program import assert_reward_configuration_safe
 from app.services.revenue_settle import INTERVAL_SECONDS, settle_revenue
@@ -30,14 +32,16 @@ from app.utils.api_locale import localize_api_message, resolve_request_locale
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Never start PII-bearing capabilities with the source default JWT secret
-    # or without a separate valid Fernet key.
-    assert_sensitive_capabilities_secure()
+    # Sensitive rows exist independently of feature flags. Never start any API
+    # process with the source default JWT secret or without a separate valid
+    # Fernet key, even when every PII-bearing capability is currently off.
+    assert_sensitive_storage_secure()
     # A confirmed order must never enter both the legacy and versioned reward
     # writers. Fail closed before any scheduler starts if deployment flags are
     # inconsistent.
     assert_reward_configuration_safe()
     assert_merchant_settlement_configuration_safe()
+    assert_payment_configuration_safe()
     try:
         community_timezone = ZoneInfo(settings.COMMUNITY_TIMEZONE)
     except ZoneInfoNotFoundError:
@@ -56,6 +60,18 @@ async def lifespan(app: FastAPI):
     # 收益结算：为活跃资产产生每日收益（基于 daily_rate）
     scheduler.add_job(settle_revenue, "interval", seconds=INTERVAL_SECONDS, id="settle_revenue")
     scheduler.add_job(expire_due, "interval", seconds=60, id="expire_due")
+    scheduler.add_job(
+        reconcile_payments_job,
+        "interval",
+        seconds=min(
+            max(int(settings.PAYMENT_RECONCILIATION_INTERVAL_SECONDS), 30),
+            3600,
+        ),
+        id="reconcile_payments",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
     scheduler.add_job(sync_offers, "interval", seconds=300, id="sync_offers")
     scheduler.add_job(
         dispatch_market_sync,

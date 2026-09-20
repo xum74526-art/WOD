@@ -16,12 +16,11 @@ test("required rejection and failure reasons cannot be empty", () => {
   assert.equal(normalizeAdminReviewPrompt("   ", false), undefined);
 });
 
-test("all admin review workspaces guard the prompt before requesting approval or refund", () => {
+test("all active admin review workspaces guard the prompt before requesting approval", () => {
   const cases = [
     ["../components/admin-withdrawal-workspace.tsx", "kind !== \"approve\"", "approveFinanceWithdrawal(row.id, note)"],
     ["../components/admin-kyc-workspace.tsx", "!approved", "reviewFinanceVerification(row.id, approved, reason)"],
     ["../components/admin-bank-card-workspace.tsx", "!approved", "reviewFinanceBankCard(row.id, approved, reason)"],
-    ["../components/admin-refund-workspace.tsx", "false", "initiateAdminRefund(row.id, row.version, note)"],
   ] as const;
 
   for (const [path, requiredExpression, requestCall] of cases) {
@@ -36,4 +35,14 @@ test("all admin review workspaces guard the prompt before requesting approval or
     assert.ok(guardIndex > requiredIndex, `${path} must return when the prompt is canceled or invalid`);
     assert.ok(requestIndex > guardIndex, `${path} must guard before sending the approval request`);
   }
+});
+
+test("revealing payout instructions is a same-origin guarded mutation", () => {
+  const source = fs.readFileSync(new URL("../lib/mobile-finance-api.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export function getPaymentInstructions");
+  const end = source.indexOf("export function financeWithdrawalReceipt", start);
+  const request = source.slice(start, end);
+
+  assert.match(request, /payment-instructions\?reveal=true/);
+  assert.match(request, /method: "POST"/);
 });

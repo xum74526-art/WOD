@@ -1,4 +1,13 @@
-export type RechargeUiState = 'pending' | 'processing' | 'success' | 'failed' | 'expired' | 'canceled'
+export type RechargeUiState =
+  | 'pending'
+  | 'processing'
+  | 'success'
+  | 'refund_pending'
+  | 'refund_unknown'
+  | 'refunded'
+  | 'failed'
+  | 'expired'
+  | 'canceled'
 
 export interface RechargeTimingSource {
   status?: string | null
@@ -105,6 +114,9 @@ export function rechargeUiState(
   remainingMs: number | null,
 ): RechargeUiState {
   const status = String(order.status || '').trim().toLowerCase()
+  if (status === 'refund_pending') return 'refund_pending'
+  if (status === 'refund_unknown') return 'refund_unknown'
+  if (status === 'refunded') return 'refunded'
   if (order.credited_at) return 'success'
   if (status === 'paid' || status === 'review' || status === 'late_paid_review') return 'processing'
   if (status === 'failed') return 'failed'
@@ -123,6 +135,9 @@ export function rechargeHistoryPresentation(order: RechargeTimingSource): Rechar
       pending: 'statusPendingPayment',
       processing: 'statusProcessing',
       success: 'statusCompleted',
+      refund_pending: 'rechargeRefundPending',
+      refund_unknown: 'rechargeRefundUnknown',
+      refunded: 'rechargeRefunded',
       failed: 'statusFailed',
       expired: 'statusExpired',
       canceled: 'statusCanceled',
@@ -131,25 +146,33 @@ export function rechargeHistoryPresentation(order: RechargeTimingSource): Rechar
     ? 'success'
     : state === 'pending'
       ? 'pending'
-      : state === 'processing'
+      : state === 'processing' || state === 'refund_pending'
         ? 'reviewing'
         : 'danger'
   return { state, labelKey, tone }
 }
 
 export function rechargeCanQuery(order: RechargeTimingSource): boolean {
-  if (order.can_query === false) return false
-  return rechargeUiState(order, null) !== 'success'
+  if (order.can_query !== true) return false
+  const state = rechargeUiState(order, null)
+  return state !== 'success'
+    && state !== 'refund_pending'
+    && state !== 'refund_unknown'
+    && state !== 'refunded'
+    && state !== 'canceled'
 }
 
 export function rechargeCanCancel(order: RechargeTimingSource): boolean {
+  if (order.can_cancel !== true || order.credited_at) return false
   const status = String(order.status || '').trim().toLowerCase()
-  if (order.credited_at || status === 'paid' || status === 'review' || status === 'late_paid_review') return false
-  if (status === 'canceled' || status === 'cancelled') return false
-  if (order.can_cancel != null) return order.can_cancel === true
-  // Compatibility with a server deployed before can_cancel was added. The
-  // cancel request still goes to the server and never clears the order locally.
-  return status === 'pending' || status === 'expired' || status === 'failed'
+  return status !== 'paid'
+    && status !== 'review'
+    && status !== 'late_paid_review'
+    && status !== 'refund_pending'
+    && status !== 'refund_unknown'
+    && status !== 'refunded'
+    && status !== 'canceled'
+    && status !== 'cancelled'
 }
 
 export function rechargeCanRestart(order: RechargeTimingSource, remainingMs: number | null): boolean {

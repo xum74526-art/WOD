@@ -213,41 +213,6 @@ export type SshKey = {
   version: number;
 };
 
-export type ServerLease = {
-  id: number;
-  lease_no: string;
-  order_id: number;
-  order_no: string;
-  product_id: number;
-  server_name: string;
-  gpu_model: string;
-  region: string;
-  status: "pending_authorization" | "active" | "grace" | "expired" | "revoked" | "failed";
-  duration_hours: number;
-  amount: string;
-  currency: string;
-  ssh_key: { id: number; name: string; fingerprint: string };
-  connection: { host: string; port: number; username: string; ssh_command: string } | null;
-  starts_at: string | null;
-  expires_at: string | null;
-  grace_expires_at: string | null;
-  authorized_at: string | null;
-  access_revoked_at: string | null;
-  failure_reason: string | null;
-  created_at: string;
-  version: number;
-  renewable: boolean;
-  payment_mode: "placeholder" | "local_placeholder" | "pingxx";
-  payment?: RentalPayment;
-};
-
-export type RentalPayment = {
-  payment_no: string;
-  status: string;
-  provider: "local_placeholder" | "pingxx" | string;
-  checkout_url: string | null;
-};
-
 export type AgentHardware = {
   status: "pending" | "verified" | "mismatch" | "stale" | "unavailable";
   observed_at: string | null;
@@ -389,18 +354,11 @@ export function listSshKeys() { return apiEnvelopeRequest<SshKey[], { private_ke
 export function createSshKey(input: { name: string; public_key: string }) { return apiRequest<SshKey>("/api/v1/account/ssh-keys", { method: "POST", body: JSON.stringify(input) }); }
 export function updateSshKey(id: number, input: { version: number; name: string }) { return apiRequest<SshKey>(`/api/v1/account/ssh-keys/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
 export function revokeSshKey(id: number, version: number) { return apiRequest<SshKey>(`/api/v1/account/ssh-keys/${id}?version=${version}`, { method: "DELETE" }); }
-export function listServerLeases() { return apiEnvelopeRequest<ServerLease[], { renewal_grace_hours: number; payment_mode: "local_placeholder" | "pingxx" }>("/api/v1/account/leases"); }
-export function renewServerLease(id: number, version: number, durationHours: number, paymentChannel = "alipay_pc_direct") { return apiRequest<ServerLease>(`/api/v1/account/leases/${id}/renew`, { method: "POST", headers: { "Idempotency-Key": `lease-renew-${crypto.randomUUID()}` }, body: JSON.stringify({ version, duration_hours: durationHours, payment_channel: paymentChannel }) }); }
-export function listSupplierLeases() { return apiEnvelopeRequest<ServerLease[], { buyer_connection_details_exposed: false }>("/api/v1/supplier/leases"); }
 export type AgentDownload = { platform: "linux" | "windows" | "docker"; arch: "amd64" | "arm64" | "multi"; filename: string; url: string; available: boolean; size_bytes: number | null; sha256: string | null };
 export type AgentEnrollment = { server_id: number; server_no: string; enrollment_token: string; expires_at: string; api_base_url: string; linux_install_command: string; windows_install_command: string; docker_install_command: string; downloads: AgentDownload[]; security: { token_single_use: true; device_identity: string; transport: string; mtls_proxy_supported: true } };
 export type SupplierServer = { id: number; server_no: string; product_id: number; product_name: string; resource_status: ResourceStatus; public_host: string; ssh_port: number; ssh_username_prefix: string; status: string; agent_mode: string; agent_version: string | null; agent_device_id: string | null; agent_platform: "linux" | "windows" | null; agent_arch: "amd64" | "arm64" | null; agent_hostname: string | null; agent_capabilities: string[]; agent_enrolled_at: string | null; last_seen_at: string | null; hardware?: AgentHardware; services?: AgentServices; created_at: string; version: number };
 export function listSupplierServers() { return apiEnvelopeRequest<SupplierServer[], { production_agent_auth: string; local_agent_mode: "simulator" }>("/api/v1/supplier/servers"); }
 export function createAgentEnrollment(serverId: number) { return apiRequest<AgentEnrollment>(`/api/v1/supplier/servers/${serverId}/enrollment-token`, { method: "POST", body: JSON.stringify({ expires_in_minutes: 20 }) }); }
-
-export type RefundRequest = { id: number; refund_no: string; payment_no: string; order_id: number; order_no: string; purpose: "server_rental" | "lease_renewal"; buyer_id: number; supplier_id: number; amount: string; currency: string; provider: string; status: "requested" | "requires_manual" | "processing" | "completed" | "rejected"; reason_code: string; reason: string; provider_reference: string | null; admin_note: string | null; requested_at: string; processed_at: string | null; created_at: string; updated_at: string; version: number };
-export function listAdminRefunds(status?: string) { return apiRequest<RefundRequest[]>(`/api/v1/admin/refunds${queryString({ status })}`); }
-export function initiateAdminRefund(id: number, version: number, note?: string) { return apiRequest<RefundRequest>(`/api/v1/admin/refunds/${id}/initiate`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
 
 export type SupplierWithdrawal = {
   id: number;

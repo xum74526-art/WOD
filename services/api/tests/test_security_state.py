@@ -84,6 +84,8 @@ class SecurityStateTests(unittest.TestCase):
                 "MANUAL_BANK_CARD_ENABLED", "MANUAL_PAYOUT_ENABLED",
             )
         }
+        settings.SECRET_KEY = "unit-test-security-state-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
 
     def tearDown(self):
         settings.PAYMENT_SERVICE_ENABLED = self.original_payment_state
@@ -367,7 +369,7 @@ class SecurityStateTests(unittest.TestCase):
         with self.assertRaises(BizError):
             add_card(BankCardIn(
                 bank_name="测试银行", card_number="6222021234567890",
-                holder="李四", phone="13900000002",
+                holder="李四", phone="13900000002", sensitive_consent=True,
             ), self.seller, self.db)
         self.db.refresh(self.seller_wallet)
         self.assertEqual(self.seller_wallet.balance, Decimal("10"))

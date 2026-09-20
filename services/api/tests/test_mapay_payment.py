@@ -29,12 +29,17 @@ from app.services.mapay import (
     create_recharge_order,
     expire_pending_payment_orders,
     handle_notification,
+    legacy_reconciliation_configured,
     payment_status,
     provider_configured,
     public_config,
     query_provider_and_reconcile,
     utc_now,
     verify_params,
+)
+from app.services.payment_gateway import (
+    assert_payment_configuration_safe,
+    payment_readiness_errors,
 )
 from app.utils.response import BizError
 
@@ -74,22 +79,26 @@ class MaPayPaymentTests(unittest.TestCase):
         self.original = {
             name: getattr(settings, name)
             for name in (
-                "PAYMENT_SERVICE_ENABLED", "MAPAY_ENABLED", "MAPAY_PID",
+                "PAYMENT_SERVICE_ENABLED", "MAPAY_ENABLED",
+                "MAPAY_LEGACY_RECONCILIATION_ENABLED", "MAPAY_BASE_URL", "MAPAY_PID",
                 "MAPAY_MERCHANT_PRIVATE_KEY_PATH", "MAPAY_PLATFORM_PUBLIC_KEY_PATH",
                 "MAPAY_NOTIFY_URL", "MAPAY_PUBLIC_API_BASE_URL", "MAPAY_PAYMENT_TYPES",
-                "MAPAY_CHECKOUT_TTL_SECONDS", "MAPAY_PROVIDER_TIMEZONE",
+                "MAPAY_HTTP_TIMEOUT", "MAPAY_CHECKOUT_TTL_SECONDS", "MAPAY_PROVIDER_TIMEZONE",
                 "CARD_HOUR_RMB_RATE",
                 "MAPAY_MIN_AMOUNT_CNY", "MAPAY_MAX_AMOUNT_CNY",
             )
         }
         settings.PAYMENT_SERVICE_ENABLED = True
         settings.MAPAY_ENABLED = True
+        settings.MAPAY_LEGACY_RECONCILIATION_ENABLED = True
+        settings.MAPAY_BASE_URL = "https://mzf.mapay.cc/xpay/epayn"
         settings.MAPAY_PID = "10001"
         settings.MAPAY_MERCHANT_PRIVATE_KEY_PATH = str(merchant_path)
         settings.MAPAY_PLATFORM_PUBLIC_KEY_PATH = str(platform_path)
         settings.MAPAY_NOTIFY_URL = "https://example.test/api/payments/mapay/notify"
         settings.MAPAY_PUBLIC_API_BASE_URL = "https://example.test/api"
         settings.MAPAY_PAYMENT_TYPES = "alipay,wxpay"
+        settings.MAPAY_HTTP_TIMEOUT = 10
         settings.MAPAY_CHECKOUT_TTL_SECONDS = 300
         settings.MAPAY_PROVIDER_TIMEZONE = "Asia/Shanghai"
         settings.CARD_HOUR_RMB_RATE = 1.002
@@ -267,6 +276,58 @@ class MaPayPaymentTests(unittest.TestCase):
         self.assertEqual(len(credits), 1)
         self.assertEqual(credits[0].amount, Decimal("0.009980"))
 
+    def test_callback_is_rejected_before_verification_when_legacy_gate_is_off(self):
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("0.01"),
+            payment_type="alipay",
+        )
+        order = self.db.query(PaymentOrder).filter_by(order_no=output["order_no"]).one()
+        params = self._paid_params(order)
+        settings.MAPAY_LEGACY_RECONCILIATION_ENABLED = False
+
+        with (
+            patch("app.services.mapay.verify_params") as verify,
+            self.assertRaisesRegex(BizError, "历史收尾尚未启用") as rejected,
+        ):
+            handle_notification(self.db, params)
+
+        self.assertEqual(rejected.exception.status_code, 503)
+        verify.assert_not_called()
+        self.db.expire_all()
+        unchanged_order = self.db.query(PaymentOrder).filter_by(id=order.id).one()
+        unchanged_wallet = self.db.query(Wallet).filter_by(id=self.wallet.id).one()
+        self.assertEqual(unchanged_order.status, "pending")
+        self.assertIsNone(unchanged_order.credited_at)
+        self.assertEqual(unchanged_wallet.balance, Decimal("10.000000"))
+        self.assertEqual(
+            self.db.query(Ledger).filter_by(ref_payment_order_id=order.id).count(),
+            0,
+        )
+
+    def test_canceled_order_success_callback_is_preserved_for_manual_review(self):
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("0.01"),
+            payment_type="alipay",
+        )
+        order = self.db.query(PaymentOrder).filter_by(order_no=output["order_no"]).one()
+        order.status = "canceled"
+        self.db.commit()
+
+        self.assertTrue(handle_notification(self.db, self._paid_params(order)))
+        self.db.refresh(order)
+        self.db.refresh(self.wallet)
+        self.assertEqual(order.status, "review")
+        self.assertIsNone(order.credited_at)
+        self.assertEqual(self.wallet.balance, Decimal("10.000000"))
+        self.assertEqual(
+            self.db.query(Ledger).filter_by(ref_payment_order_id=order.id).count(),
+            0,
+        )
+
     def test_tampered_amount_or_signature_never_credits_wallet(self):
         output = create_recharge_order(
             self.db,
@@ -428,6 +489,35 @@ class MaPayPaymentTests(unittest.TestCase):
         self.assertIsNone(order.credited_at)
         self.assertEqual(self.wallet.balance, Decimal("10.000000"))
         self.assertEqual(self.db.query(Ledger).count(), 0)
+
+    def test_failure_redelivery_cannot_remove_success_from_review_queue(self):
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("0.01"),
+            payment_type="alipay",
+        )
+        order = self.db.query(PaymentOrder).filter_by(order_no=output["order_no"]).one()
+        order.expires_at = utc_now() - timedelta(seconds=30)
+        paid_at = order.expires_at + timedelta(seconds=5)
+        self.db.commit()
+        success = self._paid_params(order)
+        success["endtime"] = self._provider_local_time(paid_at)
+        success["sign"] = self._platform_sign(success)
+        self.assertTrue(handle_notification(self.db, success))
+        self.db.refresh(order)
+        self.assertEqual(order.status, "late_paid_review")
+
+        failure = self._paid_params(order)
+        failure["trade_status"] = "TRADE_FAILED"
+        failure["sign"] = self._platform_sign(failure)
+        self.assertFalse(handle_notification(self.db, failure))
+        self.db.refresh(order)
+        self.db.refresh(self.wallet)
+        self.assertEqual(order.status, "late_paid_review")
+        self.assertEqual(order.provider_status, "TRADE_SUCCESS")
+        self.assertIsNone(order.credited_at)
+        self.assertEqual(self.wallet.balance, Decimal("10.000000"))
 
     def test_late_success_without_trusted_time_enters_review_when_query_unavailable(self):
         output = create_recharge_order(
@@ -669,6 +759,72 @@ class MaPayPaymentTests(unittest.TestCase):
                 Decimal("0.01"),
                 payment_type="alipay",
             )
+
+    def test_legacy_reconciliation_readiness_fails_closed_per_required_setting(self):
+        settings.PAYMENT_SERVICE_ENABLED = False
+        settings.MAPAY_ENABLED = False
+        settings.MAPAY_LEGACY_RECONCILIATION_ENABLED = True
+
+        self.assertTrue(legacy_reconciliation_configured())
+        self.assertFalse(
+            any(error.startswith("mapay_") for error in payment_readiness_errors())
+        )
+        assert_payment_configuration_safe()
+
+        cases = (
+            ("MAPAY_PID", "", "mapay_pid_missing"),
+            (
+                "MAPAY_BASE_URL",
+                "https://attacker.example/xpay/epayn",
+                "mapay_base_url_invalid",
+            ),
+            (
+                "MAPAY_MERCHANT_PRIVATE_KEY_PATH",
+                str(Path(self.tempdir.name) / "missing-private.pem"),
+                "mapay_merchant_private_key_invalid",
+            ),
+            (
+                "MAPAY_PLATFORM_PUBLIC_KEY_PATH",
+                str(Path(self.tempdir.name) / "missing-public.pem"),
+                "mapay_platform_public_key_invalid",
+            ),
+            ("MAPAY_PROVIDER_TIMEZONE", "Mars/Olympus", "mapay_timezone_invalid"),
+            ("MAPAY_HTTP_TIMEOUT", 0, "mapay_http_timeout_invalid"),
+            ("MAPAY_HTTP_TIMEOUT", 56, "mapay_http_timeout_invalid"),
+            ("MAPAY_HTTP_TIMEOUT", float("nan"), "mapay_http_timeout_invalid"),
+        )
+        for name, unsafe_value, expected_error in cases:
+            original = getattr(settings, name)
+            setattr(settings, name, unsafe_value)
+            with self.subTest(name=name, value=unsafe_value):
+                self.assertIn(expected_error, payment_readiness_errors())
+                self.assertFalse(legacy_reconciliation_configured())
+                with self.assertRaisesRegex(RuntimeError, expected_error):
+                    assert_payment_configuration_safe()
+            setattr(settings, name, original)
+
+    def test_legacy_query_rejects_nonofficial_base_before_signing_or_network(self):
+        output = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("0.01"),
+            payment_type="alipay",
+        )
+        order = self.db.query(PaymentOrder).filter_by(order_no=output["order_no"]).one()
+        settings.PAYMENT_SERVICE_ENABLED = False
+        settings.MAPAY_ENABLED = False
+        settings.MAPAY_BASE_URL = "https://attacker.example/xpay/epayn"
+
+        with (
+            patch("app.services.mapay.sign_params") as sign,
+            patch("app.services.mapay.httpx.post") as post,
+            self.assertRaisesRegex(BizError, "历史查询地址配置无效") as rejected,
+        ):
+            query_provider_and_reconcile(self.db, order)
+
+        self.assertEqual(rejected.exception.status_code, 503)
+        sign.assert_not_called()
+        post.assert_not_called()
 
 
 if __name__ == "__main__":

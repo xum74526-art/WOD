@@ -26,6 +26,6 @@ test('matching request statuses use one submitted-discussion-confirmed lifecycle
 
 test('historical recharge queries depend on history capability and order capability only', () => {
   assert.match(wallet, /commerce\.historyReadEnabled && pendingPayment\.value && rechargeCanQuery/)
-  assert.match(wallet, /queryProvider[\s\S]*?commerce\.historyReadEnabled[\s\S]*?payment\.can_query !== false/)
+  assert.match(wallet, /queryProvider[\s\S]*?commerce\.historyReadEnabled[\s\S]*?rechargeCanQuery\(payment\)/)
   assert.doesNotMatch(wallet, /rechargeEnabled\.value/)
 })

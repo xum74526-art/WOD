@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -41,6 +42,8 @@ class MerchantCommerceFlowTests(unittest.TestCase):
                 "MERCHANT_SERVICE_FEE_BPS",
                 "ORDER_DELIVERY_TIMEOUT_HOURS",
                 "ORDER_CONFIRMATION_TIMEOUT_HOURS",
+                "SECRET_KEY",
+                "SENSITIVE_DATA_KEY",
             )
         }
         settings.CONSUMER_REWARD_ENABLED = False
@@ -52,6 +55,8 @@ class MerchantCommerceFlowTests(unittest.TestCase):
         settings.MERCHANT_SERVICE_FEE_BPS = 1000
         settings.ORDER_DELIVERY_TIMEOUT_HOURS = 24
         settings.ORDER_CONFIRMATION_TIMEOUT_HOURS = 24
+        settings.SECRET_KEY = "unit-test-merchant-commerce-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
 
         self.buyer = User(
             username="交易闭环买家",

@@ -5,11 +5,13 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
+from app.core.sensitive import SensitiveDataDecryptionError
 from app.db.base import Base
 from app.models import *  # noqa: F401,F403 - register complete test metadata
 from app.models.invite import InviteCode, InviteDailyQuota, InviteRecord
@@ -63,10 +65,16 @@ class InviteV2Tests(unittest.TestCase):
 
     def setUp(self):
         self.original_switches = {name: getattr(settings, name) for name in self.SWITCHES}
+        self.original_sensitive_settings = {
+            "SECRET_KEY": settings.SECRET_KEY,
+            "SENSITIVE_DATA_KEY": settings.SENSITIVE_DATA_KEY,
+        }
         for name in self.SWITCHES:
             setattr(settings, name, False)
         settings.INVITE_V2_ENABLED = True
         settings.REWARD_SETTLEMENT_ENABLED = True
+        settings.SECRET_KEY = "unit-test-invite-v2-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
         self.engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -110,6 +118,8 @@ class InviteV2Tests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
         for name, value in self.original_switches.items():
+            setattr(settings, name, value)
+        for name, value in self.original_sensitive_settings.items():
             setattr(settings, name, value)
 
     def test_summary_generates_ztw_code_for_account_without_invite_code(self):
@@ -371,9 +381,10 @@ class InviteV2Tests(unittest.TestCase):
             verified=True,
             id_card="enc:v1:not-a-valid-token",
         )
-        reevaluate_invitee_qualification(broken_user.id, self.db, event_at=self.now)
-        self.assertEqual(broken_record.qualification_status, STATUS_RISK_REVIEW)
-        self.assertEqual(broken_record.qualification_reason, "identity_comparison_unavailable")
+        with self.assertRaises(SensitiveDataDecryptionError):
+            reevaluate_invitee_qualification(broken_user.id, self.db, event_at=self.now)
+        self.assertEqual(broken_record.qualification_status, STATUS_PENDING_IDENTITY)
+        self.assertEqual(broken_record.qualification_reason, "verified_identity_required")
 
         self_user = User(
             username="self", phone="13918888888", password="!", invited_by=None

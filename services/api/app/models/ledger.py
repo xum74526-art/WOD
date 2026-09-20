@@ -14,6 +14,7 @@ class Ledger(Base):
         # The payment order is the durable idempotency key for a recharge.
         # SQLite/PostgreSQL both permit multiple NULLs in this constraint.
         UniqueConstraint("ref_payment_order_id", name="uq_ledger_payment_credit"),
+        UniqueConstraint("ref_payment_refund_id", name="uq_ledger_payment_refund"),
         UniqueConstraint("ref_order_renewal_id", name="uq_ledger_order_renewal"),
         UniqueConstraint("ref_reward_accrual_id", name="uq_ledger_reward_accrual"),
         UniqueConstraint("ref_merchant_settlement_id", name="uq_ledger_merchant_settlement"),
@@ -28,6 +29,9 @@ class Ledger(Base):
     balance_after: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
     ref_order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ref_payment_order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ref_payment_refund_id: Mapped[int | None] = mapped_column(
+        ForeignKey("payment_refunds.id"), nullable=True,
+    )
     ref_order_renewal_id: Mapped[int | None] = mapped_column(
         ForeignKey("order_renewals.id"), nullable=True,
     )

@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -30,10 +30,13 @@ from app.services.auth_session import normalize_platform
 
 
 PROVIDER = "mapay"
+OFFICIAL_GATEWAY_BASE_URL = "https://mzf.mapay.cc/xpay/epayn"
 SUCCESS_STATUS = "TRADE_SUCCESS"
 SUPPORTED_PAYMENT_TYPES = frozenset({"alipay", "wxpay"})
 FINAL_PROVIDER_FAILURES = frozenset({"TRADE_CLOSED", "TRADE_FAILED", "PAYERROR"})
 PAYMENT_TIME_FIELDS = ("endtime", "pay_time", "paid_at")
+AUTO_CREDIT_STATUSES = frozenset({"pending", "expired", "failed"})
+REVIEW_CLAIM_STATUSES = frozenset({"pending", "expired", "failed", "canceled"})
 
 
 def utc_now() -> datetime:
@@ -143,6 +146,66 @@ def configured_payment_types() -> tuple[str, ...]:
     return tuple(configured)
 
 
+def official_gateway_base_url_configured(value: str) -> bool:
+    """Pin every legacy signed request to MaPay's documented HTTPS API."""
+    return str(value or "").strip() == OFFICIAL_GATEWAY_BASE_URL
+
+
+def _provider_http_timeout_seconds() -> float:
+    try:
+        timeout = float(settings.MAPAY_HTTP_TIMEOUT)
+    except (TypeError, ValueError):
+        timeout = 10.0
+    if not math.isfinite(timeout):
+        timeout = 10.0
+    return min(max(timeout, 1.0), 55.0)
+
+
+def merchant_private_key_configured() -> bool:
+    try:
+        data = _as_pem(
+            _read_key(settings.MAPAY_MERCHANT_PRIVATE_KEY_PATH, "码支付商户私钥"),
+            "PRIVATE KEY",
+        )
+        key = serialization.load_pem_private_key(data, password=None)
+    except (BizError, OSError, TypeError, ValueError):
+        return False
+    return isinstance(key, rsa.RSAPrivateKey)
+
+
+def platform_public_key_configured() -> bool:
+    try:
+        data = _as_pem(
+            _read_key(settings.MAPAY_PLATFORM_PUBLIC_KEY_PATH, "码支付平台公钥"),
+            "PUBLIC KEY",
+        )
+        key = serialization.load_pem_public_key(data)
+    except (BizError, OSError, TypeError, ValueError):
+        return False
+    return isinstance(key, rsa.RSAPublicKey)
+
+
+def legacy_reconciliation_configured() -> bool:
+    """Return whether historical MaPay close-out is safe to perform."""
+    if not settings.MAPAY_LEGACY_RECONCILIATION_ENABLED:
+        return False
+    if not str(settings.MAPAY_PID or "").strip():
+        return False
+    if not official_gateway_base_url_configured(settings.MAPAY_BASE_URL):
+        return False
+    try:
+        ZoneInfo(str(settings.MAPAY_PROVIDER_TIMEZONE or ""))
+        timeout = float(settings.MAPAY_HTTP_TIMEOUT)
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        return False
+    return (
+        math.isfinite(timeout)
+        and 1.0 <= timeout <= 55.0
+        and merchant_private_key_configured()
+        and platform_public_key_configured()
+    )
+
+
 def checkout_ttl_seconds() -> int:
     # The hosted cashier currently closes orders at five minutes. Never issue
     # a ZTW deadline that outlives the provider order even if a legacy server
@@ -237,6 +300,11 @@ def _order_channel(payment_type: str | None) -> str:
     if normalized not in SUPPORTED_PAYMENT_TYPES:
         raise BizError("充值订单支付方式无效", status_code=409)
     return normalized
+
+
+def _require_provider_order(order: PaymentOrder) -> None:
+    if order.provider != PROVIDER:
+        raise BizError("该充值订单不属于 MaPay 历史通道", status_code=409)
 
 
 def _expire_order_if_due(order: PaymentOrder, *, now: datetime | None = None) -> bool:
@@ -364,6 +432,7 @@ def checkout_html(db: Session, token: str) -> str:
     order = db.query(PaymentOrder).filter(PaymentOrder.checkout_token_hash == token_hash).first()
     if not order:
         raise BizError("支付链接无效", status_code=404)
+    _require_provider_order(order)
     if order.credited_at:
         return "<!doctype html><meta charset='utf-8'><title>KAI星算</title><p>支付已确认，可返回KAI星算查看余额。</p>"
     if order.expires_at <= utc_now():
@@ -407,6 +476,7 @@ def checkout_html(db: Session, token: str) -> str:
 
 
 def _validate_provider_payment(order: PaymentOrder, params: dict) -> None:
+    _require_provider_order(order)
     if str(params.get("pid") or "") != settings.MAPAY_PID:
         raise BizError("支付通知商户号不匹配")
     if str(params.get("out_trade_no") or "") != order.order_no:
@@ -541,6 +611,7 @@ def _record_success_for_review(
     claimed = db.query(PaymentOrder).filter(
         PaymentOrder.id == order.id,
         PaymentOrder.credited_at.is_(None),
+        PaymentOrder.status.in_(REVIEW_CLAIM_STATUSES),
         or_(
             PaymentOrder.provider_trade_no.is_(None),
             PaymentOrder.provider_trade_no == trade_no,
@@ -550,6 +621,18 @@ def _record_success_for_review(
         db.rollback()
         return False
     try:
+        from app.services.payment_operations import record_payment_event
+
+        record_payment_event(
+            db,
+            order.id,
+            "payment_requires_review",
+            dedupe_key=f"payment:{order.id}:review:{status}:{trade_no}",
+            source="legacy_provider",
+            from_status=order.status,
+            to_status=status,
+            detail={"provider": PROVIDER, "provider_status": SUCCESS_STATUS, "reason": reason},
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -565,6 +648,9 @@ def credit_verified_payment(
     observed_at: datetime | None = None,
     validate_payment=None,
     provider_label: str = "码支付",
+    review_override: bool = False,
+    actor_user_id: int | None = None,
+    review_note: str | None = None,
 ) -> bool:
     """Credit a cryptographically verified provider success at most once.
 
@@ -583,6 +669,12 @@ def credit_verified_payment(
         params,
         observed_at=now,
     )
+    if review_override:
+        if order.status not in {"review", "late_paid_review"}:
+            raise BizError("充值订单不在待复核状态", status_code=409)
+        decision = "credit"
+        paid_at = order.paid_at or paid_at or now
+        reason = None
     if decision != "credit":
         return _record_success_for_review(
             db,
@@ -601,6 +693,9 @@ def credit_verified_payment(
     claimed = db.query(PaymentOrder).filter(
         PaymentOrder.id == order.id,
         PaymentOrder.credited_at.is_(None),
+        PaymentOrder.status.in_(
+            ("review", "late_paid_review") if review_override else AUTO_CREDIT_STATUSES
+        ),
         or_(
             PaymentOrder.provider_trade_no.is_(None),
             PaymentOrder.provider_trade_no == trade_no,
@@ -616,6 +711,19 @@ def credit_verified_payment(
     }, synchronize_session=False)
     if claimed == 0:
         db.rollback()
+        current = db.query(PaymentOrder).filter(
+            PaymentOrder.id == order.id
+        ).populate_existing().first()
+        if current and current.status == "canceled" and current.credited_at is None:
+            return _record_success_for_review(
+                db,
+                current,
+                params,
+                status="review",
+                reason="已取消的历史充值订单随后收到支付成功，未自动入账，等待人工复核",
+                provider_paid_at=paid_at,
+                validate_payment=validator,
+            )
         return False
 
     wallet = db.query(Wallet).filter(Wallet.user_id == user_id).with_for_update().first()
@@ -646,6 +754,25 @@ def credit_verified_payment(
         action_url="/pages/wallet/index",
         dedupe_key=f"payment:{payment_order_id}:credited",
     )
+    from app.services.payment_operations import record_payment_event
+
+    record_payment_event(
+        db,
+        payment_order_id,
+        "payment_credited_after_review" if review_override else "payment_credited",
+        dedupe_key=f"payment:{payment_order_id}:credited",
+        actor_type="admin" if actor_user_id else "system",
+        actor_user_id=actor_user_id,
+        source="admin" if actor_user_id else "legacy_provider",
+        from_status=order.status,
+        to_status="paid",
+        detail={
+            "provider": PROVIDER,
+            "amount_cny": f"{amount_cny:.2f}",
+            "card_hours": str(card_hours),
+            "review_note": review_note if actor_user_id else None,
+        },
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -658,22 +785,53 @@ def credit_verified_payment(
 
 
 def handle_notification(db: Session, params: dict) -> bool:
+    # MaPay is retired for new collection. Its callback can mutate wallet
+    # balances only during an explicitly enabled, fully configured historical
+    # close-out window, using the same fail-closed gate as active queries.
+    if not legacy_reconciliation_configured():
+        raise BizError("码支付V2历史收尾尚未启用或配置不完整", status_code=503)
     if not verify_params(params):
         raise BizError("支付通知签名无效")
     order_no = str(params.get("out_trade_no") or "")
     order = db.query(PaymentOrder).filter(PaymentOrder.order_no == order_no).first()
     if not order:
         raise BizError("充值订单不存在", status_code=404)
+    _require_provider_order(order)
     status = str(params.get("trade_status") or "")
-    order.provider_status = status[:64]
-    order.last_modified_platform = "system"
     if status != SUCCESS_STATUS:
-        if status in FINAL_PROVIDER_FAILURES and order.credited_at is None:
-            order.status = "failed"
-            order.failure_reason = f"支付平台返回失败状态：{status}"[:160]
+        _validate_provider_payment(order, params)
+        trade_no = _provider_trade_no(db, order, params)
+        updates = {
+            PaymentOrder.provider_trade_no: trade_no,
+            PaymentOrder.provider_status: status[:64],
+            PaymentOrder.last_modified_platform: "system",
+        }
+        if status in FINAL_PROVIDER_FAILURES:
+            updates.update({
+                PaymentOrder.status: "failed",
+                PaymentOrder.failure_reason: f"支付平台返回失败状态：{status}"[:160],
+            })
+        elif order.expires_at <= utc_now():
+            updates.update({
+                PaymentOrder.status: "expired",
+                PaymentOrder.failure_reason: "支付时限已结束；如已付款请查询支付平台状态",
+            })
+        changed = db.query(PaymentOrder).filter(
+            PaymentOrder.id == order.id,
+            PaymentOrder.credited_at.is_(None),
+            PaymentOrder.status.in_(AUTO_CREDIT_STATUSES),
+            or_(
+                PaymentOrder.provider_trade_no.is_(None),
+                PaymentOrder.provider_trade_no == trade_no,
+            ),
+        ).update(updates, synchronize_session=False)
+        if changed:
+            db.commit()
         else:
-            _expire_order_if_due(order)
-        db.commit()
+            db.rollback()
+            db.query(PaymentOrder).filter(
+                PaymentOrder.id == order.id
+            ).populate_existing().first()
         return False
 
     received_at = utc_now()
@@ -706,16 +864,15 @@ def handle_notification(db: Session, params: dict) -> bool:
 
 
 def _provider_query_configured() -> bool:
-    return bool(
-        settings.PAYMENT_SERVICE_ENABLED
-        and settings.MAPAY_ENABLED
-        and settings.MAPAY_PID.strip()
-        and Path(settings.MAPAY_MERCHANT_PRIVATE_KEY_PATH).expanduser().is_file()
-        and Path(settings.MAPAY_PLATFORM_PUBLIC_KEY_PATH).expanduser().is_file()
-    )
+    return legacy_reconciliation_configured()
 
 
 def _query_provider_payload(order: PaymentOrder) -> dict:
+    _require_provider_order(order)
+    # Check the exact destination before loading/signing with the merchant key.
+    # This remains a runtime guard even though startup performs the same check.
+    if not official_gateway_base_url_configured(settings.MAPAY_BASE_URL):
+        raise BizError("码支付V2历史查询地址配置无效", status_code=503)
     if not _provider_query_configured():
         raise BizError("码支付V2尚未完成密钥配置", status_code=503)
     params = {
@@ -727,11 +884,11 @@ def _query_provider_payload(order: PaymentOrder) -> dict:
     params["sign"] = sign_params(params)
     url = settings.MAPAY_BASE_URL.rstrip("/") + "/api/pay/query"
     try:
-        response = httpx.post(url, data=params, timeout=settings.MAPAY_HTTP_TIMEOUT)
+        response = httpx.post(url, data=params, timeout=_provider_http_timeout_seconds())
         response.raise_for_status()
         payload = response.json()
-    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
-        raise BizError("支付平台订单查询失败，请稍后重试", status_code=502) from exc
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+        raise BizError("支付平台订单查询失败，请稍后重试", status_code=502) from None
     if not isinstance(payload, dict) or str(payload.get("code")) != "0":
         raise BizError("支付平台暂未确认该订单", status_code=409)
     if not _verify_query_response(payload):
@@ -749,6 +906,7 @@ def _provider_reports_success(payload: dict) -> bool:
 
 
 def query_provider_and_reconcile(db: Session, order: PaymentOrder) -> dict:
+    _require_provider_order(order)
     if order.credited_at is not None:
         return _payment_out(order)
     _persist_order_expiry(db, order)

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -23,12 +23,14 @@ from app.schemas.withdrawal import (
     ApproveWithdrawalIn,
     FailedWithdrawalIn,
     FinanceReviewIn,
+    PaymentInstructionsResponse,
     PayoutPaidAt,
     RejectWithdrawalIn,
 )
 from app.services.manual_payout import (
     ALL_WITHDRAWAL_STATUSES,
     approve_withdrawal,
+    claim_payout_actor,
     fail_withdrawal,
     issue_payment_instruction_grant,
     mark_paid,
@@ -443,7 +445,13 @@ def withdrawal_reject(
     return success(_finance_order_out(db, order))
 
 
-@router.post("/withdrawals/{order_id}/mark-failed")
+@router.post(
+    "/withdrawals/{order_id}/mark-failed",
+    description=(
+        "Before payment instructions are claimed, an administrator may fail the request. "
+        "After claim, only the assigned payout operator may fail and release its frozen funds."
+    ),
+)
 def withdrawal_failed(
     order_id: int,
     data: FailedWithdrawalIn,
@@ -458,9 +466,18 @@ def withdrawal_failed(
     return success(_finance_order_out(db, order))
 
 
-@router.get("/withdrawals/{order_id}/payment-instructions")
+@router.post(
+    "/withdrawals/{order_id}/payment-instructions",
+    response_model=PaymentInstructionsResponse,
+    description=(
+        "The first non-approving administrator to reveal these instructions is "
+        "atomically and durably assigned as the sole payout operator. Later "
+        "reveals and mark-paid requests are restricted to that same administrator."
+    ),
+)
 def payment_instructions(
     order_id: int,
+    response: Response,
     reveal_card: bool = Query(False, alias="reveal"),
     actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
@@ -469,10 +486,14 @@ def payment_instructions(
     # argument name for direct unit tests.
     if not reveal_card:
         raise BizError("查看完整卡号需显式传入 reveal=true")
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Pragma"] = "no-cache"
     order = _withdrawal(db, order_id)
     _assert_not_self(actor, order.user_id)
     if order.status != "manual_payment_pending":
         raise BizError("仅待人工打款申请可查看付款信息", status_code=409)
+    # Commit the unique payout operator before decrypting any bank-card value.
+    claim_payout_actor(db, order, actor)
     card = db.query(BankCard).filter(BankCard.id == order.bank_card_id).first()
     if not card:
         raise BizError("银行卡资料不存在", status_code=404)

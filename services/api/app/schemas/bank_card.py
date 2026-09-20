@@ -2,17 +2,20 @@ from datetime import datetime
 
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 from app.schemas.common import OrmModel
 
 
 class BankCardIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     bank_name: str | None = Field(default=None, max_length=64)  # 可选，自动识别
     card_number: str = Field(min_length=12, max_length=32)
     holder: str = Field(min_length=2, max_length=64)
     phone: str | None = Field(default=None, max_length=20)
     is_default: bool = False
+    sensitive_consent: StrictBool
 
     @field_validator("card_number")
     @classmethod
@@ -63,6 +66,8 @@ class BankCardOut(OrmModel):
     status: str = "registered"
     verification_mode: str = "format_only"
     bank_verified: bool = False
+    consent_recorded: bool = False
+    consent_version: str | None = None
     reject_reason: str | None = None
     reviewed_at: datetime | None = None
     created_at: datetime | None = None

@@ -14,6 +14,7 @@ from app.models import *  # noqa: F401,F403,E402
 from app.models.market_price import MarketPriceCandle  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.core.config import settings  # noqa: E402
+from app.core.sensitive import assert_sensitive_storage_secure  # noqa: E402
 
 # 需要确保存在的列（兼容旧 wod.db）
 _ENSURE = {
@@ -67,18 +68,21 @@ _ENSURE = {
     ],
     "bank_cards": [
         "card_fingerprint", "status", "verification_mode", "review_reason",
-        "reviewed_by", "reviewed_at", "updated_at", "created_platform",
-        "last_modified_platform",
+        "reviewed_by", "reviewed_at", "consent_at", "consent_version",
+        "updated_at", "created_platform", "last_modified_platform",
     ],
     "ledger": [
         "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id",
-        "ref_merchant_settlement_id", "event_key",
+        "ref_merchant_settlement_id", "ref_payment_refund_id", "event_key",
     ],
     "payment_orders": [
         "provider_checkout_url", "checkout_started_at", "created_platform",
-        "last_modified_platform",
+        "last_modified_platform", "client_request_id", "create_request_hash",
+        "last_reconciled_at", "reconcile_attempts",
     ],
-    "withdrawal_orders": ["created_platform", "last_modified_platform"],
+    "withdrawal_orders": [
+        "created_platform", "last_modified_platform", "payout_actor_id",
+    ],
     "invite_records": [
         "created_platform", "last_modified_platform", "qualification_status",
         "qualification_policy_version", "identity_verified_at", "qualified_at",
@@ -96,6 +100,7 @@ _DATETIME_COLS = {
     "ocr_updated_at", "moderated_at",
     "consent_at",
     "checkout_started_at",
+    "last_reconciled_at",
     "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
     "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_resolved_at",
     "identity_verified_at", "qualified_at",
@@ -105,10 +110,11 @@ _DATE_COLS = {"qualification_day"}
 _INTEGER_COLS = {
     "quantity", "purchase_hours", "video_duration", "stock", "supplier_id",
     "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id",
-    "ref_merchant_settlement_id", "reviewed_by", "dispute_resolved_by", "user_id",
+    "ref_merchant_settlement_id", "ref_payment_refund_id", "reviewed_by", "payout_actor_id",
+    "dispute_resolved_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
     "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
-    "auth_version", "moderated_by",
+    "auth_version", "moderated_by", "reconcile_attempts",
 }
 _NUMERIC_COLS = {
     "sell_price", "source_price", "exchange_rate", "reliability",
@@ -135,9 +141,13 @@ def _ensure_columns(db_engine=None):
                     col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif col == "password_set":
                     col_type = "BOOLEAN NOT NULL DEFAULT TRUE"
+                elif col == "reconcile_attempts":
+                    col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif table == "products" and col == "version":
                     col_type = "INTEGER NOT NULL DEFAULT 1"
-                elif col in {"client_request_id", "create_request_hash"}:
+                elif col in {
+                    "client_request_id", "create_request_hash", "consent_version",
+                }:
                     col_type = "VARCHAR(64)"
                 elif col in _DATETIME_COLS:
                     col_type = (
@@ -175,6 +185,12 @@ def _ensure_columns(db_engine=None):
         with target_engine.begin() as conn:
             conn.execute(text("UPDATE users SET auth_version = 0 WHERE auth_version IS NULL"))
             conn.execute(text("UPDATE users SET password_set = TRUE WHERE password_set IS NULL"))
+    if "payment_orders" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE payment_orders SET reconcile_attempts = 0 "
+                "WHERE reconcile_attempts IS NULL"
+            ))
     for table in ("posts", "comments"):
         if table in insp.get_table_names():
             with target_engine.begin() as conn:
@@ -1165,37 +1181,79 @@ def _migrate_legacy_market_history():
 
 def _migrate_sensitive_fields(db_session=None):
     """Encrypt legacy plaintext values without changing their visible meaning."""
-    from app.core.sensitive import protect
+    # This helper is imported directly by tests and maintenance tooling, so it
+    # must defend itself rather than relying only on init() or service startup.
+    assert_sensitive_storage_secure()
+
+    from app.core.sensitive import fingerprint, protect, reveal
+    from app.models.account_recovery import AccountRecoveryToken
+    from app.models.account_recovery_mail import AccountRecoveryMailOutbox
     from app.models.bank_card import BankCard
+    from app.models.buy_request import BuyRequestCredential
     from app.models.order import Order
+    from app.models.user import User
     from app.models.verification import Verification
 
     owns_session = db_session is None
     db = db_session or SessionLocal()
     try:
         migrated = 0
+
+        def migrate_value(row, attribute: str) -> str | None:
+            nonlocal migrated
+            current = getattr(row, attribute)
+            encrypted = protect(current)
+            if encrypted != current:
+                setattr(row, attribute, encrypted)
+                migrated += 1
+            return encrypted
+
         for row in db.query(Verification).all():
-            encrypted = protect(row.id_card)
-            if encrypted != row.id_card:
-                row.id_card = encrypted
-                migrated += 1
+            migrate_value(row, "id_card")
+            migrate_value(row, "ocr_summary")
         for row in db.query(BankCard).all():
-            encrypted = protect(row.card_number)
-            if encrypted != row.card_number:
-                row.card_number = encrypted
-                migrated += 1
-            encrypted_phone = protect(row.phone)
-            if encrypted_phone != row.phone:
-                row.phone = encrypted_phone
-                migrated += 1
+            encrypted_number = migrate_value(row, "card_number")
+            migrate_value(row, "phone")
+            if row.card_fingerprint is not None and encrypted_number:
+                normalized_number = "".join(reveal(encrypted_number).split())
+                current_fingerprint = fingerprint(normalized_number)
+                if row.card_fingerprint != current_fingerprint:
+                    row.card_fingerprint = current_fingerprint
+                    migrated += 1
         for row in db.query(Order).filter(Order.ssh_info.isnot(None)).all():
-            encrypted = protect(row.ssh_info)
-            if encrypted != row.ssh_info:
-                row.ssh_info = encrypted
-                migrated += 1
+            migrate_value(row, "ssh_info")
+        for row in db.query(User).filter(User.recovery_email.isnot(None)).all():
+            encrypted_email = migrate_value(row, "recovery_email")
+            if encrypted_email:
+                current_fingerprint = fingerprint(reveal(encrypted_email))
+                if row.recovery_email_fingerprint != current_fingerprint:
+                    row.recovery_email_fingerprint = current_fingerprint
+                    migrated += 1
+        for row in db.query(AccountRecoveryToken).filter(
+            AccountRecoveryToken.target_email.isnot(None)
+        ).all():
+            encrypted_email = migrate_value(row, "target_email")
+            if encrypted_email:
+                current_fingerprint = fingerprint(reveal(encrypted_email))
+                if row.target_email_fingerprint != current_fingerprint:
+                    row.target_email_fingerprint = current_fingerprint
+                    migrated += 1
+        for row in db.query(AccountRecoveryMailOutbox).all():
+            migrate_value(row, "recipient_payload")
+            migrate_value(row, "token_payload")
+        for row in db.query(BuyRequestCredential).all():
+            encrypted_payload = migrate_value(row, "protected_payload")
+            if encrypted_payload:
+                current_fingerprint = fingerprint(reveal(encrypted_payload))
+                if row.payload_fingerprint != current_fingerprint:
+                    row.payload_fingerprint = current_fingerprint
+                    migrated += 1
         db.commit()
         if migrated:
             print(f"[init_db] 已加密历史敏感字段: {migrated} 条")
+    except Exception:
+        db.rollback()
+        raise
     finally:
         if owns_session:
             db.close()
@@ -1438,8 +1496,14 @@ def _migrate_payment_precision_and_pending_deadlines(
 
 def _migrate_manual_payout_fields(db_engine=None, db_session=None):
     """Initialize the manual-payout schema without inventing withdrawable funds."""
+    # This migration reads encrypted bank-card data and can also be invoked on
+    # its own. Refuse all writes before opening a transaction unless the
+    # independent storage key is valid.
+    assert_sensitive_storage_secure()
+
     from app.core.sensitive import fingerprint, reveal
     from app.models.bank_card import BankCard
+    from app.models.withdrawal import PaymentInstructionGrant, WithdrawalOrder
     from app.utils.bank_util import luhn_check
 
     target_engine = db_engine or engine
@@ -1449,15 +1513,65 @@ def _migrate_manual_payout_fields(db_engine=None, db_session=None):
         # Historical/recharge/reward/revenue rows are deliberately ignored.
         # The only safe migration value is zero until a future auditable source
         # explicitly credits withdrawable_balance.
-        with target_engine.begin() as conn:
-            conn.execute(text(
-                "UPDATE wallets SET withdrawable_balance = 0 "
-                "WHERE withdrawable_balance IS NULL"
-            ))
-            conn.execute(text(
-                "UPDATE wallets SET withdraw_frozen = 0 "
-                "WHERE withdraw_frozen IS NULL"
-            ))
+        # Keep these updates in the same transaction as card normalization. If
+        # any ciphertext cannot be authenticated, rollback leaves the complete
+        # database unchanged instead of silently disabling or rewriting cards.
+        db.execute(text(
+            "UPDATE wallets SET withdrawable_balance = 0 "
+            "WHERE withdrawable_balance IS NULL"
+        ))
+        db.execute(text(
+            "UPDATE wallets SET withdraw_frozen = 0 "
+            "WHERE withdraw_frozen IS NULL"
+        ))
+
+        # A pre-upgrade operator who already revealed full payment details must
+        # remain the only person allowed to execute that transfer. Backfill a
+        # unique historical grant holder, but refuse to start when more than
+        # one administrator has already seen an active request: automatically
+        # choosing either one could permit a real-world double payment.
+        payout_assignments = 0
+        active_payouts = db.query(WithdrawalOrder).filter(
+            WithdrawalOrder.status == "manual_payment_pending"
+        ).all()
+        for order in active_payouts:
+            if order.reviewed_by is None:
+                raise RuntimeError(
+                    f"manual payout {order.id} is pending without an approval actor"
+                )
+            grant_actor_ids = {
+                int(actor_id)
+                for (actor_id,) in db.query(PaymentInstructionGrant.actor_user_id).filter(
+                    PaymentInstructionGrant.withdrawal_id == order.id
+                ).distinct().all()
+            }
+            if order.payout_actor_id is not None:
+                grant_actor_ids.add(int(order.payout_actor_id))
+            if len(grant_actor_ids) > 1:
+                raise RuntimeError(
+                    f"manual payout {order.id} has multiple historical payout operators; "
+                    "audit and close the request before deployment"
+                )
+            if grant_actor_ids:
+                payout_actor_id = next(iter(grant_actor_ids))
+                if payout_actor_id == int(order.reviewed_by):
+                    raise RuntimeError(
+                        f"manual payout {order.id} has the same approval and payout actor; "
+                        "audit and close the request before deployment"
+                    )
+                if order.payout_actor_id is None:
+                    order.payout_actor_id = payout_actor_id
+                    payout_assignments += 1
+
+        # Completed historical payouts have no remaining transfer risk. Keep
+        # the actual confirmer as their assignment for audit consistency.
+        for order in db.query(WithdrawalOrder).filter(
+            WithdrawalOrder.status == "paid",
+            WithdrawalOrder.payout_actor_id.is_(None),
+            WithdrawalOrder.paid_by.isnot(None),
+        ).all():
+            order.payout_actor_id = order.paid_by
+            payout_assignments += 1
 
         seen: set[tuple[int, str]] = set()
         default_seen: set[int] = set()
@@ -1541,7 +1655,12 @@ def _migrate_manual_payout_fields(db_engine=None, db_session=None):
             ))
         if changed:
             print(f"[init_db] 人工提现字段归一: 银行卡 {changed} 项；历史可提现余额保持 0")
+        if payout_assignments:
+            print(f"[init_db] 人工提现付款经办人回填: {payout_assignments} 条")
         return changed
+    except Exception:
+        db.rollback()
+        raise
     finally:
         if owns_session:
             db.close()
@@ -1678,6 +1797,10 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
 
 
 def init():
+    # This must be the first executable statement: create_all and every helper
+    # below can write. Deployment preflight runs earlier too, but init_db must
+    # remain fail-closed when invoked manually.
+    assert_sensitive_storage_secure()
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
     _migrate_community_comment_idempotency()
@@ -1761,6 +1884,14 @@ def init():
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_payment_credit "
             "ON ledger (ref_payment_order_id) WHERE ref_payment_order_id IS NOT NULL"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_payment_refund "
+            "ON ledger (ref_payment_refund_id) WHERE ref_payment_refund_id IS NOT NULL"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_payment_order_user_provider_request "
+            "ON payment_orders (user_id, provider, client_request_id)"
         ))
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_order_renewal "

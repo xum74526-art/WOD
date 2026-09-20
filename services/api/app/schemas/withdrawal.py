@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
@@ -63,3 +64,24 @@ class FailedWithdrawalIn(BaseModel):
         if len(value) < 2:
             raise ValueError("reason is required")
         return value
+
+
+class PaymentInstructionsOut(BaseModel):
+    order_id: int
+    order_no: str
+    bank_name: str
+    card_number: str
+    holder: str
+    phone: str
+    amount_cny: float
+    verification_mode: Literal["format_only"]
+    bank_verified: Literal[False]
+    reveal_token: str
+    reveal_expires_at: datetime
+    notice: str
+
+
+class PaymentInstructionsResponse(BaseModel):
+    code: int = 0
+    msg: str = "ok"
+    data: PaymentInstructionsOut

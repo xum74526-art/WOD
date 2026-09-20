@@ -9,9 +9,9 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 from PIL import Image
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -30,6 +30,7 @@ from app.models import (
     Wallet,
     WithdrawalOrder,
 )
+from app.models.bank_card import BANK_CARD_SENSITIVE_CONSENT_VERSION
 from app.routers import bank_card as bank_card_router
 from app.routers import finance as finance_router
 from app.routers import supplier as supplier_router
@@ -53,7 +54,7 @@ from app.services.manual_payout import (
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.bank_util import AMBIGUOUS_BANK_BINS, BANK_BINS, detect_bank
 from app.utils.response import BizError
-from init_db import _migrate_manual_payout_fields, _migrate_sensitive_fields
+from init_db import _ensure_columns, _migrate_manual_payout_fields, _migrate_sensitive_fields
 
 
 VALID_CARD = "4539578763621486"
@@ -82,7 +83,19 @@ class ManualPayoutTests(unittest.TestCase):
             password="!",
             role="admin",
         )
-        self.db.add_all([self.user, self.admin])
+        self.payer = User(
+            phone="13900001999",
+            username="财务打款员",
+            password="!",
+            role="admin",
+        )
+        self.other_payer = User(
+            phone="13900001998",
+            username="另一财务打款员",
+            password="!",
+            role="admin",
+        )
+        self.db.add_all([self.user, self.admin, self.payer, self.other_payer])
         self.db.flush()
         self.wallet = Wallet(
             user_id=self.user.id,
@@ -109,6 +122,8 @@ class ManualPayoutTests(unittest.TestCase):
             status="active",
             verification_mode="manual_review",
             is_default=True,
+            consent_at=datetime(2026, 8, 20, 8, 0, 0),
+            consent_version=BANK_CARD_SENSITIVE_CONSENT_VERSION,
         )
         self.db.add_all([self.wallet, self.verification, self.card])
         self.db.commit()
@@ -156,7 +171,7 @@ class ManualPayoutTests(unittest.TestCase):
 
     def _reveal(self, order, actor=None):
         return finance_router.payment_instructions(
-            order.id, True, actor or self.admin, self.db,
+            order.id, Response(), True, actor or self.payer, self.db,
         )["data"]
 
     def test_paid_at_requires_timezone_and_withdrawal_timestamps_are_utc_explicit(self):
@@ -227,8 +242,16 @@ class ManualPayoutTests(unittest.TestCase):
 
     def test_card_input_rejects_non_digits_and_normalizes_spaces(self):
         with self.assertRaises(ValidationError):
-            BankCardIn(card_number="4539-5787-6362-1486", holder="张三")
-        payload = BankCardIn(card_number="4539 5787 6362 1486", holder="张三")
+            BankCardIn(
+                card_number="4539-5787-6362-1486",
+                holder="张三",
+                sensitive_consent=True,
+            )
+        payload = BankCardIn(
+            card_number="4539 5787 6362 1486",
+            holder="张三",
+            sensitive_consent=True,
+        )
         self.assertEqual(payload.card_number, VALID_CARD)
 
     def test_binding_is_registered_format_only_and_phone_is_encrypted(self):
@@ -249,6 +272,7 @@ class ManualPayoutTests(unittest.TestCase):
                 holder="李四",
                 phone="13900001003",
                 is_default=True,
+                sensitive_consent=True,
             ),
             second_user,
             self.db,
@@ -367,6 +391,17 @@ class ManualPayoutTests(unittest.TestCase):
         with self.assertRaisesRegex(BizError, "实名认证人工审核通过"):
             self._create()
 
+    def test_historical_card_without_current_consent_cannot_withdraw(self):
+        self.card.consent_at = None
+        self.card.consent_version = None
+        self.db.commit()
+        with self.assertRaisesRegex(BizError, "缺少当前敏感信息使用同意") as raised:
+            self._create(request_id="withdraw-consent-required")
+        self.assertEqual(raised.exception.status_code, 409)
+        self.db.refresh(self.wallet)
+        self.assertEqual(self.wallet.balance, Decimal("10"))
+        self.assertEqual(self.wallet.frozen, Decimal("0"))
+
     def test_ambiguous_bins_are_never_claimed_as_a_bank(self):
         self.assertTrue(AMBIGUOUS_BANK_BINS.isdisjoint(BANK_BINS))
         for prefix in AMBIGUOUS_BANK_BINS:
@@ -375,16 +410,28 @@ class ManualPayoutTests(unittest.TestCase):
     def test_full_card_requires_explicit_reveal_and_payment_pending_status(self):
         order = self._create()
         with self.assertRaisesRegex(BizError, "显式"):
-            finance_router.payment_instructions(order.id, False, self.admin, self.db)
+            finance_router.payment_instructions(order.id, Response(), False, self.admin, self.db)
         with self.assertRaisesRegex(BizError, "待人工打款"):
-            finance_router.payment_instructions(order.id, True, self.admin, self.db)
+            finance_router.payment_instructions(order.id, Response(), True, self.admin, self.db)
         approve_withdrawal(self.db, order, self.admin, None)
         self.db.refresh(order)
-        output = finance_router.payment_instructions(order.id, True, self.admin, self.db)["data"]
+        with self.assertRaisesRegex(BizError, "不同管理员"):
+            finance_router.payment_instructions(order.id, Response(), True, self.admin, self.db)
+        response = Response()
+        output = finance_router.payment_instructions(
+            order.id, response, True, self.payer, self.db,
+        )["data"]
         self.assertEqual(output["card_number"], VALID_CARD)
         self.assertFalse(output["bank_verified"])
         self.assertTrue(output["reveal_token"])
         self.assertIsNotNone(output["reveal_expires_at"])
+        self.assertEqual(response.headers["cache-control"], "private, no-store")
+        self.db.refresh(order)
+        self.assertEqual(order.payout_actor_id, self.payer.id)
+        with self.assertRaisesRegex(BizError, "其他财务经办人"):
+            finance_router.payment_instructions(
+                order.id, Response(), True, self.other_payer, self.db,
+            )
         audit_text = " ".join(row.detail or "" for row in self.db.query(FinanceAuditLog).all())
         self.assertNotIn(VALID_CARD, audit_text)
 
@@ -441,11 +488,40 @@ class ManualPayoutTests(unittest.TestCase):
         mime, suffix = validate_receipt(content)
         path, digest = persist_receipt(content, order, suffix)
         revealed = self._reveal(order)
-        with self.assertRaisesRegex(BizError, "核对收款人"):
+        with self.assertRaisesRegex(BizError, "不同管理员"):
             mark_paid(
                 self.db,
                 order,
                 self.admin,
+                receipt_path=path,
+                original_name="bank-transfer.png",
+                content_type=mime,
+                size_bytes=len(content),
+                sha256=digest,
+                bank_reference="BANKREF-TEST-0001",
+                paid_amount_cny=Decimal("2.00"),
+                paid_at=utc_now().replace(tzinfo=timezone.utc),
+                payee_confirmed=True,
+                reveal_token=revealed["reveal_token"],
+            )
+        self.db.refresh(order)
+        self.db.refresh(self.wallet)
+        self.assertEqual(order.status, "manual_payment_pending")
+        self.assertIsNone(order.paid_by)
+        self.assertEqual(self.wallet.frozen, Decimal("2"))
+        self.assertEqual(self.wallet.withdraw_frozen, Decimal("2"))
+        self.assertEqual(self.db.query(PayoutReceipt).count(), 0)
+        self.assertEqual(
+            self.db.query(PaymentInstructionGrant).filter(
+                PaymentInstructionGrant.used_at.isnot(None)
+            ).count(),
+            0,
+        )
+        with self.assertRaisesRegex(BizError, "核对收款人"):
+            mark_paid(
+                self.db,
+                order,
+                self.payer,
                 receipt_path=path,
                 original_name="bank-transfer.png",
                 content_type=mime,
@@ -461,7 +537,7 @@ class ManualPayoutTests(unittest.TestCase):
             mark_paid(
                 self.db,
                 order,
-                self.admin,
+                self.payer,
                 receipt_path=path,
                 original_name="bank-transfer.png",
                 content_type=mime,
@@ -473,11 +549,11 @@ class ManualPayoutTests(unittest.TestCase):
                 payee_confirmed=True,
                 reveal_token="fabricated-client-assertion",
             )
-        with self.assertRaisesRegex(BizError, "查看凭证"):
+        with self.assertRaisesRegex(BizError, "其他财务经办人"):
             mark_paid(
                 self.db,
                 order,
-                self.user,
+                self.other_payer,
                 receipt_path=path,
                 original_name="bank-transfer.png",
                 content_type=mime,
@@ -495,7 +571,7 @@ class ManualPayoutTests(unittest.TestCase):
             mark_paid(
                 self.db,
                 order,
-                self.admin,
+                self.payer,
                 receipt_path=path,
                 original_name="bank-transfer.png",
                 content_type=mime,
@@ -519,7 +595,7 @@ class ManualPayoutTests(unittest.TestCase):
             mark_paid(
                 self.db,
                 order,
-                self.admin,
+                self.payer,
                 receipt_path=path,
                 original_name="bank-transfer.png",
                 content_type=mime,
@@ -535,7 +611,7 @@ class ManualPayoutTests(unittest.TestCase):
         mark_paid(
             self.db,
             order,
-            self.admin,
+            self.payer,
             receipt_path=path,
             original_name="bank-transfer.png",
             content_type=mime,
@@ -550,6 +626,9 @@ class ManualPayoutTests(unittest.TestCase):
         self.db.refresh(order)
         self.db.refresh(self.wallet)
         self.assertEqual(order.status, "paid")
+        self.assertEqual(order.reviewed_by, self.admin.id)
+        self.assertEqual(order.payout_actor_id, self.payer.id)
+        self.assertEqual(order.paid_by, self.payer.id)
         self.assertEqual(self.wallet.balance, Decimal("8"))
         self.assertEqual(self.wallet.frozen, Decimal("0"))
         self.assertEqual(self.wallet.withdrawable_balance, Decimal("3"))
@@ -578,6 +657,35 @@ class ManualPayoutTests(unittest.TestCase):
         self.assertEqual(self.wallet.balance, Decimal("10"))
         self.assertEqual(self.wallet.withdrawable_balance, Decimal("5"))
 
+    def test_claimed_payout_can_only_be_failed_by_its_payout_operator(self):
+        order = self._create(request_id="withdraw-claimed-failure")
+        approve_withdrawal(self.db, order, self.admin, None)
+        self.db.refresh(order)
+        self._reveal(order, self.payer)
+        self.db.refresh(order)
+        self.assertEqual(order.payout_actor_id, self.payer.id)
+
+        with self.assertRaisesRegex(BizError, "其他财务经办人"):
+            fail_withdrawal(self.db, order, self.other_payer, "经办人不可用")
+        self.db.refresh(order)
+        self.db.refresh(self.wallet)
+        self.assertEqual(order.status, "manual_payment_pending")
+        self.assertEqual(self.wallet.balance, Decimal("8"))
+        self.assertEqual(self.wallet.frozen, Decimal("2"))
+        self.assertEqual(self.wallet.withdrawable_balance, Decimal("3"))
+        self.assertEqual(self.wallet.withdraw_frozen, Decimal("2"))
+
+        fail_withdrawal(self.db, order, self.payer, "银行侧转账未执行")
+        self.db.refresh(order)
+        self.db.refresh(self.wallet)
+        self.assertEqual(order.status, "failed")
+        self.assertEqual(order.reviewed_by, self.admin.id)
+        self.assertEqual(order.payout_actor_id, self.payer.id)
+        self.assertEqual(self.wallet.balance, Decimal("10"))
+        self.assertEqual(self.wallet.frozen, Decimal("0"))
+        self.assertEqual(self.wallet.withdrawable_balance, Decimal("5"))
+        self.assertEqual(self.wallet.withdraw_frozen, Decimal("0"))
+
     def test_bank_reference_is_unique(self):
         first = self._create(amount="1", request_id="withdraw-ref-0001")
         approve_withdrawal(self.db, first, self.admin, None)
@@ -587,7 +695,7 @@ class ManualPayoutTests(unittest.TestCase):
         path, digest = persist_receipt(content, first, suffix)
         first_reveal = self._reveal(first)
         mark_paid(
-            self.db, first, self.admin,
+            self.db, first, self.payer,
             receipt_path=path, original_name="one.png", content_type=mime,
             size_bytes=len(content), sha256=digest,
             bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now().replace(tzinfo=timezone.utc),
@@ -601,7 +709,7 @@ class ManualPayoutTests(unittest.TestCase):
         second_reveal = self._reveal(second)
         with self.assertRaisesRegex(BizError, "流水号已用于"):
             mark_paid(
-                self.db, second, self.admin,
+                self.db, second, self.payer,
                 receipt_path=path2, original_name="two.png", content_type=mime,
                 size_bytes=len(content), sha256=digest2,
                 bank_reference="UNIQUE-REF-1", paid_amount_cny=Decimal("1.00"), paid_at=utc_now().replace(tzinfo=timezone.utc),
@@ -659,6 +767,8 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             card = BankCard(
                 user_id=user.id, bank_name="测试银行", card_number=VALID_CARD,
                 holder="张三", status="active", verification_mode="manual_review",
+                consent_at=datetime(2026, 8, 20, 8, 0, 0),
+                consent_version=BANK_CARD_SENSITIVE_CONSENT_VERSION,
             )
             verification = Verification(
                 user_id=user.id, real_name="张三", id_card="11010519491231002X",
@@ -716,8 +826,265 @@ class ManualPayoutConcurrencyTests(unittest.TestCase):
             check.close()
             engine.dispose()
 
+    def test_concurrent_reveal_claims_exactly_one_payout_operator(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            database = Path(tempdir) / "payout-claim.db"
+            engine = create_engine(
+                f"sqlite:///{database}",
+                connect_args={"check_same_thread": False, "timeout": 10},
+            )
+            Base.metadata.create_all(engine)
+            Session = sessionmaker(bind=engine, expire_on_commit=False)
+            setup = Session()
+            owner = User(phone="13900001801", username="提现用户", password="!")
+            approver = User(
+                phone="13900001802", username="审批管理员", password="!", role="admin",
+            )
+            payer_b = User(
+                phone="13900001803", username="财务经办 B", password="!", role="admin",
+            )
+            payer_c = User(
+                phone="13900001804", username="财务经办 C", password="!", role="admin",
+            )
+            setup.add_all([owner, approver, payer_b, payer_c])
+            setup.flush()
+            wallet = Wallet(
+                user_id=owner.id,
+                balance=Decimal("10"),
+                frozen=Decimal("2"),
+                withdrawable_balance=Decimal("3"),
+                withdraw_frozen=Decimal("2"),
+            )
+            card = BankCard(
+                user_id=owner.id,
+                bank_name="测试银行",
+                card_number=VALID_CARD,
+                holder="张三",
+                phone="13900001801",
+                status="registered",
+                verification_mode="format_only",
+                consent_at=datetime(2026, 8, 20, 8, 0, 0),
+                consent_version=BANK_CARD_SENSITIVE_CONSENT_VERSION,
+            )
+            setup.add_all([wallet, card])
+            setup.flush()
+            order = WithdrawalOrder(
+                order_no="WODW-CONCURRENT-PAYOUT-CLAIM",
+                user_id=owner.id,
+                wallet_id=wallet.id,
+                bank_card_id=card.id,
+                client_request_id="concurrent-payout-claim",
+                status="manual_payment_pending",
+                amount_card_hours=Decimal("2"),
+                locked_rate_cny=Decimal("1"),
+                gross_amount_cny=Decimal("2"),
+                fee_cny=Decimal("0"),
+                net_amount_cny=Decimal("2"),
+                bank_name_snapshot=card.bank_name,
+                card_last4_snapshot=VALID_CARD[-4:],
+                holder_snapshot=card.holder,
+                reviewed_by=approver.id,
+                reviewed_at=utc_now(),
+                version=2,
+            )
+            setup.add(order)
+            setup.commit()
+            order_id = order.id
+            approver_id = approver.id
+            payer_ids = (payer_b.id, payer_c.id)
+            setup.close()
+
+            original = {
+                "SECRET_KEY": settings.SECRET_KEY,
+                "SENSITIVE_DATA_KEY": settings.SENSITIVE_DATA_KEY,
+            }
+            settings.SECRET_KEY = "unit-test-payout-actor-claim-secret"
+            settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
+            barrier = threading.Barrier(2)
+
+            def reveal(actor_id: int) -> tuple[str, int, str]:
+                db = Session()
+                try:
+                    actor = db.query(User).filter(User.id == actor_id).one()
+                    barrier.wait(timeout=5)
+                    try:
+                        data = finance_router.payment_instructions(
+                            order_id, Response(), True, actor, db,
+                        )["data"]
+                        return "ok", actor_id, data["reveal_token"]
+                    except BizError as exc:
+                        return "rejected", actor_id, str(exc)
+                finally:
+                    db.close()
+
+            try:
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    results = list(pool.map(reveal, payer_ids))
+            finally:
+                for name, value in original.items():
+                    setattr(settings, name, value)
+
+            winners = [row for row in results if row[0] == "ok"]
+            rejected = [row for row in results if row[0] == "rejected"]
+            self.assertEqual(len(winners), 1)
+            self.assertEqual(len(rejected), 1)
+            self.assertIn("其他财务经办人", rejected[0][2])
+
+            check = Session()
+            final_order = check.query(WithdrawalOrder).filter(
+                WithdrawalOrder.id == order_id
+            ).one()
+            winner_id = winners[0][1]
+            loser_id = rejected[0][1]
+            self.assertEqual(final_order.reviewed_by, approver_id)
+            self.assertNotEqual(winner_id, approver_id)
+            self.assertEqual(final_order.payout_actor_id, winner_id)
+            self.assertEqual(
+                check.query(PaymentInstructionGrant).filter(
+                    PaymentInstructionGrant.withdrawal_id == order_id
+                ).count(),
+                1,
+            )
+            loser = check.query(User).filter(User.id == loser_id).one()
+            with self.assertRaisesRegex(BizError, "其他财务经办人"):
+                mark_paid(
+                    check,
+                    final_order,
+                    loser,
+                    receipt_path=Path(tempdir) / "not-written.png",
+                    original_name="not-written.png",
+                    content_type="image/png",
+                    size_bytes=1,
+                    sha256="0" * 64,
+                    bank_reference="CONCURRENT-LOSER-REF",
+                    paid_amount_cny=Decimal("2"),
+                    paid_at=utc_now().replace(tzinfo=timezone.utc),
+                    payee_confirmed=True,
+                    reveal_token=winners[0][2],
+                )
+            check.refresh(final_order)
+            self.assertEqual(final_order.status, "manual_payment_pending")
+            self.assertIsNone(final_order.paid_by)
+            check.close()
+            engine.dispose()
+
 
 class ManualPayoutMigrationTests(unittest.TestCase):
+    def setUp(self):
+        self.original_sensitive_settings = {
+            "SECRET_KEY": settings.SECRET_KEY,
+            "SENSITIVE_DATA_KEY": settings.SENSITIVE_DATA_KEY,
+        }
+        settings.SECRET_KEY = "unit-test-manual-payout-migration-secret"
+        settings.SENSITIVE_DATA_KEY = Fernet.generate_key().decode("ascii")
+
+    def tearDown(self):
+        for name, value in self.original_sensitive_settings.items():
+            setattr(settings, name, value)
+
+    def _active_payout_with_grants(self, grant_count: int):
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine, expire_on_commit=False)()
+        owner = User(phone="13900001701", username="迁移提现用户", password="!")
+        approver = User(
+            phone="13900001702", username="迁移审批人", password="!", role="admin",
+        )
+        payers = [
+            User(
+                phone=f"1390000170{index + 3}",
+                username=f"迁移付款人 {index + 1}",
+                password="!",
+                role="admin",
+            )
+            for index in range(grant_count)
+        ]
+        db.add_all([owner, approver, *payers])
+        db.flush()
+        wallet = Wallet(
+            user_id=owner.id,
+            balance=Decimal("2"),
+            frozen=Decimal("2"),
+            withdrawable_balance=Decimal("0"),
+            withdraw_frozen=Decimal("2"),
+        )
+        card = BankCard(
+            user_id=owner.id,
+            bank_name="测试银行",
+            card_number=VALID_CARD,
+            holder="张三",
+            phone="13900001701",
+            status="registered",
+            verification_mode="format_only",
+            consent_at=datetime(2026, 8, 20, 8, 0, 0),
+            consent_version=BANK_CARD_SENSITIVE_CONSENT_VERSION,
+        )
+        db.add_all([wallet, card])
+        db.flush()
+        order = WithdrawalOrder(
+            order_no=f"WODW-MIGRATION-GRANTS-{grant_count}",
+            user_id=owner.id,
+            wallet_id=wallet.id,
+            bank_card_id=card.id,
+            client_request_id=f"migration-grants-{grant_count}",
+            status="manual_payment_pending",
+            amount_card_hours=Decimal("2"),
+            locked_rate_cny=Decimal("1"),
+            gross_amount_cny=Decimal("2"),
+            fee_cny=Decimal("0"),
+            net_amount_cny=Decimal("2"),
+            bank_name_snapshot=card.bank_name,
+            card_last4_snapshot=VALID_CARD[-4:],
+            holder_snapshot=card.holder,
+            reviewed_by=approver.id,
+            reviewed_at=utc_now(),
+            version=2,
+        )
+        db.add(order)
+        db.flush()
+        for index, payer in enumerate(payers):
+            db.add(PaymentInstructionGrant(
+                token_hash=f"{index + 1:064x}",
+                actor_user_id=payer.id,
+                withdrawal_id=order.id,
+                bank_card_id=card.id,
+                order_version=order.version,
+                card_snapshot_hash=f"{index + 11:064x}",
+                expires_at=utc_now() + timedelta(minutes=5),
+            ))
+        db.commit()
+        return engine, db, order, payers
+
+    def test_legacy_schema_adds_payout_actor_column(self):
+        engine = create_engine("sqlite://")
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE withdrawal_orders (id INTEGER PRIMARY KEY)"))
+        _ensure_columns(engine)
+        columns = {column["name"] for column in inspect(engine).get_columns("withdrawal_orders")}
+        self.assertIn("payout_actor_id", columns)
+        engine.dispose()
+
+    def test_unique_historical_reveal_actor_is_backfilled(self):
+        engine, db, order, payers = self._active_payout_with_grants(1)
+        _migrate_manual_payout_fields(engine, db)
+        db.refresh(order)
+        self.assertEqual(order.payout_actor_id, payers[0].id)
+        db.close()
+        engine.dispose()
+
+    def test_multiple_historical_reveal_actors_stop_migration(self):
+        engine, db, order, _payers = self._active_payout_with_grants(2)
+        with self.assertRaisesRegex(RuntimeError, "multiple historical payout operators"):
+            _migrate_manual_payout_fields(engine, db)
+        db.refresh(order)
+        self.assertIsNone(order.payout_actor_id)
+        db.close()
+        engine.dispose()
+
     def test_historical_money_never_becomes_withdrawable_and_sensitive_phone_is_encrypted(self):
         engine = create_engine(
             "sqlite://",

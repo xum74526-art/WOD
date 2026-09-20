@@ -1,10 +1,12 @@
 import hmac
 import json
+import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -65,6 +67,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
 
         names = (
             "PAYMENT_SERVICE_ENABLED",
+            "SECRET_KEY",
             "QIXIANGPAY_ENABLED",
             "QIXIANGPAY_BASE_URL",
             "QIXIANGPAY_PID",
@@ -76,30 +79,37 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "QIXIANGPAY_HTTP_TIMEOUT",
             "QIXIANGPAY_MAX_RESPONSE_BYTES",
             "QIXIANGPAY_TRUSTED_PROXY_CIDRS",
+            "PAYMENT_CHECKOUT_ALLOWED_HOSTS",
             "QIXIANGPAY_CHECKOUT_TTL_SECONDS",
             "QIXIANGPAY_PROVIDER_TIMEZONE",
             "QIXIANGPAY_MIN_AMOUNT_CNY",
             "QIXIANGPAY_MAX_AMOUNT_CNY",
             "CARD_HOUR_RMB_RATE",
+            "PAYMENT_MAX_PENDING_ORDERS_PER_USER",
+            "PAYMENT_DAILY_RECHARGE_LIMIT_CNY",
         )
         self.original = {name: getattr(settings, name) for name in names}
         settings.PAYMENT_SERVICE_ENABLED = True
+        settings.SECRET_KEY = "unit-test-qixiang-checkout-secret"
         settings.QIXIANGPAY_ENABLED = True
-        settings.QIXIANGPAY_BASE_URL = "https://api.example.test"
+        settings.QIXIANGPAY_BASE_URL = "https://api.payqixiang.cn"
         settings.QIXIANGPAY_PID = "test-pid"
         settings.QIXIANGPAY_KEY = "unit-test-key-not-a-real-secret"
-        settings.QIXIANGPAY_NOTIFY_URL = "https://example.test/api/payments/qixiang/notify"
-        settings.QIXIANGPAY_RETURN_URL = "https://example.test/pages/wallet/index"
-        settings.QIXIANGPAY_PUBLIC_API_BASE_URL = "https://example.test/api"
+        settings.QIXIANGPAY_NOTIFY_URL = "https://wod.kai.com/api/payments/qixiang/notify"
+        settings.QIXIANGPAY_RETURN_URL = "https://wod.kai.com/payment/qixiang/return"
+        settings.QIXIANGPAY_PUBLIC_API_BASE_URL = "https://wod.kai.com/api"
         settings.QIXIANGPAY_PAYMENT_TYPES = "alipay,wxpay"
         settings.QIXIANGPAY_HTTP_TIMEOUT = 1
         settings.QIXIANGPAY_MAX_RESPONSE_BYTES = 256 * 1024
         settings.QIXIANGPAY_TRUSTED_PROXY_CIDRS = "127.0.0.1/32,::1/128"
+        settings.PAYMENT_CHECKOUT_ALLOWED_HOSTS = "cashier.example.test"
         settings.QIXIANGPAY_CHECKOUT_TTL_SECONDS = 300
         settings.QIXIANGPAY_PROVIDER_TIMEZONE = "Asia/Shanghai"
         settings.QIXIANGPAY_MIN_AMOUNT_CNY = 0.01
         settings.QIXIANGPAY_MAX_AMOUNT_CNY = 50000
         settings.CARD_HOUR_RMB_RATE = 1.002
+        settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 5
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
 
     def tearDown(self):
         for name, value in self.original.items():
@@ -147,6 +157,61 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "param": order.order_no,
             "buyer": "",
         })
+
+    def _file_sqlite_sessions(self):
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        database = Path(tempdir.name) / "qixiang-create-concurrency.sqlite3"
+        engine = create_engine(
+            f"sqlite:///{database.as_posix()}",
+            connect_args={"check_same_thread": False, "timeout": 30},
+        )
+        self.addCleanup(engine.dispose)
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine, expire_on_commit=False)
+        seed = Session()
+        try:
+            user = User(phone="13900001902", username="并发充值测试", password="!")
+            seed.add(user)
+            seed.flush()
+            seed.add(Wallet(user_id=user.id, balance=Decimal("0"), frozen=Decimal("0")))
+            seed.commit()
+            user_id = int(user.id)
+        finally:
+            seed.close()
+        return Session, user_id
+
+    def _run_parallel_recharge_creates(self, Session, user_id, requests):
+        barrier = threading.Barrier(len(requests))
+
+        def create_once(request):
+            amount, request_id = request
+            db = Session()
+            try:
+                # Match the real FastAPI dependency path: authentication has
+                # already issued a SELECT and SQLAlchemy reports autobegin.
+                db.query(User).filter(User.id == user_id).one()
+                self.assertTrue(db.in_transaction())
+                barrier.wait(timeout=10)
+                output = create_recharge_order(
+                    db,
+                    user_id,
+                    amount,
+                    payment_type="alipay",
+                    client_request_id=request_id,
+                )
+                return "ok", output
+            except BizError as exc:
+                db.rollback()
+                return "error", {"status_code": exc.status_code, "message": exc.msg}
+            finally:
+                db.close()
+
+        with patch("app.services.qixiangpay.httpx.post") as provider_create:
+            with ThreadPoolExecutor(max_workers=len(requests)) as pool:
+                results = list(pool.map(create_once, requests))
+        provider_create.assert_not_called()
+        return results
 
     def _callback(self, order: PaymentOrder) -> dict:
         params = {
@@ -212,6 +277,109 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.assertGreater(remaining, 290)
         self.assertLessEqual(remaining, 300)
 
+    def test_concurrent_daily_limit_admission_is_serialized_across_connections(self):
+        settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 5
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
+        Session, user_id = self._file_sqlite_sessions()
+
+        results = self._run_parallel_recharge_creates(
+            Session,
+            user_id,
+            (
+                (Decimal("40000.00"), "parallel-daily-limit-0001"),
+                (Decimal("40000.00"), "parallel-daily-limit-0002"),
+            ),
+        )
+
+        self.assertEqual(sorted(kind for kind, _ in results), ["error", "ok"])
+        error = next(payload for kind, payload in results if kind == "error")
+        self.assertEqual(error["status_code"], 429)
+        inspection = Session()
+        try:
+            orders = inspection.query(PaymentOrder).filter_by(user_id=user_id).all()
+            self.assertEqual(len(orders), 1)
+            self.assertEqual(
+                sum((order.amount_cny for order in orders), Decimal("0")),
+                Decimal("40000.00"),
+            )
+        finally:
+            inspection.close()
+
+    def test_concurrent_pending_limit_admission_stops_exactly_at_limit(self):
+        settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 1
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
+        Session, user_id = self._file_sqlite_sessions()
+
+        results = self._run_parallel_recharge_creates(
+            Session,
+            user_id,
+            (
+                (Decimal("10.00"), "parallel-pending-limit-0001"),
+                (Decimal("10.00"), "parallel-pending-limit-0002"),
+            ),
+        )
+
+        self.assertEqual(sorted(kind for kind, _ in results), ["error", "ok"])
+        error = next(payload for kind, payload in results if kind == "error")
+        self.assertEqual(error["status_code"], 429)
+        inspection = Session()
+        try:
+            orders = inspection.query(PaymentOrder).filter_by(user_id=user_id).all()
+            self.assertEqual(len(orders), 1)
+            self.assertEqual(orders[0].status, "pending")
+        finally:
+            inspection.close()
+
+    def test_concurrent_same_idempotency_key_reuses_one_serialized_order(self):
+        Session, user_id = self._file_sqlite_sessions()
+        request_id = "parallel-same-idempotency-0001"
+
+        results = self._run_parallel_recharge_creates(
+            Session,
+            user_id,
+            (
+                (Decimal("10.00"), request_id),
+                (Decimal("10.00"), request_id),
+            ),
+        )
+
+        self.assertEqual([kind for kind, _ in results], ["ok", "ok"])
+        self.assertEqual(
+            len({payload["order_no"] for _, payload in results}),
+            1,
+        )
+        inspection = Session()
+        try:
+            self.assertEqual(
+                inspection.query(PaymentOrder).filter_by(
+                    user_id=user_id,
+                    client_request_id=request_id,
+                ).count(),
+                1,
+            )
+        finally:
+            inspection.close()
+
+    def test_limit_rejection_does_not_rollback_caller_pending_changes(self):
+        settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 1
+        self._new_order()
+        self.user.username = "调用方待提交名称"
+
+        with self.assertRaises(BizError) as rejected:
+            create_recharge_order(
+                self.db,
+                self.user.id,
+                Decimal("10.00"),
+                payment_type="alipay",
+                client_request_id="caller-state-limit-0001",
+            )
+
+        self.assertEqual(rejected.exception.status_code, 429)
+        self.assertEqual(self.user.username, "调用方待提交名称")
+        self.db.commit()
+        self.db.refresh(self.user)
+        self.assertEqual(self.user.username, "调用方待提交名称")
+
     def test_legacy_payment_table_migration_adds_checkout_state_columns(self):
         legacy_engine = create_engine("sqlite://")
         try:
@@ -228,6 +396,10 @@ class QixiangPayPaymentTests(unittest.TestCase):
             }
             self.assertIn("provider_checkout_url", columns)
             self.assertIn("checkout_started_at", columns)
+            self.assertIn("client_request_id", columns)
+            self.assertIn("create_request_hash", columns)
+            self.assertIn("last_reconciled_at", columns)
+            self.assertIn("reconcile_attempts", columns)
             self.assertEqual(columns["provider_checkout_url"], "TEXT")
             self.assertIn("DATETIME", columns["checkout_started_at"])
         finally:
@@ -243,7 +415,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.assertEqual(post.call_count, 1)
         url, = post.call_args.args
         fields = post.call_args.kwargs["data"]
-        self.assertEqual(url, "https://api.example.test/mapi.php")
+        self.assertEqual(url, "https://api.payqixiang.cn/mapi.php")
         self.assertEqual(fields["device"], "jump")
         self.assertEqual(fields["type"], "wxpay")
         self.assertEqual(fields["out_trade_no"], order.order_no)
@@ -573,8 +745,13 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.assertEqual(paid_error.exception.status_code, 409)
         unnecessary_query.assert_not_called()
 
-    def test_create_rejects_missing_or_non_https_payurl(self):
-        for payurl in (None, "http://cashier.example.test/pay/unsafe"):
+    def test_create_rejects_missing_insecure_or_unapproved_payurl(self):
+        for payurl in (
+            None,
+            "http://cashier.example.test/pay/unsafe",
+            "https://evil.example.test/pay/lookalike",
+            "https://cashier.example.test:444/pay/wrong-port",
+        ):
             with self.subTest(payurl=payurl):
                 order, token = self._new_order()
                 payload = {

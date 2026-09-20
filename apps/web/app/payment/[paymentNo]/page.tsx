@@ -1,5 +1,5 @@
-import { CapabilityPaymentCheckout } from "@/components/capability-payment-checkout";
+import { redirect } from "next/navigation";
 
 export default function PaymentPage() {
-  return <CapabilityPaymentCheckout/>;
+  redirect("/account/wallet");
 }

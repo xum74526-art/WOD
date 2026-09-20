@@ -66,6 +66,7 @@ class PlatformAttributionTests(unittest.TestCase):
             "QIXIANGPAY_KEY",
             "QIXIANGPAY_NOTIFY_URL",
             "QIXIANGPAY_RETURN_URL",
+            "QIXIANGPAY_PUBLIC_API_BASE_URL",
             "QIXIANGPAY_PAYMENT_TYPES",
         )
         self.original = {name: getattr(settings, name) for name in names}
@@ -76,11 +77,12 @@ class PlatformAttributionTests(unittest.TestCase):
         settings.DIRECT_TRADE_ENABLED = True
         settings.PAYMENT_SERVICE_ENABLED = True
         settings.QIXIANGPAY_ENABLED = True
-        settings.QIXIANGPAY_BASE_URL = "https://pay.example.test"
+        settings.QIXIANGPAY_BASE_URL = "https://api.payqixiang.cn"
         settings.QIXIANGPAY_PID = "test-pid"
         settings.QIXIANGPAY_KEY = "test-key"
-        settings.QIXIANGPAY_NOTIFY_URL = "https://api.example.test/api/payments/qixiang/notify"
-        settings.QIXIANGPAY_RETURN_URL = "https://example.test/wallet"
+        settings.QIXIANGPAY_NOTIFY_URL = "https://wod.kai.com/api/payments/qixiang/notify"
+        settings.QIXIANGPAY_RETURN_URL = "https://wod.kai.com/payment/qixiang/return"
+        settings.QIXIANGPAY_PUBLIC_API_BASE_URL = "https://wod.kai.com/api"
         settings.QIXIANGPAY_PAYMENT_TYPES = "alipay"
 
     def tearDown(self):
@@ -123,6 +125,7 @@ class PlatformAttributionTests(unittest.TestCase):
                 card_number="4539578763621486",
                 holder="张三",
                 phone="13900000001",
+                sensitive_consent=True,
             ),
             self.user,
             self.db,

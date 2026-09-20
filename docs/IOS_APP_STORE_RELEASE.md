@@ -13,7 +13,7 @@
 | Build | `124` |
 | 支持设备 | iPhone |
 | 生产 API | `https://wod.kai.com/api` |
-| 业务模式 | 算力需求撮合；直接交易、支付、充值和提现保持关闭 |
+| 业务模式 | 默认撮合；直接交易版须使用新 Build、开启编译门禁并单独完成支付合规与审核 |
 
 每次上传必须递增 `versionCode`。同一 App Store 版本不能重复上传相同 Build。
 
@@ -31,7 +31,7 @@
 - `dSYMs` 已启用；云打包完成后必须立即下载并归档符号表。
 - 生产 API 只允许 HTTPS，DCloud 统计关闭。
 
-这些代码只有在 API、Web 和 App 使用同一已发布提交时才构成完整闭环。若只上传 IPA、未部署新的 API，举报、屏蔽和隐私相关接口会不可用。
+这些代码只有在 API、Web 和 App 使用同一已发布提交时才构成完整闭环。若只上传 IPA、未部署新的 API，举报、屏蔽、隐私、支付回跳和查单相关接口会不可用。七相支付返回地址为 `https://wod.kai.com/payment/qixiang/return`；它与 KAI OAuth 的 `kai://auth` 完全独立，且只触发服务端查单，不证明支付成功。
 
 ## 本地与账号侧准备
 
@@ -71,7 +71,9 @@ git diff --check
 
 同时确认：
 
-- `VITE_ENABLE_DIRECT_TRADE=false`；
+- 撮合审核包使用 `VITE_ENABLE_DIRECT_TRADE=false`；直接交易包必须递增 Build，并在受控构建环境显式使用 `VITE_ENABLE_DIRECT_TRADE=true`，仓库 `.env.example` 仍保持 `false`；
+- 直接交易包已完成外部支付、数字服务、退款、人工提现、银行卡和适用商店规则的法务/审核评估，App Store Connect 元数据、审核备注、截图和隐私申报与实际开启能力一致；
+- 生产 `QIXIANGPAY_RETURN_URL` 精确等于 `https://wod.kai.com/payment/qixiang/return`，该页面已公开部署；移动端只在精确 origin/path 上关闭收银台并向服务端查单；
 - API 发布环境中 `THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED=false`，公开目录只展示 KAI 自营资源；
 - API 发布环境中 `COMMUNITY_AGGREGATED_CONTENT_ENABLED=false`；
 - API 发布环境中 `COMMUNITY_USER_MEDIA_ENABLED=false`；
@@ -129,6 +131,8 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 - dSYM UUID 与构建匹配并已存入发布档案；
 - iPhone 小屏、刘海屏和最大尺寸机型完成登录、语言切换、深色模式、后台恢复和注销回归。
 
+直接交易 IPA 还必须在真实 iPhone 上完成：支付宝/微信渠道（仅限商户已获权限的渠道）、未安装支付 App、用户取消、支付失败、前后台切换、专用 HTTPS 返回、主动查单、重复回调幂等、余额刷新、充值卡时不可提现、钱包订单退款、银行卡登记和人工提现全流程。任何 return query 或客户端页面都不得直接把订单标记成功。审核账号如需要测试银行卡或提现，只使用发布负责人准备的合规测试资料，不要求审核员提交其真实银行卡。
+
 最终 IPA 的检测结果优先于源码推断。如果云打包注入了额外 SDK，必须先更新隐私政策、隐私清单和 App Store Connect 申报，再上传。
 
 ## App Store Connect 元数据
@@ -148,6 +152,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 
 - App 名称、副标题、关键词、推广文本和完整描述统一定位为“算力资源信息、需求撮合与技术社区”，避免宣传未开放的购买、充值、提现或收益功能，也不使用“新闻”“资讯聚合”“快讯”等表述；
 - iPhone 各要求尺寸的真实截图，至少覆盖首页、算力行情、需求撮合、文字技术社区的举报/屏蔽入口和账号设置；截图不得出现第三方聚合新闻或外部视频；
+- 若后续提交已获批并开启资金能力的独立 Build，名称、关键词、推广文本和完整描述也只能宣传该 Build 实际开放的能力；不得把人工提现描述为自动到账或银行四要素认证，也不得宣传充值卡时可提现或固定收益；
 - 1024×1024 App Store 图标；
 - 主类别使用 `Business`，可选副类别使用 `Utilities`，不要选择 `News`；同时完成年龄分级、内容权利、出口合规和地区范围；
 - 欧盟《数字服务法》交易者身份申报；即使首版不在欧盟分发，也要在 App Store Connect 完成 trader status 选择，若在欧盟分发则完成地址、电话和邮箱验证及展示要求；
@@ -174,11 +179,11 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 
 ## 审核备注模板
 
-根据实际审核账号补全方括号，凭据不要写入本文：
+根据实际审核账号补全方括号，凭据不要写入本文。以下模板仅适用于本次确实启用直接交易的 Build；撮合包应改回关闭说明，不能提交与实际二进制或服务端能力不一致的备注：
 
-> 本版本为算力资源信息与需求撮合应用。直接交易、在线支付、充值、提现均未开放；用户提交需求后由平台或商家人工确认配置、库存、报价和交付方案。历史账务页面仅用于已存在记录的查看。
+> 本版本提供算力资源信息与需求撮合，并在服务端与客户端双重门禁开启后提供七相支付充值、钱包卡时支付的直接交易订单、银行卡登记和已结算商家收入的人工提现。充值卡时仅供平台消费，不可提现；提现由运营人员审核后人工转账，不是银行自动出款或四要素认证。支付返回页只触发服务端查单，最终状态以服务端验签通知、主动查询和统一账本为准。
 >
-> 普通审核账号：[在 App Store Connect 填写]；已审批商家账号：[在 App Store Connect 填写]。登录后可测试首页、算力行情、发布需求、社区发帖/评论，以及“我的 → 账号设置 → 注销账号”。审核账号不需要上传真实身份证或银行卡。
+> 普通审核账号：[在 App Store Connect 填写]；已审批商家账号：[在 App Store Connect 填写]。登录后可测试首页、算力行情、发布需求、钱包、订单、社区发帖/评论，以及“我的 → 账号设置 → 注销账号”。支付测试方式与受控银行卡测试资料：[在 App Store Connect 填写]；不得要求审核员上传其真实身份证或银行卡。
 >
 > 社区仅用于算力产品、站内平台行情与技术交流，不提供新闻采编、转载、公共事务或突发事件报道。社区内容菜单提供举报、屏蔽用户和删除本人内容；管理员通过受保护的审核队列处置举报。首版仅支持文字动态，用户图片/视频发布、历史媒体动态和社区公开头像已由服务端关闭；公开昵称经过内容过滤，第三方聚合内容和视频也已由服务端关闭。首版公开资源目录仅展示 KAI 自营资源，第三方商家店铺和商品公开入口由服务端关闭。
 >
@@ -191,7 +196,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 1. 用 Xcode Organizer 或 Transporter 上传已验收 IPA。
 2. 等待 App Store Connect 完成 Processing，处理所有 Missing Compliance、隐私或签名提示。
 3. 先添加内部测试组，安装后执行完整冒烟测试。
-4. 修复崩溃、启动、登录、权限、社区、语言和注销问题并上传更高 Build。
+4. 修复崩溃、启动、登录、权限、支付回跳、查单、订单、人工提现、社区、语言和注销问题并上传更高 Build。
 5. 再配置外部测试信息并提交 Beta App Review。
 6. 外部测试稳定后，为正式版本选择该 Build，补齐隐私、分级、内容权利、地区和审核信息，再提交 App Review。
 
@@ -213,6 +218,7 @@ find /tmp/kai-ipa-audit/Payload -type d -name '*.framework'
 - Apple Distribution 证书、App Store Profile、App Store Connect App 和有上传权限的团队成员已就绪；
 - DCloud AppID 所有权和云打包账号已确认；
 - 正式 IPA 已完成隐私报告、Required Reason API、SDK、域名、签名和 dSYM 验收；
+- 直接交易 Build 已完成适用 App Store 支付规则与地区合规评估，七相商户渠道、专用 HTTPS 返回、异步通知、主动查单、退款、对账、人工审核与打款值守均有验收证据；
 - API/Web 已部署本次社区安全契约，生产环境保持 `THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED=false`、`COMMUNITY_AGGREGATED_CONTENT_ENABLED=false` 和 `COMMUNITY_USER_MEDIA_ENABLED=false`，线上举报队列有人值守并有处理时限；
 - 审核账号、截图、元数据、隐私问卷、年龄分级、内容权利和出口合规已填完；
 - 欧盟 DSA trader status 已申报，且是否在欧盟分发的决定与所需联系方式验证已完成；

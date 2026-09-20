@@ -10,7 +10,7 @@ type Summary = {
   user: { display_name: string; email?: string; email_verified: boolean; role: "personal" | "supplier" | "admin" };
   metrics: { active_orders: number; active_assets: number; hosted_devices: number; open_requests: number };
   supplier_status: string;
-  services: { payment: boolean; kyc: boolean };
+  services: { payment: boolean; recharge: boolean; withdraw: boolean; kyc: boolean };
 };
 
 export function AccountDashboard() {
@@ -58,7 +58,8 @@ export function AccountDashboard() {
           ? <Link href="/supplier"><span><strong>{locale === "en" ? "Back to Supplier Console" : "返回商家后台"}</strong><small>{locale === "en" ? "Quotes, resources, and delivery are managed in the supplier console" : "报价、资源和交付统一在商家后台处理"}</small></span><ArrowRight size={18}/></Link>
           : <Link href="/supplier/apply"><span><strong>{t("home.cta.action", "申请成为商家")}</strong><small>{locale === "en" ? `Current status: ${summary.supplier_status}` : `当前状态：${summary.supplier_status}`}</small></span><ArrowRight size={18}/></Link>}
       </section>
-      {!summary.services.payment && <div className="workspace-service-note">{locale === "en" ? "Recharge is currently unavailable for this account. Existing balance, orders, and ledger remain available." : "当前账号的充值服务暂不可用；已有余额、订单和流水仍可正常查看。"}</div>}
+      {!summary.services.recharge && <div className="workspace-service-note">{locale === "en" ? "Recharge is currently unavailable for this account. Existing balance, orders, and ledger remain available." : "当前账号的充值服务暂不可用；已有余额、订单和流水仍可正常查看。"}</div>}
+      {!summary.services.withdraw && <div className="workspace-service-note">{locale === "en" ? "New withdrawal requests are currently unavailable. Existing withdrawal records remain available in the wallet." : "当前账号暂不能新建提现申请；已有提现记录仍可在钱包中查看。"}</div>}
     </section>
   );
 }

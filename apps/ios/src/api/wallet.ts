@@ -48,7 +48,7 @@ export interface RechargePaymentOrder {
   provider: 'qixiangpay' | 'mapay'
   provider_trade_no?: string | null
   channel?: string | null
-  status: 'pending' | 'paid' | 'expired' | 'failed' | 'review' | 'late_paid_review' | 'canceled' | 'cancelled'
+  status: 'pending' | 'paid' | 'expired' | 'failed' | 'review' | 'late_paid_review' | 'refund_pending' | 'refund_unknown' | 'refunded' | 'canceled' | 'cancelled'
   amount_cny: number
   card_hours: number
   card_hour_rmb_rate: number
@@ -93,11 +93,15 @@ export function getPaymentConfig() {
   return request<PaymentConfig>({ url: '/payments/qixiang/config', silent: true })
 }
 
-export function createRechargePayment(amount_cny: number, payment_type: RechargePaymentType) {
+export function createRechargePayment(
+  amount_cny: number,
+  payment_type: RechargePaymentType,
+  client_request_id: string,
+) {
   return request<RechargePaymentOrder>({
     url: '/payments/qixiang/recharge-orders',
     method: 'POST',
-    data: { amount_cny, payment_type },
+    data: { amount_cny, payment_type, client_request_id },
   })
 }
 

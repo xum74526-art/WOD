@@ -1,5 +1,5 @@
-import { ServerLeaseWorkspace } from "@/components/server-lease-workspace";
+import { redirect } from "next/navigation";
 
 export default function AccountLeasesPage() {
-  return <ServerLeaseWorkspace />;
+  redirect("/account/orders");
 }

@@ -53,7 +53,68 @@ export type AdminOrderItem = {
     confirmed_unit_price_card_hours?: number | string | null;
   } | null;
 };
-export type AdminRechargeItem = { id: number; order_no: string; user: { id: number; username: string | null }; provider: string; provider_trade_no: string | null; channel: string; status: string; amount_cny: number; card_hours: number; card_hour_rate: number; created_platform: AuditPlatform; last_modified_platform: AuditPlatform; expires_at: string | null; paid_at: string | null; credited_at: string | null; created_at: string; updated_at: string };
+export type AdminRechargeItem = {
+  id: number;
+  order_no: string;
+  user: { id: number; username: string | null };
+  provider: string;
+  provider_trade_no: string | null;
+  client_request_id: string | null;
+  channel: string | null;
+  status: string;
+  provider_status: string | null;
+  failure_reason: string | null;
+  amount_cny: number;
+  card_hours: number;
+  card_hour_rate: number;
+  created_platform: AuditPlatform;
+  last_modified_platform: AuditPlatform | "system";
+  expires_at: string | null;
+  paid_at: string | null;
+  credited_at: string | null;
+  last_reconciled_at: string | null;
+  reconcile_attempts: number;
+  created_at: string;
+  updated_at: string;
+};
+export type AdminPaymentEvent = {
+  id: number;
+  payment_order_id: number;
+  event_type: string;
+  actor_type: string;
+  actor_user_id: number | null;
+  source: string;
+  from_status: string | null;
+  to_status: string | null;
+  detail: Record<string, string | number | boolean | null> | null;
+  created_at: string;
+};
+export type AdminPaymentRefund = {
+  id: number;
+  refund_no: string;
+  payment_order_id: number;
+  actor_user_id: number;
+  client_request_id: string;
+  amount_cny: number;
+  card_hours: number;
+  status: string;
+  wallet_hold_status: string;
+  previous_payment_status: string;
+  reason: string;
+  provider_code: string | null;
+  provider_message: string | null;
+  resolution_note: string | null;
+  attempt_count: number;
+  requested_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type AdminRechargeDetail = { order: AdminRechargeItem; events: AdminPaymentEvent[]; refund: AdminPaymentRefund | null };
+export type AdminPaymentReviewResult = { order_id: number; status: string; credited: boolean } | AdminPaymentRefund;
+export type AdminPaymentReviewInput =
+  | { action: "credit"; note: string }
+  | { action: "refund"; note: string; client_request_id: string };
 export type AdminBuyRequestItem = {
   id: number;
   user_id: number;
@@ -112,8 +173,41 @@ export function resolveAdminOrderDispute(id: number, input: { action: "refund" |
   });
 }
 
-export function listAdminRechargeOrders(input: { platform?: AuditPlatform; status?: string; orderNo?: string } = {}) {
+export function listAdminRechargeOrders(input: { platform?: AuditPlatform; status?: string; orderNo?: string; page?: number; pageSize?: number } = {}) {
   return apiRequest<AdminPage<AdminRechargeItem>>(canonicalApiPath(`/admin/recharge-orders${query(input)}`));
+}
+
+export function getAdminRechargeOrder(id: number) {
+  return apiRequest<AdminRechargeDetail>(canonicalApiPath(`/admin/recharge-orders/${id}`));
+}
+
+export function reviewAdminRechargeOrder(id: number, input: AdminPaymentReviewInput) {
+  return apiRequest<AdminPaymentReviewResult>(canonicalApiPath(`/admin/recharge-orders/${id}/review`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function createAdminPaymentRefund(id: number, input: { client_request_id: string; reason: string }) {
+  return apiRequest<AdminPaymentRefund>(canonicalApiPath(`/admin/recharge-orders/${id}/refunds`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAdminPaymentRefunds(input: { status?: string; page?: number; pageSize?: number } = {}) {
+  return apiRequest<AdminPage<AdminPaymentRefund>>(canonicalApiPath(`/admin/payment-refunds${query(input)}`));
+}
+
+export function getAdminPaymentRefund(id: number) {
+  return apiRequest<AdminPaymentRefund>(canonicalApiPath(`/admin/payment-refunds/${id}`));
+}
+
+export function resolveAdminPaymentRefund(id: number, input: { outcome: "succeeded" | "failed"; note: string }) {
+  return apiRequest<AdminPaymentRefund>(canonicalApiPath(`/admin/payment-refunds/${id}/resolve`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function listAdminBuyRequests(input: { status?: string; requestType?: "online" | "offline"; keyword?: string; page?: number; pageSize?: number } = {}) {
