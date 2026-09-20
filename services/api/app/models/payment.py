@@ -134,3 +134,61 @@ class PaymentRefund(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class PaymentRefundRequest(Base):
+    """A customer's request for an administrator-reviewed recharge refund.
+
+    Creating this row never freezes wallet funds and never contacts the
+    payment provider.  Those financial side effects remain behind the
+    administrator refund workflow represented by :class:`PaymentRefund`.
+    """
+
+    __tablename__ = "payment_refund_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "client_request_id",
+            name="uq_payment_refund_request_user_client",
+        ),
+        UniqueConstraint(
+            "active_payment_order_id",
+            name="uq_payment_refund_request_active_order",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    request_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    payment_order_id: Mapped[int] = mapped_column(
+        ForeignKey("payment_orders.id"), index=True
+    )
+    # Only active requests populate this column.  Clearing it on a terminal
+    # rejection/cancellation later permits a new application while retaining
+    # the full audit history.  The unique constraint prevents two concurrent
+    # active requests for the same payment.
+    active_payment_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("payment_orders.id"), nullable=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    client_request_id: Mapped[str] = mapped_column(String(64))
+    amount_cny: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    card_hours: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    status: Mapped[str] = mapped_column(
+        String(24), default="pending_review", server_default="pending_review", index=True
+    )
+    reason: Mapped[str] = mapped_column(String(500))
+    created_platform: Mapped[str] = mapped_column(
+        String(16), default="legacy", server_default="legacy", index=True
+    )
+    reviewed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payment_refund_id: Mapped[int | None] = mapped_column(
+        ForeignKey("payment_refunds.id"), nullable=True, unique=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

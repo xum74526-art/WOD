@@ -16,6 +16,11 @@ export type RechargeStateSource = {
   can_pay?: boolean | null;
   can_query?: boolean | null;
   can_cancel?: boolean | null;
+  provider?: string | null;
+};
+
+export type RechargeRefundRequestState = {
+  status?: string | null;
 };
 
 export const REGISTERED_BANK_CARD_STATUSES = ["registered", "pending_review", "active"] as const;
@@ -103,6 +108,25 @@ export function rechargeCanRestart(order?: RechargeStateSource | null) {
   if (!order) return false;
   const state = rechargeUiState(order);
   return state === "failed" || state === "expired" || state === "canceled";
+}
+
+export function rechargeCanRequestRefund(order?: RechargeStateSource | null) {
+  if (!order || String(order.provider || "").trim().toLowerCase() !== "qixiangpay") return false;
+  const status = String(order.status || "").trim().toLowerCase();
+  if (status === "review" || status === "late_paid_review") return true;
+  return status === "paid" && Boolean(order.credited_at);
+}
+
+export function rechargeRefundRequestLabel(request?: RechargeRefundRequestState | null) {
+  return {
+    pending_review: "待平台审核",
+    approved: "审核已通过",
+    processing: "退款处理中",
+    rejected: "申请已驳回",
+    canceled: "申请已取消",
+    succeeded: "退款已完成",
+    failed: "退款失败",
+  }[String(request?.status || "").trim().toLowerCase()] || "状态未知";
 }
 
 /** Never replace the recovery data for a different checkout that may still be live. */

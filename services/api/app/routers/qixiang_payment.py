@@ -8,10 +8,11 @@ from app.core.rate_limit import (
     limit_payment_checkout,
     limit_payment_create,
     limit_payment_query,
+    limit_payment_refund_request,
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.payment import RechargePaymentCreateIn
+from app.schemas.payment import PaymentRefundRequestCreateIn, RechargePaymentCreateIn
 from app.services import mapay as legacy_mapay
 from app.services.qixiangpay import (
     PROVIDER,
@@ -29,6 +30,11 @@ from app.services.qixiangpay import (
 from app.utils.response import BizError, success
 from app.services.auth_session import normalize_platform
 from app.services.trade_mode import recharge_enabled, require_recharge_enabled
+from app.services.payment_refund_requests import (
+    create_refund_request,
+    get_refund_request_for_order,
+    list_owned_refund_requests,
+)
 
 
 router = APIRouter(prefix="/api/payments/qixiang", tags=["payment"])
@@ -130,6 +136,57 @@ def cancel_payment(
     if order.provider != PROVIDER:
         raise BizError("历史充值订单不能通过七相支付网关取消", status_code=409)
     return success(cancel_recharge_order(db, order, platform=normalize_platform(platform)))
+
+
+@router.post("/orders/{order_no}/refund-requests")
+def submit_refund_request(
+    order_no: str,
+    data: PaymentRefundRequestCreateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
+):
+    limit_payment_refund_request(user.id)
+    return success(
+        create_refund_request(
+            db,
+            user_id=user.id,
+            order_no=order_no,
+            client_request_id=data.client_request_id,
+            reason=data.reason,
+            platform=platform,
+        )
+    )
+
+
+@router.get("/orders/{order_no}/refund-request")
+def get_order_refund_request(
+    order_no: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return success(
+        get_refund_request_for_order(db, user_id=user.id, order_no=order_no)
+    )
+
+
+@router.get("/refund-requests")
+def list_refund_requests(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status: str | None = Query(default=None, max_length=24),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return success(
+        list_owned_refund_requests(
+            db,
+            user_id=user.id,
+            page=page,
+            page_size=page_size,
+            status=status,
+        )
+    )
 
 
 @router.get("/checkout/{token}", response_class=RedirectResponse, status_code=303)

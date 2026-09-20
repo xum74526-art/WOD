@@ -31,7 +31,7 @@ from app.models import (
     ExternalAuthFlow, ExternalAuthTicket, ExternalIdentity, Follow, InviteCode,
     InviteRecord, Like, MerchantSettlement, Notification, NotificationPreference,
     OfflinePurchase, Order, OrderFundingAllocation, OrderRenewal,
-    PaymentInstructionGrant, PaymentOrder, PaymentRefund, Post, Product, RewardAccrual, Supplier,
+    PaymentInstructionGrant, PaymentOrder, PaymentRefund, PaymentRefundRequest, Post, Product, RewardAccrual, Supplier,
     SupportConversation, SupportMessage, SupportTicket, User, Verification,
     Wallet, WithdrawalOrder,
 )
@@ -144,6 +144,11 @@ def get_deletion_blockers(db: Session, user: User) -> list[dict]:
             safe_refunded_terminal,
             func.coalesce(safe_unpaid_terminal, False),
         )))
+    add("pending_refund_requests", "存在尚未处理完成的充值退款申请，请先等待平台完成审核。",
+        db.query(PaymentRefundRequest).filter(
+            PaymentRefundRequest.user_id == user.id,
+            PaymentRefundRequest.status.in_(("pending_review", "approved", "processing")),
+        ))
     add("unsettled_withdrawals", "存在待审核或待打款的提现，请先完成核对。",
         db.query(WithdrawalOrder).filter(
             WithdrawalOrder.user_id == user.id,

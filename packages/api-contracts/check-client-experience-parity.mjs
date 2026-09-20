@@ -605,6 +605,52 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'user recharge refund requests',
+    evidence: [
+      {
+        client: 'Web refund API',
+        file: 'apps/web/lib/mobile-business-api.ts',
+        patterns: [
+          'createRechargeRefundRequest(orderNo: string',
+          '/refund-requests`)',
+          'listRechargeRefundRequests(',
+        ],
+      },
+      {
+        client: 'Web refund application and history',
+        file: 'apps/web/components/payment-workspace.tsx',
+        patterns: [
+          'rechargeCanRequestRefund(row)',
+          'saveClientRequestIntent(storage, intentKey, intent)',
+          'createRechargeRefundRequest(refundFormOrder.order_no',
+          'setTab("refundRequests")',
+        ],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} refund API`,
+          file: `apps/${client}/src/api/wallet.ts`,
+          patterns: [
+            'createRechargeRefundRequest(',
+            '/refund-requests`',
+            'retryUncertainOnce: true',
+            'getRechargeRefundRequests(',
+          ],
+        },
+        {
+          client: `${client} refund application and history`,
+          file: `apps/${client}/src/pages/wallet/recharges.vue`,
+          patterns: [
+            'rechargeCanRequestRefund(order)',
+            'ensureClientRequestIntent(',
+            'createRechargeRefundRequest(order.order_no',
+            "viewMode.value = 'refunds'",
+          ],
+        },
+      ]),
+    ],
+  },
+  {
     name: 'withdrawal unavailable feedback',
     evidence: [
       {

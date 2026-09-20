@@ -12,15 +12,18 @@ import {
   rechargeCanCancel,
   rechargeCanPay,
   rechargeCanQuery,
+  rechargeCanRequestRefund,
   rechargeCanRestart,
+  rechargeRefundRequestLabel,
   rechargeUiLabel,
   rechargeUiState,
 } from "@/lib/finance-ui";
 import {
-  cancelRechargePayment, cancelWithdrawal, createRechargePayment, createWithdrawal, getMobileLedger, getMobileWallet,
+  cancelRechargePayment, cancelWithdrawal, createRechargePayment, createRechargeRefundRequest, createWithdrawal, getMobileLedger, getMobileWallet,
   getRechargePayment, getRechargePaymentConfig, getWithdrawalBundle, listRechargePayments, queryRechargePayment,
+  listRechargeRefundRequests,
   type BankCard, type MobileLedgerItem, type MobileWallet, type RechargePaymentConfig,
-  type RechargePaymentOrder, type WithdrawalConfig, type WithdrawalOrder,
+  type RechargePaymentOrder, type RechargeRefundRequest, type WithdrawalConfig, type WithdrawalOrder,
 } from "@/lib/mobile-business-api";
 import {
   clearClientRequestIntent,
@@ -36,6 +39,7 @@ import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 const PENDING_PAYMENT_KEY = "wod-web-pending-recharge";
 const RECHARGE_INTENT_KEY = "wod-web-recharge-request-intent";
 const WITHDRAWAL_INTENT_KEY = "wod-web-withdrawal-request-intent";
+const REFUND_REQUEST_INTENT_KEY_PREFIX = "wod-web-refund-request-intent";
 type PendingRechargeSession = { order_no?: string; checkout_url?: string | null; expires_at?: string | null };
 const amount = (value: unknown) => { const n = Number(value || 0); return Number.isFinite(n) ? n.toFixed(2) : "0.00"; };
 
@@ -74,12 +78,18 @@ export function PaymentWorkspace() {
   const [rechargeStatus, setRechargeStatus] = useState("");
   const [rechargeSearchInput, setRechargeSearchInput] = useState("");
   const [rechargeOrderNo, setRechargeOrderNo] = useState("");
+  const [refundRequests, setRefundRequests] = useState<RechargeRefundRequest[]>([]);
+  const [refundRequestPage, setRefundRequestPage] = useState(1);
+  const [refundRequestTotal, setRefundRequestTotal] = useState(0);
+  const [refundRequestStatus, setRefundRequestStatus] = useState("");
+  const [refundFormOrder, setRefundFormOrder] = useState<RechargePaymentOrder | null>(null);
+  const [refundReason, setRefundReason] = useState("");
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const [withdrawalTotal, setWithdrawalTotal] = useState(0);
   const [withdrawalStatus, setWithdrawalStatus] = useState("");
   const [recharge, setRecharge] = useState({ amount: "100", payment_type: "alipay" as "alipay" | "wxpay" });
   const [withdrawal, setWithdrawal] = useState({ amount: "", bank_card_id: "" });
-  const [tab, setTab] = useState<"ledger" | "recharges" | "withdrawals">("ledger");
+  const [tab, setTab] = useState<"ledger" | "recharges" | "refundRequests" | "withdrawals">("ledger");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
@@ -90,15 +100,17 @@ export function PaymentWorkspace() {
   const creatingWithdrawal = useRef(false);
   const rechargeIntent = useRef<ClientRequestIntent | null>(null);
   const withdrawalIntent = useRef<ClientRequestIntent | null>(null);
+  const refundRequestIntent = useRef<ClientRequestIntent | null>(null);
   const rechargeFormRef = useRef<HTMLFormElement>(null);
 
   const load = useCallback(async () => {
     setError("");
-    const [walletResult, ledgerResult, paymentResult, rechargeOrderResult, withdrawalResult] = await Promise.allSettled([
+    const [walletResult, ledgerResult, paymentResult, rechargeOrderResult, refundRequestResult, withdrawalResult] = await Promise.allSettled([
       getMobileWallet(),
       getMobileLedger(),
       getRechargePaymentConfig(),
       listRechargePayments({ page: rechargePage, page_size: 20, status: rechargeStatus, order_no: rechargeOrderNo }),
+      listRechargeRefundRequests({ page: refundRequestPage, page_size: 20, status: refundRequestStatus }),
       getWithdrawalBundle({ page: withdrawalPage, page_size: 20, status_filter: withdrawalStatus }),
     ]);
     if (walletResult.status === "fulfilled") setWallet(walletResult.value);
@@ -114,6 +126,10 @@ export function PaymentWorkspace() {
       setRechargeOrders(rechargeOrderResult.value.items || []);
       setRechargeTotal(rechargeOrderResult.value.total || 0);
     }
+    if (refundRequestResult.status === "fulfilled") {
+      setRefundRequests(refundRequestResult.value.items || []);
+      setRefundRequestTotal(refundRequestResult.value.total || 0);
+    }
     if (withdrawalResult.status === "fulfilled") {
       const [config, page, bankCards] = withdrawalResult.value;
       const selectable = bankCards.filter((card) => (
@@ -127,9 +143,9 @@ export function PaymentWorkspace() {
           : String(selectable.find((card) => card.is_default)?.id || selectable[0]?.id || ""),
       }));
     }
-    const failed = [walletResult, ledgerResult, paymentResult, rechargeOrderResult, withdrawalResult].find((result) => result.status === "rejected");
+    const failed = [walletResult, ledgerResult, paymentResult, rechargeOrderResult, refundRequestResult, withdrawalResult].find((result) => result.status === "rejected");
     if (failed?.status === "rejected") setError(errorMessage(failed.reason));
-  }, [rechargeOrderNo, rechargePage, rechargeStatus, withdrawalPage, withdrawalStatus]);
+  }, [rechargeOrderNo, rechargePage, rechargeStatus, refundRequestPage, refundRequestStatus, withdrawalPage, withdrawalStatus]);
 
   const refreshPayment = useCallback(async (showError = false) => {
     let stored: PendingRechargeSession | null = null;
@@ -363,9 +379,58 @@ export function PaymentWorkspace() {
     setRechargeOrderNo(rechargeSearchInput.trim().toUpperCase());
   }
 
+  function openRefundRequest(row: RechargePaymentOrder) {
+    if (!rechargeCanRequestRefund(row)) return;
+    setRefundFormOrder(row);
+    setRefundReason("");
+    setError("");
+    setMessage("");
+  }
+
+  async function submitRefundRequest(event: FormEvent) {
+    event.preventDefault();
+    if (!refundFormOrder || busy === "refund-request") return;
+    const reason = refundReason.trim().replace(/\s+/g, " ");
+    if (reason.length < 5 || reason.length > 500) {
+      setError("退款原因需填写 5–500 个字符。");
+      return;
+    }
+    setBusy("refund-request"); setError(""); setMessage("");
+    const intentKey = `${REFUND_REQUEST_INTENT_KEY_PREFIX}:${refundFormOrder.order_no}`;
+    try {
+      const storage = requestIntentStorage();
+      const fingerprint = clientRequestFingerprint([refundFormOrder.order_no, reason]);
+      const intent = ensureClientRequestIntent(
+        refundRequestIntent.current || (storage ? readClientRequestIntent(storage, intentKey) : null),
+        fingerprint,
+        "refund-request",
+      );
+      refundRequestIntent.current = intent;
+      if (storage) saveClientRequestIntent(storage, intentKey, intent);
+      const created = await createRechargeRefundRequest(refundFormOrder.order_no, {
+        client_request_id: intent.requestId,
+        reason,
+      });
+      refundRequestIntent.current = null;
+      if (storage) clearClientRequestIntent(storage, intentKey);
+      setRefundFormOrder(null); setRefundReason(""); setRefundRequestPage(1); setRefundRequestStatus(""); setTab("refundRequests");
+      try {
+        const pageResult = await listRechargeRefundRequests({ page: 1, page_size: 20 });
+        setRefundRequests(pageResult.items || [created]);
+        setRefundRequestTotal(pageResult.total || 1);
+      } catch {
+        setRefundRequests((rows) => [created, ...rows.filter((row) => row.id !== created.id)].slice(0, 20));
+        setRefundRequestTotal((total) => Math.max(1, total));
+      }
+      setMessage(`退款申请 ${created.request_no} 已提交，平台审核前不会直接扣减或退回资金。`);
+    } catch (reasonValue) { setError(errorMessage(reasonValue)); }
+    finally { setBusy(""); }
+  }
+
   const pendingState = rechargeUiState(pendingPayment);
   const rechargePages = Math.max(1, Math.ceil(rechargeTotal / 20));
   const withdrawalPages = Math.max(1, Math.ceil(withdrawalTotal / 20));
+  const refundRequestPages = Math.max(1, Math.ceil(refundRequestTotal / 20));
 
   if (!wallet) return <section className="workspace-page"><div className="workspace-skeleton" aria-label="正在读取钱包" />{error && <div className="commerce-error">{error}</div>}</section>;
   return <section className="workspace-page mobile-wallet-workspace">
@@ -390,7 +455,7 @@ export function PaymentWorkspace() {
       {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时（最低 {amount(withdrawalMinimum)} 卡时）<input type="number" min={withdrawalMinimum} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.01" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
     </div> : <div className="workspace-service-note">在线充值与提现暂未开放。已有余额、历史流水和订单状态仍可查询；如需算力服务，请前往需求页面提交信息并等待人工联系。</div>}
     <section className="mobile-record-panel wallet-ledger">
-      <header><Receipt size={20}/><div><small>ACCOUNT RECORDS</small><h2>{tab === "ledger" ? "钱包流水" : tab === "recharges" ? "充值订单" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "recharges" ? "active" : ""} onClick={() => setTab("recharges")}>充值订单</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>
+      <header><Receipt size={20}/><div><small>ACCOUNT RECORDS</small><h2>{tab === "ledger" ? "钱包流水" : tab === "recharges" ? "充值订单" : tab === "refundRequests" ? "退款申请" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "recharges" ? "active" : ""} onClick={() => setTab("recharges")}>充值订单</button><button className={tab === "refundRequests" ? "active" : ""} onClick={() => setTab("refundRequests")}>退款申请</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>
       {tab === "recharges" && <form className="refund-toolbar" onSubmit={applyRechargeSearch}>
         <input aria-label="搜索充值订单号" placeholder="输入完整充值订单号" value={rechargeSearchInput} onChange={(event) => setRechargeSearchInput(event.target.value)} />
         <select aria-label="充值状态" value={rechargeStatus} onChange={(event) => { setRechargePage(1); setRechargeStatus(event.target.value); }}>
@@ -405,6 +470,18 @@ export function PaymentWorkspace() {
         </select>
         <span>共 {withdrawalTotal} 条提现记录</span>
       </div>}
+      {tab === "refundRequests" && <div className="refund-toolbar">
+        <select aria-label="退款申请状态" value={refundRequestStatus} onChange={(event) => { setRefundRequestPage(1); setRefundRequestStatus(event.target.value); }}>
+          <option value="">全部状态</option><option value="pending_review">待平台审核</option><option value="approved">审核已通过</option><option value="processing">退款处理中</option><option value="succeeded">退款已完成</option><option value="rejected">申请已驳回</option><option value="failed">退款失败</option><option value="canceled">申请已取消</option>
+        </select>
+        <span>共 {refundRequestTotal} 条退款申请</span>
+      </div>}
+      {refundFormOrder && <form className="wallet-refund-request-form" onSubmit={submitRefundRequest}>
+        <header><div><small>REFUND REQUEST</small><strong>申请退回充值款</strong></div><button type="button" onClick={() => { setRefundFormOrder(null); setRefundReason(""); }}>关闭</button></header>
+        <p>订单 {refundFormOrder.order_no} · ¥ {amount(refundFormOrder.amount_cny)} · {amount(refundFormOrder.card_hours)} 卡时</p>
+        <label>退款原因<textarea aria-label="退款原因" minLength={5} maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="请说明退款原因（5–500 个字符）" required/></label>
+        <footer><span>提交后由平台审核；审核通过后才会发起原路退款。</span><button type="button" onClick={() => { setRefundFormOrder(null); setRefundReason(""); }}>取消</button><button className="commerce-primary" disabled={busy === "refund-request"}>{busy === "refund-request" ? "提交中…" : "提交退款申请"}</button></footer>
+      </form>}
       {tab === "ledger" ? ledger.length ? ledger.map((row) => <article key={row.id}><span><strong>{row.direction === "in" ? "+" : "-"}{amount(row.amount)} 卡时</strong><small>{row.remark || row.type} · 余额 {amount(row.balance_after)}</small></span><b>{row.type}</b><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</time></article>) : <div className="mobile-inline-empty">暂无钱包流水</div>
         : tab === "recharges" ? rechargeOrders.length ? rechargeOrders.map((row) => <article className="wallet-recharge-order" key={row.order_no}>
           <span><strong>¥ {amount(row.amount_cny)} · {amount(row.card_hours)} 卡时</strong><small>{row.order_no} · {row.provider === "qixiangpay" ? "七相支付" : row.provider || "历史支付"}</small>{row.failure_reason && <small>{row.failure_reason}</small>}</span>
@@ -413,12 +490,15 @@ export function PaymentWorkspace() {
           <time className="wallet-order-actions">
             {rechargeCanQuery(row) && <button disabled={busy === `recharge-query-${row.order_no}`} onClick={() => void refreshRechargeOrder(row)}>{busy === `recharge-query-${row.order_no}` ? "查询中…" : "查询状态"}</button>}
             {rechargeCanCancel(row) && <button className="danger" disabled={busy === `recharge-cancel-${row.order_no}`} title="取消前会再次确认订单未支付" onClick={() => void cancelRechargeOrder(row)}>{busy === `recharge-cancel-${row.order_no}` ? "取消中…" : "取消订单"}</button>}
+            {rechargeCanRequestRefund(row) && <button className="danger" onClick={() => openRefundRequest(row)}>申请退款</button>}
             {rechargeEntryEnabled && rechargeCanRestart(row) && <button onClick={() => restartRecharge(row)}>再来一单</button>}
           </time>
         </article>) : <div className="mobile-inline-empty">暂无充值订单</div>
-          : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{amount(row.amount_card_hours)} 卡时</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>¥ {amount(row.net_amount_cny)}</strong><small>手续费 ¥ {amount(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.status === "reviewing" && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}
+          : tab === "refundRequests" ? refundRequests.length ? refundRequests.map((row) => <article className="wallet-refund-request" key={row.id}><span><strong>¥ {amount(row.amount_cny)} · {amount(row.card_hours)} 卡时</strong><small>{row.request_no}</small><small>充值订单：{row.order_no}</small></span><b>{rechargeRefundRequestLabel(row)}</b><span><strong>申请原因</strong><small>{row.reason}</small></span><time>提交：{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.reviewed_at && <small>审核：{new Date(row.reviewed_at).toLocaleString("zh-CN")}</small>}</time></article>) : <div className="mobile-inline-empty">暂无退款申请</div>
+            : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{amount(row.amount_card_hours)} 卡时</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>¥ {amount(row.net_amount_cny)}</strong><small>手续费 ¥ {amount(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.status === "reviewing" && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}
       {tab === "recharges" && <nav className="community-page-nav"><button disabled={rechargePage <= 1} onClick={() => setRechargePage((page) => page - 1)}>上一页</button><span>第 {rechargePage} / {rechargePages} 页 · 共 {rechargeTotal} 条</span><button disabled={rechargePage >= rechargePages} onClick={() => setRechargePage((page) => page + 1)}>下一页</button></nav>}
       {tab === "withdrawals" && <nav className="community-page-nav"><button disabled={withdrawalPage <= 1} onClick={() => setWithdrawalPage((page) => page - 1)}>上一页</button><span>第 {withdrawalPage} / {withdrawalPages} 页</span><button disabled={withdrawalPage >= withdrawalPages} onClick={() => setWithdrawalPage((page) => page + 1)}>下一页</button></nav>}
+      {tab === "refundRequests" && <nav className="community-page-nav"><button disabled={refundRequestPage <= 1} onClick={() => setRefundRequestPage((page) => page - 1)}>上一页</button><span>第 {refundRequestPage} / {refundRequestPages} 页 · 共 {refundRequestTotal} 条</span><button disabled={refundRequestPage >= refundRequestPages} onClick={() => setRefundRequestPage((page) => page + 1)}>下一页</button></nav>}
     </section>
   </section>;
 }

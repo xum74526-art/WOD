@@ -22,7 +22,7 @@ from app.models.bank_card import BankCard
 from app.models.community import CommunityReport, Comment, Post
 from app.models.external_identity import ExternalIdentity
 from app.models.order import Order
-from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund
+from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund, PaymentRefundRequest
 from app.models.product import Product
 from app.models.user import User
 from app.models.verification import Verification
@@ -30,6 +30,7 @@ from app.models.withdrawal import WithdrawalOrder
 from app.schemas.community import CommunityReportReviewIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
+    PaymentRefundRequestReviewIn,
     PaymentRefundResolveIn,
     PaymentReviewDecisionIn,
 )
@@ -41,6 +42,14 @@ from app.services.payment_operations import (
     request_payment_refund,
     resolve_payment_review,
     resolve_unknown_refund,
+)
+from app.services.payment_refund_requests import (
+    admin_refund_request_out,
+    assert_no_active_customer_refund_request,
+    get_admin_refund_request,
+    list_admin_refund_requests,
+    review_refund_request,
+    sync_refund_request_for_payment_refund,
 )
 from app.utils.response import BizError, success
 
@@ -288,10 +297,16 @@ def recharge_order_detail(
     refund = db.query(PaymentRefund).filter(
         PaymentRefund.payment_order_id == row.id
     ).first()
+    refund_request = db.query(PaymentRefundRequest).filter(
+        PaymentRefundRequest.payment_order_id == row.id
+    ).order_by(PaymentRefundRequest.id.desc()).first()
     return success({
         "order": _payment_order_out(db, row),
         "events": [event_out(item) for item in events],
         "refund": refund_out(refund) if refund else None,
+        "refund_request": (
+            admin_refund_request_out(db, refund_request) if refund_request else None
+        ),
     })
 
 
@@ -303,6 +318,8 @@ def review_recharge_order(
     db: Session = Depends(get_db),
 ):
     limit_payment_admin(actor.id)
+    if data.action == "refund":
+        assert_no_active_customer_refund_request(db, payment_order_id)
     return success(resolve_payment_review(
         db,
         payment_order_id=payment_order_id,
@@ -321,6 +338,7 @@ def create_payment_refund(
     db: Session = Depends(get_db),
 ):
     limit_payment_admin(actor.id)
+    assert_no_active_customer_refund_request(db, payment_order_id)
     return success(request_payment_refund(
         db,
         payment_order_id=payment_order_id,
@@ -354,6 +372,56 @@ def payment_refunds(
     })
 
 
+@router.get("/payment-refund-requests")
+def payment_refund_requests(
+    platform: AuditPlatform | None = None,
+    status: str | None = Query(default=None, max_length=24),
+    request_no: str | None = Query(default=None, max_length=40),
+    order_no: str | None = Query(default=None, max_length=40),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _page(page, page_size)
+    return success(list_admin_refund_requests(
+        db,
+        page=page,
+        page_size=page_size,
+        status=status,
+        request_no=request_no,
+        order_no=order_no,
+        platform=platform,
+    ))
+
+
+@router.get("/payment-refund-requests/{request_id}")
+def payment_refund_request_detail(
+    request_id: int,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    limit_payment_admin(actor.id)
+    return success(get_admin_refund_request(db, request_id))
+
+
+@router.post("/payment-refund-requests/{request_id}/review")
+def review_payment_refund_request(
+    request_id: int,
+    data: PaymentRefundRequestReviewIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    limit_payment_admin(actor.id)
+    return success(review_refund_request(
+        db,
+        request_id=request_id,
+        actor_user_id=actor.id,
+        action=data.action,
+        note=data.note,
+    ))
+
+
 @router.get("/payment-refunds/{refund_id}")
 def payment_refund_detail(
     refund_id: int,
@@ -374,13 +442,15 @@ def resolve_payment_refund(
     db: Session = Depends(get_db),
 ):
     limit_payment_admin(actor.id)
-    return success(resolve_unknown_refund(
+    result = resolve_unknown_refund(
         db,
         refund_id=refund_id,
         actor_user_id=actor.id,
         outcome=data.outcome,
         note=data.note,
-    ))
+    )
+    sync_refund_request_for_payment_refund(db, refund_id)
+    return success(result)
 
 
 def _community_report_target(db: Session, report: CommunityReport) -> dict:

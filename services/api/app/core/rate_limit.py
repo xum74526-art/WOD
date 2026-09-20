@@ -78,6 +78,7 @@ payment_query_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
 payment_checkout_rate_limit = SlidingWindowRateLimiter(limit=20, window_seconds=60)
 payment_callback_rate_limit = SlidingWindowRateLimiter(limit=3000, window_seconds=60)
 payment_admin_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
+payment_refund_request_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=3600)
 
 
 def _identity_key(value: str) -> str:
@@ -165,3 +166,7 @@ def limit_payment_callback(provider: str) -> None:
 
 def limit_payment_admin(user_id: int) -> None:
     payment_admin_rate_limit.check(f"payment-admin:{int(user_id)}")
+
+
+def limit_payment_refund_request(user_id: int) -> None:
+    payment_refund_request_rate_limit.check(f"payment-refund-request:{int(user_id)}")

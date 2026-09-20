@@ -78,6 +78,37 @@ export interface RechargePaymentPage {
   items: RechargePaymentOrder[]
 }
 
+export type RechargeRefundRequestStatus =
+  | 'pending_review'
+  | 'approved'
+  | 'processing'
+  | 'rejected'
+  | 'canceled'
+  | 'succeeded'
+  | 'failed'
+
+export interface RechargeRefundRequest {
+  id: number
+  request_no: string
+  payment_order_id: number
+  order_no: string
+  amount_cny: number
+  card_hours: number
+  status: RechargeRefundRequestStatus
+  reason: string
+  created_platform?: string | null
+  reviewed_at?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface RechargeRefundRequestPage {
+  total: number
+  page: number
+  page_size: number
+  items: RechargeRefundRequest[]
+}
+
 export interface LedgerPage {
   total: number
   page: number
@@ -138,6 +169,37 @@ export function cancelRechargePayment(orderNo: string, silent = true) {
     url: `/payments/qixiang/orders/${encodeURIComponent(orderNo)}/cancel`,
     method: 'POST',
     silent,
+  })
+}
+
+export function createRechargeRefundRequest(
+  orderNo: string,
+  data: { client_request_id: string; reason: string },
+) {
+  return request<RechargeRefundRequest>({
+    url: `/payments/qixiang/orders/${encodeURIComponent(orderNo)}/refund-requests`,
+    method: 'POST',
+    data,
+    retryUncertainOnce: true,
+  })
+}
+
+export function getRechargeRefundRequest(orderNo: string, silent = true) {
+  return request<RechargeRefundRequest>({
+    url: `/payments/qixiang/orders/${encodeURIComponent(orderNo)}/refund-request`,
+    silent,
+  })
+}
+
+export function getRechargeRefundRequests(params?: {
+  page?: number
+  page_size?: number
+  status?: RechargeRefundRequestStatus
+}) {
+  return request<RechargeRefundRequestPage>({
+    url: '/payments/qixiang/refund-requests',
+    data: params || {},
+    silent: true,
   })
 }
 

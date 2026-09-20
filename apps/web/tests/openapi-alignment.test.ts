@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 type SchemaReference = { $ref?: string; anyOf?: SchemaReference[] };
 type Operation = { parameters?: Array<{ name: string }>; requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: SchemaReference } } }; responses?: Record<string, unknown> };
-type PropertySchema = { type?: string; minLength?: number; maxLength?: number; pattern?: string; anyOf?: PropertySchema[] };
+type PropertySchema = { type?: string; minLength?: number; maxLength?: number; pattern?: string; enum?: string[]; anyOf?: PropertySchema[] };
 type OpenApi = { paths: Record<string, Record<string, Operation>>; components: { schemas: Record<string, { properties?: Record<string, PropertySchema>; required?: string[] }> } };
 const contractPath = fileURLToPath(new URL("../../../packages/api-contracts/openapi.json", import.meta.url));
 const contract = JSON.parse(readFileSync(contractPath, "utf8")) as OpenApi;
@@ -71,6 +71,9 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
     ["/api/payments/qixiang/orders/{order_no}", "get"],
     ["/api/payments/qixiang/orders/{order_no}/query", "post"],
     ["/api/payments/qixiang/orders/{order_no}/cancel", "post"],
+    ["/api/payments/qixiang/orders/{order_no}/refund-request", "get"],
+    ["/api/payments/qixiang/orders/{order_no}/refund-requests", "post"],
+    ["/api/payments/qixiang/refund-requests", "get"],
     ["/api/payments/qixiang/checkout/{token}", "get"],
   ] as const) operation(path, method);
   const recharge = bodySchema("/api/payments/qixiang/recharge-orders", "post");
@@ -80,6 +83,17 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
     { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
   );
   assert.equal(recharge.required?.includes("client_request_id") ?? false, false);
+  const refundRequest = bodySchema("/api/payments/qixiang/orders/{order_no}/refund-requests", "post");
+  assert.deepEqual(refundRequest.required, ["client_request_id", "reason"]);
+  assert.equal(refundRequest.properties?.reason?.minLength, 5);
+  assert.deepEqual(
+    {
+      minLength: refundRequest.properties?.client_request_id?.minLength,
+      maxLength: refundRequest.properties?.client_request_id?.maxLength,
+      pattern: refundRequest.properties?.client_request_id?.pattern,
+    },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
   assert.equal(contract.paths["/api/payments/mapay/recharge-orders"]?.post, undefined);
   assert.equal(contract.paths["/api/payments/mapay/checkout/{token}"]?.get, undefined);
 });
@@ -93,6 +107,9 @@ test("administrator payment operations match the canonical backend", () => {
     ["/api/admin/payment-refunds", "get"],
     ["/api/admin/payment-refunds/{refund_id}", "get"],
     ["/api/admin/payment-refunds/{refund_id}/resolve", "post"],
+    ["/api/admin/payment-refund-requests", "get"],
+    ["/api/admin/payment-refund-requests/{request_id}", "get"],
+    ["/api/admin/payment-refund-requests/{request_id}/review", "post"],
   ] as const) operation(path, method);
 
   const review = bodySchema("/api/admin/recharge-orders/{payment_order_id}/review", "post");
@@ -117,6 +134,14 @@ test("administrator payment operations match the canonical backend", () => {
   const resolution = bodySchema("/api/admin/payment-refunds/{refund_id}/resolve", "post");
   assert.deepEqual(resolution.required, ["outcome", "note"]);
   assert.equal(resolution.properties?.client_request_id, undefined);
+
+  const requestReview = bodySchema("/api/admin/payment-refund-requests/{request_id}/review", "post");
+  assert.deepEqual(requestReview.required, ["action", "note"]);
+  assert.deepEqual(requestReview.properties?.action?.enum, ["approve", "reject"]);
+  assert.deepEqual(
+    { minLength: requestReview.properties?.note?.minLength, maxLength: requestReview.properties?.note?.maxLength },
+    { minLength: 3, maxLength: 500 },
+  );
 });
 
 test("buy-request creation exposes a backwards-compatible retry key", () => {
@@ -148,7 +173,7 @@ test("supplier resource edits expose a backwards-compatible version precondition
 });
 
 test("administrator and finance lists expose the platform filter", () => {
-  for (const path of ["/api/admin/overview", "/api/admin/users", "/api/admin/orders", "/api/admin/recharge-orders", "/api/finance/verifications", "/api/finance/bank-cards", "/api/finance/withdrawals"]) {
+  for (const path of ["/api/admin/overview", "/api/admin/users", "/api/admin/orders", "/api/admin/recharge-orders", "/api/admin/payment-refund-requests", "/api/finance/verifications", "/api/finance/bank-cards", "/api/finance/withdrawals"]) {
     const names = operation(path, "get").parameters?.map((parameter) => parameter.name) ?? [];
     assert.ok(names.includes("platform"), `${path} must expose the platform filter`);
   }

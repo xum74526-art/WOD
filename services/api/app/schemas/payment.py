@@ -42,6 +42,36 @@ class PaymentRefundCreateIn(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class PaymentRefundRequestCreateIn(BaseModel):
+    client_request_id: str = Field(
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    reason: str = Field(min_length=5, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 5:
+            raise ValueError("退款原因至少需要 5 个字符")
+        return normalized
+
+
+class PaymentRefundRequestReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str = Field(min_length=3, max_length=500)
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 3:
+            raise ValueError("审核说明至少需要 3 个字符")
+        return normalized
+
+
 class PaymentRefundResolveIn(BaseModel):
     outcome: Literal["succeeded", "failed"]
     note: str = Field(min_length=3, max_length=500)

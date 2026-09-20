@@ -110,7 +110,32 @@ export type AdminPaymentRefund = {
   created_at: string;
   updated_at: string;
 };
-export type AdminRechargeDetail = { order: AdminRechargeItem; events: AdminPaymentEvent[]; refund: AdminPaymentRefund | null };
+export type AdminPaymentRefundRequest = {
+  id: number;
+  request_no: string;
+  payment_order_id: number;
+  order_no: string | null;
+  payment_status: string | null;
+  user: { id: number; username: string | null };
+  client_request_id: string;
+  amount_cny: number;
+  card_hours: number;
+  status: string;
+  reason: string;
+  created_platform: AuditPlatform;
+  reviewed_by: number | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  payment_refund: AdminPaymentRefund | null;
+  created_at: string;
+  updated_at: string;
+};
+export type AdminRechargeDetail = {
+  order: AdminRechargeItem;
+  events: AdminPaymentEvent[];
+  refund: AdminPaymentRefund | null;
+  refund_request: AdminPaymentRefundRequest | null;
+};
 export type AdminPaymentReviewResult = { order_id: number; status: string; credited: boolean } | AdminPaymentRefund;
 export type AdminPaymentReviewInput =
   | { action: "credit"; note: string }
@@ -143,12 +168,13 @@ export type AdminBuyRequestDetail = { request: AdminBuyRequestItem; quotes: Mobi
 export type AdminBuyRequestCredential = { host: string; port: number; username: string; auth_type: "password" | "private_key"; secret: string; note?: string | null; fingerprint?: string | null; version?: number | null; status?: string | null; created_at?: string | null; updated_at?: string | null };
 export type AdminPage<T> = { total: number; page: number; page_size: number; items: T[] };
 
-function query(input: { platform?: AuditPlatform; keyword?: string; status?: string; orderNo?: string; requestType?: string; page?: number; pageSize?: number }) {
+function query(input: { platform?: AuditPlatform; keyword?: string; status?: string; orderNo?: string; requestNo?: string; requestType?: string; page?: number; pageSize?: number }) {
   const params = new URLSearchParams({ page: String(input.page ?? 1), page_size: String(input.pageSize ?? 100) });
   if (input.platform) params.set("platform", input.platform);
   if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
   if (input.status?.trim()) params.set("status", input.status.trim());
   if (input.orderNo?.trim()) params.set("order_no", input.orderNo.trim());
+  if (input.requestNo?.trim()) params.set("request_no", input.requestNo.trim());
   if (input.requestType?.trim()) params.set("request_type", input.requestType.trim());
   return `?${params.toString()}`;
 }
@@ -205,6 +231,21 @@ export function getAdminPaymentRefund(id: number) {
 
 export function resolveAdminPaymentRefund(id: number, input: { outcome: "succeeded" | "failed"; note: string }) {
   return apiRequest<AdminPaymentRefund>(canonicalApiPath(`/admin/payment-refunds/${id}/resolve`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAdminPaymentRefundRequests(input: { platform?: AuditPlatform; status?: string; requestNo?: string; orderNo?: string; page?: number; pageSize?: number } = {}) {
+  return apiRequest<AdminPage<AdminPaymentRefundRequest>>(canonicalApiPath(`/admin/payment-refund-requests${query(input)}`));
+}
+
+export function getAdminPaymentRefundRequest(id: number) {
+  return apiRequest<AdminPaymentRefundRequest>(canonicalApiPath(`/admin/payment-refund-requests/${id}`));
+}
+
+export function reviewAdminPaymentRefundRequest(id: number, input: { action: "approve" | "reject"; note: string }) {
+  return apiRequest<AdminPaymentRefundRequest>(canonicalApiPath(`/admin/payment-refund-requests/${id}/review`), {
     method: "POST",
     body: JSON.stringify(input),
   });

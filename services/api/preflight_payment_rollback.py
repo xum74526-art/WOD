@@ -29,12 +29,18 @@ ACTIVE_PAYMENT_ORDER_STATUSES = (
 # payment_operations.REFUND_ACTIVE_STATUSES uses these persisted states. There
 # is no generic "pending" refund state in the current schema.
 ACTIVE_PAYMENT_REFUND_STATUSES = ("preparing", "submitting", "unknown")
+ACTIVE_PAYMENT_REFUND_REQUEST_STATUSES = (
+    "pending_review",
+    "approved",
+    "processing",
+)
 
 _REQUIRED_SCHEMA = {
     "withdrawal_orders": {"id", "status", "payout_actor_id"},
     "payment_instruction_grants": {"withdrawal_id", "used_at"},
     "payment_orders": {"status"},
     "payment_refunds": {"status"},
+    "payment_refund_requests": {"status"},
 }
 
 
@@ -117,12 +123,21 @@ def inspect_payment_rollback_blockers(engine: Engine) -> tuple[RollbackBlocker, 
                 "payment_refunds",
                 ACTIVE_PAYMENT_REFUND_STATUSES,
             )
+            refund_request_count = _status_count(
+                connection,
+                "payment_refund_requests",
+                ACTIVE_PAYMENT_REFUND_REQUEST_STATUSES,
+            )
 
             candidates = (
                 RollbackBlocker("withdrawal_orders_in_flight", withdrawal_count),
                 RollbackBlocker("payment_instruction_grants_unused", unused_grants),
                 RollbackBlocker("payment_orders_in_flight", payment_order_count),
                 RollbackBlocker("payment_refunds_in_flight", refund_count),
+                RollbackBlocker(
+                    "payment_refund_requests_in_flight",
+                    refund_request_count,
+                ),
             )
             return tuple(blocker for blocker in candidates if blocker.count)
         finally:

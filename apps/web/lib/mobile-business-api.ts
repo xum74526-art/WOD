@@ -210,6 +210,37 @@ export type RechargePaymentPage = {
   items: RechargePaymentOrder[];
 };
 
+export type RechargeRefundRequestStatus =
+  | "pending_review"
+  | "approved"
+  | "processing"
+  | "rejected"
+  | "canceled"
+  | "succeeded"
+  | "failed";
+
+export type RechargeRefundRequest = {
+  id: number;
+  request_no: string;
+  payment_order_id: number;
+  order_no: string;
+  amount_cny: number;
+  card_hours: number;
+  status: RechargeRefundRequestStatus;
+  reason: string;
+  created_platform?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type RechargeRefundRequestPage = {
+  total: number;
+  page: number;
+  page_size: number;
+  items: RechargeRefundRequest[];
+};
+
 export type WithdrawalOrder = {
   id: number;
   order_no: string;
@@ -495,6 +526,26 @@ export function queryRechargePayment(orderNo: string) {
 
 export function cancelRechargePayment(orderNo: string) {
   return apiRequest<RechargePaymentOrder>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/cancel`), { method: "POST" });
+}
+
+export function createRechargeRefundRequest(orderNo: string, input: { client_request_id: string; reason: string }) {
+  return apiRequest<RechargeRefundRequest>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/refund-requests`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getRechargeRefundRequest(orderNo: string) {
+  return apiRequest<RechargeRefundRequest>(canonicalApiPath(`/payments/qixiang/orders/${encodeURIComponent(orderNo)}/refund-request`));
+}
+
+export function listRechargeRefundRequests(params: { page?: number; page_size?: number; status?: string } = {}) {
+  const query = new URLSearchParams({
+    page: String(params.page || 1),
+    page_size: String(params.page_size || 20),
+  });
+  if (params.status) query.set("status", params.status);
+  return apiRequest<RechargeRefundRequestPage>(canonicalApiPath(`/payments/qixiang/refund-requests?${query.toString()}`));
 }
 
 export function createWithdrawal(input: { amount_card_hours: number; bank_card_id: number; client_request_id: string }) {

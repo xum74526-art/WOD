@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.ledger import Ledger
-from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund
+from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund, PaymentRefundRequest
 from app.models.wallet import Wallet
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.response import BizError
@@ -305,6 +305,7 @@ def request_payment_refund(
     actor_user_id: int,
     client_request_id: str,
     reason: str,
+    customer_refund_request_id: int | None = None,
 ) -> dict:
     # SQLite ignores SELECT FOR UPDATE in local/test deployments. PostgreSQL's
     # row lock and unique refund/order constraint protect production workers;
@@ -316,6 +317,7 @@ def request_payment_refund(
             actor_user_id=actor_user_id,
             client_request_id=client_request_id,
             reason=reason,
+            customer_refund_request_id=customer_refund_request_id,
         )
 
 
@@ -326,6 +328,7 @@ def _request_payment_refund_locked(
     actor_user_id: int,
     client_request_id: str,
     reason: str,
+    customer_refund_request_id: int | None = None,
 ) -> dict:
     """Submit one full Qixiang original-rail refund with a durable wallet hold."""
     order = db.query(PaymentOrder).filter(
@@ -335,6 +338,24 @@ def _request_payment_refund_locked(
         raise BizError("充值订单不存在", status_code=404)
     if order.provider != "qixiangpay":
         raise BizError("历史 MaPay 订单不支持通过七相接口退款", status_code=409)
+
+    active_customer_request = db.query(PaymentRefundRequest).filter(
+        PaymentRefundRequest.active_payment_order_id == order.id,
+        PaymentRefundRequest.status.in_(("pending_review", "approved", "processing")),
+    ).first()
+    if active_customer_request and (
+        customer_refund_request_id is None
+        or active_customer_request.id != customer_refund_request_id
+    ):
+        raise BizError(
+            "该充值订单已有用户退款申请，请在退款申请队列中审核",
+            status_code=409,
+        )
+    if customer_refund_request_id is not None and (
+        not active_customer_request
+        or active_customer_request.id != customer_refund_request_id
+    ):
+        raise BizError("用户退款申请状态已变化，请刷新后重试", status_code=409)
 
     normalized_request_id = str(client_request_id or "").strip()
     existing = db.query(PaymentRefund).filter(

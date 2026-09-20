@@ -18,6 +18,11 @@ export interface RechargeTimingSource {
   remaining_seconds?: number | null
   can_query?: boolean | null
   can_cancel?: boolean | null
+  provider?: string | null
+}
+
+export interface RechargeRefundRequestSource {
+  status?: string | null
 }
 
 export interface StoredRechargeSession {
@@ -150,6 +155,37 @@ export function rechargeHistoryPresentation(order: RechargeTimingSource): Rechar
         ? 'reviewing'
         : 'danger'
   return { state, labelKey, tone }
+}
+
+export function rechargeCanRequestRefund(order: RechargeTimingSource): boolean {
+  if (String(order.provider || '').trim().toLowerCase() !== 'qixiangpay') return false
+  const status = String(order.status || '').trim().toLowerCase()
+  if (status === 'review' || status === 'late_paid_review') return true
+  return status === 'paid' && Boolean(order.credited_at)
+}
+
+export function rechargeRefundRequestPresentation(request: RechargeRefundRequestSource): {
+  labelKey: string
+  tone: 'pending' | 'reviewing' | 'success' | 'danger'
+} {
+  const status = String(request.status || '').trim().toLowerCase()
+  const labelKey = {
+    pending_review: 'refundRequestPendingReview',
+    approved: 'refundRequestApproved',
+    processing: 'refundRequestProcessing',
+    rejected: 'refundRequestRejected',
+    canceled: 'refundRequestCanceled',
+    succeeded: 'refundRequestSucceeded',
+    failed: 'refundRequestFailed',
+  }[status] || 'notAvailableShort'
+  const tone = status === 'succeeded'
+    ? 'success'
+    : status === 'rejected' || status === 'canceled' || status === 'failed'
+      ? 'danger'
+      : status === 'pending_review'
+        ? 'pending'
+        : 'reviewing'
+  return { labelKey, tone }
 }
 
 export function rechargeCanQuery(order: RechargeTimingSource): boolean {

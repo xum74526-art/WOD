@@ -42,6 +42,10 @@ class PaymentRollbackPreflightTests(unittest.TestCase):
                     id INTEGER PRIMARY KEY,
                     status TEXT NOT NULL
                 );
+                CREATE TABLE payment_refund_requests (
+                    id INTEGER PRIMARY KEY,
+                    status TEXT NOT NULL
+                );
                 """
             )
 
@@ -85,6 +89,9 @@ class PaymentRollbackPreflightTests(unittest.TestCase):
         )
         self.insert("INSERT INTO payment_orders (id, status) VALUES (1, 'refunded')")
         self.insert("INSERT INTO payment_refunds (id, status) VALUES (1, 'succeeded')")
+        self.insert(
+            "INSERT INTO payment_refund_requests (id, status) VALUES (1, 'rejected')"
+        )
 
         self.assertEqual(self.inspect_without_writes(), ())
 
@@ -185,6 +192,23 @@ class PaymentRollbackPreflightTests(unittest.TestCase):
         self.assertEqual(
             {blocker.code: blocker.count for blocker in blockers},
             {"payment_refunds_in_flight": 3},
+        )
+
+    def test_pending_customer_refund_requests_refuse_rollback(self):
+        for index, status in enumerate(
+            rollback_preflight.ACTIVE_PAYMENT_REFUND_REQUEST_STATUSES,
+            start=1,
+        ):
+            self.insert(
+                "INSERT INTO payment_refund_requests (id, status) VALUES (?, ?)",
+                (index, status),
+            )
+
+        blockers = self.inspect_without_writes()
+
+        self.assertEqual(
+            {blocker.code: blocker.count for blocker in blockers},
+            {"payment_refund_requests_in_flight": 3},
         )
 
     def test_missing_safety_schema_fails_closed_without_writing_database(self):

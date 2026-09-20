@@ -945,9 +945,14 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "/checkout/{token}",
             "/notify",
         }
+        canonical_only_suffixes = {
+            "/orders/{order_no}/refund-requests",
+            "/orders/{order_no}/refund-request",
+            "/refund-requests",
+        }
         self.assertEqual(
             {path.removeprefix("/api/payments/qixiang") for path in canonical},
-            route_suffixes,
+            route_suffixes | canonical_only_suffixes,
         )
 
         from app.main import app
