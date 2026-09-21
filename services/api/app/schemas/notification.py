@@ -18,6 +18,16 @@ class NotificationOut(OrmModel):
     created_at: datetime | None = None
 
 
+class MajorAnnouncementOut(OrmModel):
+    id: int
+    title: str
+    content: str
+    title_en: str | None = None
+    content_en: str | None = None
+    action_url: str | None = None
+    created_at: datetime | None = None
+
+
 class NotificationPreferenceUpdate(BaseModel):
     order_enabled: bool | None = None
     device_enabled: bool | None = None
@@ -52,7 +62,14 @@ class NotificationBroadcastCreateIn(BaseModel):
     content: str = Field(min_length=1, max_length=5000)
     title_en: str | None = Field(default=None, max_length=128)
     content_en: str | None = Field(default=None, max_length=5000)
-    notification_type: Literal["system", "order", "device", "revenue", "wallet"] = "system"
+    notification_type: Literal[
+        "major_announcement",
+        "system",
+        "order",
+        "device",
+        "revenue",
+        "wallet",
+    ] = "system"
     action_url: str | None = Field(default=None, max_length=512)
 
     @field_validator("client_request_id", "title", "content", "title_en", "content_en", mode="before")

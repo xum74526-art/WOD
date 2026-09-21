@@ -175,7 +175,7 @@ export type AdminNotificationBroadcast = {
   content: string;
   title_en: string | null;
   content_en: string | null;
-  notification_type: "system" | "order" | "device" | "revenue" | "wallet";
+  notification_type: "major_announcement" | "system" | "order" | "device" | "revenue" | "wallet";
   action_url: string | null;
   audience: "all_active" | string;
   status: "processing" | "completed" | string;

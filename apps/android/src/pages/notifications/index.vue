@@ -139,6 +139,7 @@ let loadGeneration = 0
 
 const filters: Array<{ value?: NotificationType; label: string }> = [
   { label: 'allNotifications' },
+  { value: 'major_announcement', label: 'majorAnnouncement' },
   { value: 'order', label: 'orderNotifications' },
   { value: 'device', label: 'deviceAlerts' },
   { value: 'revenue', label: 'revenueReminders' },
@@ -229,6 +230,7 @@ function localizedContent(notification: NotificationItem) {
 
 function typeLabel(type: string) {
   return ({
+    major_announcement: 'majorAnnouncement',
     order: 'orderNotifications',
     device: 'deviceAlerts',
     revenue: 'revenueReminders',
@@ -311,6 +313,7 @@ async function onPreferenceChange(key: PreferenceKey, event: any) {
 .notification-row.unread { background: var(--primary-soft); border-color: rgba(24, 175, 196, 0.24); }
 .type-column { width: 24rpx; padding-top: 8rpx; display: flex; flex-direction: column; align-items: center; gap: 14rpx; flex-shrink: 0; }
 .type-mark { width: 8rpx; height: 36rpx; border-radius: 4rpx; background: var(--text-dim); }
+.type-mark.major_announcement { background: #B7791F; }
 .type-mark.order { background: var(--primary); }
 .type-mark.device { background: #D97706; }
 .type-mark.revenue { background: var(--up); }

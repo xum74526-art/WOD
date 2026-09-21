@@ -26,7 +26,7 @@ class Notification(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     title_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
     content_en: Mapped[str | None] = mapped_column(Text, nullable=True)
-    type: Mapped[str] = mapped_column(String(32), default="system")  # system/order/device/revenue/wallet
+    type: Mapped[str] = mapped_column(String(32), default="system")  # major_announcement/system/order/device/revenue/wallet
     action_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Business event key used by the periodic synchronizer. It is scoped by
     # user_id, so the same order state remains isolated for every recipient.

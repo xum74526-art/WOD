@@ -16,6 +16,7 @@ const PATHS: Record<string, string> = {
   'arrow-left': 'M15 6L9 12l6 6',
   'chevron-down': 'M6 9l6 6 6-6',
   bell: 'M12 4a4 4 0 014 4v4l2 3H6l2-3V8a4 4 0 014-4zM10 19a2 2 0 004 0',
+  megaphone: 'M4 11v2l11 4V7L4 11zM15 9l4-2v10l-4-2M6 14l1 6h4l-2-5',
   wallet: 'M4 7h13a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V7zm0 0V6a2 2 0 012-2h9',
   order: 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',
   revenue: 'M4 16l4-5 4 3 4-6 4 4',

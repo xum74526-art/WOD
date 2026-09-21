@@ -76,6 +76,29 @@ def list_broadcasts(db: Session, *, page: int, page_size: int) -> dict:
     }
 
 
+def latest_major_announcement(db: Session) -> dict | None:
+    """Return only the public fields of the latest completed major notice."""
+
+    row = db.query(NotificationBroadcast).filter(
+        NotificationBroadcast.notification_type == "major_announcement",
+        NotificationBroadcast.status == "completed",
+    ).order_by(
+        NotificationBroadcast.created_at.desc(),
+        NotificationBroadcast.id.desc(),
+    ).first()
+    if row is None:
+        return None
+    return {
+        "id": row.id,
+        "title": row.title,
+        "content": row.content,
+        "title_en": row.title_en,
+        "content_en": row.content_en,
+        "action_url": row.action_url,
+        "created_at": row.created_at,
+    }
+
+
 def _insert_recipients(db: Session, row: NotificationBroadcast) -> int:
     dedupe_key = f"broadcast:{row.id}"
     recipient_select = select(

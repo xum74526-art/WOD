@@ -12,7 +12,17 @@ export interface NotificationItem {
   created_at?: string
 }
 
-export type NotificationType = 'system' | 'order' | 'device' | 'revenue' | 'wallet'
+export type NotificationType = 'major_announcement' | 'system' | 'order' | 'device' | 'revenue' | 'wallet'
+
+export interface MajorAnnouncement {
+  id: number
+  title: string
+  content: string
+  title_en?: string
+  content_en?: string
+  action_url?: string
+  created_at?: string
+}
 
 export interface NotificationPreferences {
   order_enabled: boolean
@@ -51,6 +61,14 @@ export function getNotifications(params?: {
   page_size?: number
 }, silent = false) {
   return request<NotificationListResponse>({ url: '/notifications', data: params || {}, silent })
+}
+
+export function getMajorAnnouncement(silent = true) {
+  return request<MajorAnnouncement | null>({
+    url: '/notifications/major-announcement',
+    silent,
+    auth: 'none',
+  })
 }
 
 export function getUnreadCount(silent = true) {

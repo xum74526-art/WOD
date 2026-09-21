@@ -899,6 +899,38 @@ const commonCapabilities = [
     ]),
   },
   {
+    name: 'major announcement visibility',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/internal-api.ts',
+        patterns: ['getMajorAnnouncement()', '/api/v1/canonical/notifications/major-announcement'],
+      },
+      {
+        client: 'Web home',
+        file: 'apps/web/components/major-announcement-banner.tsx',
+        patterns: ['getMajorAnnouncement()', 'kai-major-announcement-dismissed:v1', 'notificationActionPath'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} API`,
+          file: `apps/${client}/src/api/notification.ts`,
+          patterns: ['getMajorAnnouncement(', "url: '/notifications/major-announcement'", "auth: 'none'"],
+        },
+        {
+          client: `${client} home`,
+          file: `apps/${client}/src/pages/index/index.vue`,
+          patterns: ['loadMajorAnnouncement()', 'kai-major-announcement-dismissed:v1:', 'dismissMajorAnnouncement'],
+        },
+        {
+          client: `${client} notification center`,
+          file: `apps/${client}/src/pages/notifications/index.vue`,
+          patterns: ["value: 'major_announcement'", "major_announcement: 'majorAnnouncement'"],
+        },
+      ]),
+    ],
+  },
+  {
     name: 'mobile native video playback',
     evidence: ['android', 'ios'].flatMap(client => [
       {

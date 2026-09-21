@@ -11,6 +11,7 @@ import {
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 
 const TYPE_LABELS: Record<AdminNotificationBroadcast["notification_type"], string> = {
+  major_announcement: "重大公告（首页展示）",
   system: "系统公告",
   order: "订单提醒",
   device: "设备提醒",
@@ -78,7 +79,11 @@ export function AdminNotificationWorkspace() {
       setError("请填写消息标题和正文");
       return;
     }
-    if (!window.confirm("确认向所有有效账号发布这条站内消息吗？发布后会立即进入收件箱。")) return;
+    const isMajorAnnouncement = form.notification_type === "major_announcement";
+    const confirmation = isMajorAnnouncement
+      ? "确认发布这条重大公告吗？内容会在 Web 公开首页和 App 首页展示，并进入所有有效账号的消息中心。请确认正文不含内部或个人信息。"
+      : "确认向所有有效账号发布这条站内消息吗？发布后会立即进入收件箱。";
+    if (!window.confirm(confirmation)) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -100,7 +105,9 @@ export function AdminNotificationWorkspace() {
     try {
       const result = await createAdminNotificationBroadcast(input);
       pendingRequest.current = null;
-      setMessage(`已发布，${result.recipient_count} 个有效账号将收到消息。`);
+      setMessage(isMajorAnnouncement
+        ? `重大公告已发布，三端首页将显示，${result.recipient_count} 个有效账号也会收到站内消息。`
+        : `已发布，${result.recipient_count} 个有效账号将收到消息。`);
       setForm((current) => ({ ...current, content: "", content_en: "" }));
       await load();
     } catch (reason) {
@@ -117,7 +124,7 @@ export function AdminNotificationWorkspace() {
       <span>管理员可以向所有有效账号发送一条站内通知；普通账号没有发布权限。</span>
     </div>
 
-    <div className="notification-broadcast-safety"><ShieldCheck size={19} /><div><strong>发布边界</strong><span>只写入站内通知，不会发送短信或外部邮件；用户的通知偏好不会拦截平台公告。每次发布保留管理员、幂等编号和收件人数审计记录。</span></div></div>
+    <div className="notification-broadcast-safety"><ShieldCheck size={19} /><div><strong>发布边界</strong><span>普通消息只进入通知中心；重大公告会额外公开显示在 Web 首页及 Android、iOS 首页，请勿填写内部或个人信息。两类消息都不会发送短信或外部邮件，并保留管理员、幂等编号和收件人数审计记录。</span></div></div>
 
     <form className="internal-form notification-broadcast-form" onSubmit={(event) => void submit(event)}>
       <header><Megaphone size={21} /><div><small>BROADCAST COMPOSER</small><h2>发布新消息</h2></div></header>

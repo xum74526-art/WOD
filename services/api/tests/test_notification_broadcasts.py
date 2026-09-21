@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.models import Notification, NotificationBroadcast, NotificationPreference, User
 from app.routers import admin as admin_router
+from app.routers import notification as notification_router
 from app.services.auth_session import create_authenticated_session
 from app.utils.response import BizError, error
 
@@ -65,6 +66,7 @@ class NotificationBroadcastTests(unittest.TestCase):
             return JSONResponse(status_code=exc.status_code, content=error(exc.msg, exc.code))
 
         app.include_router(admin_router.router)
+        app.include_router(notification_router.router)
 
         def db_override():
             yield self.db
@@ -163,6 +165,62 @@ class NotificationBroadcastTests(unittest.TestCase):
         data = response.json()["data"]
         self.assertEqual(data["total"], 0)
         self.assertEqual(data["items"], [])
+
+    def test_latest_major_announcement_is_public_and_ignores_newer_regular_messages(self):
+        empty = self.client.get("/api/notifications/major-announcement")
+        self.assertEqual(empty.status_code, 200, empty.text)
+        self.assertIsNone(empty.json()["data"])
+
+        major = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-major-001",
+                title="重要服务公告",
+                content="平台将在今晚升级服务。",
+                notification_type="major_announcement",
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(major.status_code, 200, major.text)
+
+        regular = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-system-002",
+                title="普通系统消息",
+                content="这条消息只进入通知中心。",
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(regular.status_code, 200, regular.text)
+
+        response = self.client.get("/api/notifications/major-announcement")
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+        self.assertEqual(data["id"], major.json()["data"]["id"])
+        self.assertEqual(data["title"], "重要服务公告")
+        self.assertNotIn("actor_user_id", data)
+        self.assertNotIn("recipient_count", data)
+
+        inbox_rows = self.db.query(Notification).filter(
+            Notification.dedupe_key == f"broadcast:{data['id']}"
+        ).all()
+        self.assertEqual({row.type for row in inbox_rows}, {"major_announcement"})
+
+        replacement = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-major-003",
+                title="新的重要公告",
+                content="新的重大公告应替换首页展示。",
+                notification_type="major_announcement",
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(replacement.status_code, 200, replacement.text)
+        latest = self.client.get("/api/notifications/major-announcement").json()["data"]
+        self.assertEqual(latest["id"], replacement.json()["data"]["id"])
+        self.assertEqual(latest["title"], "新的重要公告")
 
 
 if __name__ == "__main__":

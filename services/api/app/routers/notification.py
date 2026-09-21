@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.notification import (
+    MajorAnnouncementOut,
     NotificationOut,
     NotificationPreferenceOut,
     NotificationPreferenceUpdate,
@@ -16,6 +17,7 @@ from app.services.notification_service import (
     get_or_create_preferences,
     push_delivery_status,
 )
+from app.services.notification_broadcast import latest_major_announcement
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/notifications", tags=["notification"])
@@ -23,6 +25,20 @@ router = APIRouter(prefix="/api/notifications", tags=["notification"])
 
 def _serialize_notification(notification: Notification) -> dict:
     return NotificationOut.model_validate(notification).model_dump()
+
+
+@router.get("/major-announcement")
+def get_major_announcement(
+    db: Session = Depends(get_db),
+):
+    """Latest completed major notice for the public home surfaces.
+
+    Administrator identity and recipient counts intentionally stay private;
+    the same announcement is also delivered to each active account's inbox.
+    """
+
+    row = latest_major_announcement(db)
+    return success(MajorAnnouncementOut.model_validate(row).model_dump() if row else None)
 
 
 @router.get("")

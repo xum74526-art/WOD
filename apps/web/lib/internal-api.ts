@@ -10,6 +10,10 @@ export type Notice = {
   id: number; category: string; title: string; body: string; title_en: string | null; body_en: string | null; action_path: string | null;
   is_read: boolean; read_at: string | null; created_at: string;
 };
+export type MajorAnnouncement = {
+  id: number; title: string; content: string; title_en: string | null; content_en: string | null;
+  action_url: string | null; created_at: string | null;
+};
 export type NotificationPreferences = {
   order_enabled: boolean; device_enabled: boolean; revenue_enabled: boolean;
   wallet_enabled: boolean; system_enabled: boolean; updated_at?: string;
@@ -52,6 +56,7 @@ export function deleteAddress(id: number) { return apiRequest<{ deleted: boolean
 export function setDefaultAddress(id: number) { return apiRequest<Address>(`/api/v1/account/addresses/${id}/default`, { method: "POST" }); }
 
 export function listNotifications(unreadOnly = false) { return apiEnvelopeRequest<Notice[]>(`/api/v1/notifications?unread_only=${unreadOnly}`); }
+export function getMajorAnnouncement() { return apiRequest<MajorAnnouncement | null>("/api/v1/canonical/notifications/major-announcement"); }
 export function getUnreadCount() { return apiRequest<{ unread_count: number }>("/api/v1/notifications/unread-count"); }
 export function readNotification(id: number) { return apiRequest<Notice>(`/api/v1/notifications/${id}/read`, { method: "PATCH" }); }
 export function readAllNotifications() { return apiRequest<{ updated_count: number }>("/api/v1/notifications/read-all", { method: "POST" }); }

@@ -31,6 +31,16 @@
         </view>
       </view>
 
+      <view v-if="majorAnnouncement" class="major-announcement" role="status" @tap="openMajorAnnouncement">
+        <view class="major-announcement-icon"><AppIcon name="megaphone" :size="34" /></view>
+        <view class="major-announcement-copy">
+          <text class="major-announcement-label">{{ t('majorAnnouncement') }}</text>
+          <text class="major-announcement-title">{{ localizedMajorAnnouncementTitle }}</text>
+          <text class="major-announcement-content">{{ localizedMajorAnnouncementContent }}</text>
+        </view>
+        <view class="major-announcement-close" role="button" :aria-label="t('dismissMajorAnnouncement')" @tap.stop="dismissMajorAnnouncement">×</view>
+      </view>
+
       <HomePromoCarousel />
 
       <view class="divider"></view>
@@ -231,6 +241,7 @@ import { getWallet } from '@/api/wallet'
 import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
+import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
 import { fmtCH, fmtCHn, formatNumber, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
 import { usePageMotion } from '@/utils/page-motion'
@@ -284,6 +295,7 @@ const featuredLoading = ref(true)
 const featuredError = ref(false)
 const walletBalance = ref(0)
 const homeLoadError = ref(false)
+const majorAnnouncement = ref<MajorAnnouncement | null>(null)
 type ModelRange = Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours' | 'history_provenance' | 'market_status'>
 type HotTrendState = 'loading' | 'ready' | 'empty' | 'error'
 type HotTrend = { item: MarketRankingItem; candles: MarketCandles | null; state: HotTrendState }
@@ -304,6 +316,41 @@ const totalAsset = computed(() => (assetStore.summary?.total_value ?? 0) + walle
 const assets = computed(() => assetStore.summary?.items ?? [])
 const activeHotTrend = computed(() => hotTrends.value[hotTrendIndex.value] || hotTrends.value[0] || null)
 const notificationBadge = computed(() => notificationStore.unread > 99 ? '99+' : String(notificationStore.unread))
+const localizedMajorAnnouncementTitle = computed(() => {
+  const announcement = majorAnnouncement.value
+  if (!announcement) return ''
+  return i18n.lang === 'en' && announcement.title_en ? announcement.title_en : i18n.tr(announcement.title)
+})
+const localizedMajorAnnouncementContent = computed(() => {
+  const announcement = majorAnnouncement.value
+  if (!announcement) return ''
+  return i18n.lang === 'en' && announcement.content_en ? announcement.content_en : i18n.tr(announcement.content)
+})
+
+function majorAnnouncementDismissalKey() {
+  return `kai-major-announcement-dismissed:v1:${user.value?.id || 'anonymous'}`
+}
+
+async function loadMajorAnnouncement() {
+  try {
+    const result = await getMajorAnnouncement(true)
+    const dismissedId = Number(uni.getStorageSync(majorAnnouncementDismissalKey()))
+    majorAnnouncement.value = result && dismissedId !== result.id ? result : null
+  } catch {
+    // Announcement availability must not block the authenticated home page.
+  }
+}
+
+function dismissMajorAnnouncement() {
+  if (!majorAnnouncement.value) return
+  uni.setStorageSync(majorAnnouncementDismissalKey(), majorAnnouncement.value.id)
+  majorAnnouncement.value = null
+}
+
+function openMajorAnnouncement() {
+  const action = majorAnnouncement.value?.action_url
+  go(action?.startsWith('/pages/') ? action : '/pages/notifications/index')
+}
 
 async function load() {
   const [walletResult, revenueResult, chartResult, productsResult, assetsResult] = await Promise.allSettled([
@@ -457,6 +504,7 @@ onShow(async () => {
   await userStore.restore()
   if (!userStore.isLogin) { uni.reLaunch({ url: '/pages/login/index' }); return }
   Promise.all([load(), loadHotMarket(false)]).catch(() => {})
+  loadMajorAnnouncement().catch(() => {})
   notificationStore.refresh(true).catch(() => {})
   startMarketTimer()
 })
@@ -581,6 +629,16 @@ function markProductImageFailed(id: number) {
 .sub-label { color: var(--text-sub); font-size: 11px; }
 .sub-val { color: var(--text); font-size: 14px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .up { color: var(--up); }
+
+.major-announcement { position: relative; display: flex; align-items: center; gap: 20rpx; min-height: 116rpx; padding: 20rpx 72rpx 20rpx 20rpx; margin: 4rpx 0 22rpx; box-sizing: border-box; border: 1rpx solid var(--border); border-left: 7rpx solid var(--primary); border-radius: var(--radius); background: var(--card); box-shadow: 0 14rpx 38rpx rgba(10, 91, 88, 0.08); }
+.major-announcement:active { opacity: 0.82; }
+.major-announcement-icon { width: 70rpx; height: 70rpx; flex: 0 0 70rpx; border-radius: 20rpx; color: var(--primary); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; }
+.major-announcement-copy { min-width: 0; flex: 1; }
+.major-announcement-label { display: block; color: var(--primary); font-size: 18rpx; font-weight: 700; letter-spacing: 2rpx; }
+.major-announcement-title { display: block; overflow: hidden; margin-top: 5rpx; color: var(--text); font-size: 26rpx; font-weight: 750; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.major-announcement-content { display: -webkit-box; overflow: hidden; margin-top: 5rpx; color: var(--text-sub); font-size: 21rpx; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.major-announcement-close { position: absolute; top: 12rpx; right: 12rpx; width: 54rpx; height: 54rpx; border-radius: 14rpx; color: var(--text-dim); font-size: 34rpx; font-weight: 300; line-height: 52rpx; text-align: center; }
+.major-announcement-close:active { color: var(--text); background: var(--bg-2); }
 
 .divider { height: 1px; background: var(--divider); margin: 0; }
 .home-load-warning { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx 22rpx; margin: 18rpx 0 0; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 22rpx; line-height: 1.45; }

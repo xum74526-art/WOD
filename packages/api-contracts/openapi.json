@@ -2828,6 +2828,7 @@
           "notification_type": {
             "default": "system",
             "enum": [
+              "major_announcement",
               "system",
               "order",
               "device",
@@ -11067,6 +11068,26 @@
           }
         ],
         "summary": "List Notifications",
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/api/notifications/major-announcement": {
+      "get": {
+        "description": "Latest completed major notice for the public home surfaces.\n\nAdministrator identity and recipient counts intentionally stay private;\nthe same announcement is also delivered to each active account's inbox.",
+        "operationId": "get_major_announcement_api_notifications_major_announcement_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Major Announcement",
         "tags": [
           "notification"
         ]

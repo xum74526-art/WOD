@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { GpuDailyTrendChart } from "@/components/gpu-candlestick-chart";
 import { MerchantResourceMarket } from "@/components/merchant-resource-market";
 import { MarketPulseRail } from "@/components/market-pulse-rail";
+import { MajorAnnouncementBanner } from "@/components/major-announcement-banner";
 import { useI18n } from "@/components/locale-root";
 import type { PublicProduct } from "@/lib/commerce-api";
 import type { InitialGpuTrend, PublicMarketRanking } from "@/lib/public-data";
@@ -23,6 +24,7 @@ export function HomePageContent({ initialRanking, initialProducts, initialTrend 
     <div className="site-page home-v2">
       <SiteHeader />
       <main>
+        <MajorAnnouncementBanner />
         <section className="home-v2-hero">
           <div className="home-v2-hero__copy">
             <span className="home-v2-kicker">GPU SERVER MARKETPLACE</span>

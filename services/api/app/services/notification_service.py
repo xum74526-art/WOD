@@ -21,8 +21,20 @@ from app.models.revenue import Revenue
 from app.models.supplier import Supplier
 
 
-VALID_NOTIFICATION_TYPES = {"system", "order", "device", "revenue", "wallet"}
+VALID_NOTIFICATION_TYPES = {
+    "major_announcement",
+    "system",
+    "order",
+    "device",
+    "revenue",
+    "wallet",
+}
 PREFERENCE_BY_TYPE = {
+    # A major announcement is still governed by the system-message preference
+    # when created outside the administrator broadcast path. Administrator
+    # broadcasts deliberately bypass optional preferences for every active
+    # account and remain visible in the inbox audit trail.
+    "major_announcement": "system_enabled",
     "system": "system_enabled",
     "order": "order_enabled",
     "device": "device_enabled",
