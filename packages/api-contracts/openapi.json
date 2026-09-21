@@ -2785,6 +2785,85 @@
         "title": "MatchmakingCredentialIn",
         "type": "object"
       },
+      "NotificationBroadcastCreateIn": {
+        "description": "Administrator announcement payload shared by the Web control plane.\n\nAction targets deliberately use the native ``/pages/`` namespace.  The\nWeb adapter maps only its own allowlisted subset, while native clients can\nnavigate the same target without opening an arbitrary external URL.",
+        "properties": {
+          "action_url": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Url"
+          },
+          "client_request_id": {
+            "maxLength": 64,
+            "minLength": 12,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "content": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "content_en": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content En"
+          },
+          "notification_type": {
+            "default": "system",
+            "enum": [
+              "system",
+              "order",
+              "device",
+              "revenue",
+              "wallet"
+            ],
+            "title": "Notification Type",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "title_en": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title En"
+          }
+        },
+        "required": [
+          "client_request_id",
+          "title",
+          "content"
+        ],
+        "title": "NotificationBroadcastCreateIn",
+        "type": "object"
+      },
       "NotificationPreferenceUpdate": {
         "properties": {
           "device_enabled": {
@@ -5731,6 +5810,109 @@
           }
         ],
         "summary": "Review Community Report",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/notification-broadcasts": {
+      "get": {
+        "description": "List durable administrator announcement audit records.",
+        "operationId": "notification_broadcasts_api_admin_notification_broadcasts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Notification Broadcasts",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Publish one announcement to every currently active account.",
+        "operationId": "create_notification_broadcast_api_admin_notification_broadcasts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBroadcastCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Notification Broadcast",
         "tags": [
           "admin"
         ]

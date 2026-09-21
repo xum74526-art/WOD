@@ -16,6 +16,11 @@ export function notificationActionPath(value: unknown): string | null {
   if (typeof value !== "string" || UNSAFE_ACTION_CHARACTERS.test(value)) return null;
 
   if (value === "/pages/supplier/orders") return "/supplier/orders";
+  if (value === "/pages/notifications/index") return "/account/notifications";
+  if (value === "/pages/market/index") return "/market";
+  if (value === "/pages/community/index") return "/community";
+  if (value === "/pages/profile/index") return "/account/settings";
+  if (value === "/pages/settings/index") return "/account/settings";
   if (value === "/pages/revenue/index") return "/account/revenue";
   if (value === "/pages/wallet/index") return "/account/wallet";
 

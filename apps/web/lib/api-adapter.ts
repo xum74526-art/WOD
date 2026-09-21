@@ -448,6 +448,8 @@ function notice(value: unknown) {
     category: text(item.type, "system"),
     title: text(item.title),
     body: text(item.content),
+    title_en: text(item.title_en) || null,
+    body_en: text(item.content_en) || null,
     action_path: notificationActionPath(item.action_url),
     is_read: Boolean(item.is_read),
     read_at: null,

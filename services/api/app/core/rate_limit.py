@@ -79,6 +79,7 @@ payment_checkout_rate_limit = SlidingWindowRateLimiter(limit=20, window_seconds=
 payment_callback_rate_limit = SlidingWindowRateLimiter(limit=3000, window_seconds=60)
 payment_admin_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
 payment_refund_request_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=3600)
+notification_broadcast_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=3600)
 
 
 def _identity_key(value: str) -> str:
@@ -170,3 +171,9 @@ def limit_payment_admin(user_id: int) -> None:
 
 def limit_payment_refund_request(user_id: int) -> None:
     payment_refund_request_rate_limit.check(f"payment-refund-request:{int(user_id)}")
+
+
+def limit_notification_broadcast(user_id: int) -> None:
+    """Bound accidental/replayed all-user announcements per administrator."""
+
+    notification_broadcast_rate_limit.check(f"notification-broadcast:{int(user_id)}")

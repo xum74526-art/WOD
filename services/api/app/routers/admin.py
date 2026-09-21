@@ -15,7 +15,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query as SqlAlchemyQuery, Session
 
 from app.core.deps import require_admin
-from app.core.rate_limit import limit_payment_admin
+from app.core.rate_limit import limit_notification_broadcast, limit_payment_admin
 from app.core.sensitive import reveal
 from app.db.session import get_db
 from app.models.bank_card import BankCard
@@ -28,6 +28,7 @@ from app.models.user import User
 from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
 from app.schemas.community import CommunityReportReviewIn
+from app.schemas.notification import NotificationBroadcastCreateIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
     PaymentRefundRequestReviewIn,
@@ -51,6 +52,7 @@ from app.services.payment_refund_requests import (
     review_refund_request,
     sync_refund_request_for_payment_refund,
 )
+from app.services.notification_broadcast import create_broadcast, list_broadcasts
 from app.utils.response import BizError, success
 
 
@@ -138,6 +140,31 @@ def overview(
             for source in sources
         ],
     })
+
+
+@router.get("/notification-broadcasts")
+def notification_broadcasts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """List durable administrator announcement audit records."""
+
+    _page(page, page_size)
+    return success(list_broadcasts(db, page=page, page_size=page_size))
+
+
+@router.post("/notification-broadcasts")
+def create_notification_broadcast(
+    data: NotificationBroadcastCreateIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Publish one announcement to every currently active account."""
+
+    limit_notification_broadcast(actor.id)
+    return success(create_broadcast(db, actor_user_id=actor.id, data=data))
 
 
 @router.get("/users")

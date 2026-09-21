@@ -4087,6 +4087,59 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .dispute-list blockquote { margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--brand); color: var(--text-muted); background: var(--surface-muted); font-size: 12px; }
 .supplier-profile-form { max-width: 720px; }
 
+/* Administrator message broadcast workspace. */
+.notification-broadcast-safety {
+  padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--line));
+  border-radius: var(--radius-panel);
+  color: var(--brand-strong);
+  background: color-mix(in srgb, var(--brand-soft) 62%, var(--surface));
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+.notification-broadcast-safety > svg { flex: 0 0 auto; margin-top: 2px; }
+.notification-broadcast-safety div { display: grid; gap: 4px; }
+.notification-broadcast-safety strong { color: var(--text); font-size: 13px; }
+.notification-broadcast-safety span { color: var(--text-muted); font-size: 12px; line-height: 1.65; }
+.notification-broadcast-form { max-width: 920px; }
+.notification-broadcast-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  padding: 0 12px;
+  outline: none;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+.notification-broadcast-form select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.notification-broadcast-advanced { border-top: 1px solid var(--line); padding-top: 12px; }
+.notification-broadcast-advanced summary { color: var(--brand-strong); cursor: pointer; font-size: 12px; font-weight: 720; }
+.notification-broadcast-advanced .form-pair { margin-top: 12px; }
+.notification-broadcast-history { display: grid; gap: 12px; }
+.notification-broadcast-history > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.notification-broadcast-history > header p { margin: 0; color: var(--brand-strong); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; }
+.notification-broadcast-history > header h2 { margin: 4px 0 0; font-size: 18px; }
+.notification-broadcast-history > header button { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; color: var(--text-muted); background: var(--surface); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.notification-broadcast-history > header button:disabled { opacity: .55; cursor: not-allowed; }
+.notification-broadcast-history > div:not(.commerce-empty) { display: grid; gap: 10px; }
+.notification-broadcast-history article { padding: 17px 18px; border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 13px; align-items: start; }
+.notification-broadcast-history__dot { width: 34px; height: 34px; border-radius: 50%; color: var(--brand-strong); background: var(--brand-soft); display: grid; place-items: center; }
+.notification-broadcast-history article > div { min-width: 0; }
+.notification-broadcast-history article header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.notification-broadcast-history article header strong { font-size: 14px; }
+.notification-broadcast-history article header small { color: var(--text-soft); font-size: 11px; }
+.notification-broadcast-history article p { margin: 8px 0; color: var(--text-muted); font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.notification-broadcast-history article footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--text-soft); font-size: 11px; }
+.notification-broadcast-history article code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); font-family: var(--font-mono); }
+
+@media (max-width: 620px) {
+  .notification-broadcast-history article { grid-template-columns: auto minmax(0, 1fr); }
+  .notification-broadcast-history article > .status-chip { grid-column: 2; justify-self: start; }
+}
+
 @media (max-width: 900px) {
   .internal-grid,
   .team-grid { grid-template-columns: 1fr; }

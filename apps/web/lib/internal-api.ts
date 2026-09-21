@@ -7,7 +7,7 @@ export type Address = {
   postal_code: string | null; is_default: boolean; created_at: string; updated_at: string; version: number;
 };
 export type Notice = {
-  id: number; category: string; title: string; body: string; action_path: string | null;
+  id: number; category: string; title: string; body: string; title_en: string | null; body_en: string | null; action_path: string | null;
   is_read: boolean; read_at: string | null; created_at: string;
 };
 export type NotificationPreferences = {

@@ -167,6 +167,31 @@ export type AdminBuyRequestItem = {
 export type AdminBuyRequestDetail = { request: AdminBuyRequestItem; quotes: MobileBuyQuote[]; deal?: MobileBuyRequestDeal | null; events?: MobileBuyRequestEvent[] };
 export type AdminBuyRequestCredential = { host: string; port: number; username: string; auth_type: "password" | "private_key"; secret: string; note?: string | null; fingerprint?: string | null; version?: number | null; status?: string | null; created_at?: string | null; updated_at?: string | null };
 export type AdminPage<T> = { total: number; page: number; page_size: number; items: T[] };
+export type AdminNotificationBroadcast = {
+  id: number;
+  client_request_id: string;
+  actor_user_id: number;
+  title: string;
+  content: string;
+  title_en: string | null;
+  content_en: string | null;
+  notification_type: "system" | "order" | "device" | "revenue" | "wallet";
+  action_url: string | null;
+  audience: "all_active" | string;
+  status: "processing" | "completed" | string;
+  recipient_count: number;
+  created_at: string | null;
+  completed_at: string | null;
+};
+export type AdminNotificationBroadcastInput = {
+  client_request_id: string;
+  title: string;
+  content: string;
+  title_en?: string | null;
+  content_en?: string | null;
+  notification_type: AdminNotificationBroadcast["notification_type"];
+  action_url?: string | null;
+};
 
 function query(input: { platform?: AuditPlatform; keyword?: string; status?: string; orderNo?: string; requestNo?: string; requestType?: string; page?: number; pageSize?: number }) {
   const params = new URLSearchParams({ page: String(input.page ?? 1), page_size: String(input.pageSize ?? 100) });
@@ -182,6 +207,23 @@ function query(input: { platform?: AuditPlatform; keyword?: string; status?: str
 export function getAdminOverview(platform?: AuditPlatform) {
   const suffix = platform ? `?platform=${encodeURIComponent(platform)}` : "";
   return apiRequest<AdminOverview>(canonicalApiPath(`/admin/overview${suffix}`));
+}
+
+export function listAdminNotificationBroadcasts(input: { page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  return apiRequest<AdminPage<AdminNotificationBroadcast>>(
+    canonicalApiPath(`/admin/notification-broadcasts?${params.toString()}`),
+  );
+}
+
+export function createAdminNotificationBroadcast(input: AdminNotificationBroadcastInput) {
+  return apiRequest<AdminNotificationBroadcast>(canonicalApiPath("/admin/notification-broadcasts"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function listAdminUsers(input: { platform?: AuditPlatform; keyword?: string } = {}) {

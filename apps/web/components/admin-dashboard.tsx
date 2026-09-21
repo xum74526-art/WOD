@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Bank, ClipboardText, Gavel, IdentificationCard, Receipt, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, Bank, Bell, ClipboardText, Gavel, IdentificationCard, Receipt, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
 
 const queues = [
   { eyebrow: "SERVICE REQUESTS", title: "需求管理", description: "查看用户提交的算力需求、指定商家与联系方式，供运营人员线下跟进。", href: "/admin/requests", label: "查看需求", icon: ClipboardText },
@@ -7,6 +7,7 @@ const queues = [
   { eyebrow: "IDENTITY", title: "实名认证", description: "核验个人或企业主体，结论控制商家准入与提现。", href: "/admin/kyc", label: "进入实名队列", icon: IdentificationCard },
   { eyebrow: "MERCHANT ADMISSION", title: "商家入驻审核", description: "单独审核商家入驻资料；只有已完成实名认证的申请人才能通过。", href: "/admin/suppliers", label: "进入入驻队列", icon: Storefront },
   { eyebrow: "ORDER DISPUTES", title: "订单争议", description: "核对商品快照与安全交付证据，执行退回买家卡时或放行商家结算。", href: "/admin/disputes", label: "进入争议队列", icon: Gavel },
+  { eyebrow: "MESSAGE CENTER", title: "消息发布", description: "向所有有效账号发布站内公告，支持安全跳转并保留发布审计记录。", href: "/admin/notifications", label: "发布站内消息", icon: Bell },
   { eyebrow: "PAYMENT OPERATIONS", title: "充值与人民币退款", description: "复核七相充值、查看支付事件，并处理全额人民币原支付渠道退款。", href: "/admin/refunds", label: "进入支付运营", icon: Receipt },
   { eyebrow: "BANK CARDS", title: "银行卡复核", description: "核对用户登记的持卡人、银行和预留手机号，不冒充银行验卡。", href: "/admin/bank-cards", label: "进入银行卡队列", icon: Bank },
   { eyebrow: "PAYOUT", title: "提现结算", description: "审核商家提现，完成线下转账后登记银行流水。", href: "/admin/withdrawals", label: "进入结算队列", icon: Bank },

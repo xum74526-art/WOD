@@ -11,6 +11,10 @@ test("notification actions map the exact mobile allowlist onto Web routes", () =
   assert.equal(notificationActionPath("/pages/asset/detail?id=23"), "/account/assets/23");
   assert.equal(notificationActionPath("/pages/revenue/index"), "/account/revenue");
   assert.equal(notificationActionPath("/pages/wallet/index"), "/account/wallet");
+  assert.equal(notificationActionPath("/pages/notifications/index"), "/account/notifications");
+  assert.equal(notificationActionPath("/pages/market/index"), "/market");
+  assert.equal(notificationActionPath("/pages/community/index"), "/community");
+  assert.equal(notificationActionPath("/pages/settings/index"), "/account/settings");
 });
 
 test("notification actions reject malformed IDs and non-exact query strings", () => {
@@ -80,6 +84,8 @@ test("the notice adapter always applies the shared notification mapper", () => {
   const adapter = readFileSync(new URL("../lib/api-adapter.ts", import.meta.url), "utf8");
 
   assert.match(adapter, /import \{ notificationActionPath \} from "@\/lib\/notification-navigation"/);
+  assert.match(adapter, /title_en: text\(item\.title_en\) \|\| null/);
+  assert.match(adapter, /body_en: text\(item\.content_en\) \|\| null/);
   assert.match(adapter, /action_path: notificationActionPath\(item\.action_url\)/);
   assert.doesNotMatch(adapter, /action_path: text\(item\.action_url\)/);
 });
