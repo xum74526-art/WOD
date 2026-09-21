@@ -1,11 +1,11 @@
 <template>
   <view class="direct-wallet-actions">
     <view class="action-row">
-      <view class="action ghost" :class="{ disabled: !commerce.rechargeEnabled }" @tap="openRecharge">{{ t('recharge') }}</view>
-      <view class="action primary" :class="{ disabled: !commerce.withdrawEnabled || !wallet?.withdraw_service_enabled }" @tap="openWithdraw">{{ t('withdraw') }}</view>
+      <view class="action ghost pressable" :class="{ disabled: !commerce.rechargeEnabled }" @tap="openRecharge">{{ t('recharge') }}</view>
+      <view class="action primary pressable" :class="{ disabled: !commerce.withdrawEnabled || !wallet?.withdraw_service_enabled }" @tap="openWithdraw">{{ t('withdraw') }}</view>
     </view>
 
-    <view v-if="sheet.type === 'recharge'" class="mask" @tap="closeSheet">
+    <view v-if="sheet.type === 'recharge'" class="mask wallet-sheet-mask" @tap="closeSheet">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">{{ t('k_2d1872ca') }}</text>
         <view class="rate-card">
@@ -14,27 +14,27 @@
         </view>
         <view class="input-wrap"><text>¥</text><input v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeCny')" /></view>
         <view class="quick-amounts">
-          <view v-for="amount in quickAmounts" :key="amount" class="quick-amount" @tap="sheet.amount = String(amount)">¥{{ amount }}</view>
+          <view v-for="amount in quickAmounts" :key="amount" class="quick-amount pressable" @tap="sheet.amount = String(amount)">¥{{ amount }}</view>
         </view>
         <view class="payment-methods">
-          <view v-for="method in paymentMethods" :key="method.value" class="payment-method" :class="{ active: sheet.paymentType === method.value }" @tap="sheet.paymentType = method.value">
+          <view v-for="method in paymentMethods" :key="method.value" class="payment-method pressable" :class="{ active: sheet.paymentType === method.value }" @tap="sheet.paymentType = method.value">
             {{ t(method.label) }}
           </view>
         </view>
         <text v-if="!rechargeEnabled" class="unavailable">{{ t('mapayKeyPending') }}</text>
         <view class="sheet-actions">
-          <view class="sheet-button ghost" @tap="closeSheet">{{ t('cancel') }}</view>
-          <view class="sheet-button primary" :class="{ disabled: !rechargeEnabled || submitting }" @tap="submitRecharge">{{ t(submitting ? 'submitting' : 'payAndRecharge') }}</view>
+          <view class="sheet-button ghost pressable" @tap="closeSheet">{{ t('cancel') }}</view>
+          <view class="sheet-button primary pressable" :class="{ disabled: !rechargeEnabled || submitting }" @tap="submitRecharge">{{ t(submitting ? 'submitting' : 'payAndRecharge') }}</view>
         </view>
       </view>
     </view>
 
-    <view v-if="sheet.type === 'withdraw'" class="mask" @tap="closeSheet">
+    <view v-if="sheet.type === 'withdraw'" class="mask wallet-sheet-mask" @tap="closeSheet">
       <view class="sheet" @tap.stop>
         <text class="sheet-title">{{ t('k_1b3593c1') }}</text>
         <view v-if="!bankCards.length" class="empty-card">
           <text>{{ t('k_5cdf6123') }}</text>
-          <view class="sheet-button primary" @tap="goBankCards">{{ t('k_e2f477a5') }}</view>
+          <view class="sheet-button primary pressable" @tap="goBankCards">{{ t('k_e2f477a5') }}</view>
         </view>
         <template v-else>
           <view class="input-wrap"><text>{{ t('cardHour') }}</text><input v-model="sheet.amount" type="digit" :placeholder="t('withdrawableValue', { amount: `${fmtCardHours(wallet?.withdrawable_balance ?? 0)} ${t('cardHour')}` })" /></view>
@@ -46,8 +46,8 @@
             <text>¥{{ formatMoney(withdrawNet) }}</text>
           </view>
           <view class="sheet-actions">
-            <view class="sheet-button ghost" @tap="closeSheet">{{ t('cancel') }}</view>
-            <view class="sheet-button primary" :class="{ disabled: submitting }" @tap="submitWithdrawal">{{ t(submitting ? 'submitting' : 'submitWithdrawalRequest') }}</view>
+            <view class="sheet-button ghost pressable" @tap="closeSheet">{{ t('cancel') }}</view>
+            <view class="sheet-button primary pressable" :class="{ disabled: submitting }" @tap="submitWithdrawal">{{ t(submitting ? 'submitting' : 'submitWithdrawalRequest') }}</view>
           </view>
         </template>
       </view>
@@ -278,7 +278,8 @@ async function submitWithdrawal() {
 .ghost { color: var(--primary); border: 1rpx solid var(--primary); }
 .disabled { opacity: 0.45; }
 .mask { position: fixed; inset: 0; z-index: 999; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.48); }
-.sheet { width: 100%; padding: 34rpx 32rpx calc(34rpx + var(--safe-bottom)); background: var(--bg); border-radius: 30rpx 30rpx 0 0; }
+.wallet-sheet-mask { animation: wallet-mask-in 180ms ease-out both; }
+.sheet { width: 100%; padding: 34rpx 32rpx calc(34rpx + var(--safe-bottom)); background: var(--bg); border-radius: 30rpx 30rpx 0 0; animation: wallet-sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .sheet-title { display: block; margin-bottom: 24rpx; color: var(--text); font-size: 32rpx; font-weight: 800; }
 .rate-card, .withdraw-preview { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx; color: var(--text-sub); background: var(--bg-2); border-radius: 16rpx; }
 .input-wrap { min-height: 88rpx; margin-top: 20rpx; padding: 0 20rpx; display: flex; align-items: center; gap: 16rpx; color: var(--text); border: 1rpx solid var(--border); border-radius: 16rpx; }
@@ -289,4 +290,7 @@ async function submitWithdrawal() {
 .unavailable { display: block; margin-top: 16rpx; color: var(--down); font-size: 22rpx; }
 .empty-card { display: flex; flex-direction: column; gap: 22rpx; color: var(--text-sub); }
 .picker-value { min-height: 78rpx; margin: 18rpx 0; padding: 0 20rpx; display: flex; align-items: center; color: var(--text); border: 1rpx solid var(--border); border-radius: 16rpx; }
+@keyframes wallet-mask-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wallet-sheet-in { from { opacity: 0; transform: translate3d(0, 28rpx, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@media (prefers-reduced-motion: reduce) { .wallet-sheet-mask, .sheet { animation: none; } }
 </style>

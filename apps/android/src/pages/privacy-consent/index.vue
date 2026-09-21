@@ -113,7 +113,9 @@ import { onLoad } from '@dcloudio/uni-app'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { LEGAL_EFFECTIVE_AT, LEGAL_VERSION } from '@/config/legal-documents'
 import { useI18nStore } from '@/store/i18n'
+import { useUserStore } from '@/store/user'
 import { CLIENT_PLATFORM } from '@/utils/client-platform'
+import { switchTab } from '@/utils/nav'
 import { hasPendingLoginKaiCallback } from '@/utils/login-kai-callback'
 import {
   acceptPrivacyConsent,
@@ -188,15 +190,17 @@ function openLegal(type: 'agreement' | 'privacy') {
 
 function enterApp() {
   if (leaving) return
+  if (!useUserStore().token) {
+    leaving = true
+    uni.reLaunch({ url: '/pages/login/index' })
+    return
+  }
   leaving = true
   if (hasPendingLoginKaiCallback()) {
     uni.reLaunch({ url: '/pages/login/index' })
     return
   }
-  uni.switchTab({
-    url: '/pages/index/index',
-    fail: () => uni.reLaunch({ url: '/pages/index/index' }),
-  })
+  switchTab('/pages/index/index', { fallbackToReLaunch: true })
 }
 
 function acceptAndContinue() {

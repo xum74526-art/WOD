@@ -126,6 +126,20 @@ view, text { box-sizing: border-box; }
 .safe-bottom { padding-bottom: var(--safe-bottom); }
 .page-shell { min-height: 100vh; padding: calc(28rpx + var(--safe-top)) 32rpx calc(132rpx + var(--safe-bottom)); }
 
+/* Shared app motion: short, transform-only feedback keeps low-end devices responsive. */
+.page-motion-enter { animation: kai-page-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both; will-change: opacity, transform; }
+.pressable { transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease; }
+.pressable:active { transform: scale(0.985); opacity: 0.92; }
+@keyframes kai-page-enter {
+  from { opacity: 0.01; transform: translate3d(0, 10rpx, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-motion-enter { animation: none; }
+  .pressable { transition: none; }
+  .pressable:active { transform: none; opacity: 1; }
+}
+
 /* === SCSS 变量映射到 CSS 变量（兼容旧代码） === */
 $wod-bg: var(--bg);
 $wod-bg-2: var(--bg-2);

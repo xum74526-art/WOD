@@ -273,6 +273,7 @@ import {
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
+import { switchTab } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 import { formatNumber } from '@/utils/format'
 import { localizeRegionName } from '@/utils/region-name'
@@ -661,7 +662,7 @@ function openTrend(item: MarketRankingItem) {
 }
 function goMarket() {
   if (currentModel.value) uni.setStorageSync('wod-market-keyword', currentModel.value.gpu_model)
-  uni.switchTab({ url: '/pages/market/index' })
+  switchTab('/pages/market/index')
 }
 
 onLoad((options) => {

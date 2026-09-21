@@ -13,7 +13,7 @@
       >
         <swiper-item v-for="slide in HOME_PROMOTIONS" :key="slide.id">
           <view
-            class="promo-card"
+            class="promo-card pressable"
             :class="`promo-card--${slide.id}`"
             role="button"
             :aria-label="`${t(slide.titleKey)}，${t(slide.actionKey)}`"
@@ -102,7 +102,7 @@
 import { onMounted, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
-import { navigateTo } from '@/utils/nav'
+import { navigateTo, switchTab } from '@/utils/nav'
 import {
   HOME_NOTICES,
   HOME_PROMOTIONS,
@@ -149,7 +149,7 @@ function markPromotionImageFailed(id: HomePromotionItem['id']) {
 
 function openItem(item: { route: string; navigation: HomePromotionNavigation }) {
   if (item.navigation === 'switchTab') {
-    uni.switchTab({ url: item.route })
+    switchTab(item.route)
     return
   }
   navigateTo(item.route)

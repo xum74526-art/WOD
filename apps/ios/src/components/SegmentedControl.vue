@@ -3,7 +3,7 @@
     <view
       v-for="(item, i) in items"
       :key="i"
-      class="seg-item"
+      class="seg-item pressable"
       :class="{ active: modelValue === i }"
       @tap="$emit('update:modelValue', i)"
     >

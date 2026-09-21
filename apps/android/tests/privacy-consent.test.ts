@@ -308,6 +308,13 @@ test('a failed back navigation cannot bypass the consent page', () => {
   new Function('require', 'exports', 'uni', compiled)(
     (name: string) => {
       if (name === './privacy-consent') return { hasCurrentPrivacyConsent: () => false }
+      if (name === './motion') {
+        return {
+          APP_MOTION: { routeIn: 240, routeOut: 220, tab: 180, micro: 160, sheet: 260, reduced: 80, lock: 420 },
+          navigateAnimation: () => ({ animationType: 'pop-in', animationDuration: 240 }),
+          backAnimation: () => ({ animationType: 'pop-out', animationDuration: 220 }),
+        }
+      }
       throw new Error(`Unexpected dependency: ${name}`)
     },
     exports,

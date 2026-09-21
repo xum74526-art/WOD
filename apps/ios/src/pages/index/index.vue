@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view v-if="userStore.authReady && userStore.isLogin" :class="['page', pageMotionClass]">
     <view class="shell" :style="{ paddingTop: 'calc(20rpx + var(--safe-top))' }">
       <view class="topbar">
         <view>
@@ -41,7 +41,7 @@
       </view>
 
       <scroll-view scroll-x class="price-bar" :show-scrollbar="false">
-        <view class="pb-item" v-for="p in hot" :key="p.id" @tap="go('/pages/product/detail?id=' + p.id)">
+        <view class="pb-item pressable" v-for="p in hot" :key="p.id" @tap="go('/pages/product/detail?id=' + p.id)">
           <text class="pb-name">{{ p.gpu_model }}</text>
           <text class="pb-price">{{ productCardHourPrice(p) }} {{ t('cardHourPerGpuHour') }}</text>
           <text class="pb-change" :class="changeTone(modelChange(p))">{{ modelChangeText(p) }}</text>
@@ -52,40 +52,40 @@
 
       <view class="quick">
         <template v-if="commerce.directTradeEnabled">
-          <view class="q-item" @tap="go('/pages/wallet/index')">
+          <view class="q-item pressable" @tap="go('/pages/wallet/index')">
             <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
             <text class="q-text">{{ t('recharge') }}</text>
           </view>
-          <view class="q-item" @tap="go('/pages/wallet/index?withdraw=1')">
+          <view class="q-item pressable" @tap="go('/pages/wallet/index?withdraw=1')">
             <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
             <text class="q-text">{{ t('withdraw') }}</text>
           </view>
         </template>
         <template v-else-if="commerce.matchmakingEnabled">
-          <view class="q-item" @tap="go('/pages/buy-request/index?compose=1')">
+          <view class="q-item pressable" @tap="go('/pages/buy-request/index?compose=1')">
             <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
             <text class="q-text">{{ t('submitRequirement') }}</text>
           </view>
-          <view class="q-item" @tap="go('/pages/buy-request/index')">
+          <view class="q-item pressable" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
             <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
         <template v-else>
-          <view class="q-item" @tap="go('/pages/quote/index')">
+          <view class="q-item pressable" @tap="go('/pages/quote/index')">
             <view class="q-icon"><AppIcon name="search" :size="36" /></view>
             <text class="q-text">{{ t('viewMarket') }}</text>
           </view>
-          <view class="q-item" @tap="go('/pages/buy-request/index')">
+          <view class="q-item pressable" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
             <text class="q-text">{{ t('myRequirements') }}</text>
           </view>
         </template>
-        <view class="q-item" @tap="goTab('/pages/market/index')">
+        <view class="q-item pressable" @tap="goTab('/pages/market/index')">
           <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
           <text class="q-text">{{ t('buyCompute') }}</text>
         </view>
-        <view class="q-item" @tap="go('/pages/orders/index')">
+        <view class="q-item pressable" @tap="go('/pages/orders/index')">
           <view class="q-icon"><AppIcon name="order" :size="36" /></view>
           <text class="q-text">{{ t('orders') }}</text>
         </view>
@@ -96,7 +96,7 @@
       </SectionHeader>
       <view v-if="!assets.length" class="empty">{{ t("noRunning") }}</view>
       <scroll-view scroll-x class="asset-scroll" :show-scrollbar="false">
-        <view v-for="a in assets" :key="a.id" class="card arow-s" @tap="go('/pages/asset/detail?id=' + a.id)">
+        <view v-for="a in assets" :key="a.id" class="card arow-s pressable" @tap="go('/pages/asset/detail?id=' + a.id)">
           <view class="al">
           <text class="an">{{ localizeProductName(a.product_name, i18n.lang) }}</text>
             <text class="ag">{{ a.gpu_model }} · {{ t('剩余 {days} 天', { days: a.remaining_days ?? 0 }) }}</text>
@@ -131,7 +131,7 @@
           </view>
         </scroll-view>
         <template v-if="activeHotTrend">
-          <view class="hot-market-head" @tap="goTrend(activeHotTrend)">
+          <view class="hot-market-head pressable" @tap="goTrend(activeHotTrend)">
             <view>
               <text class="hot-model">{{ activeHotTrend.item.gpu_model }}</text>
               <text class="hot-variant">{{ activeHotTrend.item.gpu_variant || t('standardVariant') }}</text>
@@ -189,7 +189,7 @@
       </view>
       <view v-else-if="!hot.length" class="featured-state">{{ t('noHotMarketData') }}</view>
       <template v-else>
-        <view v-for="p in hot" :key="p.id" class="card prow" @tap="go('/pages/product/detail?id=' + p.id)">
+        <view v-for="p in hot" :key="p.id" class="card prow pressable" @tap="go('/pages/product/detail?id=' + p.id)">
           <image class="pimg" :src="productImage(p)" mode="aspectFill" lazy-load :fade-show="false" @error="markProductImageFailed(p.id)" />
           <view class="pl">
             <text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text>
@@ -214,6 +214,10 @@
       </template>
     </view>
   </view>
+  <view v-else class="startup-gate" aria-busy="true">
+    <image class="startup-logo" src="/static/logo/logo.png" mode="aspectFit" />
+    <text class="startup-label">{{ t('loading') }}</text>
+  </view>
 </template>
 
 <script setup lang="ts">
@@ -228,7 +232,8 @@ import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { fmtCH, fmtCHn, formatNumber, toCardHours } from '@/utils/format'
-import { navigateTo as go } from '@/utils/nav'
+import { navigateTo as go, switchTab } from '@/utils/nav'
+import { usePageMotion } from '@/utils/page-motion'
 import type { Product } from '@/api/gpu'
 import type { RevenueSummary, RevenuePoint } from '@/api/revenue'
 import AppIcon from '@/components/AppIcon.vue'
@@ -266,6 +271,7 @@ const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 const commerce = useCommerceStore()
 const i18n = useI18nStore()
+const { pageMotionClass } = usePageMotion()
 const { t } = i18n
 const user = computed(() => userStore.userInfo)
 const displayUsername = computed(() => localizePersonName(user.value?.username || '体验用户', i18n.lang))
@@ -446,8 +452,9 @@ function retryFeaturedProducts() {
   loadFeaturedProducts(false).catch(() => {})
 }
 
-onShow(() => {
+onShow(async () => {
   i18n.updateTabBar()
+  await userStore.restore()
   if (!userStore.isLogin) { uni.reLaunch({ url: '/pages/login/index' }); return }
   Promise.all([load(), loadHotMarket(false)]).catch(() => {})
   notificationStore.refresh(true).catch(() => {})
@@ -457,7 +464,7 @@ onHide(stopMarketTimer)
 onUnload(stopMarketTimer)
 
 function reload() { load() }
-function goTab(url: string) { uni.switchTab({ url }) }
+function goTab(url: string) { switchTab(url) }
 function modelRange(p: Pick<Product, 'gpu_model' | 'memory'>): ModelRange | undefined { return volatilityMap.value[gpuKey(p.gpu_model, p.memory)] }
 function metricPriority(metric?: ModelRange): number {
   if (!hasCompleteSevenDayMetric(metric)) return -1
@@ -554,6 +561,9 @@ function markProductImageFailed(id: number) {
   --card-border: var(--home-card-border);
   --shadow: var(--home-card-shadow);
 }
+.startup-gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18rpx; background: var(--bg); color: var(--text-sub); }
+.startup-logo { width: 112rpx; height: 112rpx; border-radius: 28rpx; }
+.startup-label { font-size: 24rpx; }
 .shell { padding: 0 20px calc(132rpx + var(--safe-bottom)); }
 
 .topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }

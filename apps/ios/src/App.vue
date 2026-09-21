@@ -176,7 +176,7 @@ function startNetworkedRuntime() {
   if (networkRuntimeStarted || !hasCurrentPrivacyConsent()) return false
   networkRuntimeStarted = true
   const user = useUserStore()
-  user.restore()
+  void user.restore()
   // #ifdef APP-PLUS
   appUpdateTimer = setTimeout(() => {
     appUpdateTimer = null

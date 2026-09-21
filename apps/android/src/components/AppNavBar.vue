@@ -1,7 +1,7 @@
 <template>
   <view class="navbar" :style="{ paddingTop: 'var(--safe-top)' }">
     <view class="nb-inner">
-      <view class="nb-left" @tap="onBack" v-if="showBack">
+      <view class="nb-left pressable" @tap="onBack" v-if="showBack">
         <AppIcon name="arrow-left" :size="44" />
       </view>
       <view class="nb-left" v-else><slot name="left" /></view>

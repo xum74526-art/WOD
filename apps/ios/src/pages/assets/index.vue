@@ -1,10 +1,10 @@
 <template>
-  <view class="page" :class="{ 'picker-open': pickerOpen }">
+  <view :class="['page', pageMotionClass, { 'picker-open': pickerOpen }]">
     <view class="shell">
       <view class="asset-page-header">
         <text class="asset-page-kicker">{{ t(role === 'supplier' ? 'merchantAssetOperations' : 'myAssets') }}</text>
         <view
-          class="asset-panel-trigger"
+          class="asset-panel-trigger pressable"
           role="button"
           tabindex="0"
           :aria-label="t('switchAssetComponent')"
@@ -141,6 +141,7 @@ import { useHostingStore } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
 import { navigateTo as nav } from '@/utils/nav'
+import { usePageMotion } from '@/utils/page-motion'
 
 const PANEL_KEYS: AssetPanelKey[] = [
   'asset-overview',
@@ -161,6 +162,7 @@ const hostingStore = useHostingStore()
 const userStore = useUserStore()
 const i18n = useI18nStore()
 const { t } = i18n
+const { pageMotionClass } = usePageMotion()
 const role = computed(() => userStore.role)
 
 const walletBalance = ref(0)

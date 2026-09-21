@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <view class="shell" :style="{ paddingTop: 'calc(28rpx + var(--safe-top))' }">
       <view class="title-row">
         <text class="title">{{ t("market") }}</text>
@@ -41,7 +41,7 @@
         <view class="retry-button" role="button" @tap="load(true)">{{ t('retry') }}</view>
       </view>
       <view v-else-if="!list.length" class="state">{{ t(marketSource === 'kai' ? 'noKaiListings' : 'noMerchantListings') }}</view>
-      <view v-for="p in list" :key="p.id" class="card prod" @tap="go(p.id)">
+      <view v-for="p in list" :key="p.id" class="card prod pressable" @tap="go(p.id)">
         <image
           class="pimg"
           :src="productImage(p)"
@@ -108,6 +108,7 @@ import { getMarketRanking, type MarketRankingItem } from '@/api/market'
 import type { Product } from '@/api/gpu'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
+import { usePageMotion } from '@/utils/page-motion'
 import { fmtCHn, formatNumber } from '@/utils/format'
 import { directTradeCardHoursPerGpuHour, directTradeCnyPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import { useI18nStore } from '@/store/i18n'
@@ -130,6 +131,7 @@ import {
 } from '@/utils/market-list'
 
 const i18n = useI18nStore()
+const { pageMotionClass } = usePageMotion()
 const { t, tr } = i18n
 const commerce = useCommerceStore()
 const list = ref<Product[]>([])

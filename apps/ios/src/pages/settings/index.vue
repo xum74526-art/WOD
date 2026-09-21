@@ -1,10 +1,10 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <AppNavBar :title="t('settings')" />
     <scroll-view scroll-y class="body">
       <SectionHeader :title="t('k_aa05fd09')" />
       <view class="card menu">
-        <view class="menu-item" @tap="onTheme">
+        <view class="menu-item pressable" @tap="onTheme">
           <view class="mi-left">
             <AppIcon name="settings" :size="40" />
             <text class="mi-text">{{ t('appearance') }}</text>
@@ -14,7 +14,7 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view class="menu-item" @tap="onLanguage">
+        <view class="menu-item pressable" @tap="onLanguage">
           <view class="mi-left">
             <AppIcon name="language" :size="40" />
             <text class="mi-text">{{ t('language') }}</text>
@@ -24,7 +24,7 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view class="menu-item" @tap="onNotify">
+        <view class="menu-item pressable" @tap="onNotify">
           <view class="mi-left">
             <AppIcon name="bell" :size="40" />
             <text class="mi-text">{{ t('k_d1d4c33c') }}</text>
@@ -35,14 +35,14 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view class="menu-item" @tap="onPassword">
+        <view class="menu-item pressable" @tap="onPassword">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <text class="mi-text">{{ t('k_7fc88aee') }}</text>
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="onRecoveryEmail">
+        <view class="menu-item pressable" @tap="onRecoveryEmail">
           <view class="mi-left">
             <AppIcon name="mail" :size="40" />
             <view>
@@ -55,7 +55,7 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view v-if="phoneLogin?.can_configure" class="menu-item" @tap="onPhoneLogin">
+        <view v-if="phoneLogin?.can_configure" class="menu-item pressable" @tap="onPhoneLogin">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <view>
@@ -65,7 +65,7 @@
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="onHelp">
+        <view class="menu-item pressable" @tap="onHelp">
           <view class="mi-left">
             <AppIcon name="help" :size="40" />
             <text class="mi-text">{{ t('k_e885e3f4') }}</text>
@@ -76,7 +76,7 @@
 
       <SectionHeader :title="t('k_81d9f505')" />
       <view class="card menu">
-        <view class="menu-item" :class="{ disabled: updateChecking }" @tap="onCheckUpdate">
+        <view class="menu-item pressable" :class="{ disabled: updateChecking }" @tap="onCheckUpdate">
           <view class="mi-left">
             <AppIcon name="refresh" :size="40" />
             <text class="mi-text">{{ t(updateChecking ? 'appUpdateChecking' : 'appUpdateCheck') }}</text>
@@ -86,7 +86,7 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view class="menu-item" @tap="onAbout">
+        <view class="menu-item pressable" @tap="onAbout">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <text class="mi-text">{{ t('k_17651c8f') }}</text>
@@ -96,28 +96,28 @@
             <AppIcon name="chevron" :size="36" />
           </view>
         </view>
-        <view class="menu-item" @tap="nav('/pages/agreement/index?type=agreement')">
+        <view class="menu-item pressable" @tap="nav('/pages/agreement/index?type=agreement')">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <text class="mi-text">{{ t('用户协议') }}</text>
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="nav('/pages/agreement/index?type=privacy')">
+        <view class="menu-item pressable" @tap="nav('/pages/agreement/index?type=privacy')">
           <view class="mi-left">
             <AppIcon name="verified" :size="40" />
             <text class="mi-text">{{ t('隐私政策') }}</text>
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="nav('/pages/image-attributions/index')">
+        <view class="menu-item pressable" @tap="nav('/pages/image-attributions/index')">
           <view class="mi-left">
             <AppIcon name="verified" :size="40" />
             <text class="mi-text">{{ t('imageAttributionsTitle') }}</text>
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="showPrivacyWithdrawal = true">
+        <view class="menu-item pressable" @tap="showPrivacyWithdrawal = true">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <text class="mi-text">{{ t('privacyChoices') }}</text>
@@ -128,7 +128,7 @@
 
       <SectionHeader :title="t('kaiIdentityBinding')" />
       <view class="card menu">
-        <view class="menu-item" :class="{ disabled: kaiBindingLoading }" @tap="onKaiBinding">
+        <view class="menu-item pressable" :class="{ disabled: kaiBindingLoading }" @tap="onKaiBinding">
           <view class="mi-left">
             <AppIcon name="verified" :size="40" />
             <view>
@@ -149,14 +149,14 @@
           <text class="mi-text">{{ t('platformContactLink', { phone: t('platformContactNumber') }) }}</text>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item" @tap="nav('/pages/account-deletion/index')">
+        <view class="menu-item pressable" @tap="nav('/pages/account-deletion/index')">
           <view class="mi-left">
             <AppIcon name="shield" :size="40" />
             <text class="mi-text">{{ t('accountDeletion') }}</text>
           </view>
           <AppIcon name="chevron" :size="36" />
         </view>
-        <view class="menu-item danger" @tap="showLogout = true">
+        <view class="menu-item danger pressable" @tap="showLogout = true">
           <view class="mi-left">
             <AppIcon name="logout" :size="40" />
             <text class="mi-text d-text">{{ t('k_44efd179') }}</text>
@@ -201,6 +201,7 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import LanguageSelectorSheet from '@/components/LanguageSelectorSheet.vue'
 import { navigateTo as nav } from '@/utils/nav'
+import { usePageMotion } from '@/utils/page-motion'
 import { callContactPhone } from '@/utils/contact-phone'
 import { useI18nStore } from '@/store/i18n'
 import { useThemeStore, type ThemeMode } from '@/store/theme'
@@ -215,6 +216,7 @@ import {
 
 const i18n = useI18nStore()
 const { t } = i18n
+const { pageMotionClass } = usePageMotion()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
 const notificationStore = useNotificationStore()

@@ -54,6 +54,24 @@ export interface RechargeHistoryPresentation {
 export const DEFAULT_RECHARGE_TTL_SECONDS = 5 * 60
 export const MINIMUM_RECHARGE_CNY = 10
 export const MINIMUM_WITHDRAW_CARD_HOURS = 10
+const ABSOLUTE_MINIMUM_RECHARGE_CNY = 0.01
+
+export function resolveRechargeBuildMinimum(value: unknown): number {
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount < ABSOLUTE_MINIMUM_RECHARGE_CNY || amount > MINIMUM_RECHARGE_CNY) {
+    return MINIMUM_RECHARGE_CNY
+  }
+  return Math.round(amount * 100) / 100
+}
+
+/**
+ * Production stays at the conservative 10 CNY floor. A signed test build may
+ * explicitly lower that floor, while the server-provided minimum remains
+ * authoritative and can always raise it again.
+ */
+export const RECHARGE_BUILD_MINIMUM_CNY = resolveRechargeBuildMinimum(
+  import.meta.env?.VITE_RECHARGE_MIN_AMOUNT_CNY,
+)
 
 function configuredMinimum(value: unknown, floor: number): number {
   const amount = Number(value)
@@ -61,7 +79,7 @@ function configuredMinimum(value: unknown, floor: number): number {
 }
 
 export function effectiveRechargeMinimum(value: unknown): number {
-  return configuredMinimum(value, MINIMUM_RECHARGE_CNY)
+  return configuredMinimum(value, RECHARGE_BUILD_MINIMUM_CNY)
 }
 
 export function effectiveWithdrawalMinimum(value: unknown): number {
@@ -220,7 +238,7 @@ function normalizeRechargeAmount(value: unknown): string | null {
   const source = String(value ?? '').trim()
   if (!/^\d+(?:\.\d{1,2})?$/.test(source)) return null
   const amount = Number(source)
-  return Number.isFinite(amount) && amount >= MINIMUM_RECHARGE_CNY ? String(amount) : null
+  return Number.isFinite(amount) && amount >= RECHARGE_BUILD_MINIMUM_CNY ? String(amount) : null
 }
 
 function normalizeRechargeChannel(value: unknown): RechargePaymentChannel | null {

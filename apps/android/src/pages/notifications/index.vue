@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <AppNavBar :title="t('notificationCenter')">
       <template #right>
         <text v-if="notificationStore.unread > 0" class="mark-all" @tap="onMarkAll">{{ t('markAllRead') }}</text>
@@ -47,7 +47,7 @@
           <view
             v-for="filter in filters"
             :key="filter.value || 'all'"
-            class="filter-chip"
+            class="filter-chip pressable"
             :class="{ active: activeType === filter.value }"
             @tap="selectType(filter.value)"
           >{{ t(filter.label) }}</view>
@@ -66,7 +66,7 @@
       <view
         v-for="notification in items"
         :key="notification.id"
-        class="card notification-row"
+        class="card notification-row pressable"
         :class="{ unread: !notification.is_read }"
         @tap="onTap(notification)"
       >
@@ -114,12 +114,14 @@ import { useNotificationStore } from '@/store/notification'
 import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
+import { usePageMotion } from '@/utils/page-motion'
 
 type PreferenceKey = keyof Pick<NotificationPreferences,
   'order_enabled' | 'device_enabled' | 'revenue_enabled' | 'wallet_enabled' | 'system_enabled'>
 
 const i18n = useI18nStore()
 const { t, tr } = i18n
+const { pageMotionClass } = usePageMotion()
 const notificationStore = useNotificationStore()
 const items = ref<NotificationItem[]>([])
 const loading = ref(true)

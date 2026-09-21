@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <view class="shell" :style="{ paddingTop: 'calc(28rpx + var(--safe-top))' }">
       <!-- 搜索栏 -->
       <view v-if="searching" class="search-bar">
@@ -90,7 +90,7 @@
       <view v-if="loading && list.length" class="state">{{ t('loadMore') }}</view>
       <view v-if="finished && list.length" class="state">{{ t("noMore") }}</view>
     </view>
-    <view class="fab" @tap="goPublish"><AppIcon name="plus" :size="44" color="#fff" /></view>
+    <view class="fab pressable" @tap="goPublish"><AppIcon name="plus" :size="44" color="#fff" /></view>
   </view>
 </template>
 
@@ -107,9 +107,11 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizeCommunityText, localizeInternalBrandText, localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
+import { usePageMotion } from '@/utils/page-motion'
 
 const i18n = useI18nStore()
 const { t } = i18n
+const { pageMotionClass } = usePageMotion()
 const list = ref<PostItem[]>([])
 const loading = ref(false)
 const loadError = ref(false)

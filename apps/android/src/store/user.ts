@@ -10,6 +10,12 @@ export const useUserStore = defineStore('user', () => {
   const token = ref(getToken())
   const userInfo = ref<UserInfo | null>(null)
   const role = ref<'personal' | 'supplier'>('personal')
+  // The first page must not render protected content until a persisted token
+  // has been checked (or we have confirmed that there is no token). This
+  // prevents the home tab flashing before an expired session redirects to
+  // login.
+  const authReady = ref(false)
+  let restorePromise: Promise<boolean> | null = null
 
   function applySession(res: { token: string; user: UserInfo }) {
     // A successful login may follow an expired session or an OAuth callback.
@@ -19,6 +25,7 @@ export const useUserStore = defineStore('user', () => {
     setToken(res.token)
     userInfo.value = res.user
     role.value = (res.user.role as 'personal' | 'supplier') || 'personal'
+    authReady.value = true
     uni.$emit('wod-session-changed')
     return res
   }
@@ -63,16 +70,28 @@ export const useUserStore = defineStore('user', () => {
     return role.value
   }
 
-  function restore() {
-    if (token.value && !userInfo.value) {
-      fetchProfile().catch(() => {})
+  function restore(): Promise<boolean> {
+    if (authReady.value) return Promise.resolve(!!token.value)
+    if (restorePromise) return restorePromise
+    if (!token.value) {
+      authReady.value = true
+      return Promise.resolve(false)
     }
+    restorePromise = fetchProfile()
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => {
+        authReady.value = true
+        restorePromise = null
+      })
+    return restorePromise
   }
 
   function clearSession() {
     token.value = ''
     userInfo.value = null
     role.value = 'personal'
+    authReady.value = true
     useAssetStore().reset()
   }
 
@@ -89,5 +108,5 @@ export const useUserStore = defineStore('user', () => {
   const isLogin = computed(() => !!token.value)
   const canSwitchRole = computed(() => userInfo.value?.supplier_status === 'approved')
 
-  return { token, userInfo, role, isLogin, canSwitchRole, login, register, loginWithKaiTicket, bindKaiIdentity, fetchProfile, restore, switchRole, clearSession, logout, signOut }
+  return { token, userInfo, role, isLogin, authReady, canSwitchRole, login, register, loginWithKaiTicket, bindKaiIdentity, fetchProfile, restore, switchRole, clearSession, logout, signOut }
 })

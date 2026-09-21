@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <view class="shell" :style="{ paddingTop: 'calc(52rpx + var(--safe-top))' }">
       <view class="logo-area">
         <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
@@ -112,8 +112,11 @@ import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { consumeAuthReturnPath } from '@/utils/auth-return-path'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
+import { switchTab } from '@/utils/nav'
+import { usePageMotion } from '@/utils/page-motion'
 
 const { t } = useI18nStore()
+const { pageMotionClass } = usePageMotion()
 const userStore = useUserStore()
 const pendingDeletion = ref(false)
 onShow(() => { pendingDeletion.value = !!readDeletionReceipt() })
@@ -367,10 +370,7 @@ function enterAuthenticatedApp() {
     })
     return
   }
-  uni.switchTab({
-    url: '/pages/index/index',
-    fail: () => uni.reLaunch({ url: '/pages/index/index' }),
-  })
+  switchTab('/pages/index/index', { fallbackToReLaunch: true })
 }
 
 function runtimeKaiCallback() {

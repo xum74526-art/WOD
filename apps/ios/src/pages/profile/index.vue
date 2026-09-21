@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view :class="['page', pageMotionClass]">
     <view class="shell" :style="{ paddingTop: 'calc(28rpx + var(--safe-top))' }">
       <view class="role-bar" v-if="canSwitchRole">
         <text class="role-text">{{ t('currentMode') }}{{ t(role === 'personal' ? 'personalMode' : 'supplierMode') }}</text>
@@ -9,7 +9,7 @@
         <text>{{ t('profileLoadFailedDesc') }}</text>
         <text class="load-retry" @tap="load">{{ t('retry') }}</text>
       </view>
-      <view class="user-card" @tap="goProfile">
+      <view class="user-card pressable" @tap="goProfile">
         <view class="avatar">
           <image v-if="avatarUrl" class="avatar-img" :src="avatarUrl" mode="aspectFill" @error="avatarLoadFailed = true" />
           <text v-else>{{ avatarText }}</text>
@@ -23,7 +23,7 @@
 
       <!-- 个人模式：总资产 + 邀请好友 -->
       <view class="top-row" v-if="role === 'personal'">
-        <view class="card summary" @tap="goAssets">
+        <view class="card summary pressable" @tap="goAssets">
           <text class="sum-label">{{ t("totalAssets") }}</text>
           <AmountText :value="toCardHours(totalAsset)" size="lg" />
           <view class="sum-mini">
@@ -31,7 +31,7 @@
             <text class="sm-v">{{ fmtCH(wallet?.balance) }}</text>
           </view>
         </view>
-        <view class="card invite-card" @tap="goInvite">
+        <view class="card invite-card pressable" @tap="goInvite">
           <view class="iv-icons"><AppIcon name="coin" :size="36" /><AppIcon name="friends" :size="36" /></view>
           <text class="iv-label">{{ t("inviteFriends") }}</text>
           <text class="iv-val">{{ invite?.invited_count || 0 }} {{ t('people') }}</text>
@@ -42,7 +42,7 @@
 
       <!-- 商家模式：出租收入 + 设备概览 -->
       <view class="top-row" v-else>
-        <view class="card summary" @tap="go('/pages/supplier/revenue')">
+        <view class="card summary pressable" @tap="go('/pages/supplier/revenue')">
           <text class="sum-label">{{ t('k_815f90b8') }}</text>
           <AmountText :value="toCardHours(supplierWallet?.total_revenue ?? 0)" size="lg" />
           <view class="sum-mini">
@@ -54,7 +54,7 @@
             <text class="sm-v">{{ fmtCH(supplierWallet?.today_revenue) }}</text>
           </view>
         </view>
-        <view class="card invite-card" @tap="go('/pages/supplier/devices')">
+        <view class="card invite-card pressable" @tap="go('/pages/supplier/devices')">
           <view class="iv-icons"><AppIcon name="gpu" :size="36" /></view>
           <text class="iv-label">{{ t('merchantResourceManagement') }}</text>
           <text class="iv-val">{{ dash?.product_count ?? 0 }} {{ t('units') }}</text>
@@ -63,7 +63,7 @@
       </view>
 
       <!-- 商家销售返佣：按已确认销售卡时累计，和购买返佣独立。 -->
-      <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card" @tap="go('/pages/supplier/rebate')">
+      <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card pressable" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
           <text class="rb-title">{{ t('supplierSalesRebateTitle') }}</text>
           <text v-if="supplierRebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
@@ -87,7 +87,7 @@
       </view>
 
       <!-- 个人购买返佣：商家作为买家时同样适用。 -->
-      <view v-if="rebate" class="card rebate-card" @tap="go('/pages/rebate/index')">
+      <view v-if="rebate" class="card rebate-card pressable" @tap="go('/pages/rebate/index')">
         <view class="rb-title-row">
           <text class="rb-title">{{ t('personalPurchaseRebateTitle') }}</text>
           <text v-if="rebate.reward_mode === 'test_card_hours'" class="rb-mode">{{ t('closedTestRewardBadge') }}</text>
@@ -113,7 +113,7 @@
       <view v-for="group in widgetGroups" :key="group.key" class="card widget-card">
         <text class="widget-title">{{ t(group.label) }}</text>
         <view class="grid-card">
-          <view v-for="it in group.items" :key="it.key" class="g-item" @tap="onTap(it)">
+          <view v-for="it in group.items" :key="it.key" class="g-item pressable" @tap="onTap(it)">
             <view class="g-icon"><AppIcon :name="it.icon" :size="44" /></view>
             <text class="g-text">{{ t(it.label) }}</text>
           </view>
@@ -133,13 +133,14 @@ import { getInviteSummary, type InviteSummary } from '@/api/invite'
 import { getDashboard, getSupplierWallet, getSupplierRebate, type SupplierRebate } from '@/api/supplier'
 import { getRebateSummary, type RebateSummary } from '@/api/user'
 import { formatMoneyShort, formatNumber, fmtCH, fmtCHr, fmtCHn, toCardHours } from '@/utils/format'
-import { navigateTo as nav } from '@/utils/nav'
+import { navigateTo as nav, switchTab } from '@/utils/nav'
 import AmountText from '@/components/AmountText.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName } from '@/utils/localize-content'
 import { resolveApiMediaUrl } from '@/utils/config'
 import { getProfileWidgetGroups, type ProfileWidget } from '@/config/profile-widgets'
+import { usePageMotion } from '@/utils/page-motion'
 
 const userStore = useUserStore()
 const assetStore = useAssetStore()
@@ -147,6 +148,7 @@ const role = computed(() => userStore.role)
 const canSwitchRole = computed(() => userStore.canSwitchRole)
 const i18n = useI18nStore()
 const { t, tr } = i18n
+const { pageMotionClass } = usePageMotion()
 const wallet = ref<WalletInfo | null>(null)
 const invite = ref<InviteSummary | null>(null)
 const rebate = ref<RebateSummary | null>(null)
@@ -203,7 +205,7 @@ function onTap(it: ProfileWidget) {
   nav(it.route)
 }
 
-function goAssets() { uni.switchTab({ url: '/pages/assets/index' }) }
+function goAssets() { switchTab('/pages/assets/index') }
 function go(url: string) { nav(url) }
 function goInvite() { nav('/pages/invite/index') }
 function goWallet() { nav('/pages/wallet/index') }
