@@ -16,7 +16,7 @@ export function generateMetadata(): Promise<Metadata> {
       description: "查看不同 GPU 型号的卡时价格变化与当前市场区间。",
     },
     en: {
-      title: "GPU Compute Market Trends | KAI星算",
+      title: "GPU Compute Market Trends | KAI Star",
       description: "Compare card-hour price movements and current market ranges across GPU models.",
     },
   });

@@ -14,8 +14,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "了解KAI星算处理个人信息的具体清单、权限、第三方服务及权利行使方式。",
     },
     en: {
-      title: "Privacy Policy | KAI星算",
-      description: "The data inventory, permissions, service providers, and privacy choices for KAI星算.",
+      title: "Privacy Policy | KAI Star",
+      description: "The data inventory, permissions, service providers, and privacy choices for KAI Star.",
     },
   });
 }
@@ -27,7 +27,7 @@ export const privacySections: LegalSection[] = [
     paragraphs: [
       {
         zh: "本政策适用于“KAI星算”网站、Android 客户端和 iOS 客户端（Android 包名：com.kai.ztwstarmap），包括账号登录、算力行情、资源与需求撮合、商家协作、算力技术社区及客服功能。",
-        en: "This Policy applies to the KAI星算 website, Android app, and iOS app (Android package: com.kai.ztwstarmap), including accounts, compute pricing, resource and request matching, supplier collaboration, the compute community, and support.",
+        en: "This Policy applies to the KAI Star website, Android app, and iOS app (Android package: com.kai.ztwstarmap), including accounts, compute pricing, resource and request matching, supplier collaboration, the compute community, and support.",
       },
       {
         zh: "个人信息处理者和应用运营者为锆芯期算人工智能科技（上海）有限公司，注册地址为上海市浦东新区川南奉公路5058号3幢一层（集中登记地），网站备案号为沪ICP备2026046279号-1，隐私与客服联系电话为+86 4001082026。",
@@ -103,7 +103,7 @@ export const privacySections: LegalSection[] = [
       { zh: "照片和视频：Android 仅在你点击选择头像、实名认证资料、社区图片或视频时，通过系统照片选择器申请“所选照片和视频”访问（READ_MEDIA_VISUAL_USER_SELECTED）；iOS 在相同场景申请照片访问。拒绝后仅相应选择或上传功能不可用。", en: "Photos and videos: on Android, selected-photo-and-video access (READ_MEDIA_VISUAL_USER_SELECTED) is requested through the system picker only after you choose an avatar, identity material, community image or video. iOS requests photo access in the same scenarios. Refusal affects only the relevant selection or upload." },
       { zh: "拍摄：当你主动选择系统拍摄入口时，由系统相机完成拍摄并把你确认的结果返回 App；不会在后台开启相机。当前 Android 安装包不直接声明持续相机权限，且 Android、iOS 均不为当前功能申请麦克风权限。", en: "Capture: when you choose the system capture entry, the system camera captures and returns only the result you confirm. The camera is not opened in the background. The current Android package does not declare ongoing camera access, and neither mobile app requests microphone access for current features." },
       { zh: "桌面角标：部分 vivo 设备包含角标兼容权限，仅用于显示 App 图标上的未读数量，不读取通讯录、短信或通知内容。", en: "Launcher badge: a compatibility permission on some vivo devices displays an unread count on the app icon and does not read contacts, SMS or notification content." },
-      { zh: "当前版本不申请通讯录、短信、通话记录、精确位置、麦克风、电话状态、安装其他应用或读取其他应用列表权限。你可在“系统设置 → 应用 → KAI星算 → 权限”随时撤回已授予权限。", en: "The current release does not request contacts, SMS, call log, precise location, microphone, phone state, app-installation, or installed-app-list permissions. Revoke granted permissions at System Settings → Apps → KAI星算 → Permissions." },
+      { zh: "当前版本不申请通讯录、短信、通话记录、精确位置、麦克风、电话状态、安装其他应用或读取其他应用列表权限。你可在“系统设置 → 应用 → KAI星算 → 权限”随时撤回已授予权限。", en: "The current release does not request contacts, SMS, call log, precise location, microphone, phone state, app-installation, or installed-app-list permissions. Revoke granted permissions at System Settings → Apps → KAI Star → Permissions." },
     ],
   },
   {
@@ -133,7 +133,7 @@ export const privacySections: LegalSection[] = [
     id: "cross-border",
     title: { zh: "存储地点与个人信息出境", en: "Storage location and cross-border processing" },
     paragraphs: [
-      { zh: "KAI星算核心 API、数据库和上传文件部署在阿里云中国香港区域（cn-hongkong）。当中国大陆用户使用联网业务时，账号与找回邮箱、KAI 关联、实名及银行卡、地址、需求与履约、SSH 交付、社区与客服、设备网络和日志信息会经 HTTPS 加密传输到中国香港特别行政区并在那里存储和处理。", en: "KAI星算's core API, database and uploaded files are deployed in Alibaba Cloud Hong Kong region (cn-hongkong). When a mainland-China user uses connected services, account and recovery email, KAI link, identity and bank-card, address, request and fulfilment, SSH delivery, community and support, device/network and log data is encrypted by HTTPS in transit to Hong Kong SAR and stored and processed there." },
+      { zh: "KAI星算核心 API、数据库和上传文件部署在阿里云中国香港区域（cn-hongkong）。当中国大陆用户使用联网业务时，账号与找回邮箱、KAI 关联、实名及银行卡、地址、需求与履约、SSH 交付、社区与客服、设备网络和日志信息会经 HTTPS 加密传输到中国香港特别行政区并在那里存储和处理。", en: "KAI Star's core API, database and uploaded files are deployed in Alibaba Cloud Hong Kong region (cn-hongkong). When a mainland-China user uses connected services, account and recovery email, KAI link, identity and bank-card, address, request and fulfilment, SSH delivery, community and support, device/network and log data is encrypted by HTTPS in transit to Hong Kong SAR and stored and processed there." },
       { zh: "境外接收环境的运营管理者为本政策所列运营主体锆芯期算人工智能科技（上海）有限公司，联系方式为+86 4001082026；阿里云计算有限公司提供中国香港云基础设施。处理目的为提供账号、撮合、社区、客服、履约、安全和故障处理，处理方式为传输、存储、查询、校验、备份、删除或匿名化，信息种类限于上一段所列范围。你可通过本政策“你的权利”所列路径向运营主体行使权利。", en: "The overseas receiving environment is operated and managed by the operator named in this Policy, Zircon Core Futures Computing Artificial Intelligence Technology (Shanghai) Co., Ltd., at +86 4001082026; Alibaba Cloud Computing Co., Ltd. supplies the Hong Kong infrastructure. Purposes are accounts, matching, community, support, fulfilment, security and troubleshooting. Methods are transfer, storage, query, validation, backup, deletion or anonymisation, limited to the categories above. Exercise rights through the paths in Your Rights." },
       { zh: "移动客户端会在首次业务联网前，通过独立且默认不勾选的选项，就上述境外接收方、处理目的、方式和信息种类取得单独同意。拒绝后，App 不发起业务网络请求，你仍可阅读协议和隐私政策、调整语言或退出应用，但因核心服务部署在中国香港，无法使用登录、行情、撮合、社区和客服等联网功能。我们会依法履行个人信息保护影响评估以及适用的出境安全评估、个人信息保护认证或标准合同等程序；未满足适用法定条件时，不应启动相应出境处理。", en: "Before the first business network request, the mobile app uses a separate unchecked choice for the overseas recipient, purpose, method and data categories. If declined, the app makes no business network request; you can still read the terms and privacy policy, change language or exit, but cannot use connected sign-in, pricing, matching, community or support because core services are in Hong Kong. We conduct the personal-information protection impact assessment and applicable security assessment, certification or standard-contract procedure required by law; processing should not start unless applicable legal conditions are met.", sensitive: true },
     ],
@@ -165,8 +165,8 @@ export const privacySections: LegalSection[] = [
       { zh: "查阅、更正与补充：在“我的”及“我的 → 设置”查看和修改头像、昵称、找回邮箱、手机号登录标识、地址、银行卡等可管理资料；对应业务记录可在相关列表和详情页查看。", en: "Access, correction and completion: use Profile and Profile → Settings to view or edit avatar, nickname, recovery email, phone sign-in identifier, addresses, bank cards and other manageable data; view business records in the relevant list and detail pages." },
       { zh: "删除：在相应页面删除符合条件的地址、银行卡及自己发布的内容；无法自行操作时，通过+86 4001082026提交删除申请。", en: "Deletion: remove eligible addresses, bank cards and your published content on the relevant page, or request deletion through +86 4001082026 when self-service is unavailable." },
       { zh: "撤回隐私同意：在“我的 → 设置 → 隐私选择”点击“撤回并返回”。撤回后 App 停止后续业务网络请求并返回隐私选择页；再次同意前联网功能不可用。撤回不影响此前基于同意完成处理的合法性，也不会自动注销账号。", en: "Withdraw privacy consent: go to Profile → Settings → Privacy Choices and tap Withdraw and Return. The app stops subsequent business network requests and returns to the privacy choice page; connected features remain unavailable until renewed consent. Withdrawal does not invalidate earlier lawful processing or automatically delete the account." },
-      { zh: "关闭系统权限：在“系统设置 → 应用 → KAI星算 → 权限”关闭照片等已授予权限；关闭后仅依赖该权限的功能受影响。", en: "Revoke system permissions: use System Settings → Apps → KAI星算 → Permissions. Only the dependent feature is affected." },
-      { zh: "账号注销：在“我的 → 设置 → 注销账号”检查未结事项、完成身份验证并提交。我们不设置与注销无关的不合理条件；处理完成后所有会话失效、KAI 关联解除且非必要资料清理。注销KAI星算不会注销外部 KAI 账号，注销不可恢复。卸载 App 后也可访问 https://wod.kai.com/account-deletion 提交。", en: "Account deletion: use Profile → Settings → Delete Account, review outstanding items, verify identity and submit. We impose no unrelated unreasonable condition. Completion invalidates sessions, unlinks KAI and clears non-essential data. Deleting KAI星算 does not delete the external KAI account and is irreversible. After uninstalling, use https://wod.kai.com/account-deletion." },
+      { zh: "关闭系统权限：在“系统设置 → 应用 → KAI星算 → 权限”关闭照片等已授予权限；关闭后仅依赖该权限的功能受影响。", en: "Revoke system permissions: use System Settings → Apps → KAI Star → Permissions. Only the dependent feature is affected." },
+      { zh: "账号注销：在“我的 → 设置 → 注销账号”检查未结事项、完成身份验证并提交。我们不设置与注销无关的不合理条件；处理完成后所有会话失效、KAI 关联解除且非必要资料清理。注销KAI星算不会注销外部 KAI 账号，注销不可恢复。卸载 App 后也可访问 https://wod.kai.com/account-deletion 提交。", en: "Account deletion: use Profile → Settings → Delete Account, review outstanding items, verify identity and submit. We impose no unrelated unreasonable condition. Completion invalidates sessions, unlinks KAI and clears non-essential data. Deleting KAI Star does not delete the external KAI account and is irreversible. After uninstalling, use https://wod.kai.com/account-deletion." },
       { zh: "复制、限制、拒绝、解释及投诉：通过+86 4001082026提出请求。为保护账号，我们会核验必要身份信息，并通常在 15 个工作日内答复。对处理结果有异议，可向有管辖权的个人信息保护主管部门投诉。", en: "Copy, restriction, objection, explanation and complaint: call +86 4001082026. We verify only the identity data necessary to protect the account and normally respond within 15 working days. You may complain to a competent personal-information authority." },
     ],
   },
@@ -182,7 +182,7 @@ export const privacySections: LegalSection[] = [
     id: "minors",
     title: { zh: "未成年人保护", en: "Minors" },
     paragraphs: [
-      { zh: "KAI星算面向年满 18 周岁、具有完全民事行为能力的用户，不向未满 18 周岁者提供注册、实名或撮合服务。未满 18 周岁者请勿提交个人信息；如监护人发现未成年人误提交信息，可通过+86 4001082026联系我们，我们会核验后尽快删除或采取其他必要措施。", en: "KAI星算 is for users aged 18 or older with full civil capacity and does not offer registration, identity or matching services to anyone under 18. A minor must not submit personal information. A guardian who discovers an erroneous submission can call +86 4001082026, and we will verify and promptly delete it or take other necessary action." },
+      { zh: "KAI星算面向年满 18 周岁、具有完全民事行为能力的用户，不向未满 18 周岁者提供注册、实名或撮合服务。未满 18 周岁者请勿提交个人信息；如监护人发现未成年人误提交信息，可通过+86 4001082026联系我们，我们会核验后尽快删除或采取其他必要措施。", en: "KAI Star is for users aged 18 or older with full civil capacity and does not offer registration, identity or matching services to anyone under 18. A minor must not submit personal information. A guardian who discovers an erroneous submission can call +86 4001082026, and we will verify and promptly delete it or take other necessary action." },
     ],
   },
   {
@@ -201,7 +201,7 @@ export default function PrivacyPage() {
       title="隐私政策"
       titleEn="Privacy Policy"
       description="说明KAI星算实际处理的个人信息、权限、第三方服务、存储期限及权利操作路径。"
-      descriptionEn="The actual personal data, permissions, service providers, retention, and privacy controls used by KAI星算."
+      descriptionEn="The actual personal data, permissions, service providers, retention, and privacy controls used by KAI Star."
     >
       <LegalDocument sections={privacySections} accountDeletionLink />
     </SimplePage>

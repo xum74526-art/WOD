@@ -434,7 +434,7 @@ test('legacy internal market sources always display the current KAI星算 brand'
     assert.doesNotMatch(page, /return 'WOD Market'/)
   }
   assert.match(locale, /ztwMarketName: 'KAI星算算力行情'/)
-  assert.match(locale, /ztwMarketName: 'KAI Compute Market'/)
+  assert.match(locale, /ztwMarketName: 'KAI Star Market'/)
 })
 
 test('the app manifest enables the native VideoPlayer module', () => {

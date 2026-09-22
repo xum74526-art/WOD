@@ -13,7 +13,7 @@ export function generateMetadata(): Promise<Metadata> {
       description: "管理账号资料、密码、绑定邮箱与 KAI 身份。",
     },
     en: {
-      title: "Account Settings | KAI星算",
+      title: "Account Settings | KAI Star",
       description: "Manage your profile, password, linked email, and KAI identity.",
     },
   });

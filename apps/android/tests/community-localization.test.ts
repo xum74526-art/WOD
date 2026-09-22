@@ -40,7 +40,7 @@ test('first-party market posts remove mixed Chinese from English display copy', 
       'wod-market',
       'en',
     ),
-    'The current reference price in North America is 5.04 CH/h. KAI Compute Market data.',
+    'The current reference price in North America is 5.04 CH/h. KAI Star Market data.',
   )
   assert.equal(
     localizeInternalBrandText('北美用戶原文', 'user-post', 'en'),

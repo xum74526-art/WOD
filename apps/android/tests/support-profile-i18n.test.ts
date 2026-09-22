@@ -59,6 +59,6 @@ test('only historical first-party news copy receives the KAI星算 display brand
   assert.equal(localizeInternalBrandText('ZTW 算力行情', 'wod-market'), 'KAI星算 算力行情')
   assert.equal(localizeInternalBrandText('WOD 算力行情', 'user-post'), 'WOD 算力行情')
   assert.equal(localizeInternalBrandText('兑换码 WOD10', 'wod-market'), '兑换码 WOD10')
-  assert.equal(localizeInternalBrandText('Latest Compute Star Map market data', 'wod-market', 'en'), 'Latest KAI Compute Market data')
+  assert.equal(localizeInternalBrandText('Latest Compute Star Map market data', 'wod-market', 'en'), 'Latest KAI Star Market data')
   assert.equal(localizeInternalBrandText('KAI星算 Platform Market', 'wod-market', 'en'), 'KAI Platform Market')
 })

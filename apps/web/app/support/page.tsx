@@ -15,8 +15,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "KAI星算自助客服与账号工单。",
     },
     en: {
-      title: "KAI星算 Help & Support",
-      description: "KAI星算 self-service support and account tickets.",
+      title: "KAI Star Help & Support",
+      description: "KAI Star self-service support and account tickets.",
     },
   });
 }

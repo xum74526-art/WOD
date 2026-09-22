@@ -13,8 +13,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "通过已绑定邮箱或 KAI 身份找回KAI星算账号。",
     },
     en: {
-      title: "Recover account | KAI星算",
-      description: "Recover your KAI星算 account with a linked email or KAI identity.",
+      title: "Recover account | KAI Star",
+      description: "Recover your KAI Star account with a linked email or KAI identity.",
     },
   }, { robots: { index: false, follow: false } });
 }

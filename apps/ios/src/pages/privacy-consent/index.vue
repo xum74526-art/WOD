@@ -166,7 +166,7 @@ const copies = {
     incomplete: '請完成所有必選項', declinedTitle: '尚未同意', declinedContent: '應用不會發起業務網路請求。你可以繼續閱讀法律文本，或關閉應用後稍後再作選擇。', understood: '知道了',
   },
   en: {
-    appName: 'KAI星算', eyebrow: 'Privacy and data protection', title: 'Make your privacy choices first',
+    appName: 'KAI Star', eyebrow: 'Privacy and data protection', title: 'Make your privacy choices first',
     intro: 'Before the app sends service network requests for account recovery, update checks, or third-party content loading, please read and make your choices. Until then, the app displays only bundled legal text and sends no service network request.',
     version: 'Legal text version', generalTitle: 'User Agreement and Privacy Policy',
     generalDescription: 'Read the bundled legal text in full. It explains the data processed, purposes, third parties, retention, account deletion, and how to exercise your rights.',

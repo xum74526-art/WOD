@@ -13,8 +13,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "使用安全链接为KAI星算账号设置新密码。",
     },
     en: {
-      title: "Reset password | KAI星算",
-      description: "Use a secure link to set a new password for your KAI星算 account.",
+      title: "Reset password | KAI Star",
+      description: "Use a secure link to set a new password for your KAI Star account.",
     },
   }, { robots: { index: false, follow: false } });
 }

@@ -409,7 +409,7 @@ async function onCheckUpdate() {
 function onAbout() {
   uni.showModal({
     title: t('k_17651c8f'),
-    content: `KAI星算 - ${t('算力资源撮合平台')}\n${t('versionLabel')} v${appVersion}`,
+    content: `${t('appName')} - ${t('算力资源撮合平台')}\n${t('versionLabel')} v${appVersion}`,
     showCancel: false,
     confirmText: t('知道了'),
   })

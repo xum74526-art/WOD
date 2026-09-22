@@ -13,8 +13,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "创建KAI星算账号，统一使用 Web、iOS 与 Android。",
     },
     en: {
-      title: "Create account | KAI星算",
-      description: "Create a KAI星算 account for Web, iOS, and Android.",
+      title: "Create account | KAI Star",
+      description: "Create a KAI Star account for Web, iOS, and Android.",
     },
   });
 }

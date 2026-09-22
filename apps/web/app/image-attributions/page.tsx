@@ -13,8 +13,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "查看KAI星算 GPU 图片的原作、作者、修改方式与使用许可。",
     },
     en: {
-      title: "Image Sources and Licenses | KAI星算",
-      description: "Original works, authors, modifications and licenses for GPU images used by KAI星算.",
+      title: "Image Sources and Licenses | KAI Star",
+      description: "Original works, authors, modifications and licenses for GPU images used by KAI Star.",
     },
   });
 }

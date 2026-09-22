@@ -11,10 +11,10 @@ test("English public market uses an English brand and supplier label", () => {
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const brand = fs.readFileSync(new URL("../components/brand.tsx", import.meta.url), "utf8");
 
-  assert.equal(localizeSupplierName("KAI星算自营", "en"), "KAI Compute Self-operated");
-  assert.match(locale, /replaceAll\("KAI星算", "KAI Compute"\)/);
+  assert.equal(localizeSupplierName("KAI星算自营", "en"), "KAI Star Self-operated");
+  assert.match(locale, /replaceAll\("KAI星算", "KAI Star"\)/);
   assert.match(market, /locale === "en" \? "KAI COMPUTE SELF-OPERATED"/);
-  assert.match(brand, /locale === "en" \? "KAI Compute" : "KAI星算"/);
+  assert.match(brand, /locale === "en" \? "KAI Star" : "KAI星算"/);
 });
 
 test("admin overview uses component translations and legacy queues have English coverage", () => {

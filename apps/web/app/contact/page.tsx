@@ -16,8 +16,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "联系KAI星算，咨询算力需求与机构接入。",
     },
     en: {
-      title: "Contact Us | KAI星算",
-      description: "Contact KAI星算 about compute requirements and institutional access.",
+      title: "Contact Us | KAI Star",
+      description: "Contact KAI Star about compute requirements and institutional access.",
     },
   });
 }

@@ -82,10 +82,10 @@ export function communityDisplayText(
 
   let localized = branded
     .replace(/KAI星算平台行情|算力星圖平台行情/g, "KAI Platform Market")
-    .replace(/KAI星算算力行情/g, "KAI Compute Market")
-    .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, "KAI Compute Market")
-    .replace(/Compute Star Map(?:\s+market)?/gi, "KAI Compute Market")
-    .replace(/KAI星算\s+market/gi, "KAI Compute Market")
+    .replace(/KAI星算算力行情/g, "KAI Star Market")
+    .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, "KAI Star Market")
+    .replace(/Compute Star Map(?:\s+market)?/gi, "KAI Star Market")
+    .replace(/KAI星算\s+market/gi, "KAI Star Market")
     .replace(/KAI星算/g, "KAI");
   for (const [from, to] of INTERNAL_REGION_EN) localized = localized.replaceAll(from, to);
   return localized;

@@ -10,9 +10,9 @@ type BrandProps = {
 
 export function Brand({ inverse = false }: BrandProps) {
   const { locale } = useI18n();
-  const brandName = locale === "en" ? "KAI Compute" : "KAI星算";
+  const brandName = locale === "en" ? "KAI Star" : "KAI星算";
   return (
-    <Link className={`brand${inverse ? " brand--inverse" : ""}`} href="/" aria-label={locale === "en" ? "KAI Compute home" : "KAI星算首页"}>
+    <Link className={`brand${inverse ? " brand--inverse" : ""}`} href="/" aria-label={locale === "en" ? "KAI Star home" : "KAI星算首页"}>
       <Image className="brand__logo" src="/kai-logo.svg" alt="" width={72} height={32} priority />
       <span className="brand__name"><b>{brandName}</b></span>
     </Link>

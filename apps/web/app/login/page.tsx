@@ -13,8 +13,8 @@ export function generateMetadata(): Promise<Metadata> {
       description: "登录KAI星算，查看算力资源、订单、资产及账号资料。",
     },
     en: {
-      title: "Sign in | KAI星算",
-      description: "Sign in to KAI星算 to access compute resources, orders, assets, and account settings.",
+      title: "Sign in | KAI Star",
+      description: "Sign in to KAI Star to access compute resources, orders, assets, and account settings.",
     },
   });
 }

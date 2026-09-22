@@ -216,7 +216,7 @@ export const adminLegacyEnglish: Record<string, string> = {
   "未提交": "Not submitted",
   "平台人工交付": "Platform manual fulfillment",
   "商家人工交付": "Supplier manual fulfillment",
-  "KAI星算自营": "KAI Compute self-operated",
+  "KAI星算自营": "KAI Star self-operated",
   "第三方商家": "Third-party supplier",
   "证据与处理结论": "Evidence and decision",
   "说明 SSH 交付证据、资源参数核验结果，以及退款或放行的理由": "Describe SSH delivery evidence, verified resource specifications, and the reason to refund or release.",

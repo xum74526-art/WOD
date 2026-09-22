@@ -82,11 +82,11 @@ test("terms describe the live matchmaking mode without inventing enabled payment
   assert.doesNotMatch(terms, /正式用户协议需要|The formal terms must|access@kai\.com|mailto:/);
 });
 
-test("public legal shell and contact surface use KAI星算 and expose no public email", () => {
+test("public legal shell localizes the brand and exposes no public email", () => {
   const simple = read("../components/simple-page.tsx");
   const contact = read("../app/contact/page.tsx");
   const footer = read("../components/site-footer.tsx");
-  assert.match(simple, />KAI星算 \/ INFORMATION</);
+  assert.match(simple, /locale === "en" \? "KAI Star \/ INFORMATION" : "KAI星算 \/ INFORMATION"/);
   assert.doesNotMatch(simple, /北斗 kai \/ INFORMATION|ZTW \/ INFORMATION|KAI \/ INFORMATION/);
   assert.match(contact, /<ContactPhone\s*\/>/);
   for (const source of [contact, footer]) assert.doesNotMatch(source, /access@kai\.com|mailto:/);

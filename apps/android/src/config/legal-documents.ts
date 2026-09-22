@@ -155,7 +155,7 @@ const PRIVACY_EN: LegalDocument = {
   title: 'Privacy Policy',
   metadata: metadataEn(),
   introduction: [
-    'This Policy applies to the KAI星算 Android and iOS apps (Android package: com.kai.ztwstarmap). We process personal information lawfully, fairly, in good faith, and only as necessary. Read it before registering, signing in, or using the service.',
+    'This Policy applies to the KAI Star Android and iOS apps (Android package: com.kai.ztwstarmap). We process personal information lawfully, fairly, in good faith, and only as necessary. Read it before registering, signing in, or using the service.',
     `The operator and personal-information processor is ${LEGAL_OPERATOR}. If you do not agree, do not register or continue using the service. Refusing an optional permission affects only the feature that needs it.`,
   ],
   sections: [
@@ -206,7 +206,7 @@ const PRIVACY_EN: LegalDocument = {
     {
       title: '5. Storage location, cross-border processing, and retention',
       paragraphs: [
-        'KAI星算 currently deploys its core API, database, and uploaded files in Alibaba Cloud Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfillment, security, troubleshooting, and legally required retention.',
+        'KAI Star currently deploys its core API, database, and uploaded files in Alibaba Cloud Hong Kong region (cn-hongkong). When users in any region use service network features, the account, recovery-email, KAI-link, identity and bank-card, address, matchmaking and SSH-delivery, community and support, device/network and log data described in this Policy is encrypted in transit to Hong Kong SAR and stored and processed there for service delivery, fulfillment, security, troubleshooting, and legally required retention.',
         'The overseas receiving environment is operated and managed by the operator named here at the telephone above; Alibaba Cloud Computing Co., Ltd. supplies the Hong Kong infrastructure. Purposes are accounts, matching, community, support, fulfilment, security and troubleshooting; methods are transfer, storage, query, validation, backup, deletion or anonymisation. Before the first business network request, the app uses a separate unchecked choice to obtain separate consent. If declined, no business network request is made; you may still read legal texts, change language or exit, but connected sign-in, pricing, matching, community and support remain unavailable. We conduct the required impact assessment and applicable security assessment, certification or standard-contract procedure; processing should not start unless applicable legal conditions are met.',
         'Account and business data is retained only for service, dispute, or legal needs. Recovery verification and reset credentials expire in 30 minutes. Completed recovery-mail delivery records are normally removed within 24 hours.',
         'A deletion recovery capability, expiry, and internal account ID may remain on this device for up to seven days; it contains no password or normal login token. Profile, ID, address, community, and support data is deleted or anonymized when its purpose ends, you delete it, or the account is deleted. Unfulfilled, ledger, settlement, dispute, and legally required records remain restricted only for the necessary scope and period, without inventing a fixed financial term.',
@@ -223,8 +223,8 @@ const PRIVACY_EN: LegalDocument = {
     {
       title: '7. Your rights and account deletion',
       paragraphs: [
-        'Use Profile and the relevant service pages to access, correct or delete manageable data; use System Settings → Apps → KAI星算 → Permissions to revoke system permissions; and use Profile → Settings → Privacy Choices → Withdraw and Return to withdraw privacy consent. Withdrawal stops subsequent business network requests and returns to the privacy choice page until renewed consent. It does not invalidate earlier lawful processing or automatically delete the account.',
-        'Use Profile → Settings → Delete account. Active fulfillment, disputes, or unsettled matters must be resolved first. Completion invalidates all sessions, removes unnecessary data, and unlinks the KAI星算 KAI identity without deleting other KAI products. Deletion cannot be reversed and a new account does not inherit old records.',
+        'Use Profile and the relevant service pages to access, correct or delete manageable data; use System Settings → Apps → KAI Star → Permissions to revoke system permissions; and use Profile → Settings → Privacy Choices → Withdraw and Return to withdraw privacy consent. Withdrawal stops subsequent business network requests and returns to the privacy choice page until renewed consent. It does not invalidate earlier lawful processing or automatically delete the account.',
+        'Use Profile → Settings → Delete account. Active fulfillment, disputes, or unsettled matters must be resolved first. Completion invalidates all sessions, removes unnecessary data, and unlinks the KAI Star KAI identity without deleting other KAI products. Deletion cannot be reversed and a new account does not inherit old records.',
         'We may verify identity before acting on a request and normally respond within 15 working days, subject to applicable law and complex cases.',
       ],
     },
@@ -373,8 +373,8 @@ function agreementEn(): LegalDocument {
     title: 'User Agreement',
     metadata: metadataEn(),
     introduction: [
-      `This Agreement is between you and ${LEGAL_OPERATOR} for the KAI星算 mobile applications and related services. Read it fully, especially the risk, liability, deletion, and dispute terms.`,
-      'By accepting, registering, signing in, or continuing to use KAI星算, you accept this Agreement and the rules shown for a feature. If you disagree, do not register or use the service.',
+      `This Agreement is between you and ${LEGAL_OPERATOR} for the KAI Star mobile applications and related services. Read it fully, especially the risk, liability, deletion, and dispute terms.`,
+      'By accepting, registering, signing in, or continuing to use KAI Star, you accept this Agreement and the rules shown for a feature. If you disagree, do not register or use the service.',
     ],
     sections: [
       {
@@ -395,7 +395,7 @@ function agreementEn(): LegalDocument {
       {
         title: '3. Services and eligibility',
         paragraphs: [
-          'KAI星算 provides KAI Pricing market references, compute-resource information, requirement submission, merchant proposals and counteroffers, confirmation, coordinated fulfillment, community, support, and history. Availability may change for compliance, qualifications, security, or operations.',
+          'KAI Star provides KAI Pricing market references, compute-resource information, requirement submission, merchant proposals and counteroffers, confirmation, coordinated fulfillment, community, support, and history. Availability may change for compliance, qualifications, security, or operations.',
           'Identity verification, merchant application, publishing, sensitive operations, or fulfillment may require accurate additional materials. Approval means the materials met admission requirements at review time; it is not a guarantee of continuing capacity, hardware performance, or returns.',
         ],
       },
@@ -403,8 +403,8 @@ function agreementEn(): LegalDocument {
         title: '4. Market data and matchmaking',
         paragraphs: [
           'KAI Pricing and other quotes, charts, configurations, quantities, and historical data support observation and discussions only. They are not investment advice, live inventory, fixed quotations, transaction commitments, or return guarantees, and may be affected by upstream updates, networks, sample size, and time windows.',
-          'A requirement may include model, quantity, duration, region, contact, and notes. Submission is not an order, payment, or contract. Merchants with reviewed onboarding materials may propose plans, and KAI星算 may coordinate comparison and confirmation. Final scope, price, delivery, acceptance, fees, and liability must be confirmed by the relevant parties.',
-          'Buyer private contact details are not shown in the public market. Users must independently evaluate a plan and must not treat market data or coordination as KAI星算 assuming every counterparty obligation.',
+          'A requirement may include model, quantity, duration, region, contact, and notes. Submission is not an order, payment, or contract. Merchants with reviewed onboarding materials may propose plans, and KAI Star may coordinate comparison and confirmation. Final scope, price, delivery, acceptance, fees, and liability must be confirmed by the relevant parties.',
+          'Buyer private contact details are not shown in the public market. Users must independently evaluate a plan and must not treat market data or coordination as KAI Star assuming every counterparty obligation.',
         ],
       },
       transactionSection,
@@ -413,7 +413,7 @@ function agreementEn(): LegalDocument {
         paragraphs: [
           'Merchants must keep entity, contact, resource, lawful control, availability, price, and delivery details accurate. Review of onboarding materials is not certification of hardware, continuing inventory, returns, or every merchant statement.',
           'A merchant may submit only necessary SSH host, port, username, and credentials for confirmed fulfillment and must not reuse weak credentials or deliver a system it cannot lawfully provide. A buyer may use access only as agreed and must not reshare, scan, attack, bypass controls, or break law. Temporary credentials should be rotated or revoked promptly.',
-          'KAI星算 may display or retain minimum delivery records for coordination and disputes. A party at fault remains responsible for inaccurate materials, out-of-scope use, or failure to follow security requirements.',
+          'KAI Star may display or retain minimum delivery records for coordination and disputes. A party at fault remains responsible for inaccurate materials, out-of-scope use, or failure to follow security requirements.',
         ],
       },
       {
@@ -427,14 +427,14 @@ function agreementEn(): LegalDocument {
         title: '8. Compute technical community',
         paragraphs: [
           'The current community is limited to compute products, first-party platform market updates, and technical discussion, and the initial release supports text posts only. You are responsible for posts and comments and must hold the necessary rights. Illegal, infringing, false, fraudulent, privacy-invasive, malicious, or system-abusive content is prohibited.',
-          'Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. You grant KAI星算 the necessary non-exclusive service-scope permission to display and review submitted content. We maintain reporting, moderation, blocking, takedown, evidence-preservation, and appeal mechanisms.',
+          'Do not use the community for news gathering or republication, or for reports or commentary about public affairs, politics, military affairs, diplomacy, or emergencies. You grant KAI Star the necessary non-exclusive service-scope permission to display and review submitted content. We maintain reporting, moderation, blocking, takedown, evidence-preservation, and appeal mechanisms.',
         ],
       },
       {
         title: '9. Prohibited conduct',
         paragraphs: [
           'Fraud, money laundering, infringement, sham transactions, manipulation, malicious resource reservation, bypassing controls, unauthorized access, malware, network or API disruption, account resale, scraping non-public data, and conduct prohibited by law or harmful to others are forbidden.',
-          'Depending on severity, KAI星算 may warn, restrict features, remove content, suspend transactions or accounts, preserve evidence, and cooperate with authorities. Money, assets, and disputes remain governed by server records, applicable rules, and law.',
+          'Depending on severity, KAI Star may warn, restrict features, remove content, suspend transactions or accounts, preserve evidence, and cooperate with authorities. Money, assets, and disputes remain governed by server records, applicable rules, and law.',
         ],
       },
       {
@@ -451,8 +451,8 @@ function agreementEn(): LegalDocument {
       {
         title: '12. Risk and liability',
         paragraphs: [
-          'Evaluate your own purpose, technical ability, budget, and risk tolerance. KAI星算 does not guarantee uninterrupted or error-free data, constant resource availability, merchant performance, or any return.',
-          'KAI星算 remains liable where loss is caused by its intent or gross negligence as required by law. Effects caused by a user or counterparty, third-party or upstream interruption, network or device failure, force majeure, or events beyond reasonable control are allocated under law and fault. Nothing excludes liability that law does not permit us to limit.',
+          'Evaluate your own purpose, technical ability, budget, and risk tolerance. KAI Star does not guarantee uninterrupted or error-free data, constant resource availability, merchant performance, or any return.',
+          'KAI Star remains liable where loss is caused by its intent or gross negligence as required by law. Effects caused by a user or counterparty, third-party or upstream interruption, network or device failure, force majeure, or events beyond reasonable control are allocated under law and fault. Nothing excludes liability that law does not permit us to limit.',
         ],
       },
       {

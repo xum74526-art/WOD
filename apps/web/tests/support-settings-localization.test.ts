@@ -50,7 +50,7 @@ test("Web support requests the selected locale and localizes system UI while pre
   assert.equal(displayBusinessReference("WOD-P-12"), "KAI星算-P-12");
   assert.equal(displayBusinessReference("WODR202609100001"), "KAI星算R202609100001");
   assert.equal(displayBusinessReference("ZTW-20260910-4E9F8B"), "KAI星算-20260910-4E9F8B");
-  assert.match(locale, /"support\.assistant": "KAI星算 Self-service Support"/);
+  assert.match(locale, /"support\.assistant": "KAI Star Self-service Support"/);
   assert.match(locale, /"support\.title": "Help & Support"/);
   assert.match(locale, /"support\.status\.pending": "Pending assignment"/);
 });
@@ -62,14 +62,14 @@ test("help and support metadata have complete English copy without release place
   const brand = fs.readFileSync(new URL("../components/brand.tsx", import.meta.url), "utf8");
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
 
-  assert.match(help, /KAI星算 Sign-in Help/);
+  assert.match(help, /KAI Star Sign-in Help/);
   assert.match(help, /first successful Kai SSO sign-in or registration creates a local account/);
   assert.match(help, /never merges an existing account by email or phone/);
   assert.doesNotMatch(help, /认证服务完成后|will be published here|北斗 kai account/);
-  assert.match(support, /KAI星算 Help & Support/);
-  assert.match(simple, />KAI星算 \/ INFORMATION</);
+  assert.match(support, /KAI Star Help & Support/);
+  assert.match(simple, /locale === "en" \? "KAI Star \/ INFORMATION" : "KAI星算 \/ INFORMATION"/);
   assert.match(simple, /locale === "zh-Hant" \? toTraditionalChinese\(simplified\) : simplified/);
-  assert.match(brand, /const brandName = locale === "en" \? "KAI Compute" : "KAI星算"/);
+  assert.match(brand, /const brandName = locale === "en" \? "KAI Star" : "KAI星算"/);
   assert.match(brand, /<span className="brand__name"><b>\{brandName\}<\/b><\/span>/);
   assert.doesNotMatch(locale, /"support\.assistant": "北斗|"footer\.about": "About 北斗|"auth\.already": "Already have a 北斗/);
 });

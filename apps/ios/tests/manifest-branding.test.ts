@@ -20,7 +20,7 @@ test('native package identity and icon paths use the KAI星算 Vue 3 source tree
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'KAI星算')
   assert.equal(manifest.versionName, '1.2.2')
-  assert.equal(manifest.versionCode, '125')
+  assert.equal(manifest.versionCode, '126')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
 
@@ -63,6 +63,18 @@ test('login, registration and the native icon present the KAI星算 brand', () =
   assert.match(loginPage, /src="\/static\/logo\/logo\.png"/)
   assert.match(loginPage, /t\('appName'\)/)
   assert.match(loginPage, /t\('算力资源撮合平台'\)/)
-  assert.equal([...i18n.matchAll(/appName: 'KAI星算'/g)].length, 2)
+  assert.equal([...i18n.matchAll(/appName: 'KAI星算'/g)].length, 1)
+  assert.equal([...i18n.matchAll(/appName: 'KAI Star'/g)].length, 1)
   assert.doesNotMatch(i18n, /appName: 'KAI'/)
+
+  const englishLocale = JSON.parse(readFileSync(resolve(appRoot, 'src/locale/en.json'), 'utf8'))
+  assert.equal(englishLocale['app.name'], 'KAI Star')
+
+  const privacyConsent = readFileSync(resolve(appRoot, 'src/pages/privacy-consent/index.vue'), 'utf8')
+  const settingsPage = readFileSync(resolve(appRoot, 'src/pages/settings/index.vue'), 'utf8')
+  const legalDocuments = readFileSync(resolve(appRoot, 'src/config/legal-documents.ts'), 'utf8')
+  assert.match(privacyConsent, /en:\s*\{\s*appName: 'KAI Star'/)
+  assert.match(settingsPage, /content: `\$\{t\('appName'\)\}/)
+  assert.doesNotMatch(legalDocuments.slice(legalDocuments.indexOf('const PRIVACY_EN'), legalDocuments.indexOf('function agreementZh')), /KAI星算/)
+  assert.doesNotMatch(legalDocuments.slice(legalDocuments.indexOf('function agreementEn'), legalDocuments.indexOf('const PROTECTED_LEGAL_VALUES')), /KAI星算/)
 })
