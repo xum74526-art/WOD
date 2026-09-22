@@ -4,11 +4,11 @@ import { toTraditionalChinese } from './traditional-chinese.ts'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
-  'WOD资讯': 'KAI Compute Market',
-  'ZTW资讯': 'KAI Compute Market',
-  'ZTW資訊': 'KAI Compute Market',
-  'KAI星算资讯': 'KAI Compute Market',
-  'KAI星算資訊': 'KAI Compute Market',
+  'WOD资讯': 'KAI Platform Market',
+  'ZTW资讯': 'KAI Platform Market',
+  'ZTW資訊': 'KAI Platform Market',
+  'KAI星算资讯': 'KAI Platform Market',
+  'KAI星算資訊': 'KAI Platform Market',
 }
 
 const PLATFORM_NEWS_NAMES = new Set([
@@ -234,7 +234,7 @@ function translateGeneratedPost(source: string): string | null {
 export function localizePersonName(value: string, lang: AppLanguage): string {
   if (!value) return value
   if (PLATFORM_NEWS_NAMES.has(value)) {
-    return lang === 'en' ? 'KAI Compute Market' : lang === 'zh-Hant' ? '算力星圖平台行情' : 'KAI星算平台行情'
+    return lang === 'en' ? 'KAI Platform Market' : lang === 'zh-Hant' ? '算力星圖平台行情' : 'KAI星算平台行情'
   }
   if (lang === 'zh-Hans') return value
   if (lang === 'zh-Hant') return value === '体验用户' ? toTraditionalChinese(value) : value
@@ -291,7 +291,9 @@ export function localizeInternalBrandText(
 
   let localized = branded
     .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, 'KAI Compute Market')
-    .replace(/KAI星算/g, 'Compute Star Map')
+    .replace(/Compute Star Map(?:\s+market)?/gi, 'KAI Compute Market')
+    .replace(/KAI星算\s+market/gi, 'KAI Compute Market')
+    .replace(/KAI星算/g, 'KAI')
   for (const [source, target] of INTERNAL_REGION_EN) localized = localized.replaceAll(source, target)
   return localized
 }

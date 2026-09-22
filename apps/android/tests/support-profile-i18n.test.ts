@@ -50,7 +50,7 @@ test('an edited nickname is displayed and submitted exactly as entered', () => {
 test('legacy WOD news account is presented with the KAI星算 brand without changing stored data', () => {
   assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), 'KAI星算平台行情')
   assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), '算力星圖平台行情')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'KAI Compute Market')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'KAI Platform Market')
   assert.equal(profileUsernameSubmissionValue('WOD资讯', 'KAI星算平台行情', false), 'WOD资讯')
 })
 
@@ -59,4 +59,6 @@ test('only historical first-party news copy receives the KAI星算 display brand
   assert.equal(localizeInternalBrandText('ZTW 算力行情', 'wod-market'), 'KAI星算 算力行情')
   assert.equal(localizeInternalBrandText('WOD 算力行情', 'user-post'), 'WOD 算力行情')
   assert.equal(localizeInternalBrandText('兑换码 WOD10', 'wod-market'), '兑换码 WOD10')
+  assert.equal(localizeInternalBrandText('Latest Compute Star Map market data', 'wod-market', 'en'), 'Latest KAI Compute Market data')
+  assert.equal(localizeInternalBrandText('KAI星算 Platform Market', 'wod-market', 'en'), 'KAI Platform Market')
 })

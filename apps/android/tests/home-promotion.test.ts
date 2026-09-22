@@ -90,6 +90,14 @@ test('mobile promotion carousel uses a dark media card with internal paging and 
   assert.match(carousel, /class="notice-swiper"[\s\S]*?vertical/)
 })
 
+test('English homepage keeps the greeting and quick actions aligned', () => {
+  assert.match(homePage, /class="greeting"/)
+  assert.match(homePage, /\.greeting \{[^}]*min-width: 0;[^}]*flex: 1;/)
+  assert.match(homePage, /\.q-item \{[^}]*min-height: 102px;/)
+  assert.match(homePage, /\.q-text \{[^}]*min-height: 30px;[^}]*text-align: center;/)
+  assert.match(i18n, /homePromoRequestKicker: 'KAI MATCHING'/)
+})
+
 test('mobile homepage uses a light cool card surface without changing other pages', () => {
   assert.match(appStyles, /--home-card: #F6F8F8;/)
   assert.match(appStyles, /--home-card: rgba\(255, 255, 255, 0\.07\);/)

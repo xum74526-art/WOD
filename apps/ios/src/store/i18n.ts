@@ -2127,7 +2127,7 @@ const EN: Record<string, string> = {
   homePromoHourlyDescription: 'Choose quantity and duration, then submit your requirements.',
   homePromoHourlyAction: 'Browse market',
   homePromoHourlyImageAlt: 'RTX 5090 GPU product visual',
-  homePromoRequestKicker: 'KAI星算 MATCHING',
+  homePromoRequestKicker: 'KAI MATCHING',
   homePromoRequestTitle: 'Post Compute Request',
   homePromoRequestDescription: 'Share specs and duration to receive supplier quotes.',
   homePromoRequestAction: 'Submit request',

@@ -147,12 +147,12 @@ test("platform-owned community copy uses the selected language without rewriting
   };
   assert.equal(
     communityPostContent(internal, "en"),
-    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. Compute Star Map market data.",
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. KAI Compute Market data.",
   );
   assert.equal(communityPostTopic(internal, "en"), "Compute Market");
   assert.equal(
     communityShareText({ ...internal, source_url: "https://example.com/source" }, "en"),
-    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. Compute S\nhttps://example.com/source",
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. KAI Compu\nhttps://example.com/source",
   );
 
   const userPost = { content: "北美用戶原文", origin: "user", source_key: null };

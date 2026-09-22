@@ -1,8 +1,8 @@
 <template>
-  <view v-if="userStore.authReady && userStore.isLogin" :class="['page', pageMotionClass, { 'page--modal-open': majorAnnouncement }]">
+  <view v-if="userStore.authReady && userStore.isLogin" :class="['page', { 'page--modal-open': majorAnnouncement }]">
     <view class="shell" :style="{ paddingTop: 'calc(20rpx + var(--safe-top))' }">
       <view class="topbar">
-        <view>
+        <view class="greeting">
           <text class="hi">{{ t('hello') }}</text>
           <text class="uname">{{ displayUsername }}</text>
         </view>
@@ -54,40 +54,40 @@
         <template v-if="commerce.directTradeEnabled">
           <view class="q-item pressable" @tap="go('/pages/wallet/index')">
             <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
-            <text class="q-text">{{ t('recharge') }}</text>
+            <view class="q-text"><text>{{ t('recharge') }}</text></view>
           </view>
           <view class="q-item pressable" @tap="go('/pages/wallet/index?withdraw=1')">
             <view class="q-icon"><AppIcon name="wallet" :size="36" /></view>
-            <text class="q-text">{{ t('withdraw') }}</text>
+            <view class="q-text"><text>{{ t('withdraw') }}</text></view>
           </view>
         </template>
         <template v-else-if="commerce.matchmakingEnabled">
           <view class="q-item pressable" @tap="go('/pages/buy-request/index?compose=1')">
             <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
-            <text class="q-text">{{ t('submitRequirement') }}</text>
+            <view class="q-text"><text>{{ t('submitRequirement') }}</text></view>
           </view>
           <view class="q-item pressable" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myRequirements') }}</text>
+            <view class="q-text"><text>{{ t('myRequirements') }}</text></view>
           </view>
         </template>
         <template v-else>
           <view class="q-item pressable" @tap="go('/pages/quote/index')">
             <view class="q-icon"><AppIcon name="search" :size="36" /></view>
-            <text class="q-text">{{ t('viewMarket') }}</text>
+            <view class="q-text"><text>{{ t('viewMarket') }}</text></view>
           </view>
           <view class="q-item pressable" @tap="go('/pages/buy-request/index')">
             <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-            <text class="q-text">{{ t('myRequirements') }}</text>
+            <view class="q-text"><text>{{ t('myRequirements') }}</text></view>
           </view>
         </template>
         <view class="q-item pressable" @tap="goTab('/pages/market/index')">
           <view class="q-icon"><AppIcon name="gpu" :size="36" /></view>
-          <text class="q-text">{{ t('buyCompute') }}</text>
+          <view class="q-text"><text>{{ t('buyCompute') }}</text></view>
         </view>
         <view class="q-item pressable" @tap="go('/pages/orders/index')">
           <view class="q-icon"><AppIcon name="order" :size="36" /></view>
-          <text class="q-text">{{ t('orders') }}</text>
+          <view class="q-text"><text>{{ t('orders') }}</text></view>
         </view>
       </view>
 
@@ -265,7 +265,6 @@ import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRank
 import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
 import { fmtCH, fmtCHn, fmtCardHours, formatNumber, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
-import { usePageMotion } from '@/utils/page-motion'
 import type { Product } from '@/api/gpu'
 import type { RevenueSummary, RevenuePoint } from '@/api/revenue'
 import AppIcon from '@/components/AppIcon.vue'
@@ -303,7 +302,6 @@ const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 const commerce = useCommerceStore()
 const i18n = useI18nStore()
-const { pageMotionClass } = usePageMotion()
 const { t } = i18n
 const user = computed(() => userStore.userInfo)
 const displayUsername = computed(() => localizePersonName(user.value?.username || '体验用户', i18n.lang))
@@ -660,9 +658,10 @@ function markProductImageFailed(id: number) {
 .shell { padding: 0 20px calc(132rpx + var(--safe-bottom)); }
 
 .topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }
-.hi { color: var(--text-sub); font-size: 13px; }
-.uname { color: var(--text); font-size: 15px; font-weight: 700; }
-.top-actions { display: flex; gap: 8px; align-items: center; color: var(--text-sub); }
+.greeting { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 4rpx; padding-right: 8rpx; }
+.hi { flex-shrink: 0; color: var(--text-sub); font-size: 13px; }
+.uname { min-width: 0; overflow: hidden; color: var(--text); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.top-actions { flex-shrink: 0; display: flex; gap: 6px; align-items: center; color: var(--text-sub); }
 .top-action-hit { position: relative; width: 88rpx; height: 88rpx; display: flex; align-items: center; justify-content: center; }
 .notification-badge { position: absolute; top: 5rpx; right: 2rpx; min-width: 28rpx; height: 28rpx; padding: 0 7rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 14rpx; background: var(--down); color: #fff; font-size: 17rpx; font-weight: 700; line-height: 1; }
 
@@ -707,9 +706,9 @@ function markProductImageFailed(id: number) {
 .pb-change.neutral { color: var(--text-dim); }
 
 .quick { display: flex; gap: 8px; padding: 16px 0; }
-.q-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 14px 0; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); }
-.q-icon { margin-bottom: 6px; color: var(--primary); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--primary-soft); }
-.q-text { color: var(--text); font-size: 11px; }
+.q-item { min-width: 0; min-height: 102px; flex: 1; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 14px 4px 12px; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); }
+.q-icon { flex: 0 0 36px; margin-bottom: 6px; color: var(--primary); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--primary-soft); }
+.q-text { width: 100%; min-height: 30px; display: flex; align-items: center; justify-content: center; color: var(--text); font-size: 11px; line-height: 1.25; overflow-wrap: break-word; text-align: center; }
 
 .more { color: var(--text-sub); font-size: 12px; }
 .empty { padding: 40rpx 0; text-align: center; color: var(--text-sub); font-size: 13px; }

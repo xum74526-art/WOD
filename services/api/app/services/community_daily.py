@@ -749,16 +749,38 @@ def _backfill_internal_branding(db: Session) -> int:
             value = getattr(post, field)
             branded = value
             if branded:
-                replacement = "KAI星算" if field == "content" else "Compute Star Map"
-                branded = re.sub(
-                    r"(?<![A-Z0-9_-])(?:WOD|ZTW)(?![A-Z0-9_-])",
-                    replacement,
-                    branded,
-                )
                 if field == "content":
+                    branded = re.sub(
+                        r"(?<![A-Z0-9_-])(?:WOD|ZTW)(?![A-Z0-9_-])",
+                        "KAI星算",
+                        branded,
+                    )
                     branded = branded.replace("来自 KAI星算 最新", "来自KAI星算最新")
                 else:
-                    branded = branded.replace("KAI星算", "Compute Star Map")
+                    branded = re.sub(
+                        r"(?<![A-Z0-9_-])(?:WOD|ZTW)(?:\s+market)?(?![A-Z0-9_-])",
+                        "KAI Compute Market",
+                        branded,
+                        flags=re.IGNORECASE,
+                    )
+                    branded = re.sub(
+                        r"Compute Star Map(?:\s+market)?",
+                        "KAI Compute Market",
+                        branded,
+                        flags=re.IGNORECASE,
+                    )
+                    branded = re.sub(
+                        r"KAI星算(?:\s+market)?",
+                        "KAI Compute Market",
+                        branded,
+                        flags=re.IGNORECASE,
+                    )
+                    branded = re.sub(
+                        r"KAI Compute Market(?:\s+market)+",
+                        "KAI Compute Market",
+                        branded,
+                        flags=re.IGNORECASE,
+                    )
                     for region_zh, region_en in sorted(
                         INTERNAL_REGION_EN_BY_NAME.items(),
                         key=lambda item: len(item[0]),
@@ -936,12 +958,12 @@ def _internal_candidates(db: Session, batch: str, count: int, start_index: int =
             price = f"{float(product.price):.2f}"
             stock = product.stock or 0
             content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自KAI星算最新站内行情，实际下单前请再次确认。"
-            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region_en} is {price} CH/h, with {stock} units available. Price and availability come from the latest Compute Star Map market data; confirm again before ordering."
+            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region_en} is {price} CH/h, with {stock} units available. Price and availability come from the latest KAI Compute Market data; confirm again before ordering."
             title = f"{name} {batch} compute snapshot {index}"
         else:
             content_zh = f"今日算力使用提示 #{index + 1}\n\n开始训练前先确认显存、CUDA 版本和预计运行时长，可减少环境不匹配和闲置成本。"
             content_en = f"Daily Compute Tip #{index + 1}\n\nCheck VRAM, the CUDA version, and expected runtime before training to reduce environment mismatches and idle cost."
-            title = f"Compute Star Map tip {batch} {index}"
+            title = f"KAI Compute Market tip {batch} {index}"
         result.append(Candidate(
             source_key=INTERNAL_SOURCE_KEY,
             source_name=INTERNAL_SOURCE_NAME,
