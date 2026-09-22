@@ -34,7 +34,7 @@ from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
 from app.schemas.community import CommunityReportReviewIn
 from app.schemas.admin_account import AdminUserActionIn
-from app.schemas.notification import NotificationBroadcastCreateIn
+from app.schemas.notification import NotificationBroadcastCreateIn, NotificationBroadcastRevokeIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
     PaymentRefundRequestReviewIn,
@@ -59,7 +59,7 @@ from app.services.payment_refund_requests import (
     review_refund_request,
     sync_refund_request_for_payment_refund,
 )
-from app.services.notification_broadcast import create_broadcast, list_broadcasts
+from app.services.notification_broadcast import create_broadcast, list_broadcasts, revoke_broadcast
 from app.utils.response import BizError, success
 
 
@@ -172,6 +172,24 @@ def create_notification_broadcast(
 
     limit_notification_broadcast(actor.id)
     return success(create_broadcast(db, actor_user_id=actor.id, data=data))
+
+
+@router.post("/notification-broadcasts/{broadcast_id}/revoke")
+def revoke_notification_broadcast(
+    broadcast_id: int,
+    data: NotificationBroadcastRevokeIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Withdraw a publication while retaining its immutable audit record."""
+
+    limit_notification_broadcast(actor.id)
+    return success(revoke_broadcast(
+        db,
+        broadcast_id=broadcast_id,
+        actor_user_id=actor.id,
+        data=data,
+    ))
 
 
 @router.get("/users")

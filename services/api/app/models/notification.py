@@ -32,6 +32,8 @@ class Notification(Base):
     # user_id, so the same order state remains isolated for every recipient.
     dedupe_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -81,5 +83,13 @@ class NotificationBroadcast(Base):
     audience: Mapped[str] = mapped_column(String(32), default="all_active")
     status: Mapped[str] = mapped_column(String(24), default="completed", index=True)
     recipient_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

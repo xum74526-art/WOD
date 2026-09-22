@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -15,6 +15,7 @@ class NotificationOut(OrmModel):
     type: str
     action_url: str | None = None
     is_read: bool
+    expires_at: datetime | None = None
     created_at: datetime | None = None
 
 
@@ -25,6 +26,7 @@ class MajorAnnouncementOut(OrmModel):
     title_en: str | None = None
     content_en: str | None = None
     action_url: str | None = None
+    expires_at: datetime | None = None
     created_at: datetime | None = None
 
 
@@ -71,6 +73,7 @@ class NotificationBroadcastCreateIn(BaseModel):
         "wallet",
     ] = "system"
     action_url: str | None = Field(default=None, max_length=512)
+    expires_at: datetime | None = None
 
     @field_validator("client_request_id", "title", "content", "title_en", "content_en", mode="before")
     @classmethod
@@ -98,6 +101,27 @@ class NotificationBroadcastCreateIn(BaseModel):
             raise ValueError("跳转地址必须是安全的站内 /pages/ 路径")
         return normalized
 
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expires_at(cls, value: datetime | None):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("过期时间必须包含时区")
+        normalized = value.astimezone(timezone.utc)
+        if normalized <= datetime.now(timezone.utc):
+            raise ValueError("过期时间必须晚于当前时间")
+        return normalized
+
+
+class NotificationBroadcastRevokeIn(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value):
+        return str(value or "").strip()
+
 
 class NotificationBroadcastOut(OrmModel):
     id: int
@@ -112,6 +136,10 @@ class NotificationBroadcastOut(OrmModel):
     audience: str
     status: str
     recipient_count: int
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_by_user_id: int | None = None
+    revoke_reason: str | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
 

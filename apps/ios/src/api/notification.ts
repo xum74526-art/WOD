@@ -9,6 +9,7 @@ export interface NotificationItem {
   type: string
   action_url?: string
   is_read: boolean
+  expires_at?: string
   created_at?: string
 }
 
@@ -93,4 +94,8 @@ export function markRead(id: number) {
 
 export function markAllRead() {
   return request({ url: '/notifications/read-all', method: 'POST' })
+}
+
+export function deleteNotification(id: number) {
+  return request<{ id: number; deleted: boolean }>({ url: `/notifications/${id}`, method: 'DELETE' })
 }

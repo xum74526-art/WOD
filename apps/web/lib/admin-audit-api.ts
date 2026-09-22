@@ -203,8 +203,12 @@ export type AdminNotificationBroadcast = {
   notification_type: "major_announcement" | "system" | "order" | "device" | "revenue" | "wallet";
   action_url: string | null;
   audience: "all_active" | string;
-  status: "processing" | "completed" | string;
+  status: "processing" | "completed" | "expired" | "revoked" | string;
   recipient_count: number;
+  expires_at: string | null;
+  revoked_at: string | null;
+  revoked_by_user_id: number | null;
+  revoke_reason: string | null;
   created_at: string | null;
   completed_at: string | null;
 };
@@ -216,6 +220,7 @@ export type AdminNotificationBroadcastInput = {
   content_en?: string | null;
   notification_type: AdminNotificationBroadcast["notification_type"];
   action_url?: string | null;
+  expires_at?: string | null;
 };
 
 function query(input: { platform?: AuditPlatform; keyword?: string; status?: string; orderNo?: string; requestNo?: string; requestType?: string; page?: number; pageSize?: number }) {
@@ -248,6 +253,13 @@ export function createAdminNotificationBroadcast(input: AdminNotificationBroadca
   return apiRequest<AdminNotificationBroadcast>(canonicalApiPath("/admin/notification-broadcasts"), {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export function revokeAdminNotificationBroadcast(id: number, reason: string) {
+  return apiRequest<AdminNotificationBroadcast>(canonicalApiPath(`/admin/notification-broadcasts/${id}/revoke`), {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 

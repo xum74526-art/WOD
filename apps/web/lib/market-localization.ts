@@ -9,7 +9,7 @@ const supplierNames: Record<string, string> = {
   "第三方商家": "Third-party Merchant",
   "KAI 自营": "KAI Self-operated",
   "KAI自营": "KAI Self-operated",
-  "KAI星算自营": "KAI星算 Self-operated",
+  "KAI星算自营": "KAI Compute Self-operated",
 };
 
 const regionNames: Record<string, string> = {

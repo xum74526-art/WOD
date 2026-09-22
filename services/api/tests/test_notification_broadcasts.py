@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
+from app.core.rate_limit import notification_broadcast_rate_limit
 from app.db.base import Base
 from app.db.session import get_db
 from app.models import Notification, NotificationBroadcast, NotificationPreference, User
@@ -19,6 +21,7 @@ from app.utils.response import BizError, error
 
 class NotificationBroadcastTests(unittest.TestCase):
     def setUp(self):
+        notification_broadcast_rate_limit._events.clear()
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -221,6 +224,103 @@ class NotificationBroadcastTests(unittest.TestCase):
         latest = self.client.get("/api/notifications/major-announcement").json()["data"]
         self.assertEqual(latest["id"], replacement.json()["data"]["id"])
         self.assertEqual(latest["title"], "新的重要公告")
+
+    def test_expired_announcement_leaves_audit_but_disappears_from_public_and_inbox(self):
+        expiry = datetime.now(timezone.utc) + timedelta(days=1)
+        created = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-expiry-001",
+                title="限时公告",
+                content="过期后不再展示。",
+                notification_type="major_announcement",
+                expires_at=expiry.isoformat(),
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        broadcast_id = created.json()["data"]["id"]
+        self.assertIsNotNone(created.json()["data"]["expires_at"])
+
+        expired_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+        broadcast = self.db.get(NotificationBroadcast, broadcast_id)
+        broadcast.expires_at = expired_at
+        self.db.query(Notification).filter(
+            Notification.dedupe_key == f"broadcast:{broadcast_id}",
+        ).update({"expires_at": expired_at}, synchronize_session=False)
+        self.db.commit()
+
+        public = self.client.get("/api/notifications/major-announcement")
+        self.assertIsNone(public.json()["data"])
+        inbox = self.client.get("/api/notifications", headers=self.user_headers).json()["data"]
+        self.assertNotIn("限时公告", {item["title"] for item in inbox["items"]})
+        self.assertEqual(inbox["unread"], 1)  # only the one-time inbox welcome remains
+        history = self.client.get(
+            "/api/admin/notification-broadcasts",
+            headers=self.admin_headers,
+        ).json()["data"]
+        self.assertEqual(history["items"][0]["status"], "expired")
+        self.assertEqual(self.db.get(NotificationBroadcast, broadcast_id).status, "completed")
+
+    def test_admin_can_revoke_without_erasing_audit_and_regular_user_cannot(self):
+        created = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-revoke-001",
+                title="待撤销公告",
+                content="该公告将被管理员撤销。",
+                notification_type="major_announcement",
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        broadcast_id = created.json()["data"]["id"]
+
+        denied = self.client.post(
+            f"/api/admin/notification-broadcasts/{broadcast_id}/revoke",
+            json={"reason": "普通用户不能撤销"},
+            headers=self.user_headers,
+        )
+        self.assertEqual(denied.status_code, 403, denied.text)
+
+        revoked = self.client.post(
+            f"/api/admin/notification-broadcasts/{broadcast_id}/revoke",
+            json={"reason": "维护计划已经取消"},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+        data = revoked.json()["data"]
+        self.assertEqual(data["status"], "revoked")
+        self.assertEqual(data["revoked_by_user_id"], self.admin.id)
+        self.assertEqual(data["revoke_reason"], "维护计划已经取消")
+        self.assertIsNotNone(data["revoked_at"])
+        self.assertEqual(self.db.query(NotificationBroadcast).count(), 1)
+        recipient_rows = self.db.query(Notification).filter(
+            Notification.dedupe_key == f"broadcast:{broadcast_id}",
+        ).all()
+        self.assertEqual(len(recipient_rows), 3)
+        self.assertTrue(all(row.deleted_at is not None and row.is_read for row in recipient_rows))
+        self.assertIsNone(self.client.get("/api/notifications/major-announcement").json()["data"])
+
+        repeated = self.client.post(
+            f"/api/admin/notification-broadcasts/{broadcast_id}/revoke",
+            json={"reason": "重复请求不会覆盖首次审计"},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(repeated.status_code, 200, repeated.text)
+        self.assertEqual(repeated.json()["data"]["revoke_reason"], "维护计划已经取消")
+
+    def test_past_expiration_is_rejected_before_delivery(self):
+        response = self.client.post(
+            "/api/admin/notification-broadcasts",
+            json=self._payload(
+                client_request_id="broadcast-expiry-past",
+                expires_at=(datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+            ),
+            headers=self.admin_headers,
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.db.query(NotificationBroadcast).count(), 0)
 
 
 if __name__ == "__main__":

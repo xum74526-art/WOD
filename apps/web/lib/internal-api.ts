@@ -8,7 +8,7 @@ export type Address = {
 };
 export type Notice = {
   id: number; category: string; title: string; body: string; title_en: string | null; body_en: string | null; action_path: string | null;
-  is_read: boolean; read_at: string | null; created_at: string;
+  is_read: boolean; read_at: string | null; expires_at: string | null; created_at: string;
 };
 export type MajorAnnouncement = {
   id: number; title: string; content: string; title_en: string | null; content_en: string | null;
@@ -60,6 +60,7 @@ export function getMajorAnnouncement() { return apiRequest<MajorAnnouncement | n
 export function getUnreadCount() { return apiRequest<{ unread_count: number }>("/api/v1/notifications/unread-count"); }
 export function readNotification(id: number) { return apiRequest<Notice>(`/api/v1/notifications/${id}/read`, { method: "PATCH" }); }
 export function readAllNotifications() { return apiRequest<{ updated_count: number }>("/api/v1/notifications/read-all", { method: "POST" }); }
+export function deleteNotification(id: number) { return apiRequest<{ id: number; deleted: boolean }>(`/api/v1/notifications/${id}`, { method: "DELETE" }); }
 export function getNotificationPreferences() { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences"); }
 export function updateNotificationPreferences(input: Partial<NotificationPreferences>) { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences", { method: "PUT", body: JSON.stringify(input) }); }
 

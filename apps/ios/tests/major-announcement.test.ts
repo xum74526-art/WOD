@@ -33,3 +33,17 @@ test('notification center exposes the major-announcement category', () => {
   assert.match(i18n, /majorAnnouncement: 'Major Announcement'/)
   assert.match(i18n, /acknowledgeMajorAnnouncement: 'Got it'/)
 })
+
+test('notification center lets the account mark viewed and delete its own message', () => {
+  const api = read('../src/api/notification.ts')
+  const page = read('../src/pages/notifications/index.vue')
+  const i18n = read('../src/store/i18n.ts')
+
+  assert.match(api, /deleteNotification\(id: number\)/)
+  assert.match(api, /method: 'DELETE'/)
+  assert.match(page, /onMarkViewed\(notification\)/)
+  assert.match(page, /onDelete\(notification\)/)
+  assert.match(page, /deleteNotification\(notification\.id\)/)
+  assert.match(i18n, /markViewed: '标为已查看'/)
+  assert.match(i18n, /deleteNotificationConfirm:/)
+})

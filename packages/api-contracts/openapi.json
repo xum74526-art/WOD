@@ -2900,6 +2900,18 @@
             ],
             "title": "Content En"
           },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
           "notification_type": {
             "default": "system",
             "enum": [
@@ -2938,6 +2950,21 @@
           "content"
         ],
         "title": "NotificationBroadcastCreateIn",
+        "type": "object"
+      },
+      "NotificationBroadcastRevokeIn": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 2,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "NotificationBroadcastRevokeIn",
         "type": "object"
       },
       "NotificationPreferenceUpdate": {
@@ -5986,6 +6013,62 @@
           }
         ],
         "summary": "Create Notification Broadcast",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/notification-broadcasts/{broadcast_id}/revoke": {
+      "post": {
+        "description": "Withdraw a publication while retaining its immutable audit record.",
+        "operationId": "revoke_notification_broadcast_api_admin_notification_broadcasts__broadcast_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "broadcast_id",
+            "required": true,
+            "schema": {
+              "title": "Broadcast Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBroadcastRevokeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke Notification Broadcast",
         "tags": [
           "admin"
         ]
@@ -11427,6 +11510,52 @@
           }
         ],
         "summary": "Unread Count",
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/api/notifications/{nid}": {
+      "delete": {
+        "description": "Hide one notification only from the authenticated account's inbox.",
+        "operationId": "delete_notification_api_notifications__nid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Notification",
         "tags": [
           "notification"
         ]

@@ -69,6 +69,7 @@ test("help and support metadata have complete English copy without release place
   assert.match(support, /KAI星算 Help & Support/);
   assert.match(simple, />KAI星算 \/ INFORMATION</);
   assert.match(simple, /locale === "zh-Hant" \? toTraditionalChinese\(simplified\) : simplified/);
-  assert.match(brand, /<span className="brand__name"><b>KAI星算<\/b><\/span>/);
+  assert.match(brand, /const brandName = locale === "en" \? "KAI Compute" : "KAI星算"/);
+  assert.match(brand, /<span className="brand__name"><b>\{brandName\}<\/b><\/span>/);
   assert.doesNotMatch(locale, /"support\.assistant": "北斗|"footer\.about": "About 北斗|"auth\.already": "Already have a 北斗/);
 });

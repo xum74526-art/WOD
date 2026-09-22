@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -25,6 +28,18 @@ router = APIRouter(prefix="/api/notifications", tags=["notification"])
 
 def _serialize_notification(notification: Notification) -> dict:
     return NotificationOut.model_validate(notification).model_dump()
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _visible_notifications(query):
+    now = _utcnow()
+    return query.filter(
+        Notification.deleted_at.is_(None),
+        or_(Notification.expires_at.is_(None), Notification.expires_at > now),
+    )
 
 
 @router.get("/major-announcement")
@@ -57,7 +72,9 @@ def list_notifications(
     ensure_inbox_welcome(db, user.id)
     db.commit()
 
-    query = db.query(Notification).filter(Notification.user_id == user.id)
+    query = _visible_notifications(
+        db.query(Notification).filter(Notification.user_id == user.id)
+    )
     if type_filter:
         query = query.filter(Notification.type == type_filter)
     if unread_only:
@@ -66,10 +83,10 @@ def list_notifications(
     items = query.order_by(Notification.created_at.desc(), Notification.id.desc()).offset(
         (page - 1) * page_size
     ).limit(page_size).all()
-    unread = db.query(Notification).filter(
+    unread = _visible_notifications(db.query(Notification).filter(
         Notification.user_id == user.id,
         Notification.is_read.is_(False),
-    ).count()
+    )).count()
     return success({
         "items": [_serialize_notification(item) for item in items],
         "unread": unread,
@@ -87,10 +104,10 @@ def unread_count(
 ):
     ensure_inbox_welcome(db, user.id)
     db.commit()
-    unread = db.query(Notification).filter(
+    unread = _visible_notifications(db.query(Notification).filter(
         Notification.user_id == user.id,
         Notification.is_read.is_(False),
-    ).count()
+    )).count()
     return success({"unread": unread})
 
 
@@ -130,10 +147,10 @@ def mark_all_read(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    changed = db.query(Notification).filter(
+    changed = _visible_notifications(db.query(Notification).filter(
         Notification.user_id == user.id,
         Notification.is_read.is_(False),
-    ).update({"is_read": True}, synchronize_session=False)
+    )).update({"is_read": True}, synchronize_session=False)
     db.commit()
     return success({"unread": 0, "changed": changed})
 
@@ -144,13 +161,34 @@ def mark_read(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    notification = db.query(Notification).filter(
+    notification = _visible_notifications(db.query(Notification).filter(
         Notification.id == nid,
         Notification.user_id == user.id,
-    ).first()
+    )).first()
     if not notification:
         raise BizError("通知不存在", status_code=404)
     if not notification.is_read:
         notification.is_read = True
         db.commit()
     return success({"id": nid, "is_read": True})
+
+
+@router.delete("/{nid}")
+def delete_notification(
+    nid: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Hide one notification only from the authenticated account's inbox."""
+
+    notification = db.query(Notification).filter(
+        Notification.id == nid,
+        Notification.user_id == user.id,
+    ).first()
+    if not notification:
+        raise BizError("通知不存在", status_code=404)
+    if notification.deleted_at is None:
+        notification.deleted_at = _utcnow()
+        notification.is_read = True
+        db.commit()
+    return success({"id": nid, "deleted": True})

@@ -454,6 +454,7 @@ function notice(value: unknown) {
     action_path: notificationActionPath(item.action_url),
     is_read: Boolean(item.is_read),
     read_at: null,
+    expires_at: text(item.expires_at) || null,
     created_at: text(item.created_at),
   };
 }

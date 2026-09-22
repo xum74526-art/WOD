@@ -931,6 +931,33 @@ const commonCapabilities = [
     ],
   },
   {
+    name: 'notification viewed and account-scoped delete actions',
+    evidence: [
+      {
+        client: 'Web API',
+        file: 'apps/web/lib/internal-api.ts',
+        patterns: ['readNotification(id: number)', 'deleteNotification(id: number)', 'method: "DELETE"'],
+      },
+      {
+        client: 'Web notification center',
+        file: 'apps/web/components/notification-workspace.tsx',
+        patterns: ['标为已查看', 'deleteNotification(row.id)', 'notice-delete'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} API`,
+          file: `apps/${client}/src/api/notification.ts`,
+          patterns: ['deleteNotification(id: number)', "method: 'DELETE'"],
+        },
+        {
+          client: `${client} notification center`,
+          file: `apps/${client}/src/pages/notifications/index.vue`,
+          patterns: ['onMarkViewed(notification)', 'onDelete(notification)', 'deleteNotification(notification.id)'],
+        },
+      ]),
+    ],
+  },
+  {
     name: 'mobile native video playback',
     evidence: ['android', 'ios'].flatMap(client => [
       {

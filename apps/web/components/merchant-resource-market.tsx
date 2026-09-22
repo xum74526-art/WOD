@@ -100,7 +100,7 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
   const rows = catalog.rows;
   const displayRows = typeof limit === "number" ? rows.slice(0, limit) : rows;
   const sourceCopy = useMemo(() => activeSource === "kai" ? {
-    eyebrow: "KAI星算 SELF-OPERATED",
+    eyebrow: locale === "en" ? "KAI COMPUTE SELF-OPERATED" : "KAI星算 SELF-OPERATED",
     title: t("market.kai.title", "KAI星算自营"),
     description: directTradeEnabled
       ? t("market.kai.directDescription", "KAI星算发布商品与价格，由平台统一安排人工交付并记录订单状态。")
@@ -111,7 +111,7 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
     description: directTradeEnabled
       ? t("market.merchant.directDescription", "商家发布资源参数与库存，下单后由对应商家人工交付。")
       : t("market.merchant.description", "商家发布资源参数与库存，提交需求后由对应商家人工联系确认方案。"),
-  }, [activeSource, directTradeEnabled, t]);
+  }, [activeSource, directTradeEnabled, locale, t]);
 
   const roleNote = viewerRole === "supplier" && activeSource === "wod"
     ? t("market.merchant.supplierView", "这里就是买家看到的商家市场；上架商品、库存与买家需求共用统一业务平台。")

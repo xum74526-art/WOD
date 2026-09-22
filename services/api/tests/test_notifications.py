@@ -152,6 +152,72 @@ class NotificationTests(unittest.TestCase):
         self.assertTrue(own.is_read)
         self.assertFalse(other.is_read)
 
+    def test_delete_is_account_scoped_soft_delete_and_idempotent(self):
+        own = create_notification(
+            self.db,
+            user_id=self.user_a.id,
+            title="A 的可删除消息",
+            notification_type="system",
+            respect_preferences=False,
+        )
+        other = create_notification(
+            self.db,
+            user_id=self.user_b.id,
+            title="B 的私有消息",
+            notification_type="system",
+            respect_preferences=False,
+        )
+        self.db.commit()
+
+        with self.assertRaises(BizError) as raised:
+            notification_router.delete_notification(other.id, self.user_a, self.db)
+        self.assertEqual(raised.exception.status_code, 404)
+
+        result = notification_router.delete_notification(own.id, self.user_a, self.db)["data"]
+        self.assertTrue(result["deleted"])
+        self.db.refresh(own)
+        self.assertIsNotNone(own.deleted_at)
+        self.assertTrue(own.is_read)
+        repeated = notification_router.delete_notification(own.id, self.user_a, self.db)["data"]
+        self.assertTrue(repeated["deleted"])
+        self.db.refresh(other)
+        self.assertIsNone(other.deleted_at)
+
+        listed = notification_router.list_notifications(
+            type_filter=None,
+            unread_only=False,
+            page=1,
+            page_size=20,
+            user=self.user_a,
+            db=self.db,
+        )["data"]
+        self.assertNotIn("A 的可删除消息", {item["title"] for item in listed["items"]})
+
+    def test_expired_notifications_do_not_count_as_unread_or_allow_marking_viewed(self):
+        expired = create_notification(
+            self.db,
+            user_id=self.user_a.id,
+            title="已过期消息",
+            notification_type="system",
+            respect_preferences=False,
+        )
+        expired.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+        self.db.commit()
+
+        listed = notification_router.list_notifications(
+            type_filter=None,
+            unread_only=False,
+            page=1,
+            page_size=20,
+            user=self.user_a,
+            db=self.db,
+        )["data"]
+        self.assertNotIn("已过期消息", {item["title"] for item in listed["items"]})
+        self.assertEqual(listed["unread"], 1)  # one-time inbox welcome only
+        with self.assertRaises(BizError) as raised:
+            notification_router.mark_read(expired.id, self.user_a, self.db)
+        self.assertEqual(raised.exception.status_code, 404)
+
     def test_order_event_sync_notifies_buyer_and_supplier_once(self):
         supplier = Supplier(
             user_id=self.user_b.id,
@@ -211,10 +277,25 @@ class NotificationTests(unittest.TestCase):
                 "title VARCHAR(128) NOT NULL, content TEXT, type VARCHAR(32), "
                 "is_read BOOLEAN, created_at DATETIME)"
             ))
+            connection.execute(text(
+                "CREATE TABLE notification_broadcasts ("
+                "id INTEGER PRIMARY KEY, client_request_id VARCHAR(64) NOT NULL, "
+                "actor_user_id INTEGER NOT NULL, title VARCHAR(128) NOT NULL, "
+                "content TEXT NOT NULL, notification_type VARCHAR(32), "
+                "status VARCHAR(24), recipient_count INTEGER, created_at DATETIME)"
+            ))
         _ensure_columns(legacy_engine)
         _ensure_columns(legacy_engine)
         columns = {column["name"] for column in inspect(legacy_engine).get_columns("notifications")}
-        self.assertTrue({"title_en", "content_en", "action_url", "dedupe_key"}.issubset(columns))
+        self.assertTrue({
+            "title_en", "content_en", "action_url", "dedupe_key", "expires_at", "deleted_at",
+        }.issubset(columns))
+        broadcast_columns = {
+            column["name"] for column in inspect(legacy_engine).get_columns("notification_broadcasts")
+        }
+        self.assertTrue({
+            "expires_at", "revoked_at", "revoked_by_user_id", "revoke_reason",
+        }.issubset(broadcast_columns))
 
 
 if __name__ == "__main__":

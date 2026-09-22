@@ -216,7 +216,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
       </aside>
       <div className="workspace-main">
         <header className="workspace-topbar">
-          <div><strong>KAI星算 {workspaceName}</strong><span>{t("workspace.connected", "已连接统一业务平台")}</span></div>
+          <div><strong>{locale === "en" ? "KAI Compute" : "KAI星算"} {workspaceName}</strong><span>{t("workspace.connected", "已连接统一业务平台")}</span></div>
           <div><Link href="/"><ArrowSquareOut size={17}/><span>{t("workspace.publicSite", "公开网站")}</span></Link><UiSettings compact/></div>
         </header>
         <header className="workspace-mobile-head">

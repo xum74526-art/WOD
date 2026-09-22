@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localeForFormatting, nextLocale, type KaiLocale } from "@/lib/language";
 import { toTraditionalChinese } from "@/lib/traditional-chinese";
+import { adminLegacyEnglish } from "@/lib/admin-legacy-english";
 
 export type { KaiLocale } from "@/lib/language";
 
@@ -55,6 +56,36 @@ const english: Record<string, string> = {
   "nav.login": "Sign in",
   "nav.logout": "Sign out",
   "nav.openAccount": "Open account shortcuts",
+  "admin.dashboard.title": "Platform Operations Console",
+  "admin.dashboard.description": "Manage platform-level review and arbitration here, without mixing in buyer procurement or supplier operations.",
+  "admin.dashboard.requests.title": "Request Management",
+  "admin.dashboard.requests.description": "Review compute requests, assigned suppliers, and contact details for operational follow-up.",
+  "admin.dashboard.requests.action": "View requests",
+  "admin.dashboard.data.title": "Platform Data",
+  "admin.dashboard.data.description": "Review users, orders, and recharge records from Web, iOS, Android, Admin, and legacy sources in one place.",
+  "admin.dashboard.data.action": "View platform data",
+  "admin.dashboard.kyc.title": "Identity Verification",
+  "admin.dashboard.kyc.description": "Verify individuals or businesses; the result controls supplier admission and withdrawals.",
+  "admin.dashboard.kyc.action": "Open verification queue",
+  "admin.dashboard.suppliers.title": "Merchant Admission",
+  "admin.dashboard.suppliers.description": "Review merchant applications separately. Only applicants with completed identity verification can be approved.",
+  "admin.dashboard.suppliers.action": "Open admission queue",
+  "admin.dashboard.disputes.title": "Order Disputes",
+  "admin.dashboard.disputes.description": "Review product snapshots and secure-delivery evidence, then return card hours to the buyer or release supplier settlement.",
+  "admin.dashboard.disputes.action": "Open dispute queue",
+  "admin.dashboard.notifications.title": "Message Broadcast",
+  "admin.dashboard.notifications.description": "Publish in-app notices to all active accounts with safe links and a complete publishing audit trail.",
+  "admin.dashboard.notifications.action": "Publish a message",
+  "admin.dashboard.payments.title": "Recharge & RMB Refunds",
+  "admin.dashboard.payments.description": "Review Qixiang recharges, inspect payment events, and process full refunds to the original RMB payment method.",
+  "admin.dashboard.payments.action": "Open payment operations",
+  "admin.dashboard.cards.title": "Bank Card Review",
+  "admin.dashboard.cards.description": "Review registered cardholder, bank, and reserved-phone details without presenting the review as bank verification.",
+  "admin.dashboard.cards.action": "Open bank-card queue",
+  "admin.dashboard.withdrawals.title": "Withdrawal Settlement",
+  "admin.dashboard.withdrawals.description": "Review supplier withdrawals and record the bank reference after an offline transfer is completed.",
+  "admin.dashboard.withdrawals.action": "Open settlement queue",
+  "admin.dashboard.audit": "Administrators centrally manage requests, users, orders, recharges, identity checks, bank cards, and withdrawals. Sensitive actions retain an audit trail.",
   "footer.description": "KAI星算 Future Compute Center connects institutional demand, capacity suppliers, and verifiable compute delivery.",
   "footer.disclaimer": "© 2026 KAI星算. Services and specifications are subject to the effective service documents.",
   "footer.product": "Product",
@@ -989,8 +1020,8 @@ function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
     const translate = (raw: string) => {
       if (locale === "zh-Hant") return toTraditionalChinese(raw);
       const trimmed = raw.trim();
-      const translated = legacyEnglish[trimmed];
-      return translated ? raw.replace(trimmed, translated) : raw;
+      const translated = legacyEnglish[trimmed] || adminLegacyEnglish[trimmed];
+      return translated ? raw.replace(trimmed, translated.replaceAll("KAI星算", "KAI Compute")) : raw;
     };
     const shouldSkip = (element: Element | null) => Boolean(element?.closest("script, style, noscript, code, pre, [data-i18n-skip]"));
     const translateText = (node: Text) => {
@@ -1061,7 +1092,9 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
   }, []);
   const toggleLocale = useCallback(() => setLocale(nextLocale(locale)), [locale, setLocale]);
   const t = useCallback((key: string, fallback: string, values?: Record<string, string | number>) => {
-    const localized = locale === "en" ? english[key] || fallback : locale === "zh-Hant" ? toTraditionalChinese(fallback) : fallback;
+    const localized = locale === "en"
+      ? (english[key] || fallback).replaceAll("KAI星算", "KAI Compute")
+      : locale === "zh-Hant" ? toTraditionalChinese(fallback) : fallback;
     return Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localized);
   }, [locale]);
   useEffect(() => {

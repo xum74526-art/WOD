@@ -57,7 +57,13 @@ _ENSURE = {
     ],
     "likes": ["created_platform"],
     "follows": ["created_platform"],
-    "notifications": ["title_en", "content_en", "action_url", "dedupe_key"],
+    "notifications": [
+        "title_en", "content_en", "action_url", "dedupe_key",
+        "expires_at", "deleted_at",
+    ],
+    "notification_broadcasts": [
+        "expires_at", "revoked_at", "revoked_by_user_id", "revoke_reason",
+    ],
     "verifications": [
         "ocr_status", "ocr_summary", "ocr_error_code", "ocr_updated_at",
         "ocr_input_token", "consent_at", "created_platform", "last_modified_platform",
@@ -105,6 +111,7 @@ _DATETIME_COLS = {
     "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_resolved_at",
     "identity_verified_at", "qualified_at",
     "recovery_email_verified_at",
+    "expires_at", "revoked_at",
 }
 _DATE_COLS = {"qualification_day"}
 _INTEGER_COLS = {
@@ -114,7 +121,7 @@ _INTEGER_COLS = {
     "dispute_resolved_by", "user_id",
     "source_max_configurable_quantity", "platform_stock_cap",
     "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
-    "auth_version", "moderated_by", "reconcile_attempts",
+    "auth_version", "moderated_by", "reconcile_attempts", "revoked_by_user_id",
 }
 _NUMERIC_COLS = {
     "sell_price", "source_price", "exchange_rate", "reliability",
@@ -1880,7 +1887,10 @@ def init():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_order_renewals_created_platform ON order_renewals (created_platform)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_created ON notifications (user_id, created_at DESC)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications (user_id, is_read, created_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notifications_user_visibility ON notifications (user_id, deleted_at, expires_at, is_read, created_at DESC)"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_user_dedupe ON notifications (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notification_broadcast_visibility ON notification_broadcasts (notification_type, status, expires_at, created_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_notification_broadcasts_revoked_by_user_id ON notification_broadcasts (revoked_by_user_id)"))
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_ledger_payment_credit "
             "ON ledger (ref_payment_order_id) WHERE ref_payment_order_id IS NOT NULL"

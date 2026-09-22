@@ -20,6 +20,7 @@ from app.models.user import User
 from app.schemas.notification import (
     NotificationBroadcastCreateIn,
     NotificationBroadcastOut,
+    NotificationBroadcastRevokeIn,
 )
 from app.utils.response import BizError
 
@@ -40,6 +41,9 @@ def _payload_values(data: NotificationBroadcastCreateIn) -> dict:
         values[field] = value.strip() if isinstance(value, str) else value
     if not values["title"] or not values["content"]:
         raise BizError("消息标题和正文不能为空")
+    expires_at = values.get("expires_at")
+    if expires_at is not None:
+        values["expires_at"] = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
     return values
 
 
@@ -53,12 +57,16 @@ def _same_payload(row: NotificationBroadcast, values: dict) -> bool:
             "content_en",
             "notification_type",
             "action_url",
+            "expires_at",
         )
     )
 
 
 def _out(row: NotificationBroadcast) -> dict:
-    return NotificationBroadcastOut.model_validate(row).model_dump()
+    data = NotificationBroadcastOut.model_validate(row).model_dump()
+    if row.status == "completed" and row.expires_at is not None and row.expires_at <= _utcnow():
+        data["status"] = "expired"
+    return data
 
 
 def list_broadcasts(db: Session, *, page: int, page_size: int) -> dict:
@@ -82,6 +90,10 @@ def latest_major_announcement(db: Session) -> dict | None:
     row = db.query(NotificationBroadcast).filter(
         NotificationBroadcast.notification_type == "major_announcement",
         NotificationBroadcast.status == "completed",
+        or_(
+            NotificationBroadcast.expires_at.is_(None),
+            NotificationBroadcast.expires_at > _utcnow(),
+        ),
     ).order_by(
         NotificationBroadcast.created_at.desc(),
         NotificationBroadcast.id.desc(),
@@ -95,6 +107,7 @@ def latest_major_announcement(db: Session) -> dict | None:
         "title_en": row.title_en,
         "content_en": row.content_en,
         "action_url": row.action_url,
+        "expires_at": row.expires_at,
         "created_at": row.created_at,
     }
 
@@ -111,6 +124,7 @@ def _insert_recipients(db: Session, row: NotificationBroadcast) -> int:
         literal(row.action_url),
         literal(dedupe_key),
         literal(False),
+        literal(row.expires_at),
     ).where(
         or_(User.account_status.is_(None), User.account_status == "active"),
         ~exists().where(
@@ -130,6 +144,7 @@ def _insert_recipients(db: Session, row: NotificationBroadcast) -> int:
                 "action_url",
                 "dedupe_key",
                 "is_read",
+                "expires_at",
             ],
             recipient_select,
         )
@@ -175,6 +190,7 @@ def create_broadcast(
             content_en=values.get("content_en"),
             notification_type=values["notification_type"],
             action_url=values.get("action_url"),
+            expires_at=values.get("expires_at"),
             audience="all_active",
             status="processing",
             recipient_count=0,
@@ -202,6 +218,46 @@ def create_broadcast(
         row.recipient_count = _insert_recipients(db, row)
         row.status = "completed"
         row.completed_at = _utcnow()
+        db.commit()
+        db.refresh(row)
+        return _out(row)
+
+
+def revoke_broadcast(
+    db: Session,
+    *,
+    broadcast_id: int,
+    actor_user_id: int,
+    data: NotificationBroadcastRevokeIn,
+) -> dict:
+    """Revoke a publication without destroying its delivery audit trail."""
+
+    with _BROADCAST_LOCK:
+        row = db.query(NotificationBroadcast).filter(
+            NotificationBroadcast.id == broadcast_id,
+        ).with_for_update().first()
+        if row is None:
+            raise BizError("公告不存在", status_code=404)
+        if row.status == "revoked":
+            return _out(row)
+        if row.status != "completed":
+            raise BizError("公告尚未发布完成，暂不能撤销", status_code=409)
+
+        revoked_at = _utcnow()
+        row.status = "revoked"
+        row.revoked_at = revoked_at
+        row.revoked_by_user_id = actor_user_id
+        row.revoke_reason = data.reason
+
+        # Recipient rows remain in the database for audit/idempotency, but no
+        # account can list or reopen a revoked broadcast after this commit.
+        db.query(Notification).filter(
+            Notification.dedupe_key == f"broadcast:{row.id}",
+            Notification.deleted_at.is_(None),
+        ).update(
+            {"deleted_at": revoked_at, "is_read": True},
+            synchronize_session=False,
+        )
         db.commit()
         db.refresh(row)
         return _out(row)

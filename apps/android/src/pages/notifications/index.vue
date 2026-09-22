@@ -81,6 +81,11 @@
           </view>
           <text v-if="localizedContent(notification)" class="notification-content">{{ localizedContent(notification) }}</text>
           <text class="notification-date">{{ formatDate(notification.created_at) }}</text>
+          <view class="notification-actions" @tap.stop>
+            <text v-if="!notification.is_read" class="notification-action viewed-action" @tap.stop="onMarkViewed(notification)">{{ t('markViewed') }}</text>
+            <text v-else class="viewed-status">{{ t('viewed') }}</text>
+            <text class="notification-action delete-action" @tap.stop="onDelete(notification)">{{ t('deleteNotification') }}</text>
+          </view>
         </view>
         <text v-if="notification.action_url" class="row-chevron">›</text>
       </view>
@@ -98,6 +103,7 @@
 import { ref } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import {
+  deleteNotification,
   getNotificationPreferences,
   getNotifications,
   markAllRead,
@@ -261,6 +267,34 @@ async function onMarkAll() {
   } catch { /* request already provides the failure message */ }
 }
 
+async function onMarkViewed(notification: NotificationItem) {
+  if (notification.is_read) return
+  try {
+    await markRead(notification.id)
+    notification.is_read = true
+    notificationStore.setUnread(Math.max(0, notificationStore.unread - 1))
+    uni.showToast({ title: t('markedViewed'), icon: 'success' })
+  } catch { /* request already provides the failure message */ }
+}
+
+function onDelete(notification: NotificationItem) {
+  uni.showModal({
+    title: t('deleteNotificationTitle'),
+    content: t('deleteNotificationConfirm'),
+    success: async result => {
+      if (!result.confirm) return
+      try {
+        await deleteNotification(notification.id)
+        items.value = items.value.filter(item => item.id !== notification.id)
+        if (!notification.is_read) {
+          notificationStore.setUnread(Math.max(0, notificationStore.unread - 1))
+        }
+        uni.showToast({ title: t('notificationDeleted'), icon: 'success' })
+      } catch { /* request already provides the failure message */ }
+    },
+  })
+}
+
 async function onPreferenceChange(key: PreferenceKey, event: any) {
   if (!preferences.value || savingPreference.value) return
   const previous = preferences.value[key]
@@ -325,6 +359,10 @@ async function onPreferenceChange(key: PreferenceKey, event: any) {
 .notification-type { flex-shrink: 0; color: var(--text-sub); font-size: 19rpx; padding: 5rpx 10rpx; background: var(--bg-2); border-radius: 8rpx; }
 .notification-content { color: var(--text-sub); font-size: 24rpx; margin-top: 10rpx; display: block; line-height: 1.55; }
 .notification-date { color: var(--text-dim); font-size: 20rpx; margin-top: 12rpx; display: block; }
+.notification-actions { min-height: 56rpx; margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx solid var(--divider); display: flex; align-items: center; justify-content: flex-end; gap: 28rpx; }
+.notification-action, .viewed-status { font-size: 22rpx; font-weight: 650; }
+.viewed-action, .viewed-status { color: var(--primary); }
+.delete-action { color: var(--down); }
 .row-chevron { align-self: center; color: var(--text-dim); font-size: 36rpx; }
 .footer-state { padding: 28rpx 0 16rpx; color: var(--text-dim); font-size: 22rpx; text-align: center; }
 .footer-error { color: var(--primary); }
