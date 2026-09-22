@@ -33,14 +33,14 @@ test('community navigation and empty-state keys have English translations', () =
 })
 
 test('first-party market posts remove mixed Chinese from English display copy', () => {
-  assert.equal(localizePersonName('KAI星算平台行情', 'en'), 'KAI Compute Market')
+  assert.equal(localizePersonName('KAI星算平台行情', 'en'), 'KAI Platform Market')
   assert.equal(
     localizeInternalBrandText(
       'The current reference price in 北美 is 5.04 CH/h. KAI星算 market data.',
       'wod-market',
       'en',
     ),
-    'The current reference price in North America is 5.04 CH/h. Compute Star Map market data.',
+    'The current reference price in North America is 5.04 CH/h. KAI Compute Market data.',
   )
   assert.equal(
     localizeInternalBrandText('北美用戶原文', 'user-post', 'en'),

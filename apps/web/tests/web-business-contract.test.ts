@@ -24,6 +24,9 @@ test("legacy community brand values are renamed for display without changing bac
   assert.equal(communityDisplayText("WOD 算力行情", "wod-market"), "KAI星算 算力行情");
   assert.equal(communityDisplayText("ZTW 算力行情", "wod-market"), "KAI星算 算力行情");
   assert.equal(communityDisplayText("WOD 行情更新", "user-post"), "WOD 行情更新");
+  assert.equal(communityDisplayText("WOD资讯", "wod-market", "en"), "KAI Platform Market");
+  assert.equal(communityDisplayText("Latest Compute Star Map market data", "wod-market", "en"), "Latest KAI Compute Market data");
+  assert.equal(communityDisplayText("KAI星算算力行情", "wod-market", "en"), "KAI Compute Market");
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 
   const feed = fs.readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");

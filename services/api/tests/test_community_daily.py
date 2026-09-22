@@ -62,7 +62,7 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertEqual(candidate.source_key, "wod-market")
         self.assertEqual(candidate.source_name, "KAI星算算力行情")
         self.assertEqual(candidate.author, "KAI星算")
-        self.assertTrue(candidate.title.startswith("Compute Star Map tip"))
+        self.assertTrue(candidate.title.startswith("KAI Compute Market tip"))
 
     def test_internal_market_post_uses_an_english_region_in_english_copy(self):
         product = SimpleNamespace(
@@ -98,7 +98,7 @@ class CommunityDailyTests(unittest.TestCase):
 
         self.assertEqual(_backfill_internal_branding(db), 1)
         self.assertEqual(post.content, "价格来自KAI星算最新站内行情，优惠码 WOD10 继续有效")
-        self.assertEqual(post.content_en, "Latest Compute Star Map market data")
+        self.assertEqual(post.content_en, "Latest KAI Compute Market data")
         self.assertEqual(post.source_name, "KAI星算算力行情")
         self.assertEqual(post.source_author, "KAI星算")
 
@@ -115,7 +115,7 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertEqual(_backfill_internal_branding(db), 1)
         self.assertEqual(
             post.content_en,
-            "The current reference price in North America is 5.04 CH/h. Compute Star Map market data.",
+            "The current reference price in North America is 5.04 CH/h. KAI Compute Market data.",
         )
 
     def test_existing_internal_author_is_renamed_without_changing_identity(self):
