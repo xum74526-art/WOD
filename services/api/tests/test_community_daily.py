@@ -78,6 +78,7 @@ class CommunityDailyTests(unittest.TestCase):
         candidate = _internal_candidates(db, "2026-09-22", 1)[0]
 
         self.assertIn("North America", candidate.content_en)
+        self.assertIn("5.040 CH/h", candidate.content_en)
         self.assertNotIn("北美", candidate.content_en)
         self.assertNotRegex(candidate.content_en, r"[\u3400-\u9fff]")
 
