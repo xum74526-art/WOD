@@ -8,6 +8,7 @@ import { useI18n } from "@/components/locale-root";
 import { localeForFormatting, type KaiLocale } from "@/lib/language";
 import { getMobileMarketCandles, type MobileMarketModel } from "@/lib/mobile-market-api";
 import type { InitialGpuTrend } from "@/lib/public-data";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 type PricePoint = {
   date: string;
@@ -47,7 +48,7 @@ const ranges: { value: RangeDays; label: string }[] = [
 const chart = { width: 720, left: 34, right: 650, top: 24, bottom: 254 };
 
 function formatPrice(value: number) {
-  return value.toFixed(2);
+  return formatFinancialAmount(value, "en-US", false);
 }
 
 function formatDate(value: string, locale: KaiLocale) {
@@ -197,7 +198,7 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
       <div className="gpu-kline-quote">
         <div><strong>{formatPrice(active.close)}</strong><span>{locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</span></div>
         <b className={isUp ? "is-up" : "is-down"}>
-          {plot.delta >= 0 ? "+" : ""}{plot.delta.toFixed(2)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
+          {plot.delta >= 0 ? "+" : ""}{formatFinancialAmount(plot.delta, "en-US", false)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
         </b>
         <nav aria-label={locale === "en" ? "Chart range" : "K 线周期"}>
           {ranges.map((range) => <button

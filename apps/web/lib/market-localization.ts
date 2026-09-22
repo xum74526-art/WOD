@@ -7,6 +7,9 @@ const supplierNames: Record<string, string> = {
   "上海云算力": "Shanghai Cloud Compute",
   "西安智链科技": "Xi'an Intelligent Chain Technology",
   "第三方商家": "Third-party Merchant",
+  "KAI 自营": "KAI Self-operated",
+  "KAI自营": "KAI Self-operated",
+  "KAI星算自营": "KAI星算 Self-operated",
 };
 
 const regionNames: Record<string, string> = {

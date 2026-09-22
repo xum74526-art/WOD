@@ -7,6 +7,7 @@ import type { PublicProduct } from "@/lib/commerce-api";
 import type { InitialGpuTrend, PublicMarketRanking, PublicMarketRankingItem } from "@/lib/public-data";
 import { resolveApiOrigin } from "@/lib/server/api-origin";
 import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
+import { financialDecimal } from "@/lib/financial-format";
 
 type JsonObject = Record<string, unknown>;
 type CanonicalEnvelope = { code?: number; msg?: string; data?: unknown };
@@ -140,7 +141,7 @@ function publicProduct(value: unknown): PublicProduct {
     disk_gb: null,
     bandwidth_mbps: null,
     unit_price_ch: number(item.price_card_hours_per_gpu_hour, price),
-    price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
+    price: { amount: financialDecimal(price), currency: "CNY", unit: "GPU·小时" },
     total_quantity: item.reported_stock == null ? stock : number(item.reported_stock, stock),
     available_quantity: stock,
     source_name: supplierName || (sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),

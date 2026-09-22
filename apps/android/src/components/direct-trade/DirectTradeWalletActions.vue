@@ -10,7 +10,7 @@
         <text class="sheet-title">{{ t('k_2d1872ca') }}</text>
         <view class="rate-card">
           <text>{{ t('rechargeRateLockedHint') }}</text>
-          <text>1 {{ t('cardHour') }} = {{ formatNumber(cardHourRate, { maximumFractionDigits: 3 }) }} {{ t('cny') }}</text>
+          <text>1 {{ t('cardHour') }} = {{ formatAmount(cardHourRate) }} {{ t('cny') }}</text>
         </view>
         <view class="input-wrap"><text>¥</text><input v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeCny')" /></view>
         <view class="quick-amounts">
@@ -63,7 +63,7 @@ import { getBankCards, type BankCardItem } from '@/api/bank-card'
 import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/api/withdrawal'
 import { isRegisteredBankCardStatus } from '@/utils/bank-card'
 import { resolveBackendUrl } from '@/utils/config'
-import { fmtCardHours, formatMoney, formatNumber } from '@/utils/format'
+import { fmtCardHours, formatAmount, formatMoney } from '@/utils/format'
 import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
 import { openPaymentCheckout } from '@/utils/payment-checkout'
 import {
@@ -239,7 +239,7 @@ async function submitRecharge() {
 async function submitWithdrawal() {
   const amount = Number(sheet.amount)
   if (!Number.isFinite(amount) || amount < minimumWithdrawal.value || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
-    uni.showToast({ title: t('withdrawAmountRange', { min: formatNumber(minimumWithdrawal.value), max: formatNumber(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
+    uni.showToast({ title: t('withdrawAmountRange', { min: formatAmount(minimumWithdrawal.value), max: formatAmount(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
     return
   }
   if (amount > Number(props.wallet?.withdrawable_balance || 0)) {

@@ -263,7 +263,7 @@ import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
-import { fmtCH, fmtCHn, fmtCardHours, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCH, fmtCHn, fmtCardHours, formatAmount, formatNumber, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
 import { usePageMotion } from '@/utils/page-motion'
 import type { Product } from '@/api/gpu'
@@ -520,7 +520,7 @@ function startMarketTimer() {
 
 function productCardHourPrice(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): string {
   const cny = Number(product.price_cny_per_gpu_hour ?? product.price ?? 0)
-  return formatNumber(product.price_card_hours_per_gpu_hour ?? toCardHours(cny))
+  return formatAmount(product.price_card_hours_per_gpu_hour ?? toCardHours(cny))
 }
 
 function stopMarketTimer() {

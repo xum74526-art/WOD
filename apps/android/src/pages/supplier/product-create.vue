@@ -114,7 +114,7 @@ function normalizePriceInput(value: unknown): string {
   const dotIndex = raw.indexOf('.')
   if (dotIndex < 0) return raw.slice(0, 6)
   const integer = (raw.slice(0, dotIndex) || '0').slice(0, 6)
-  const fraction = raw.slice(dotIndex + 1).replace(/\./g, '').slice(0, 4)
+  const fraction = raw.slice(dotIndex + 1).replace(/\./g, '').slice(0, 3)
   return `${integer}.${fraction}`
 }
 

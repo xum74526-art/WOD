@@ -7,6 +7,7 @@ import { AdminQueuePagination } from "@/components/admin-queue-pagination";
 import { normalizeAdminReviewPrompt } from "@/lib/admin-review-prompt";
 import { ADMIN_QUEUE_PAGE_SIZE, adminQueuePageCount } from "@/lib/admin-queue-pagination";
 import { errorMessage } from "@/lib/commerce-ui";
+import { formatFinancialAmount } from "@/lib/financial-format";
 import { formatPlatformDateTime, localDateTimeInputToUtcIso, toLocalDateTimeInputValue } from "@/lib/date-time";
 import {
   approveFinanceWithdrawal,
@@ -179,14 +180,14 @@ export function AdminWithdrawalWorkspace() {
             <h2>{row.user?.username || `用户 #${row.user?.id || "-"}`}</h2>
             <span>申请时间（北京时间） {formatPlatformDateTime(row.created_at)} · 最后操作 {platformLabel(row.last_modified_platform)}</span>
           </div>
-          <strong>¥ {row.net_amount_cny.toFixed(2)}</strong>
+          <strong>¥ {formatFinancialAmount(row.net_amount_cny)}</strong>
           <b className={`status-chip status-chip--${row.status === "paid" ? "published" : ["rejected", "failed", "canceled"].includes(row.status) ? "rejected" : "pending_review"}`}>{labels[row.status]}</b>
         </header>
         <div className="admin-bank-slip"><Bank size={20}/><dl>
           <div><dt>收款人</dt><dd>{row.bank_card.holder}</dd></div>
           <div><dt>开户银行</dt><dd>{row.bank_card.bank_name}</dd></div>
           <div><dt>银行卡</dt><dd>尾号 {row.bank_card.card_last4 || row.bank_card.card_number.slice(-4)}</dd></div>
-          <div><dt>卡时 / 汇率</dt><dd>{row.amount_card_hours} / {row.locked_rate_cny}</dd></div>
+          <div><dt>卡时 / 汇率</dt><dd>{formatFinancialAmount(row.amount_card_hours)} / {formatFinancialAmount(row.locked_rate_cny)}</dd></div>
         </dl></div>
         {row.review_note && <p>{row.review_note}</p>}
         {row.failure_reason && <p>{row.failure_reason}</p>}

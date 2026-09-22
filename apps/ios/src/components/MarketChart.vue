@@ -12,7 +12,7 @@
 import { computed } from 'vue'
 import type { MarketSeries } from '@/api/market'
 import { useI18nStore } from '@/store/i18n'
-import { toCardHours } from '@/utils/format'
+import { formatAmount, toCardHours } from '@/utils/format'
 
 const i18n = useI18nStore()
 const { t } = i18n
@@ -43,7 +43,7 @@ const validSeries = computed(() => props.series
 const hasPoints = computed(() => validSeries.value.length > 0)
 
 function formatAxis(value: number): string {
-  const formatted = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2)
+  const formatted = formatAmount(value, false)
   return props.displayCurrency === 'CNY' ? `¥${formatted}` : formatted
 }
 

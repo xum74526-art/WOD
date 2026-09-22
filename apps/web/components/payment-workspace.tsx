@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, Bank, CheckCircle, ClockCountdown, Coins, LockKey, Receipt, WarningCircle } from "@phosphor-icons/react";
 import { errorMessage } from "@/lib/commerce-ui";
+import { formatFinancialAmount } from "@/lib/financial-format";
 import {
   canPrepareRechargeRestart,
   isRegisteredBankCardStatus,
@@ -41,7 +42,7 @@ const RECHARGE_INTENT_KEY = "wod-web-recharge-request-intent";
 const WITHDRAWAL_INTENT_KEY = "wod-web-withdrawal-request-intent";
 const REFUND_REQUEST_INTENT_KEY_PREFIX = "wod-web-refund-request-intent";
 type PendingRechargeSession = { order_no?: string; checkout_url?: string | null; expires_at?: string | null };
-const amount = (value: unknown) => { const n = Number(value || 0); return Number.isFinite(n) ? n.toFixed(2) : "0.00"; };
+const amount = (value: unknown) => formatFinancialAmount(value as number | string | null | undefined);
 
 function requestIntentStorage() {
   try { return window.sessionStorage; } catch { return null; }
@@ -250,13 +251,13 @@ export function PaymentWorkspace() {
     if (!Number.isFinite(value) || value < withdrawalMinimum || value > Number(withdrawalConfig?.max_card_hours || Infinity)) {
       setError(`提现卡时须在 ${amount(withdrawalMinimum)} 至 ${amount(withdrawalConfig?.max_card_hours)} 之间`); return;
     }
-    const normalizedValue = Number(value.toFixed(2));
+    const normalizedValue = Number(value.toFixed(3));
     if (normalizedValue > Number(wallet?.withdrawable_balance || 0)) { setError("提现金额超过当前可提现余额"); return; }
     if (!card) { setError("请选择状态可用的银行卡"); return; }
     creatingWithdrawal.current = true;
     setBusy("withdraw"); setError("");
     try {
-      const fingerprint = clientRequestFingerprint([normalizedValue.toFixed(2), card.id]);
+      const fingerprint = clientRequestFingerprint([normalizedValue.toFixed(3), card.id]);
       const storage = requestIntentStorage();
       const intent = ensureClientRequestIntent(
         withdrawalIntent.current || (storage ? readClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY) : null),
@@ -452,7 +453,7 @@ export function PaymentWorkspace() {
     </section>}
     {(rechargeEntryEnabled || withdrawalEntryEnabled) ? <div className="mobile-service-columns wallet-actions">
       {rechargeEntryEnabled && <form ref={rechargeFormRef} className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（人民币，最低 {amount(rechargeMinimum)} 元）<input type="number" min={rechargeMinimum} max={paymentConfig?.max_amount_cny || undefined} step="0.01" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge" || rechargeBlocksNewOrder(pendingPayment)}>{busy === "recharge" ? "正在创建…" : rechargeBlocksNewOrder(pendingPayment) ? "请先处理当前充值订单" : rechargeEnabled ? "确认金额并前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>创建订单前会再次确认金额；只有服务端确认卡时到账后才显示充值成功。</p></form>}
-      {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时（最低 {amount(withdrawalMinimum)} 卡时）<input type="number" min={withdrawalMinimum} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.01" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
+      {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时（最低 {amount(withdrawalMinimum)} 卡时）<input type="number" min={withdrawalMinimum} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.001" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
     </div> : <div className="workspace-service-note">在线充值与提现暂未开放。已有余额、历史流水和订单状态仍可查询；如需算力服务，请前往需求页面提交信息并等待人工联系。</div>}
     <section className="mobile-record-panel wallet-ledger">
       <header><Receipt size={20}/><div><small>ACCOUNT RECORDS</small><h2>{tab === "ledger" ? "钱包流水" : tab === "recharges" ? "充值订单" : tab === "refundRequests" ? "退款申请" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "recharges" ? "active" : ""} onClick={() => setTab("recharges")}>充值订单</button><button className={tab === "refundRequests" ? "active" : ""} onClick={() => setTab("refundRequests")}>退款申请</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>

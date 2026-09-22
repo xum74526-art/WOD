@@ -91,7 +91,7 @@
 import { computed, ref, watch } from 'vue'
 import type { MarketCandle, MarketCandleRange, MarketHistoryState } from '@/api/market'
 import { useI18nStore } from '@/store/i18n'
-import { formatNumber, toCardHours } from '@/utils/format'
+import { formatAmount, toCardHours } from '@/utils/format'
 import { candleChangePercent, formatSignedMarketPercent } from '@/utils/market-chart'
 import {
   candleBucketMilliseconds,
@@ -287,7 +287,7 @@ function zoomOut() { if (canZoomOut.value) applyZoom(zoomOutLimit.value) }
 
 function price(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '--'
-  const formatted = formatNumber(value)
+  const formatted = formatAmount(value)
   return props.displayCurrency === 'CNY' ? `¥${formatted}` : formatted
 }
 
@@ -412,8 +412,8 @@ function onChartTouch(event: any) {
 }
 
 function axisNumber(value: number, span = 1): string {
-  const maximumFractionDigits = Math.abs(span) < 0.01 ? 4 : Math.abs(span) < 1 ? 3 : 2
-  return formatNumber(value, { maximumFractionDigits, useGrouping: false })
+  void span
+  return formatAmount(value, false)
 }
 function timeLabel(time: number): string {
   const value = new Date(time)

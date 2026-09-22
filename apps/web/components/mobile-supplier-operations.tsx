@@ -8,11 +8,11 @@ import { errorMessage } from "@/lib/commerce-ui";
 import { getSupplierProfile, getSupplierRebate, getSupplierRevenueBundle, getSupplierStats, getUserRebate, updateSupplierProfile, type RebateSummary, type SupplierProfile, type SupplierRebate, type SupplierRevenueRecord, type SupplierStats, type SupplierWallet } from "@/lib/mobile-business-api";
 import { localizeRebateHint, rebateTierRange } from "@/lib/product-purchase";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 export type MobileSupplierSection = "revenue" | "analytics" | "rebates" | "settings";
 const amount = (value: unknown) => {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+  return formatFinancialAmount(value as number | string | null | undefined);
 };
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("zh-CN") : "—");
 

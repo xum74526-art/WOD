@@ -46,7 +46,7 @@ test("operator labels distinguish wallet refunds from original-rail CNY refunds"
   assert.match(workspace, /必须由另一名管理员登录七相商户后台/);
   assert.match(workspace, /批准不等于渠道已退款成功/);
   assert.match(workspace, /驳回只记录审核结论，不退款，也不扣减用户卡时/);
-  assert.match(workspace, /toFixed\(2\)/);
+  assert.match(workspace, /formatFinancialAmount\(value\)/);
   assert.doesNotMatch(workspace, /toFixed\(6\)/);
 });
 

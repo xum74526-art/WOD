@@ -19,6 +19,7 @@ import {
   type MobileMarketCandles,
   type MobileMarketModel,
 } from "@/lib/mobile-market-api";
+import { formatFinancialAmount } from "@/lib/financial-format";
 import {
   canMergeLiveReference,
   candleBodyWidth,
@@ -91,17 +92,12 @@ function modelIdentity(model: MobileMarketModel | null) {
 
 function formatPrice(value: number | null | undefined, dateLocale: string) {
   if (value == null || !Number.isFinite(value)) return "--";
-  const digits = value >= 100 ? 2 : 3;
-  return value.toLocaleString(dateLocale, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-    useGrouping: false,
-  });
+  return formatFinancialAmount(value, dateLocale, false);
 }
 
 function formatAxis(value: number, span: number, dateLocale: string) {
-  const digits = Math.abs(span) < 0.01 ? 4 : Math.abs(span) < 1 ? 3 : 2;
-  return value.toLocaleString(dateLocale, { maximumFractionDigits: digits, useGrouping: false });
+  void span;
+  return formatFinancialAmount(value, dateLocale, false);
 }
 
 function formatInteger(value: number, dateLocale: string) {

@@ -77,13 +77,13 @@ function stableDecimal(
 
 /**
  * 用户界面数值的统一格式化入口。
- * 默认最多显示两位小数，不改变调用方持有的原始值或计算精度。
+ * 默认最多显示三位小数，不改变调用方持有的原始值或计算精度。
  */
 export function formatNumber(
   value: NumericValue,
   options: { minimumFractionDigits?: number; maximumFractionDigits?: number; useGrouping?: boolean; locale?: string } = {},
 ): string {
-  const maximumFractionDigits = Math.max(0, Math.min(options.maximumFractionDigits ?? 2, 20))
+  const maximumFractionDigits = Math.max(0, Math.min(options.maximumFractionDigits ?? 3, 20))
   const minimumFractionDigits = Math.max(0, Math.min(options.minimumFractionDigits ?? 0, maximumFractionDigits))
   // 保留 locale 参数以兼容现有调用；当前支持的 zh-CN / en-US 数字分隔规则相同。
   void (options.locale || currentLocale())
@@ -95,17 +95,26 @@ export function formatNumber(
   )
 }
 
-/** 表单输入框中的数值：最多两位小数，且不插入千分位分隔符。 */
+/** 表单输入框中的数值：最多三位小数，且不插入千分位分隔符。 */
 export function formatNumberInput(value: NumericValue): string {
-  return formatNumber(value, { maximumFractionDigits: 2, useGrouping: false })
+  return formatNumber(value, { maximumFractionDigits: 3, useGrouping: false })
 }
 
 export function formatMoney(n: number | string | undefined | null): string {
-  return formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatAmount(n)
 }
 
 export function formatMoneyShort(n: number | string | undefined | null): string {
   return formatNumber(n)
+}
+
+/** 人民币、卡时、汇率与商品价格统一显示三位小数。 */
+export function formatAmount(value: NumericValue, useGrouping = true): string {
+  return formatNumber(value, {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+    useGrouping,
+  })
 }
 
 // === 卡时（算力货币单位） ===
@@ -126,24 +135,24 @@ export function fromCardHours(cardHours: number | string | undefined | null): nu
 export function fmtCH(rmb: number | string | undefined | null): string {
   const num = toCardHours(rmb)
   const unit = currentLang() === 'en' ? ' CH' : currentLang() === 'zh-Hant' ? '卡時' : '卡时'
-  return formatNumber(num) + unit
+  return formatAmount(num) + unit
 }
 
 /** 格式化为 "1.98卡时/h"（小时费率） */
 export function fmtCHr(rmb: number | string | undefined | null): string {
   const num = toCardHours(rmb)
   const unit = currentLang() === 'en' ? ' CH/h' : currentLang() === 'zh-Hant' ? '卡時/h' : '卡时/h'
-  return formatNumber(num) + unit
+  return formatAmount(num) + unit
 }
 
 /** 短格式卡时（不带单位，用于模板拼接） */
 export function fmtCHn(rmb: number | string | undefined | null): string {
-  return formatNumber(toCardHours(rmb))
+  return formatAmount(toCardHours(rmb))
 }
 
 /** 已经以卡时为单位的数值，仅格式化展示，不再执行汇率换算。 */
 export function fmtCardHours(value: NumericValue): string {
-  return formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatAmount(value)
 }
 
 export function formatDate(s?: string): string {

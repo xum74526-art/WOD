@@ -43,17 +43,18 @@ import {
 } from "@/lib/client-request-intent";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import type { AuditPlatform } from "@/lib/mobile-finance-api";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 const PAYMENT_OPERATION_INTENT_KEY = "kai-admin-payment-operation-intent:v1";
 
 type WorkspaceTab = "orders" | "requests" | "refunds";
 
 function money(value: number) {
-  return Number(value || 0).toFixed(2);
+  return formatFinancialAmount(value);
 }
 
 function cardHours(value: number) {
-  return Number(value || 0).toFixed(2);
+  return formatFinancialAmount(value);
 }
 
 function browserSessionStorage() {

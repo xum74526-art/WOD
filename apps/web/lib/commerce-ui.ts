@@ -1,4 +1,5 @@
 import type { OrderStatus, QuoteStatus, RequestStatus } from "@/lib/commerce-api";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 export const requestStatusLabel: Record<RequestStatus, string> = {
   draft: "草稿", reviewing: "审核中", published: "开放报价", negotiating: "报价洽谈", matched: "已匹配",
@@ -21,7 +22,7 @@ export function formatDate(value?: string | null, locale = "zh-CN") {
 
 export function formatMoney(amount: string | null, currency: string, unit: string) {
   if (amount === null) return "预算面议";
-  const value = Number(amount).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+  const value = formatFinancialAmount(amount);
   if (unit === "order_total") return `${currency} ${value}`;
   return `${currency} ${value} / ${unitLabel[unit] ?? unit}`;
 }

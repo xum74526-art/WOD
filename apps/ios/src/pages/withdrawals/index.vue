@@ -25,7 +25,7 @@
           <text class="status" :class="statusTone(order.status)">{{ t(statusLabel(order.status)) }}</text>
         </view>
         <view class="amount-row">
-          <view><text class="amount-label">{{ t('withdrawCardHours') }}</text><text class="amount-main">{{ formatNumber(order.amount_card_hours) }} {{ t('cardHour') }}</text></view>
+          <view><text class="amount-label">{{ t('withdrawCardHours') }}</text><text class="amount-main">{{ fmtCardHours(order.amount_card_hours) }} {{ t('cardHour') }}</text></view>
           <view class="arrival"><text class="amount-label">{{ t('estimatedArrival') }}</text><text class="amount-cny">¥{{ formatMoney(order.net_amount_cny) }}</text></view>
         </view>
         <view class="order-foot">
@@ -46,7 +46,7 @@ import { getWithdrawals, type WithdrawalOrder, type WithdrawalStatus } from '@/a
 import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
-import { formatDate, formatMoney, formatNumber } from '@/utils/format'
+import { fmtCardHours, formatDate, formatMoney } from '@/utils/format'
 import { navigateTo as nav } from '@/utils/nav'
 import { displayBusinessReference } from '@/utils/display-reference'
 

@@ -34,6 +34,7 @@ import {
   type BuyRequestIntent,
 } from "@/lib/web-business-contract";
 import { normalizeInquiryRegionRequirement } from "@/lib/request-navigation";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 const statuses: Record<string, string> = {
   published: "已提交",
@@ -321,7 +322,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
       try { await loadDetail(requestId); } catch { /* the existing quote remains visible */ }
       return;
     }
-    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${snapshot.currency} ${snapshot.totalPrice.toFixed(2)}`;
+    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${snapshot.currency} ${formatFinancialAmount(snapshot.totalPrice)}`;
     const prompt = directTradeEnabled
       ? `确认选择 ${item.supplier_name} 的报价（${confirmedTerms}）？`
       : `确认选择 ${item.supplier_name} 的方案（${confirmedTerms}）？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
@@ -485,8 +486,8 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
 function QuoteForm({ value, onChange, onSubmit, onCancel, busy, label }: { value: QuoteDraft; onChange: (next: QuoteDraft) => void; onSubmit: (event: FormEvent) => void; onCancel?: () => void; busy: boolean; label: string }) {
   return <form className="mobile-quote-form matchmaking-quote-form" onSubmit={onSubmit}>
     <header><Storefront size={18}/><strong>{label}</strong></header>
-    <label>单位价格<input min="0" step="0.01" type="number" value={value.unit_price} onChange={(event) => onChange({ ...value, unit_price: event.target.value })}/></label>
-    <label>总报价<input required min="0" step="0.01" type="number" value={value.total_price} onChange={(event) => onChange({ ...value, total_price: event.target.value })}/></label>
+    <label>单位价格<input min="0" step="0.001" type="number" value={value.unit_price} onChange={(event) => onChange({ ...value, unit_price: event.target.value })}/></label>
+    <label>总报价<input required min="0" step="0.001" type="number" value={value.total_price} onChange={(event) => onChange({ ...value, total_price: event.target.value })}/></label>
     <label>最早交付时间<input type="datetime-local" value={value.available_at} onChange={(event) => onChange({ ...value, available_at: event.target.value })}/></label>
     <label>有效小时<input required min="1" max="720" type="number" value={value.expires_in_hours} onChange={(event) => onChange({ ...value, expires_in_hours: event.target.value })}/></label>
     <label className="wide">方案说明<textarea maxLength={1000} rows={3} value={value.message} onChange={(event) => onChange({ ...value, message: event.target.value })}/></label>

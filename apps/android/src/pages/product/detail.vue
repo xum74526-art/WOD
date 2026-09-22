@@ -23,14 +23,14 @@
         <template v-if="commerce.directTradeEnabled">
           <view v-if="isKaiProduct" class="price-primary">
             <text class="currency">¥</text>
-            <text class="pp">{{ formatNumber(directTradeCnyPerGpuHour(product)) }}</text>
+            <text class="pp">{{ formatAmount(directTradeCnyPerGpuHour(product)) }}</text>
             <text class="pu">{{ t('perGpuHour') }}</text>
           </view>
           <view v-else class="price-primary">
-            <text class="pp">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }}</text>
+            <text class="pp">{{ formatAmount(directTradeCardHoursPerGpuHour(product)) }}</text>
             <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
           </view>
-          <text v-if="isKaiProduct" class="daily muted">{{ formatNumber(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHourPerGpuHour') }}</text>
+          <text v-if="isKaiProduct" class="daily muted">{{ formatAmount(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHourPerGpuHour') }}</text>
           <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
         </template>
         <template v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false">
@@ -171,7 +171,7 @@ import { getProduct, type Product } from '@/api/gpu'
 import type { PurchaseType } from '@/api/order'
 import { getRebateSummary, type RebateSummary } from '@/api/user'
 import { getMarketCandles, type MarketCandles, type MarketCandlesParams } from '@/api/market'
-import { fmtCardHours, formatNumber } from '@/utils/format'
+import { fmtCardHours, formatAmount, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'

@@ -18,14 +18,13 @@ import {
 import { useI18n } from "@/components/locale-root";
 import { errorMessage } from "@/lib/commerce-ui";
 import { getInviteBundle, type InviteRecord, type InviteSummary } from "@/lib/mobile-business-api";
+import { formatFinancialAmount } from "@/lib/financial-format";
 import styles from "./referral-workspace.module.css";
 
 type RecordTab = "fixed" | "rebate";
 
 function amount(value: unknown, locale: string) {
-  const number = Number(value || 0);
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    .format(Number.isFinite(number) ? number : 0);
+  return formatFinancialAmount(value as number | string | null | undefined, locale);
 }
 
 function rate(value: unknown, locale: string) {

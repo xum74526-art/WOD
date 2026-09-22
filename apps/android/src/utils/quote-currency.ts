@@ -26,9 +26,9 @@ export function formatQuoteAmount(
   cardHourLabel: string,
 ): string {
   const code = normalizeQuoteCurrency(currency)
-  if (code === 'CNY' || code === 'RMB') return `¥${quoteNumber(amount, 2, 2)}`
+  if (code === 'CNY' || code === 'RMB') return `¥${quoteNumber(amount, 3, 3)}`
   if (['CH', 'CARD_HOUR', 'CARD_HOURS', 'CARD-HOUR'].includes(code)) {
-    return `${quoteNumber(amount, 0, 6)} ${cardHourLabel}`
+    return `${quoteNumber(amount, 3, 3)} ${cardHourLabel}`
   }
-  return `${quoteNumber(amount, 0, 6)} ${code || '—'}`
+  return `${quoteNumber(amount, 3, 3)} ${code || '—'}`
 }

@@ -10,6 +10,7 @@ import { useI18n } from "@/components/locale-root";
 import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
 import { ProductImage } from "@/components/product-image";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 type ViewerRole = AuthUser["role"] | "guest" | "loading";
 type MarketSource = "kai" | "wod";
@@ -143,6 +144,12 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
       const resourceClaimLabel = row.resource_claim_source === "merchant_declared" || (!row.resource_claim_source && !kaiSelfOperated)
         ? t("market.claim.merchant", "配置与库存由商家自行申报")
         : t("market.claim.kai", "商品信息由KAI星算发布");
+      const assuranceLabel = kaiSelfOperated
+        ? t("market.assurance.kai", "KAI星算自营 · 平台人工交付")
+        : t("market.assurance.merchant", "商家发布 · 商家人工交付");
+      const assuranceDescription = kaiSelfOperated
+        ? t("market.assurance.kaiDirect", "商品信息由KAI星算发布，由平台安排人工交付；买家确认后订单完成，交付异常可在验收期内发起争议。")
+        : t("market.assurance.merchantDirect", "商品配置与库存由商家申报并负责人工交付；买家确认后订单完成，交付异常可在验收期内发起争议。");
       const inquiryAvailable = matchmakingEnabled && row.inquiry_available !== false;
       const status = directTradeEnabled
         ? row.purchasable ? t("market.availableDirect", "可下单") : t("market.unavailableDirect", "暂不可租")
@@ -155,8 +162,8 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
         <header><div><small><b>{kaiSelfOperated ? t("market.kai.title", "KAI星算自营") : t("market.merchant.listing", "商家资源")}</b> · {row.supplier_id && !kaiSelfOperated ? <Link href={`/stores/${row.supplier_id}`}>{sellerName}</Link> : sellerName}</small><h3>{displayName}</h3>{sellerDetails && <em>{sellerDetails}</em>}</div><span className={(directTradeEnabled ? !row.purchasable : !inquiryAvailable) ? "is-offline" : ""}>{status}</span></header>
         <div className="merchant-resource-gpu"><strong>{row.gpu_model}</strong><span>{row.gpu_memory_gb}GB</span></div>
         <dl><div><dt><MapPin size={13}/>{t("market.region", "区域")}</dt><dd>{localizeMarketRegion(row.region, locale)}</dd></div><div><dt><HardDrives size={13}/>{t("market.stock", "可用库存")}</dt><dd>{row.available_quantity} {t("market.units", "台")}</dd></div><div><dt><TerminalWindow size={13}/>{t("market.fulfillment", "履约方式")}</dt><dd>{fulfillmentLabel}</dd></div></dl>
-        <div className="merchant-resource-assurance"><ShieldCheck size={16}/><span><strong>{row.assurance_label || (kaiSelfOperated ? t("market.kai.title", "KAI星算自营") : t("market.merchant.listing", "商家资源"))}</strong><small>{resourceClaimLabel} · {directTradeEnabled ? row.assurance_description : kaiSelfOperated ? t("market.kai.assurance", "提交需求后由平台人工联系确认方案。") : t("market.merchant.assurance", "提交需求后由对应商家人工联系确认方案。")}</small></span></div>
-        <footer><div><small>{directTradeEnabled ? t("market.hourly", "每小时价格") : t("market.servicePrice", "服务价格")}</small><strong>{directTradeEnabled ? `${row.unit_price_ch.toLocaleString(locale === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: 6 })} ${locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}` : inquiryAvailable ? t("market.inquiry", "询价") : "—"}</strong></div><Link href={`/market/products/${row.id}`}>{directTradeEnabled ? row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情") : inquiryAvailable ? t("market.submitRequest", "提交需求") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
+        <div className="merchant-resource-assurance"><ShieldCheck size={16}/><span><strong>{assuranceLabel}</strong><small>{resourceClaimLabel} · {directTradeEnabled ? assuranceDescription : kaiSelfOperated ? t("market.kai.assurance", "提交需求后由平台人工联系确认方案。") : t("market.merchant.assurance", "提交需求后由对应商家人工联系确认方案。")}</small></span></div>
+        <footer><div><small>{directTradeEnabled ? t("market.hourly", "每小时价格") : t("market.servicePrice", "服务价格")}</small><strong>{directTradeEnabled ? `${formatFinancialAmount(row.unit_price_ch, locale === "en" ? "en-US" : "zh-CN")} ${locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}` : inquiryAvailable ? t("market.inquiry", "询价") : "—"}</strong></div><Link href={`/market/products/${row.id}`}>{directTradeEnabled ? row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情") : inquiryAvailable ? t("market.submitRequest", "提交需求") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
       </article>;
     })}</div>}
     {displayRows.length > 0 && typeof limit !== "number" && <div className="merchant-market__pagination" aria-live="polite">

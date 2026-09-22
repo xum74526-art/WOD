@@ -27,8 +27,8 @@ const props = withDefaults(defineProps<{
 const str = computed(() => {
   return formatNumber(props.value, {
     locale: i18n.locale,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
   })
 })
 const parts = computed(() => str.value.split('.'))

@@ -7,8 +7,9 @@ import { getMobileAsset, type MobileAsset } from "@/lib/mobile-business-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { useI18n } from "@/components/locale-root";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
-const amount = (value: unknown) => Number(value || 0).toFixed(2);
+const amount = (value: unknown) => formatFinancialAmount(value as number | string | null | undefined);
 
 export function MobileAssetDetail({ id }: { id: number }) {
   const { t } = useI18n();

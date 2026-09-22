@@ -10,6 +10,7 @@ import {
   type SupplierWithdrawal,
 } from "@/lib/commerce-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 const statusLabels: Record<SupplierWithdrawal["status"], string> = {
   requested: "待审核",
@@ -46,7 +47,7 @@ export function SupplierRevenueWorkspace() {
   }
 
   async function cancel(row: SupplierWithdrawal) {
-    if (!window.confirm(`取消提现 ${row.currency} ${row.amount}？金额会立即退回可用余额。`)) return;
+    if (!window.confirm(`取消提现 ${row.currency} ${formatFinancialAmount(row.amount)}？金额会立即退回可用余额。`)) return;
     setCancelling(row.id); setError("");
     try { await cancelSupplierWithdrawal(row.id, row.version); await load(); }
     catch (reason) { setError(errorMessage(reason)); }
@@ -78,7 +79,7 @@ export function SupplierRevenueWorkspace() {
       <section className="settlement-history">
         <header><div><small>WITHDRAWAL LEDGER</small><h2>提现记录</h2></div><span>待处理 {data.summary.requested} · 已打款 {data.summary.paid}</span></header>
         {data.withdrawals.length ? data.withdrawals.map((row) => <article key={row.id}>
-          <div className="settlement-history__main"><small>{row.withdrawal_no}</small><strong>{row.currency} {row.amount}</strong><span>{row.payout.bank_name} · {row.payout.account_no}</span></div>
+          <div className="settlement-history__main"><small>{row.withdrawal_no}</small><strong>{row.currency} {formatFinancialAmount(row.amount)}</strong><span>{row.payout.bank_name} · {row.payout.account_no}</span></div>
           <div className="settlement-history__state"><b className={`status-chip status-chip--${row.status === "paid" ? "published" : row.status === "rejected" || row.status === "cancelled" ? "rejected" : "pending_review"}`}>{statusLabels[row.status]}</b><time>{formatDate(row.requested_at)}</time>{row.payment_reference && <small>流水 {row.payment_reference}</small>}</div>
           {row.status === "requested" && <button className="settlement-cancel" disabled={cancelling === row.id} onClick={() => void cancel(row)}><XCircle size={15}/>{cancelling === row.id ? "取消中…" : "取消申请"}</button>}
           {row.review_note && <p>{row.review_note}</p>}

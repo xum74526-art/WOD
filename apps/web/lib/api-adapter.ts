@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeStoredLocale } from "@/lib/language";
+import { financialDecimal } from "@/lib/financial-format";
 import { isValidMarketLatestPayload } from "@/lib/market-latest-payload";
 import { notificationActionPath } from "@/lib/notification-navigation";
 import { createStaleTtlCache } from "@/lib/stale-ttl-cache";
@@ -388,7 +389,7 @@ function product(value: unknown) {
     disk_gb: null,
     bandwidth_mbps: null,
     unit_price_ch: walletPrice,
-    price: { amount: price.toFixed(4), currency: "CNY", unit: "GPU·小时" },
+    price: { amount: financialDecimal(price), currency: "CNY", unit: "GPU·小时" },
     total_quantity: item.reported_stock == null ? stock : number(item.reported_stock, stock),
     available_quantity: stock,
     source_name: supplierName || (sellerType === "kai_self_operated" ? "KAI Pricing" : sellerName),
@@ -497,7 +498,7 @@ function order(value: unknown, supplierView = false) {
     payment_status: ["paid", "delivering", "completed", "running"].includes(text(item.status)) ? "paid" : "pending",
     duration_hours: purchaseHours ?? (cycleDays == null ? null : cycleDays * 24),
     purchase_hours: purchaseHours,
-    amount: number(item.amount_card_hours, number(item.amount)).toFixed(4),
+    amount: financialDecimal(number(item.amount_card_hours, number(item.amount))),
     currency: "CARD_HOURS",
     price_unit: "order_total",
     quantity: number(item.quantity, 1),
@@ -1237,13 +1238,13 @@ export async function handleApi(request: NextRequest, segments: string[]) {
         kind: "payment", provider: "canonical-api", status: wallet.payment_service_enabled ? "configured" : "disabled",
         configured: Boolean(wallet.payment_service_enabled), capabilities: ["wallet", "ledger"], reason: wallet.payment_service_enabled ? null : "手机端支付尚未启用",
       },
-      balances: [{ currency: "CARD_HOURS", available: number(wallet.balance).toFixed(2), frozen: number(wallet.frozen).toFixed(2) }],
+      balances: [{ currency: "CARD_HOURS", available: financialDecimal(number(wallet.balance)), frozen: financialDecimal(number(wallet.frozen)) }],
       payment_intents: ledger.map((entry) => ({
         id: number(entry.id),
         payment_no: `LEDGER-${number(entry.id)}`,
         order_id: entry.ref_order_id == null ? null : number(entry.ref_order_id),
         purpose: text(entry.remark, text(entry.type)),
-        amount: number(entry.amount).toFixed(4),
+        amount: financialDecimal(number(entry.amount)),
         currency: "CARD_HOURS",
         status: text(entry.direction) === "in" ? "succeeded" : text(entry.type),
         provider: "canonical-api",

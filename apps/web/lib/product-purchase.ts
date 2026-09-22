@@ -1,5 +1,6 @@
 import { localeForFormatting, type KaiLocale } from "./language.ts";
 import { toTraditionalChinese } from "./traditional-chinese.ts";
+import { formatFinancialAmount } from "./financial-format.ts";
 
 export type ProductPurchaseType = "usage" | "holding";
 
@@ -104,7 +105,7 @@ export function localizeRebateHint(value: string | null | undefined, locale: Kai
 export function rebateTierRange(tiers: RebateTier[], index: number, locale: KaiLocale) {
   const previous = index > 0 ? tiers[index - 1]?.max_month_spent : 0;
   const current = tiers[index]?.max_month_spent;
-  const format = (value: number) => value.toLocaleString(localeForFormatting(locale), { maximumFractionDigits: 2 });
+  const format = (value: number) => formatFinancialAmount(value, localeForFormatting(locale));
   if (current == null) return `${format(Number(previous || 0))}+`;
   return `${format(Number(previous || 0))} – ${format(Number(current))}`;
 }

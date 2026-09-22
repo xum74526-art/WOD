@@ -275,7 +275,7 @@ import SegmentedControl from '@/components/SegmentedControl.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
 import { switchTab } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
-import { formatNumber } from '@/utils/format'
+import { formatAmount, formatNumber } from '@/utils/format'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import {
@@ -396,14 +396,14 @@ const candleStats = computed(() => {
 })
 
 function modelKey(item: Pick<MarketModel, 'gpu_model' | 'gpu_variant'>) { return `${item.gpu_model}|${item.gpu_variant || ''}` }
-function cnyNumber(value: number) { return formatNumber(value) }
-function cnyPriceOrDash(value?: number | null) { return value == null ? '--' : `¥${formatNumber(value)}` }
+function cnyNumber(value: number) { return formatAmount(value) }
+function cnyPriceOrDash(value?: number | null) { return value == null ? '--' : `¥${formatAmount(value)}` }
 function cnyPricePerGpuHour(value?: number | null) {
   return value == null ? '--' : `${cnyPriceOrDash(value)}${t('perGpuHour')}`
 }
 function originalPrice(item: MarketSnapshot) {
   const suffix = item.currency === 'USD' && item.fx_date ? ` · ${item.fx_date}` : ''
-  return `${formatNumber(item.min_price)}-${formatNumber(item.max_price)} ${item.currency}${suffix}`
+  return `${formatAmount(item.min_price)}-${formatAmount(item.max_price)} ${item.currency}${suffix}`
 }
 function sourceChecked(item: MarketSnapshot) {
   if (!item.source_checked_at) return t('notUpdated')
@@ -459,7 +459,7 @@ function changeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_c
 function priceRangeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours'> | MarketModel): string {
   const range = hasCompleteSevenDayMetric(item) ? trustedSevenDayPriceRange(item) : null
   return range
-    ? t('sevenDayPriceRangeCnyValue', { low: formatNumber(range.low), high: formatNumber(range.high) })
+    ? t('sevenDayPriceRangeCnyValue', { low: formatAmount(range.low), high: formatAmount(range.high) })
     : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
 }
 function changeTone(value: number | null): string {

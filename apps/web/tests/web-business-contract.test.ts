@@ -370,7 +370,7 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(market, /提交需求后由对应商家人工联系确认方案/);
   assert.match(market, /market\.inquiry/);
   assert.match(market, /market\.submitRequest/);
-  assert.match(market, /row\.unit_price_ch\.toLocaleString/);
+  assert.match(market, /formatFinancialAmount\(row\.unit_price_ch/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(detail, /beginInquiry/);
   assert.match(detail, /\/account\/requests/);
@@ -471,8 +471,8 @@ test("seller resource workspace uses the backend card-hour price contract", () =
   const supplierApi = fs.readFileSync(new URL("../lib/supplier-api.ts", import.meta.url), "utf8");
 
   assert.match(resource, /每 GPU 小时价格（卡时）/);
-  assert.match(resource, /selected\.price\.toFixed\(4\).*卡时 \/ GPU·小时/);
-  assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|selected\.price\.toFixed\(4\).*CNY/);
+  assert.match(resource, /formatFinancialAmount\(selected\.price\).*卡时 \/ GPU·小时/);
+  assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|formatFinancialAmount\(selected\.price\).*CNY/);
   assert.match(supplierApi, /MobileSupplierDevice[\s\S]*version: number/);
   assert.match(supplierApi, /expected_version: expectedVersion/);
   assert.match(resource, /updateMobileSupplierDevice\(selected\.id, selected\.version, changes\)/);

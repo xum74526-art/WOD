@@ -193,7 +193,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(market, /imageUrl=\{row\.image_url\}/);
   assert.match(market, /t\("market\.inquiry", "询价"\)/);
   assert.match(market, /t\("market\.submitRequest", "提交需求"\)/);
-  assert.match(market, /row\.unit_price_ch\.toLocaleString/);
+  assert.match(market, /formatFinancialAmount\(row\.unit_price_ch/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(market, /directTradeEnabled \? row\.purchasable \?/);
   assert.doesNotMatch(market, /href: "\/(supplier|admin)\/resources"/);
@@ -207,7 +207,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.doesNotMatch(detail, /region: product\.region \|\| ""/);
   assert.match(detail, /new URLSearchParams\(/);
   assert.match(detail, /\/account\/requests\?\$\{params\.toString\(\)\}/);
-  assert.match(detail, /directTradeEnabled \? `\$\{product\.unit_price_ch[\s\S]*? : "询价"/);
+  assert.match(detail, /formatFinancialAmount\(product\.unit_price_ch/);
   assert.match(detail, /提交需求/);
   assert.match(detail, /holdingTradeEnabled = capabilities\.holding_trade_enabled === true/);
   assert.match(detail, /purchaseType === "holding" && holdingModeAvailable/);
@@ -226,6 +226,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(market, /market\.merchant\.title/);
   assert.match(market, /提交需求后由平台人工联系确认方案/);
   assert.match(market, /提交需求后由对应商家人工联系确认方案/);
+  assert.doesNotMatch(market, /row\.assurance_(?:label|description)/);
   assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
   assert.doesNotMatch(`${market}\n${detail}\n${browser}`, /GetDeploying|getdeploying|AutoDL|算力云/i);
 });

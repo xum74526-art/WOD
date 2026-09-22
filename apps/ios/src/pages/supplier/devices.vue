@@ -94,7 +94,7 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCardHours, formatNumber } from '@/utils/format'
+import { fmtCardHours, formatAmount } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 import { navigateTo } from '@/utils/nav'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
@@ -173,7 +173,7 @@ function onEdit(device: SupplierDeviceItem) {
   if (busyId.value !== null) return
   editTarget.value = device
   editForm.name = device.name
-  editForm.price = formatNumber(device.price, { maximumFractionDigits: 4, useGrouping: false })
+  editForm.price = formatAmount(device.price, false)
   editForm.stock = String(device.stock)
   editShow.value = true
 }
@@ -189,7 +189,7 @@ function normalizePriceInput(value: unknown): string {
   const dotIndex = raw.indexOf('.')
   if (dotIndex < 0) return raw.slice(0, 6)
   const integer = (raw.slice(0, dotIndex) || '0').slice(0, 6)
-  const fraction = raw.slice(dotIndex + 1).replace(/\./g, '').slice(0, 4)
+  const fraction = raw.slice(dotIndex + 1).replace(/\./g, '').slice(0, 3)
   return `${integer}.${fraction}`
 }
 

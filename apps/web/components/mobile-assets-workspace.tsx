@@ -9,6 +9,7 @@ import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { useI18n } from "@/components/locale-root";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 const filters = [
   ["all", "asset.filter.all", "全部"],
@@ -18,8 +19,7 @@ const filters = [
 ] as const;
 
 function amount(value: unknown) {
-  const number = Number(value || 0);
-  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+  return formatFinancialAmount(value as number | string | null | undefined);
 }
 
 export function MobileAssetsWorkspace() {

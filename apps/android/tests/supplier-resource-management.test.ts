@@ -63,7 +63,7 @@ test('resource creation submits card hours without applying the RMB conversion h
   const createPage = source('../src/pages/supplier/product-create.vue')
   assert.match(createPage, /createSupplierDevice/)
   assert.doesNotMatch(createPage, /fromCardHours/)
-  assert.match(createPage, /slice\(0, 4\)/)
+  assert.match(createPage, /slice\(0, 3\)/)
   assert.match(createPage, /if \(submitting\.value\) return/)
   assert.match(createPage, /if \(!listed\) submitting\.value = false/)
   assert.match(createPage, /ensureClientRequestIntent/)
@@ -74,9 +74,9 @@ test('resource creation submits card hours without applying the RMB conversion h
   assert.match(supplierApi, /interface SupplierDeviceCreateInput[\s\S]*client_request_id:\s*string/)
 })
 
-test('resource editing preserves four-decimal prices and submits only changed fields', () => {
-  assert.match(devicePage, /maximumFractionDigits:\s*4/)
-  assert.match(devicePage, /slice\(0, 4\)/)
+test('resource editing preserves three-decimal prices and submits only changed fields', () => {
+  assert.match(devicePage, /formatAmount\(device\.price, false\)/)
+  assert.match(devicePage, /slice\(0, 3\)/)
   assert.match(devicePage, /const changes:\s*SupplierDeviceUpdateInput = \{\}/)
   assert.match(devicePage, /if \(stock !== editTarget\.value\.stock\) changes\.stock = stock/)
   assert.match(devicePage, /updateSupplierDevice\(editTarget\.value\.id, editTarget\.value\.version, changes\)/)

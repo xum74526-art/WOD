@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Gavel, X } from "@phosphor-icons/react";
 import { listAdminOrders, resolveAdminOrderDispute, type AdminOrderItem } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 const DISPUTE_PAGE_SIZE = 30;
 
@@ -101,7 +102,7 @@ export function AdminDisputeWorkspace() {
           <dl>
             <div><dt>买家</dt><dd>{selected.user.username || `用户 ${selected.user.id}`}</dd></div>
             <div><dt>卖方</dt><dd>{sellerName(selected)} · {fulfillmentName(selected)}</dd></div>
-            <div><dt>订单金额</dt><dd>{Number(selected.amount_card_hours || 0).toFixed(4)} 卡时</dd></div>
+            <div><dt>订单金额</dt><dd>{formatFinancialAmount(selected.amount_card_hours)} 卡时</dd></div>
             <div><dt>发起时间</dt><dd>{formatDate(selected.disputed_at || selected.created_at)}</dd></div>
             {selected.dispute_due_at && <div><dt>处理截止</dt><dd>{formatDate(selected.dispute_due_at)}</dd></div>}
           </dl>
@@ -117,7 +118,7 @@ export function AdminDisputeWorkspace() {
             {snapshotRegion && <>区域：{snapshotRegion}<br/></>}
             <>{`数量：${snapshot.quantity ?? selected.quantity} 台`}<br/></>
             {(snapshot.purchase_hours ?? selected.purchase_hours) != null && <>购买时长：{snapshot.purchase_hours ?? selected.purchase_hours} 小时<br/></>}
-            {snapshotUnitPrice != null && <>下单单价：{Number(snapshotUnitPrice).toFixed(6)} 卡时 / GPU·小时</>}
+            {snapshotUnitPrice != null && <>下单单价：{formatFinancialAmount(snapshotUnitPrice)} 卡时 / GPU·小时</>}
           </p></section>}
           {selected.dispute_resolution_note && <section><h3>已有处理记录</h3><p>{selected.dispute_resolution_note}</p></section>}
           <footer><label><span>证据与处理结论</span><textarea rows={5} maxLength={2000} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="说明 SSH 交付证据、资源参数核验结果，以及退款或放行的理由" /></label><div><button disabled={busy} onClick={() => void decide("release")}><Check size={15}/>交付有效 · 放行结算</button><button disabled={busy} onClick={() => void decide("refund")} className="commerce-danger"><X size={15}/>买家申诉成立 · 退回卡时</button></div></footer>

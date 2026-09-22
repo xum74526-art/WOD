@@ -25,10 +25,11 @@ import { isRegisteredBankCardStatus, luhnCheckCardNumber } from "@/lib/finance-u
 import { useI18n } from "@/components/locale-root";
 import { localizeRebateHint } from "@/lib/product-purchase";
 import { ReferralWorkspace } from "@/components/referral-workspace";
+import { formatFinancialAmount } from "@/lib/financial-format";
 
 export type MobileAccountSection = "revenue" | "referrals" | "coupons" | "bank-accounts";
 
-function amount(value: unknown) { const n = Number(value || 0); return Number.isFinite(n) ? n.toFixed(2) : "0.00"; }
+function amount(value: unknown) { return formatFinancialAmount(value as number | string | null | undefined); }
 function date(value?: string | null) { return value ? new Date(value).toLocaleDateString("zh-CN") : "—"; }
 
 function RevenueWorkspace() {
