@@ -1,5 +1,5 @@
 <template>
-  <view v-if="userStore.authReady && userStore.isLogin" :class="['page', pageMotionClass]">
+  <view v-if="userStore.authReady && userStore.isLogin" :class="['page', pageMotionClass, { 'page--modal-open': majorAnnouncement }]">
     <view class="shell" :style="{ paddingTop: 'calc(20rpx + var(--safe-top))' }">
       <view class="topbar">
         <view>
@@ -29,16 +29,6 @@
             <text class="sub-val">{{ fmtCH(rev?.total) }}</text>
           </view>
         </view>
-      </view>
-
-      <view v-if="majorAnnouncement" class="major-announcement" role="status" @tap="openMajorAnnouncement">
-        <view class="major-announcement-icon"><AppIcon name="megaphone" :size="34" /></view>
-        <view class="major-announcement-copy">
-          <text class="major-announcement-label">{{ t('majorAnnouncement') }}</text>
-          <text class="major-announcement-title">{{ localizedMajorAnnouncementTitle }}</text>
-          <text class="major-announcement-content">{{ localizedMajorAnnouncementContent }}</text>
-        </view>
-        <view class="major-announcement-close" role="button" :aria-label="t('dismissMajorAnnouncement')" @tap.stop="dismissMajorAnnouncement">×</view>
       </view>
 
       <HomePromoCarousel />
@@ -223,6 +213,37 @@
         </view>
       </template>
     </view>
+
+    <view v-if="majorAnnouncement" class="major-announcement-overlay" role="presentation">
+      <view class="major-announcement-dialog" role="dialog" aria-modal="true" @tap.stop>
+        <view class="major-announcement-header">
+          <view class="major-announcement-rail"></view>
+          <view class="major-announcement-heading">
+            <text class="major-announcement-label">{{ t('majorAnnouncement') }}</text>
+            <text class="major-announcement-title">{{ localizedMajorAnnouncementTitle }}</text>
+          </view>
+          <view class="major-announcement-close" role="button" :aria-label="t('dismissMajorAnnouncement')" @tap.stop="dismissMajorAnnouncement">×</view>
+        </view>
+
+        <view v-if="localizedMajorAnnouncementTime" class="major-announcement-time">
+          <text>{{ t('majorAnnouncementPublishedAt') }}：{{ localizedMajorAnnouncementTime }}</text>
+        </view>
+
+        <scroll-view class="major-announcement-body" scroll-y :show-scrollbar="false">
+          <text class="major-announcement-content">{{ localizedMajorAnnouncementContent }}</text>
+          <view v-if="majorAnnouncement.action_url" class="major-announcement-action" role="button" @tap="openMajorAnnouncement">
+            <text>{{ t('viewMajorAnnouncementDetails') }}</text>
+            <text aria-hidden="true">›</text>
+          </view>
+        </scroll-view>
+
+        <view class="major-announcement-footer">
+          <view class="major-announcement-acknowledge" role="button" @tap="dismissMajorAnnouncement">
+            <text>{{ t('acknowledgeMajorAnnouncement') }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
   <view v-else class="startup-gate" aria-busy="true">
     <image class="startup-logo" src="/static/logo/logo.png" mode="aspectFit" />
@@ -326,9 +347,24 @@ const localizedMajorAnnouncementContent = computed(() => {
   if (!announcement) return ''
   return i18n.lang === 'en' && announcement.content_en ? announcement.content_en : i18n.tr(announcement.content)
 })
+const localizedMajorAnnouncementTime = computed(() => {
+  const value = majorAnnouncement.value?.created_at
+  if (!value) return ''
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 16)
+  return date.toLocaleString(i18n.locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+})
 
 function majorAnnouncementDismissalKey() {
-  return `kai-major-announcement-dismissed:v1:${user.value?.id || 'anonymous'}`
+  return `kai-major-announcement-dismissed:v2:${user.value?.id || 'anonymous'}`
 }
 
 async function loadMajorAnnouncement() {
@@ -609,6 +645,7 @@ function markProductImageFailed(id: number) {
   --card-border: var(--home-card-border);
   --shadow: var(--home-card-shadow);
 }
+.page--modal-open { height: 100vh; overflow: hidden; }
 .startup-gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18rpx; background: var(--bg); color: var(--text-sub); }
 .startup-logo { width: 112rpx; height: 112rpx; border-radius: 28rpx; }
 .startup-label { font-size: 24rpx; }
@@ -630,15 +667,23 @@ function markProductImageFailed(id: number) {
 .sub-val { color: var(--text); font-size: 14px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .up { color: var(--up); }
 
-.major-announcement { position: relative; display: flex; align-items: center; gap: 20rpx; min-height: 116rpx; padding: 20rpx 72rpx 20rpx 20rpx; margin: 4rpx 0 22rpx; box-sizing: border-box; border: 1rpx solid var(--border); border-left: 7rpx solid var(--primary); border-radius: var(--radius); background: var(--card); box-shadow: 0 14rpx 38rpx rgba(10, 91, 88, 0.08); }
-.major-announcement:active { opacity: 0.82; }
-.major-announcement-icon { width: 70rpx; height: 70rpx; flex: 0 0 70rpx; border-radius: 20rpx; color: var(--primary); background: var(--primary-soft); display: flex; align-items: center; justify-content: center; }
-.major-announcement-copy { min-width: 0; flex: 1; }
-.major-announcement-label { display: block; color: var(--primary); font-size: 18rpx; font-weight: 700; letter-spacing: 2rpx; }
-.major-announcement-title { display: block; overflow: hidden; margin-top: 5rpx; color: var(--text); font-size: 26rpx; font-weight: 750; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.major-announcement-content { display: -webkit-box; overflow: hidden; margin-top: 5rpx; color: var(--text-sub); font-size: 21rpx; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.major-announcement-close { position: absolute; top: 12rpx; right: 12rpx; width: 54rpx; height: 54rpx; border-radius: 14rpx; color: var(--text-dim); font-size: 34rpx; font-weight: 300; line-height: 52rpx; text-align: center; }
+.major-announcement-overlay { position: fixed; inset: 0; z-index: 1000; padding: calc(28rpx + var(--safe-top)) 28rpx calc(28rpx + var(--safe-bottom)); box-sizing: border-box; background: rgba(4, 20, 22, 0.62); display: flex; align-items: center; justify-content: center; }
+.major-announcement-dialog { width: 100%; max-width: 680rpx; max-height: calc(100vh - 56rpx - var(--safe-top) - var(--safe-bottom)); overflow: hidden; box-sizing: border-box; border: 1rpx solid var(--border); border-radius: 32rpx; background: var(--card); box-shadow: 0 34rpx 100rpx rgba(0, 24, 26, 0.34); display: flex; flex-direction: column; }
+.major-announcement-header { position: relative; flex: 0 0 auto; padding: 42rpx 88rpx 26rpx 38rpx; display: flex; align-items: flex-start; gap: 20rpx; }
+.major-announcement-rail { width: 7rpx; height: 68rpx; flex: 0 0 7rpx; border-radius: 4rpx; background: var(--primary); }
+.major-announcement-heading { min-width: 0; flex: 1; }
+.major-announcement-label { display: block; color: var(--primary); font-size: 19rpx; font-weight: 700; letter-spacing: 3rpx; }
+.major-announcement-title { display: block; margin-top: 8rpx; color: var(--text); font-size: 34rpx; font-weight: 750; line-height: 1.35; }
+.major-announcement-close { position: absolute; top: 25rpx; right: 23rpx; width: 62rpx; height: 62rpx; border-radius: 18rpx; color: var(--text-dim); font-size: 45rpx; font-weight: 300; line-height: 58rpx; text-align: center; }
 .major-announcement-close:active { color: var(--text); background: var(--bg-2); }
+.major-announcement-time { flex: 0 0 auto; margin: 0 38rpx; padding: 0 0 24rpx 27rpx; border-bottom: 1rpx solid var(--divider); color: var(--text-sub); font-size: 22rpx; font-variant-numeric: tabular-nums; }
+.major-announcement-body { min-height: 240rpx; height: 44vh; max-height: 680rpx; box-sizing: border-box; padding: 32rpx 38rpx; }
+.major-announcement-content { display: block; color: var(--text); font-size: 28rpx; line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
+.major-announcement-action { width: fit-content; min-height: 72rpx; margin-top: 24rpx; color: var(--primary); display: flex; align-items: center; gap: 10rpx; font-size: 25rpx; font-weight: 700; }
+.major-announcement-action:active { opacity: 0.72; }
+.major-announcement-footer { flex: 0 0 auto; padding: 24rpx 38rpx 36rpx; border-top: 1rpx solid var(--divider); }
+.major-announcement-acknowledge { min-height: 92rpx; border-radius: 24rpx; color: #fff; background: var(--primary); box-shadow: 0 18rpx 44rpx rgba(12, 160, 164, 0.24); display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 750; }
+.major-announcement-acknowledge:active { opacity: 0.86; transform: translateY(1rpx); }
 
 .divider { height: 1px; background: var(--divider); margin: 0; }
 .home-load-warning { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx 22rpx; margin: 18rpx 0 0; color: var(--text-sub); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: var(--radius); font-size: 22rpx; line-height: 1.45; }

@@ -6,17 +6,20 @@ function read(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
 }
 
-test('major announcement uses the public endpoint and appears before home promotions', () => {
+test('major announcement uses the public endpoint and opens as a home modal', () => {
   const api = read('../src/api/notification.ts')
   const home = read('../src/pages/index/index.vue')
 
   assert.match(api, /'major_announcement' \| 'system'/)
   assert.match(api, /url: '\/notifications\/major-announcement'/)
   assert.match(api, /auth: 'none'/)
-  assert.ok(home.indexOf('v-if="majorAnnouncement"') < home.indexOf('<HomePromoCarousel />'))
-  assert.match(home, /kai-major-announcement-dismissed:v1:\$\{user\.value\?\.id/)
+  assert.ok(home.indexOf('<HomePromoCarousel />') < home.indexOf('class="major-announcement-overlay"'))
+  assert.match(home, /kai-major-announcement-dismissed:v2:\$\{user\.value\?\.id/)
   assert.match(home, /loadMajorAnnouncement\(\)/)
   assert.match(home, /dismissMajorAnnouncement/)
+  assert.match(home, /role="dialog" aria-modal="true"/)
+  assert.match(home, /acknowledgeMajorAnnouncement/)
+  assert.match(home, /majorAnnouncementPublishedAt/)
 })
 
 test('notification center exposes the major-announcement category', () => {
@@ -26,5 +29,7 @@ test('notification center exposes the major-announcement category', () => {
   assert.match(page, /value: 'major_announcement', label: 'majorAnnouncement'/)
   assert.match(page, /major_announcement: 'majorAnnouncement'/)
   assert.match(i18n, /majorAnnouncement: '重大公告'/)
+  assert.match(i18n, /acknowledgeMajorAnnouncement: '我知道了'/)
   assert.match(i18n, /majorAnnouncement: 'Major Announcement'/)
+  assert.match(i18n, /acknowledgeMajorAnnouncement: 'Got it'/)
 })

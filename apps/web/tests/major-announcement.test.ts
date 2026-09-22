@@ -15,7 +15,7 @@ test("administrator can select a homepage major announcement", () => {
   assert.match(workspace, /公开显示在 Web 首页/);
 });
 
-test("public home renders the latest major announcement without blocking core content", () => {
+test("public home renders the latest major announcement in an accessible modal", () => {
   const api = read("../lib/internal-api.ts");
   const banner = read("../components/major-announcement-banner.tsx");
   const home = read("../components/home-page-content.tsx");
@@ -23,7 +23,11 @@ test("public home renders the latest major announcement without blocking core co
   assert.match(api, /\/api\/v1\/canonical\/notifications\/major-announcement/);
   assert.ok(home.indexOf("<MajorAnnouncementBanner />") < home.indexOf('className="home-v2-hero"'));
   assert.match(banner, /getMajorAnnouncement\(\)/);
-  assert.match(banner, /kai-major-announcement-dismissed:v1/);
+  assert.match(banner, /kai-major-announcement-dismissed:v2/);
   assert.match(banner, /notificationActionPath\(announcement\?\.action_url\)/);
+  assert.match(banner, /role="dialog"/);
+  assert.match(banner, /aria-modal="true"/);
+  assert.match(banner, /majorAnnouncement\.acknowledge/);
+  assert.match(banner, /document\.body\.style\.overflow = "hidden"/);
   assert.match(banner, /\.catch\(\(\) => \{/);
 });

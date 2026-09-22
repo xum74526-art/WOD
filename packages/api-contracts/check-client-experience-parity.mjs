@@ -909,7 +909,7 @@ const commonCapabilities = [
       {
         client: 'Web home',
         file: 'apps/web/components/major-announcement-banner.tsx',
-        patterns: ['getMajorAnnouncement()', 'kai-major-announcement-dismissed:v1', 'notificationActionPath'],
+        patterns: ['getMajorAnnouncement()', 'kai-major-announcement-dismissed:v2', 'role="dialog"', 'majorAnnouncement.acknowledge', 'notificationActionPath'],
       },
       ...['android', 'ios'].flatMap(client => [
         {
@@ -920,7 +920,7 @@ const commonCapabilities = [
         {
           client: `${client} home`,
           file: `apps/${client}/src/pages/index/index.vue`,
-          patterns: ['loadMajorAnnouncement()', 'kai-major-announcement-dismissed:v1:', 'dismissMajorAnnouncement'],
+          patterns: ['loadMajorAnnouncement()', 'kai-major-announcement-dismissed:v2:', 'major-announcement-overlay', 'acknowledgeMajorAnnouncement', 'dismissMajorAnnouncement'],
         },
         {
           client: `${client} notification center`,
