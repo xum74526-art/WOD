@@ -37,7 +37,7 @@ function dismissedAnnouncementId(): number | null {
 export function MajorAnnouncementBanner() {
   const { dateLocale, locale, t } = useI18n();
   const [announcement, setAnnouncement] = useState<MajorAnnouncement | null>(null);
-  const acknowledgeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -88,7 +88,7 @@ export function MajorAnnouncementBanner() {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    acknowledgeRef.current?.focus();
+    dialogRef.current?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") dismiss();
@@ -106,9 +106,11 @@ export function MajorAnnouncementBanner() {
 
   return <div className="home-major-announcement" role="presentation">
     <section
+      ref={dialogRef}
       className="home-major-announcement__dialog"
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       aria-labelledby={`major-announcement-${announcement.id}`}
       aria-describedby={`major-announcement-content-${announcement.id}`}
     >
@@ -136,7 +138,7 @@ export function MajorAnnouncementBanner() {
       </div>
 
       <footer className="home-major-announcement__footer">
-        <button ref={acknowledgeRef} type="button" className="home-major-announcement__acknowledge" onClick={dismiss}>
+        <button type="button" className="home-major-announcement__acknowledge" onClick={dismiss}>
           {t("majorAnnouncement.acknowledge", "我知道了")}
         </button>
       </footer>
