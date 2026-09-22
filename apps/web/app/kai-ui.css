@@ -896,7 +896,8 @@ html.dark .home-v2 {
   display: flex;
   flex-direction: column;
 }
-.home-major-announcement__dialog:focus { outline: none; }
+.home-major-announcement__dialog:focus,
+.home-major-announcement__dialog:focus-visible { outline: none !important; }
 .home-major-announcement__header {
   position: relative;
   padding: 28px 66px 18px 34px;

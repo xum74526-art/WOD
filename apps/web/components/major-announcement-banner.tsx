@@ -91,7 +91,22 @@ export function MajorAnnouncementBanner() {
     dialogRef.current?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") dismiss();
+      if (event.key === "Escape") {
+        dismiss();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === dialogRef.current || document.activeElement === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);

@@ -29,6 +29,7 @@ test("public home renders the latest major announcement in an accessible modal",
   assert.match(banner, /aria-modal="true"/);
   assert.match(banner, /dialogRef\.current\?\.focus\(\)/);
   assert.match(banner, /tabIndex=\{-1\}/);
+  assert.match(banner, /querySelectorAll<HTMLElement>\("a\[href\], button:not\(\[disabled\]\)"\)/);
   assert.match(banner, /majorAnnouncement\.acknowledge/);
   assert.match(banner, /document\.body\.style\.overflow = "hidden"/);
   assert.match(banner, /\.catch\(\(\) => \{/);
