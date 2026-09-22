@@ -1,5 +1,5 @@
 <template>
-  <view :class="['page', pageMotionClass]">
+  <view class="page" :class="{ 'auth-ready': pageEntered }">
     <view class="shell" :style="{ paddingTop: 'calc(52rpx + var(--safe-top))' }">
       <view class="logo-area">
         <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
@@ -13,12 +13,14 @@
         <text class="alink">{{ t('deletionResume') }}</text>
       </view>
       <view class="auth-card">
-        <view class="mode-switch">
+        <view class="mode-switch" :class="{ 'mode-register': mode === 'register' }">
+          <view class="mode-indicator" aria-hidden="true" />
           <view class="mode-item" :class="{ active: mode === 'login' }" @tap="setMode('login')">{{ t('登录') }}</view>
           <view class="mode-item" :class="{ active: mode === 'register' }" @tap="setMode('register')">{{ t('注册') }}</view>
         </view>
 
-        <view class="method-switch">
+        <view class="method-switch" :class="{ 'method-kai': authMethod === 'kai' }">
+          <view class="method-indicator" aria-hidden="true" />
           <view class="method-item" :class="{ active: authMethod === 'phone' }" @tap="setAuthMethod('phone')">
             <text>{{ t(mode === 'login' ? 'phoneLogin' : 'phoneRegister') }}</text>
           </view>
@@ -27,49 +29,53 @@
           </view>
         </view>
 
-        <view v-if="authMethod === 'phone'" class="phone-form">
-          <view class="field" v-if="mode === 'register'">
-            <text class="flabel">{{ t('k_819767ad') }}</text>
-            <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" maxlength="64" />
-          </view>
-          <view class="field" v-if="mode === 'register'">
-            <text class="flabel">{{ t('k_1dfb714c') }}</text>
-            <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" maxlength="16" />
-          </view>
-          <view class="field" v-if="mode === 'register'">
-            <text class="flabel">{{ t('k_b19c3a24') }}</text>
-            <view class="captcha-row">
-              <input class="finput captcha-input" v-model="form.captcha_code" :placeholder="t('k_8001cfd7')" placeholder-class="ph" maxlength="6" />
-              <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha()" mode="aspectFit" />
-              <view v-else class="captcha-placeholder" @tap="refreshCaptcha()">{{ t('k_3ca790b3') }}</view>
+        <view class="auth-panel-frame" :style="{ height: panelHeight }">
+          <view :key="mode + '-' + authMethod" class="auth-panel-content">
+            <view v-if="authMethod === 'phone'" class="phone-form">
+              <view class="field" :class="{ focused: focusedField === 'username' }" v-if="mode === 'register'">
+                <text class="flabel">{{ t('k_819767ad') }}</text>
+                <input class="finput" v-model="form.username" :placeholder="t('k_08b1fa13')" placeholder-class="ph" maxlength="64" :disabled="submitting" @focus="focusedField = 'username'" @blur="focusedField = ''" />
+              </view>
+              <view class="field" :class="{ focused: focusedField === 'invite' }" v-if="mode === 'register'">
+                <text class="flabel">{{ t('k_1dfb714c') }}</text>
+                <input class="finput" v-model="form.invite_code" :placeholder="t('k_7f9c3b8d')" placeholder-class="ph" maxlength="16" :disabled="submitting" @focus="focusedField = 'invite'" @blur="focusedField = ''" />
+              </view>
+              <view class="field" :class="{ focused: focusedField === 'captcha' }" v-if="mode === 'register'">
+                <text class="flabel">{{ t('k_b19c3a24') }}</text>
+                <view class="captcha-row">
+                  <input class="finput captcha-input" v-model="form.captcha_code" :placeholder="t('k_8001cfd7')" placeholder-class="ph" maxlength="6" :disabled="submitting" @focus="focusedField = 'captcha'" @blur="focusedField = ''" />
+                  <image v-if="captchaImg" class="captcha-img" :src="captchaImg" @tap="refreshCaptcha()" mode="aspectFit" />
+                  <view v-else class="captcha-placeholder" @tap="refreshCaptcha()">{{ t('k_3ca790b3') }}</view>
+                </view>
+              </view>
+              <view class="field" :class="{ focused: focusedField === 'phone' }">
+                <text class="flabel">{{ t('k_8098e2b4') }}</text>
+                <input class="finput" v-model="form.phone" type="number" :placeholder="t('k_6e4f4b33')" placeholder-class="ph" maxlength="11" :disabled="submitting" @focus="focusedField = 'phone'" @blur="focusedField = ''" />
+              </view>
+              <view class="field password-field" :class="{ focused: focusedField === 'password' }">
+                <text class="flabel">{{ t('k_a8105204') }}</text>
+                <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" maxlength="64" :disabled="submitting" confirm-type="done" @confirm="submit" @focus="focusedField = 'password'" @blur="focusedField = ''" />
+                <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
+              </view>
+              <view v-if="mode === 'login'" class="account-recovery-row">
+                <button class="account-recovery-link" @tap="openAccountRecovery">{{ t('forgotPassword') }}</button>
+              </view>
+            </view>
+
+            <view v-else class="kai-panel">
+              <view class="kai-mark">KAI</view>
+              <text class="kai-title">{{ t(mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister') }}</text>
+              <text class="kai-desc">{{ t('kaiIdentityHint') }}</text>
+              <view class="kai-flow">
+                <view class="flow-dot">1</view><text>{{ t('kaiVerifyStep') }}</text>
+                <view class="flow-line" />
+                <view />
+                <view class="flow-dot">2</view><text>{{ t(mode === 'login' ? 'kaiReturnStep' : 'kaiRegisterReturnStep') }}</text>
+              </view>
+              <view v-if="kaiConfigured === false" class="config-warning">{{ t('kaiNotConfigured') }}</view>
+              <text class="phone-note">{{ t(mode === 'login' ? 'kaiPhoneBindingHint' : 'kaiRegisterBindingHint') }}</text>
             </view>
           </view>
-          <view class="field">
-            <text class="flabel">{{ t('k_8098e2b4') }}</text>
-            <input class="finput" v-model="form.phone" type="number" :placeholder="t('k_6e4f4b33')" placeholder-class="ph" maxlength="11" />
-          </view>
-          <view class="field">
-            <text class="flabel">{{ t('k_a8105204') }}</text>
-            <input class="finput" v-model="form.password" :password="!showPwd" :placeholder="t('k_e39ffe99')" placeholder-class="ph" maxlength="64" />
-            <view class="eye" :class="{ on: showPwd }" @tap="showPwd = !showPwd"><AppIcon name="eye" :size="36" /></view>
-          </view>
-          <view v-if="mode === 'login'" class="account-recovery-row">
-            <button class="account-recovery-link" @tap="openAccountRecovery">{{ t('forgotPassword') }}</button>
-          </view>
-        </view>
-
-        <view v-else class="kai-panel">
-          <view class="kai-mark">KAI</view>
-          <text class="kai-title">{{ t(mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister') }}</text>
-          <text class="kai-desc">{{ t('kaiIdentityHint') }}</text>
-          <view class="kai-flow">
-            <view class="flow-dot">1</view><text>{{ t('kaiVerifyStep') }}</text>
-            <view class="flow-line" />
-            <view />
-            <view class="flow-dot">2</view><text>{{ t(mode === 'login' ? 'kaiReturnStep' : 'kaiRegisterReturnStep') }}</text>
-          </view>
-          <view v-if="kaiConfigured === false" class="config-warning">{{ t('kaiNotConfigured') }}</view>
-          <text class="phone-note">{{ t(mode === 'login' ? 'kaiPhoneBindingHint' : 'kaiRegisterBindingHint') }}</text>
         </view>
 
         <view class="agree">
@@ -77,8 +83,11 @@
           <view class="atext">{{ t('我已阅读并同意') }}<text class="alink" @tap.stop="goAgreement('agreement')">{{ t('用户协议') }}</text>{{ t('和') }}<text class="alink" @tap.stop="goAgreement('privacy')">{{ t('隐私政策') }}</text></view>
         </view>
 
-        <view class="btn-primary" :class="{ disabled: submitting || !agree }" @tap="submit">
-          <text v-if="authMethod === 'phone'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
+        <view class="btn-primary" :class="{ disabled: !agree, busy: submitting, succeeded: loginSucceeded }" role="button" :aria-busy="submitting ? 'true' : 'false'" @tap="submit">
+          <view v-if="submitting && !loginSucceeded" class="submit-spinner" aria-hidden="true" />
+          <text v-if="loginSucceeded" class="submit-check" aria-hidden="true">✓</text>
+          <text v-if="loginSucceeded">{{ t('loginSuccess') }}</text>
+          <text v-else-if="authMethod === 'phone'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
           <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
         </view>
         <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
@@ -89,8 +98,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
+import { getCurrentInstance, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { onHide, onLoad, onReady, onResize, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { request } from '@/api/request'
 import { getKaiAuthConfig, startKaiAuth } from '@/api/user'
@@ -112,15 +121,25 @@ import { hasInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { consumeAuthReturnPath } from '@/utils/auth-return-path'
 import { readDeletionReceipt } from '@/utils/account-deletion-receipt'
 import { callContactPhone } from '@/utils/contact-phone'
-import { switchTab } from '@/utils/nav'
-import { usePageMotion } from '@/utils/page-motion'
+import { navigateTo, switchTab } from '@/utils/nav'
+import { finishAppLaunch } from '@/utils/app-launch'
+import { prefersReducedMotion } from '@/utils/motion'
 
 const { t } = useI18nStore()
-const { pageMotionClass } = usePageMotion()
+const pageEntered = ref(false)
+const focusedField = ref('')
+const loginSucceeded = ref(false)
+const panelHeight = ref('auto')
+const pageInstance = getCurrentInstance()
+let panelMeasureGeneration = 0
+let entranceTimer: ReturnType<typeof setTimeout> | null = null
+let launchRevealTimer: ReturnType<typeof setTimeout> | null = null
+let loginSuccessTimer: ReturnType<typeof setTimeout> | null = null
+let pageVisible = true
 const userStore = useUserStore()
 const pendingDeletion = ref(false)
 onShow(() => { pendingDeletion.value = !!readDeletionReceipt() })
-function openDeletionStatus() { uni.navigateTo({ url: '/pages/account-deletion/index' }) }
+function openDeletionStatus() { navigateTo('/pages/account-deletion/index') }
 const mode = ref<'login' | 'register'>('login')
 const authMethod = ref<'phone' | 'kai'>('phone')
 const form = reactive({ username: '', phone: '', password: '', invite_code: '', captcha_code: '' })
@@ -145,22 +164,41 @@ let kaiReturnProbeGeneration = 0
 const HANDLED_KAI_CALLBACK_KEY = 'wod_kai_callback_fingerprint'
 const KAI_RETURN_PROBE_DELAYS = [0, 80, 180, 350, 650, 1000, 1600, 2400]
 
+function measureAuthPanel() {
+  const generation = ++panelMeasureGeneration
+  void nextTick(() => {
+    if (!pageVisible || generation !== panelMeasureGeneration) return
+    uni.createSelectorQuery().in(pageInstance?.proxy)
+      .select('.auth-panel-content').boundingClientRect((result) => {
+        if (generation !== panelMeasureGeneration || !pageVisible || Array.isArray(result)) return
+        if (result?.height && result.height > 0) panelHeight.value = result.height + 'px'
+      }).exec()
+  })
+}
+
+watch([mode, authMethod, kaiConfigured], measureAuthPanel, { flush: 'post' })
+onResize(measureAuthPanel)
+
 function setMode(value: 'login' | 'register') {
+  if (mode.value === value || submitting.value || loginSucceeded.value) return
+  focusedField.value = ''
   mode.value = value
   syncCaptchaLifecycle(false)
 }
 
 function setAuthMethod(value: 'phone' | 'kai') {
+  if (authMethod.value === value || submitting.value || loginSucceeded.value) return
+  focusedField.value = ''
   authMethod.value = value
   syncCaptchaLifecycle(false)
 }
 
 function goAgreement(type: string) {
-  uni.navigateTo({ url: '/pages/agreement/index?type=' + type })
+  navigateTo('/pages/agreement/index?type=' + type)
 }
 
 function openAccountRecovery() {
-  uni.navigateTo({ url: '/pages/forgot-password/index' })
+  navigateTo('/pages/forgot-password/index')
 }
 
 function isPhoneRegistration() {
@@ -333,8 +371,7 @@ async function handleKaiCallback(callback: KaiAuthCallback | null) {
     uni.removeStorageSync(PENDING_KAI_INTENT_KEY)
     uni.setStorageSync(HANDLED_KAI_CALLBACK_KEY, fingerprint)
     clearPendingLoginKaiCallback(callback)
-    uni.showToast({ title: t('loginSuccess'), icon: 'success' })
-    setTimeout(enterAuthenticatedApp, 500)
+    completeLogin()
     return true
   } catch {
     // Keep the callback retryable when ticket exchange failed because of a
@@ -355,8 +392,13 @@ function handleStagedKaiCallback() {
 
 let authenticatedNavigationStarted = false
 
+function completeLogin() {
+  loginSucceeded.value = true
+  loginSuccessTimer = setTimeout(enterAuthenticatedApp, prefersReducedMotion() ? 0 : 280)
+}
+
 function enterAuthenticatedApp() {
-  if (authenticatedNavigationStarted) return
+  if (authenticatedNavigationStarted || !userStore.isLogin || !userStore.authReady) return
   authenticatedNavigationStarted = true
   const returnPath = consumeAuthReturnPath()
   if (hasInquiryRequestPrefill()) {
@@ -442,7 +484,7 @@ function unregisterKaiRuntimeListener() {
 }
 
 async function submit() {
-  if (submitting.value) return
+  if (submitting.value || loginSucceeded.value) return
   if (!agree.value) { uni.showToast({ title: t('请先同意协议'), icon: 'none' }); return }
   if (authMethod.value === 'kai') { await submitKai(); return }
   const isRegistration = mode.value === 'register'
@@ -465,8 +507,7 @@ async function submit() {
   try {
     if (!isRegistration) await userStore.login(normalizedPhone, form.password)
     else await userStore.register(registrationUsername, normalizedPhone, form.password, registrationInviteCode || undefined, captchaKey.value, form.captcha_code)
-    uni.showToast({ title: t('success'), icon: 'success' })
-    setTimeout(enterAuthenticatedApp, 500)
+    completeLogin()
   } catch {
     if (isRegistration) await refreshCaptcha(true)
   }
@@ -479,12 +520,51 @@ onLoad((options) => {
   else handleStagedKaiCallback()
 })
 
+function revealRenderedLogin(attempt = 0) {
+  // onReady is a service-layer event on native. Wait for the view layer to
+  // acknowledge visible content before removing its cover, otherwise the
+  // bridge delay can expose an empty page even though the route is ready.
+  void nextTick(() => {
+    if (!pageVisible) return
+    uni.createSelectorQuery().in(pageInstance?.proxy).select('.auth-card')
+      .fields({ computedStyle: ['opacity'] }, (result) => {
+        if (!pageVisible) return
+        const opacity = Number((result as { opacity?: string } | undefined)?.opacity ?? 0)
+        if (opacity >= 0.35 || attempt >= 12) {
+          finishAppLaunch()
+          return
+        }
+        launchRevealTimer = setTimeout(() => {
+          launchRevealTimer = null
+          revealRenderedLogin(attempt + 1)
+        }, 40)
+      }).exec()
+  })
+}
+
+onReady(() => {
+  // The background is always opaque; only the brand and form enter, once.
+  measureAuthPanel()
+  entranceTimer = setTimeout(() => {
+    entranceTimer = null
+    pageEntered.value = true
+    revealRenderedLogin()
+  }, prefersReducedMotion() ? 0 : 32)
+})
+
+async function restoreExistingSession() {
+  await userStore.restore()
+  if (pageVisible && userStore.isLogin && !loginSucceeded.value) enterAuthenticatedApp()
+}
+
 onShow(() => {
+  pageVisible = true
+  measureAuthPanel()
   captchaPageVisible = true
   if (userStore.isLogin) {
     clearPendingLoginKaiCallback()
     stopCaptchaExpiryTimer()
-    setTimeout(enterAuthenticatedApp, 800)
+    void restoreExistingSession()
     return
   }
   syncCaptchaLifecycle(true)
@@ -492,6 +572,7 @@ onShow(() => {
 })
 
 onHide(() => {
+  pageVisible = false
   captchaPageVisible = false
   stopCaptchaExpiryTimer()
 })
@@ -502,6 +583,11 @@ onMounted(() => {
   void checkKaiConfig()
 })
 onUnmounted(() => {
+  pageVisible = false
+  panelMeasureGeneration += 1
+  if (entranceTimer) clearTimeout(entranceTimer)
+  if (launchRevealTimer) clearTimeout(launchRevealTimer)
+  if (loginSuccessTimer) clearTimeout(loginSuccessTimer)
   captchaPageVisible = false
   stopCaptchaExpiryTimer()
   uni.$off('wod-kai-login-callback-ready', handleStagedKaiCallback)
@@ -512,6 +598,9 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .page { min-height: 100vh; background: var(--bg-2); }
+.logo-area, .auth-card { opacity: 0; transform: translate3d(0, 18rpx, 0); transition: opacity 420ms ease, transform 480ms cubic-bezier(.22, 1, .36, 1); }
+.auth-card { transition-delay: 65ms; }
+.auth-ready .logo-area, .auth-ready .auth-card { opacity: 1; transform: none; }
 .shell { padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
 .logo-area { display: flex; align-items: center; margin: 28rpx 8rpx 40rpx; }
 .logo-img { width: 88rpx; height: 88rpx; border-radius: 22rpx; margin-right: 22rpx; }
@@ -519,21 +608,33 @@ onUnmounted(() => {
 .logo { font-size: 44rpx; line-height: 1; font-weight: 800; color: var(--text); letter-spacing: 2rpx; }
 .sub { margin-top: 12rpx; color: var(--text-sub); font-size: 24rpx; }
 .auth-card { background: var(--card); border: 1rpx solid var(--border); border-radius: 28rpx; padding: 24rpx; box-shadow: 0 14rpx 42rpx rgba(15, 38, 47, 0.06); }
-.mode-switch { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border-radius: 18rpx; padding: 6rpx; margin-bottom: 28rpx; }
-.mode-item { height: 76rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 28rpx; font-weight: 600; border-radius: 14rpx; }
-.mode-item.active { color: var(--text); background: var(--card); box-shadow: 0 5rpx 18rpx rgba(15, 38, 47, 0.08); }
-.method-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-bottom: 28rpx; }
-.method-item { min-height: 76rpx; border: 1rpx solid var(--border); border-radius: 16rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 26rpx; }
-.method-item.active { color: var(--primary); background: rgba(24, 175, 196, .08); border-color: var(--primary); font-weight: 600; }
-.field { position: relative; margin-bottom: 22rpx; background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 16rpx; padding: 20rpx 24rpx; }
-.flabel { color: var(--text-sub); font-size: 22rpx; display: block; margin-bottom: 10rpx; }
+.mode-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border-radius: 18rpx; padding: 6rpx; margin-bottom: 28rpx; }
+.mode-indicator { position: absolute; top: 6rpx; bottom: 6rpx; left: 6rpx; width: calc(50% - 6rpx); border-radius: 14rpx; background: var(--bg); box-shadow: 0 5rpx 18rpx rgba(15, 38, 47, 0.08); transition: transform 280ms cubic-bezier(.22, 1, .36, 1); }
+.mode-register .mode-indicator { transform: translateX(100%); }
+.mode-item { position: relative; z-index: 1; height: 76rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 28rpx; font-weight: 600; border-radius: 14rpx; transition: color 180ms ease, transform 140ms ease; }
+.mode-item.active { color: var(--text); }
+.method-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-bottom: 24rpx; }
+.method-indicator { position: absolute; top: 0; bottom: 0; left: 0; width: calc(50% - 8rpx); box-sizing: border-box; border: 1rpx solid var(--primary); border-radius: 16rpx; background: var(--primary-soft); transition: transform 260ms cubic-bezier(.22, 1, .36, 1); }
+.method-kai .method-indicator { transform: translateX(calc(100% + 16rpx)); }
+.method-item { position: relative; z-index: 1; min-height: 76rpx; border: 1rpx solid var(--border); border-radius: 16rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 26rpx; transition: color 180ms ease, border-color 180ms ease, transform 140ms ease; }
+.method-item.active { color: var(--primary); border-color: transparent; font-weight: 600; }
+.mode-item:active, .method-item:active { transform: scale(.97); }
+.auth-panel-frame { overflow: hidden; transition: height 280ms cubic-bezier(.22, 1, .36, 1); }
+.auth-panel-content { padding: 4rpx; box-sizing: border-box; animation: auth-panel-in 240ms cubic-bezier(.22, 1, .36, 1); }
+@keyframes auth-panel-in { from { opacity: .45; transform: translate3d(0, 8rpx, 0); } to { opacity: 1; transform: none; } }
+.field { position: relative; margin-bottom: 22rpx; background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 16rpx; padding: 20rpx 24rpx; transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+.field.focused { border-color: var(--primary); box-shadow: 0 0 0 4rpx var(--primary-soft); background: var(--bg); }
+.field.focused .flabel { color: var(--primary); }
+.flabel { color: var(--text-sub); font-size: 22rpx; display: block; margin-bottom: 10rpx; transition: color 180ms ease; }
+.password-field .finput { padding-right: 58rpx; }
 .finput { color: var(--text); font-size: 30rpx; min-height: 42rpx; }
 .ph { color: var(--text-dim); }
 .captcha-row { display: flex; align-items: center; gap: 16rpx; }
 .captcha-input { flex: 1; }
 .captcha-img { width: 112px; height: 46px; border-radius: 8rpx; flex-shrink: 0; }
 .captcha-placeholder { width: 112px; height: 46px; border-radius: 8rpx; background: var(--card); border: 1rpx solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22rpx; color: var(--text-sub); flex-shrink: 0; }
-.eye { position: absolute; right: 24rpx; bottom: 27rpx; color: var(--text-sub); }
+.eye { position: absolute; right: 16rpx; bottom: 17rpx; padding: 10rpx; color: var(--text-sub); transition: color 160ms ease, transform 140ms ease; }
+.eye:active { transform: scale(.88); }
 .eye.on { color: var(--primary); }
 .account-recovery-row { display: flex; justify-content: flex-end; margin: -8rpx 2rpx 4rpx; }
 .account-recovery-link { width: auto; margin: 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.4; }
@@ -548,14 +649,29 @@ onUnmounted(() => {
 .config-warning { width: 100%; box-sizing: border-box; margin-top: 20rpx; padding: 18rpx; background: rgba(239, 68, 68, .08); color: #dc2626; border-radius: 14rpx; font-size: 23rpx; }
 .phone-note { margin-top: 20rpx; color: var(--text-dim); font-size: 22rpx; }
 .agree { display: flex; align-items: flex-start; margin: 28rpx 4rpx 28rpx; }
-.check { width: 36rpx; height: 36rpx; border-radius: 18rpx; border: 1rpx solid var(--text-dim); margin-right: 14rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.check { width: 36rpx; height: 36rpx; border-radius: 18rpx; border: 1rpx solid var(--text-dim); margin-right: 14rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background-color 160ms ease, border-color 160ms ease, transform 140ms ease; }
+.check:active { transform: scale(.88); }
 .check.checked { background: var(--primary); border-color: var(--primary); }
-.ck { color: #fff; font-size: 22rpx; }
+.ck { color: #fff; font-size: 22rpx; animation: auth-check-in 180ms ease-out; }
 .atext { color: var(--text-sub); font-size: 23rpx; flex: 1; line-height: 1.55; }
 .alink { color: var(--primary); }
-.btn-primary { background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; }
+.btn-primary { display: flex; align-items: center; justify-content: center; gap: 16rpx; min-height: 96rpx; box-sizing: border-box; background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; transition: transform 140ms ease, opacity 180ms ease, background-color 200ms ease, box-shadow 180ms ease; }
+.btn-primary:not(.disabled):not(.busy):not(.succeeded):active { transform: scale(.98); box-shadow: 0 4rpx 18rpx var(--primary-soft); }
 .btn-primary.disabled { opacity: 0.4; }
+.btn-primary.succeeded { background: #158466; }
+.submit-spinner { width: 28rpx; height: 28rpx; border: 3rpx solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: auth-submit-spin 750ms linear infinite; }
+.submit-check { animation: auth-check-in 180ms ease-out; }
+@keyframes auth-submit-spin { to { transform: rotate(360deg); } }
+@keyframes auth-check-in { from { transform: scale(.6); opacity: .2; } to { transform: scale(1); opacity: 1; } }
 .security-note { display: block; text-align: center; color: var(--text-dim); font-size: 21rpx; margin: 20rpx 0 4rpx; }
 .contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
 .contact-link::after { border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .logo-area, .auth-card, .mode-indicator, .mode-item, .method-indicator, .method-item,
+  .auth-panel-frame, .field, .flabel, .eye, .check, .btn-primary { transition: none; }
+  .auth-panel-content, .ck, .submit-spinner, .submit-check { animation: none; }
+  .logo-area, .auth-card { transform: none; }
+  .mode-item:active, .method-item:active, .eye:active, .check:active,
+  .btn-primary:not(.disabled):not(.busy):not(.succeeded):active { transform: none; }
+}
 </style>

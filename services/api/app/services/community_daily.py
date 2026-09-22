@@ -41,6 +41,45 @@ INTERNAL_SOURCE_NAME = "KAI星算算力行情"
 INTERNAL_SOURCE_AUTHOR = "KAI星算"
 INTERNAL_SYSTEM_PHONE = "wod-community"
 INTERNAL_SYSTEM_USERNAME = "KAI星算平台行情"
+INTERNAL_REGION_EN_BY_CODE = {
+    "north_china": "North China",
+    "east_china": "East China",
+    "central_china": "Central China",
+    "south_china": "South China",
+    "northeast_china": "Northeast China",
+    "northwest_china": "Northwest China",
+    "southwest_china": "Southwest China",
+    "china_unspecified": "Mainland China",
+    "asia_pacific": "Asia Pacific",
+    "north_america": "North America",
+    "europe": "Europe",
+    "middle_east": "Middle East",
+    "south_america": "South America",
+    "africa": "Africa",
+    "global_unspecified": "Global / Undisclosed",
+}
+INTERNAL_REGION_EN_BY_NAME = {
+    "华北": "North China",
+    "华东": "East China",
+    "华中": "Central China",
+    "华南": "South China",
+    "东北": "Northeast China",
+    "西北": "Northwest China",
+    "西南": "Southwest China",
+    "中国大陆": "Mainland China",
+    "亚太": "Asia Pacific",
+    "北美": "North America",
+    "欧洲": "Europe",
+    "中东": "Middle East",
+    "南美": "South America",
+    "非洲": "Africa",
+    "海外": "Overseas",
+    "全球/未披露": "Global / Undisclosed",
+    "全球／未披露": "Global / Undisclosed",
+    "全球 / 未披露": "Global / Undisclosed",
+    "未披露": "Undisclosed",
+    "平台": "the platform",
+}
 BILIBILI_OFFICIAL_OWNER_ID = "1320140761"
 BILIBILI_SEARCH_QUERIES = (
     "NVIDIA英伟达",
@@ -718,6 +757,14 @@ def _backfill_internal_branding(db: Session) -> int:
                 )
                 if field == "content":
                     branded = branded.replace("来自 KAI星算 最新", "来自KAI星算最新")
+                else:
+                    branded = branded.replace("KAI星算", "Compute Star Map")
+                    for region_zh, region_en in sorted(
+                        INTERNAL_REGION_EN_BY_NAME.items(),
+                        key=lambda item: len(item[0]),
+                        reverse=True,
+                    ):
+                        branded = branded.replace(region_zh, region_en)
             if value != branded:
                 setattr(post, field, branded)
                 changed = True
@@ -730,6 +777,21 @@ def _backfill_internal_branding(db: Session) -> int:
         if changed:
             updated += 1
     return updated
+
+
+def _internal_region_en(region_name: str | None, region_code: str | None) -> str:
+    """Return an English-only region label for first-party generated posts."""
+
+    code = str(region_code or "").strip().lower()
+    if code in INTERNAL_REGION_EN_BY_CODE:
+        return INTERNAL_REGION_EN_BY_CODE[code]
+
+    name = str(region_name or "平台").strip()
+    if name in INTERNAL_REGION_EN_BY_NAME:
+        return INTERNAL_REGION_EN_BY_NAME[name]
+    # Upstream identifiers such as EU-West are already suitable for English.
+    # Do not leak an unrecognised Chinese label into the English copy.
+    return "the listed region" if re.search(r"[\u3400-\u9fff]", name) else name
 
 
 def _app_timezone():
@@ -870,10 +932,11 @@ def _internal_candidates(db: Session, batch: str, count: int, start_index: int =
         if product:
             name = product.name
             region = product.region_name or "平台"
+            region_en = _internal_region_en(product.region_name, product.region_code)
             price = f"{float(product.price):.2f}"
             stock = product.stock or 0
             content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自KAI星算最新站内行情，实际下单前请再次确认。"
-            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region} is {price} CH/h, with {stock} units available. Price and availability come from the latest Compute Star Map market data; confirm again before ordering."
+            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region_en} is {price} CH/h, with {stock} units available. Price and availability come from the latest Compute Star Map market data; confirm again before ordering."
             title = f"{name} {batch} compute snapshot {index}"
         else:
             content_zh = f"今日算力使用提示 #{index + 1}\n\n开始训练前先确认显存、CUDA 版本和预计运行时长，可减少环境不匹配和闲置成本。"

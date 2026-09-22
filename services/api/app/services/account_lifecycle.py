@@ -7,8 +7,12 @@ from app.utils.response import BizError
 
 
 def ensure_active_user(user: User | None) -> None:
-    if user is None or getattr(user, "account_status", "active") not in (None, "active"):
-        raise BizError("账号已注销或正在注销", status_code=401)
+    state = getattr(user, "account_status", "active") if user is not None else None
+    if state in (None, "active") and user is not None:
+        return
+    if state == "suspended":
+        raise BizError("账号已冻结，请联系客服", status_code=401)
+    raise BizError("账号已注销或正在注销", status_code=401)
 
 
 def lock_active_user(db: Session, user_id: int) -> None:

@@ -17,6 +17,7 @@ import {
 import { stagePasswordResetCallback } from './utils/password-reset-callback'
 import { checkForAppUpdate } from './utils/app-update'
 import { CLIENT_PLATFORM } from './utils/client-platform'
+import { beginAppLaunch } from './utils/app-launch'
 import {
   hasCurrentPrivacyConsent,
   PRIVACY_CONSENT_EVENT,
@@ -30,6 +31,7 @@ let passwordResetNavigationTimer: ReturnType<typeof setTimeout> | null = null
 let appUpdateTimer: ReturnType<typeof setTimeout> | null = null
 let loginKaiCallbackNavigationTimer: ReturnType<typeof setTimeout> | null = null
 let networkRuntimeStarted = false
+let privacyNavigationPending = false
 
 function currentRoute() {
   const pages = getCurrentPages()
@@ -39,7 +41,12 @@ function currentRoute() {
 function ensurePrivacyConsentPage() {
   const route = currentRoute()
   if (route === 'pages/privacy-consent/index' || route === 'pages/agreement/index') return
-  uni.reLaunch({ url: '/pages/privacy-consent/index' })
+  if (privacyNavigationPending) return
+  privacyNavigationPending = true
+  uni.reLaunch({
+    url: '/pages/privacy-consent/index',
+    complete: () => { privacyNavigationPending = false },
+  })
 }
 
 function runtimeArguments() {
@@ -209,6 +216,7 @@ function handlePrivacyConsentRevoked() {
 }
 
 onLaunch(() => {
+  beginAppLaunch()
   uni.$on('wod-session-changed', () => {
     useHostingStore().reset()
     const notifications = useNotificationStore()

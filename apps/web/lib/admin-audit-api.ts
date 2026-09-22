@@ -5,7 +5,32 @@ import type { MobileBuyQuote, MobileBuyRequestDeal, MobileBuyRequestEvent } from
 
 export type AdminCounts = { users: number; orders: number; recharge_orders: number; verifications: number; bank_cards: number; withdrawals: number };
 export type AdminOverview = { created_platform: AuditPlatform | null; counts: AdminCounts; by_platform: Array<{ created_platform: AuditPlatform; counts: AdminCounts }> };
-export type AdminUserItem = { id: number; username: string; phone_masked: string | null; phone_bound: boolean; role: string; supplier_status: string; kai_identity_bound: boolean; created_platform: AuditPlatform; created_at: string };
+export type AdminUserItem = {
+  id: number;
+  username: string;
+  phone_masked: string | null;
+  phone_bound: boolean;
+  role: string;
+  supplier_status: string;
+  kai_identity_bound: boolean;
+  account_status: "active" | "suspended" | "deleting" | "deleted" | string;
+  password_set: boolean;
+  recovery_email_verified: boolean;
+  created_platform: AuditPlatform;
+  created_at: string;
+};
+export type AdminUserActionKind = "send_password_reset" | "freeze" | "unfreeze" | "delete";
+export type AdminUserAction = {
+  id: number;
+  actor_user_id: number;
+  target_user_id: number;
+  action: AdminUserActionKind;
+  reason: string;
+  previous_status: string;
+  new_status: string;
+  result_code: string;
+  created_at: string | null;
+};
 export type AdminOrderItem = {
   id: number;
   order_no: string;
@@ -226,8 +251,30 @@ export function createAdminNotificationBroadcast(input: AdminNotificationBroadca
   });
 }
 
-export function listAdminUsers(input: { platform?: AuditPlatform; keyword?: string } = {}) {
+export function listAdminUsers(input: { platform?: AuditPlatform; keyword?: string; status?: string; page?: number; pageSize?: number } = {}) {
   return apiRequest<AdminPage<AdminUserItem>>(canonicalApiPath(`/admin/users${query(input)}`));
+}
+
+export function manageAdminUser(id: number, input: {
+  action: AdminUserActionKind;
+  client_request_id: string;
+  reason: string;
+  confirm_username?: string;
+}) {
+  return apiRequest<AdminUserAction>(canonicalApiPath(`/admin/users/${id}/actions`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAdminUserActions(id: number, input: { page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  return apiRequest<AdminPage<AdminUserAction>>(
+    canonicalApiPath(`/admin/users/${id}/actions?${params.toString()}`),
+  );
 }
 
 export function listAdminOrders(input: { platform?: AuditPlatform; status?: string; orderNo?: string; page?: number; pageSize?: number } = {}) {

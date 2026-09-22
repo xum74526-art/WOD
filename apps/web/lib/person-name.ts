@@ -25,7 +25,7 @@ export function localizePersonName(value: string | null | undefined, locale: Kai
   const source = String(value ?? "").trim();
   if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hans") return "KAI星算平台行情";
   if (PLATFORM_MARKET_NAMES.has(source) && locale === "zh-Hant") return "算力星圖平台行情";
-  if (PLATFORM_MARKET_NAMES.has(source) && locale === "en") return "KAI星算 Platform Market";
+  if (PLATFORM_MARKET_NAMES.has(source) && locale === "en") return "KAI Compute Market";
   if (source && locale === "zh-Hant") return toTraditionalChinese(source);
   if (!source || locale !== "en") return source;
   if (PERSON_EN[source]) return PERSON_EN[source];

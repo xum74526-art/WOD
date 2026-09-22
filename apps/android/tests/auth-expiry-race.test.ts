@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 type RequestResponse = { statusCode: number; data: unknown }
 
-function fixture(initialToken = 'old-session') {
+function fixture(initialToken = 'old-session', route = 'pages/orders/index') {
   const source = readFileSync(new URL('../src/api/request.ts', import.meta.url), 'utf8')
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -44,7 +44,7 @@ function fixture(initialToken = 'old-session') {
     throw new Error(`Unexpected dependency: ${name}`)
   }
 
-  new Function('require', 'exports', 'uni', compiled)(requireMock, exports, {
+  new Function('require', 'exports', 'getCurrentPages', 'uni', compiled)(requireMock, exports, () => [{ route }], {
     request: (options: { success: (result: RequestResponse) => void }) => requests.push(options),
     uploadFile: (options: { success: (result: RequestResponse) => void }) => {
       uploads.push(options)
@@ -69,6 +69,18 @@ function fixture(initialToken = 'old-session') {
     staged: () => staged,
   }
 }
+
+test('expired startup and login requests clear the session without remounting login', async () => {
+  for (const route of ['pages/privacy-consent/index', 'pages/login/index']) {
+    const flow = fixture('expired-session', route)
+    const pending = flow.request({ url: '/user/profile' })
+    flow.respondRequest(0, { statusCode: 401, data: { code: 401 } })
+    await assert.rejects(pending)
+    assert.equal(flow.cleared(), 1)
+    assert.equal(flow.emitted(), 1)
+    assert.equal(flow.redirected(), 0)
+  }
+})
 
 test('a late 401 from an old request cannot clear a newly signed-in session', async () => {
   const flow = fixture()

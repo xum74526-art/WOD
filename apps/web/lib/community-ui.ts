@@ -1,3 +1,6 @@
+import type { KaiLocale } from "./language.ts";
+import { toTraditionalChinese } from "./traditional-chinese.ts";
+
 export const COMMUNITY_POST_MAX_LENGTH = 500;
 export const COMMUNITY_MEDIA_MAX_FILES = 9;
 export const COMMUNITY_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -42,20 +45,91 @@ export async function uploadCommunityMediaBatch<T>(
   return uploaded;
 }
 
-export function communityDisplayText(value?: string | null, sourceKey?: string | null) {
+const INTERNAL_REGION_EN: Array<[string, string]> = [
+  ["全球 / 未披露", "Global / Undisclosed"],
+  ["全球／未披露", "Global / Undisclosed"],
+  ["全球/未披露", "Global / Undisclosed"],
+  ["中国大陆", "Mainland China"],
+  ["华北", "North China"],
+  ["华东", "East China"],
+  ["华中", "Central China"],
+  ["华南", "South China"],
+  ["东北", "Northeast China"],
+  ["西北", "Northwest China"],
+  ["西南", "Southwest China"],
+  ["亚太", "Asia Pacific"],
+  ["北美", "North America"],
+  ["欧洲", "Europe"],
+  ["中东", "Middle East"],
+  ["南美", "South America"],
+  ["非洲", "Africa"],
+  ["海外", "Overseas"],
+  ["未披露", "Undisclosed"],
+];
+
+export function communityDisplayText(
+  value?: string | null,
+  sourceKey?: string | null,
+  locale: KaiLocale = "zh-Hans",
+) {
   const source = String(value || "");
   if (sourceKey !== "wod-market") return source;
-  return source
+  const branded = source
     .replace(/(?:WOD|ZTW)(?:资讯|資訊)/g, "KAI星算平台行情")
     .replace(/(^|[^A-Z0-9_-])(?:WOD|ZTW)(?=$|[^A-Z0-9_-])/g, "$1KAI星算");
+  if (locale === "zh-Hant") return toTraditionalChinese(branded);
+  if (locale !== "en") return branded;
+
+  let localized = branded
+    .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, "KAI Compute Market")
+    .replace(/KAI星算/g, "Compute Star Map");
+  for (const [from, to] of INTERNAL_REGION_EN) localized = localized.replaceAll(from, to);
+  return localized;
+}
+
+type CommunityLocalizedPost = {
+  content?: string | null;
+  content_en?: string | null;
+  topic?: string | null;
+  topic_en?: string | null;
+  origin?: string | null;
+  source_key?: string | null;
+};
+
+function communityPlatformText(
+  value: string,
+  sourceKey: string | null | undefined,
+  origin: string | null | undefined,
+  locale: KaiLocale,
+) {
+  const platformOwned = origin === "internal" || origin === "aggregated" || Boolean(sourceKey);
+  if (!platformOwned) return value;
+  const localized = communityDisplayText(value, sourceKey, locale);
+  return locale === "zh-Hant" ? toTraditionalChinese(localized) : localized;
+}
+
+export function communityPostContent(post: CommunityLocalizedPost, locale: KaiLocale) {
+  const source = locale === "en" && post.origin !== "user" && post.content_en
+    ? post.content_en
+    : String(post.content || "");
+  return communityPlatformText(source, post.source_key, post.origin, locale);
+}
+
+export function communityPostTopic(post: CommunityLocalizedPost, locale: KaiLocale) {
+  const source = locale === "en" && post.origin !== "user" && post.topic_en
+    ? post.topic_en
+    : String(post.topic || "");
+  return communityPlatformText(source, post.source_key, post.origin, locale);
 }
 
 export function communityShareText(post: {
   content?: string | null;
+  content_en?: string | null;
+  origin?: string | null;
   source_url?: string | null;
   source_key?: string | null;
-}) {
-  const summary = communityDisplayText(post.content, post.source_key).trim().slice(0, 100);
+}, locale: KaiLocale = "zh-Hans") {
+  const summary = communityPostContent(post, locale).trim().slice(0, 100);
   const source = String(post.source_url || "").trim();
   return [summary, source].filter(Boolean).join("\n");
 }

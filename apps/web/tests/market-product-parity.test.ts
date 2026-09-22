@@ -209,7 +209,9 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(detail, /\/account\/requests\?\$\{params\.toString\(\)\}/);
   assert.match(detail, /directTradeEnabled \? `\$\{product\.unit_price_ch[\s\S]*? : "询价"/);
   assert.match(detail, /提交需求/);
-  assert.match(detail, /if \(!directTradeEnabled \|\| !product\?\.purchasable/);
+  assert.match(detail, /holdingTradeEnabled = capabilities\.holding_trade_enabled === true/);
+  assert.match(detail, /purchaseType === "holding" && holdingModeAvailable/);
+  assert.match(detail, /if \(!directTradeEnabled \|\| !product/);
   assert.match(detail, /matchmakingEnabled && product\.inquiry_available !== false/);
   assert.match(detail, /createDirectOrder/);
   assert.match(detail, /预计钱包扣款/);

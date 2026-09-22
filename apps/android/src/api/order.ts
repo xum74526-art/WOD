@@ -58,9 +58,7 @@ export interface OrderItem {
   remaining_hours?: number
 }
 
-// The API currently rejects new holding purchases. Historical orders may still
-// report purchase_type="holding" through OrderItem, but checkout is usage-only.
-export type PurchaseType = 'usage'
+export type PurchaseType = 'usage' | 'holding'
 
 export function createOrder(
   product_id: number,

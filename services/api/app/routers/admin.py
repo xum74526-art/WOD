@@ -9,13 +9,18 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query as SqlAlchemyQuery, Session
 
 from app.core.deps import require_admin
-from app.core.rate_limit import limit_notification_broadcast, limit_payment_admin
+from app.core.rate_limit import (
+    limit_admin_account_action,
+    limit_notification_broadcast,
+    limit_payment_admin,
+)
 from app.core.sensitive import reveal
 from app.db.session import get_db
 from app.models.bank_card import BankCard
@@ -28,6 +33,7 @@ from app.models.user import User
 from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
 from app.schemas.community import CommunityReportReviewIn
+from app.schemas.admin_account import AdminUserActionIn
 from app.schemas.notification import NotificationBroadcastCreateIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
@@ -36,6 +42,7 @@ from app.schemas.payment import (
     PaymentReviewDecisionIn,
 )
 from app.services.auth_session import AUDIT_PLATFORMS, AuditPlatform
+from app.services.account_administration import list_user_actions, perform_user_action
 from app.services.product_provider import product_provider_info
 from app.services.payment_operations import (
     event_out,
@@ -171,6 +178,7 @@ def create_notification_broadcast(
 def users(
     platform: AuditPlatform | None = None,
     keyword: str | None = Query(default=None, max_length=64),
+    status: Literal["active", "suspended", "deleting", "deleted"] | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     actor: User = Depends(require_admin),
@@ -178,6 +186,8 @@ def users(
 ):
     _page(page, page_size)
     query = _filter_platform(db.query(User), User, platform)
+    if status:
+        query = query.filter(User.account_status == status)
     if keyword:
         normalized = keyword.strip()
         if normalized:
@@ -203,10 +213,46 @@ def users(
         "role": row.role,
         "supplier_status": row.supplier_status,
         "kai_identity_bound": row.id in bound_user_ids,
+        "account_status": row.account_status or "active",
+        "password_set": bool(row.password_set),
+        "recovery_email_verified": bool(row.recovery_email_verified_at),
         "created_platform": row.created_platform or "legacy",
         "created_at": row.created_at,
     } for row in rows]
     return success({"total": total, "page": page, "page_size": page_size, "items": items})
+
+
+@router.post("/users/{user_id}/actions")
+def manage_user_account(
+    user_id: int,
+    data: AdminUserActionIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    limit_admin_account_action(actor.id)
+    return success(perform_user_action(
+        db,
+        actor=actor,
+        target_user_id=user_id,
+        data=data,
+    ))
+
+
+@router.get("/users/{user_id}/actions")
+def user_account_actions(
+    user_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _page(page, page_size)
+    return success(list_user_actions(
+        db,
+        target_user_id=user_id,
+        page=page,
+        page_size=page_size,
+    ))
 
 
 @router.get("/orders")

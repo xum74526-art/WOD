@@ -56,7 +56,8 @@ from app.services.invite_rewards_v2 import (
     process_invite_order_event,
     process_invite_renewal_event,
 )
-from app.services.trade_mode import require_direct_trade_enabled
+from app.services.holding_trade import HOLDING_LIFECYCLE_POLICY
+from app.services.trade_mode import require_direct_trade_enabled, require_holding_trade_enabled
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/orders", tags=["order"])
@@ -226,6 +227,7 @@ def _order_out(o: Order, db: Session) -> dict:
     out["can_renew"] = bool(
         p
         and o.status in RENEWABLE_ORDER_STATUSES
+        and o.purchase_type == "usage"
         and not (market_source == "wod" and o.purchase_hours is not None)
     )
     confirmation_due = o.confirmation_due_at
@@ -252,6 +254,9 @@ def _order_out(o: Order, db: Session) -> dict:
         else:
             out["remaining_days"] = max(0, int(remaining_seconds // 86400))
             out["remaining_hours"] = None
+    elif o.purchase_type == "holding":
+        out["remaining_days"] = None
+        out["remaining_hours"] = None
     else:
         out["remaining_days"] = None if o.purchase_hours is not None else 0
         out["remaining_hours"] = 0 if o.purchase_hours is not None else None
@@ -328,6 +333,8 @@ def _product_snapshot(product: Product, source: str, db: Session) -> dict:
         "seller_type": provider["seller_type"],
         "seller_name": provider["seller_name"],
         "market_source": source,
+        "external_product_id": product.external_product_id,
+        "price_observed_at": product.price_updated_at.isoformat() if product.price_updated_at else None,
     }
 
 
@@ -391,11 +398,16 @@ def create_order(
         ).first()
         if own_supplier:
             raise BizError("不能购买自己上架的算力资源", status_code=409)
-    purchasable, unavailable_reason = product_purchase_availability(p, db)
-    if not purchasable:
-        raise BizError(unavailable_reason or "该资源暂不可在KAI星算内下单", status_code=409)
-    _ensure_current_market_product(p, db)
     source = product_market_source(p)
+    holding_purchase = data.purchase_type == "holding"
+    # Holding is an immediate KAI-quote asset acquisition; it does not require
+    # an SSH fulfilment operator. Usage checkout keeps the stricter fulfilment
+    # readiness check unchanged.
+    if not (holding_purchase and source == "kai"):
+        purchasable, unavailable_reason = product_purchase_availability(p, db)
+        if not purchasable:
+            raise BizError(unavailable_reason or "该资源暂不可在KAI星算内下单", status_code=409)
+    _ensure_current_market_product(p, db)
     _validate_expected_unit_price(p, source, data.expected_unit_price_card_hours)
     product_snapshot = _product_snapshot(p, source, db)
     purchase_hours: int | None = None
@@ -421,8 +433,12 @@ def create_order(
         allowed = available_purchase_cycles(p.cycle)
         if cycle_days not in allowed:
             raise BizError(f"不支持的周期，可选 {allowed}")
-    if data.purchase_type != "usage":
-        raise BizError("持有交易与二级市场尚未完成，当前仅支持使用模式", status_code=409)
+    if holding_purchase:
+        require_holding_trade_enabled()
+        if source != "kai" or p.supplier_id is not None:
+            raise BizError("持有模式仅支持 KAI 自营且具备有效行情的算力资源", status_code=409)
+        if data.expected_unit_price_card_hours is None:
+            raise BizError("请确认当前持有买入单价后再下单", status_code=422)
     reserved_stock = max(int(p.stock or 0), 0)
     available_stock = reserved_stock
     if source == "kai":
@@ -454,36 +470,67 @@ def create_order(
         # update. Cancellation restores it.
         p.stock = reserved_stock - data.quantity
         now = datetime.now(timezone.utc)
-        # Manually fulfilled purchase: reserve the full amount until valid SSH/device
-        # delivery is confirmed. No asset exists at checkout.
+        # Usage orders reserve funds until valid SSH delivery is confirmed.
+        # A holding order is a card-hour-denominated asset acquisition and is
+        # therefore captured and registered immediately without SSH delivery.
         order = Order(
             order_no="WOD" + datetime.now().strftime("%Y%m%d") + uuid.uuid4().hex[:8].upper(),
             client_request_id=request_id,
             user_id=user.id, product_id=p.id, quantity=data.quantity,
             cycle_days=cycle_days, purchase_hours=purchase_hours,
             created_platform=platform, last_modified_platform=platform,
-            amount=amount, status="paid", purchase_type=data.purchase_type,
+            amount=amount, status="completed" if holding_purchase else "paid", purchase_type=data.purchase_type,
             product_snapshot=product_snapshot,
-            lifecycle_policy_version="reserved-v1",
+            lifecycle_policy_version=HOLDING_LIFECYCLE_POLICY if holding_purchase else "reserved-v1",
             start_at=now, end_at=None,
-            delivery_due_at=now + timedelta(
+            delivery_due_at=None if holding_purchase else now + timedelta(
                 hours=max(int(settings.ORDER_DELIVERY_TIMEOUT_HOURS), 1)
             ),
+            confirmed_at=now if holding_purchase else None,
         )
         db.add(order)
         db.flush()
         reserve_order_funding(order, wallet, amount, db)
-        db.add(Ledger(
-            user_id=user.id, wallet_id=wallet.id, type="freeze", direction="out",
-            amount=amount, balance_after=spendable_wallet_balance(wallet, db),
-            ref_order_id=order.id,
-            remark=(
-                f"购买{'持有' if data.purchase_type == 'holding' else '使用'} {p.name} × {data.quantity}"
-                f"（{purchase_hours}小时，待交付）"
-                if purchase_hours is not None
-                else f"购买{'持有' if data.purchase_type == 'holding' else '使用'} {p.name} × {data.quantity}（待交付）"
-            ),
-        ))
+        if holding_purchase:
+            capture_order_funding(order, wallet, db, captured_at=now)
+            unit_value = (amount / Decimal(max(int(data.quantity), 1))).quantize(Decimal("0.0001"))
+            db.add(Asset(
+                user_id=user.id,
+                product_id=p.id,
+                order_id=order.id,
+                quantity=data.quantity,
+                value=unit_value,
+                daily_rate=Decimal("0"),
+                status="active",
+                purchase_type="holding",
+                start_at=now,
+                end_at=None,
+                rebate_status=None,
+                rebate_amount=0,
+            ))
+            db.add(Ledger(
+                user_id=user.id,
+                wallet_id=wallet.id,
+                type="pay",
+                direction="out",
+                amount=amount,
+                balance_after=spendable_wallet_balance(wallet, db),
+                ref_order_id=order.id,
+                event_key=f"holding_asset_buy:{order.id}",
+                remark=f"购买持有资产 {p.name} × {data.quantity}（{purchase_hours} GPU 小时）",
+            ))
+        else:
+            db.add(Ledger(
+                user_id=user.id, wallet_id=wallet.id, type="freeze", direction="out",
+                amount=amount, balance_after=spendable_wallet_balance(wallet, db),
+                ref_order_id=order.id,
+                remark=(
+                    f"购买使用 {p.name} × {data.quantity}"
+                    f"（{purchase_hours}小时，待交付）"
+                    if purchase_hours is not None
+                    else f"购买使用 {p.name} × {data.quantity}（待交付）"
+                ),
+            ))
         db.commit()
     except IntegrityError:
         db.rollback()

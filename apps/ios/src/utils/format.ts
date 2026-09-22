@@ -143,7 +143,7 @@ export function fmtCHn(rmb: number | string | undefined | null): string {
 
 /** 已经以卡时为单位的数值，仅格式化展示，不再执行汇率换算。 */
 export function fmtCardHours(value: NumericValue): string {
-  return formatNumber(value)
+  return formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function formatDate(s?: string): string {

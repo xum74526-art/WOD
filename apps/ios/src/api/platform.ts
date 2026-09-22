@@ -8,6 +8,7 @@ export interface PlatformCapabilities {
   commerce_mode: 'matchmaking' | 'direct_trade' | string
   matchmaking_enabled: boolean
   direct_trade_enabled: boolean
+  holding_trade_enabled: boolean
   payment_enabled: boolean
   recharge_enabled: boolean
   withdraw_enabled: boolean

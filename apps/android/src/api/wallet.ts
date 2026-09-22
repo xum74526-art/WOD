@@ -6,6 +6,7 @@ export interface WalletInfo {
   withdrawable_balance?: number
   withdraw_frozen?: number
   total_income: number
+  audited_earnings_enabled?: boolean
   has_bank_card?: boolean
   payment_service_enabled?: boolean
   recharge_service_enabled?: boolean

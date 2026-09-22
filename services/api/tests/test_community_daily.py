@@ -9,6 +9,7 @@ from app.services.community_daily import (
     _bilibili_content_en,
     _get_system_user,
     _internal_candidates,
+    _internal_region_en,
     _is_relevant_bilibili_video,
     _is_playable_video_reference,
     canonicalize_url,
@@ -63,6 +64,28 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertEqual(candidate.author, "KAI星算")
         self.assertTrue(candidate.title.startswith("Compute Star Map tip"))
 
+    def test_internal_market_post_uses_an_english_region_in_english_copy(self):
+        product = SimpleNamespace(
+            name="RTX4090 24GB",
+            region_name="北美",
+            region_code="north_america",
+            price=5.04,
+            stock=10,
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [product]
+
+        candidate = _internal_candidates(db, "2026-09-22", 1)[0]
+
+        self.assertIn("North America", candidate.content_en)
+        self.assertNotIn("北美", candidate.content_en)
+        self.assertNotRegex(candidate.content_en, r"[\u3400-\u9fff]")
+
+    def test_internal_region_fails_closed_without_leaking_unknown_chinese(self):
+        self.assertEqual(_internal_region_en("北美", None), "North America")
+        self.assertEqual(_internal_region_en("旧测试地区", None), "the listed region")
+        self.assertEqual(_internal_region_en("EU-West", None), "EU-West")
+
     def test_internal_brand_backfill_keeps_legacy_source_key(self):
         post = MagicMock(
             content="价格来自 WOD 最新站内行情，优惠码 WOD10 继续有效",
@@ -78,6 +101,22 @@ class CommunityDailyTests(unittest.TestCase):
         self.assertEqual(post.content_en, "Latest Compute Star Map market data")
         self.assertEqual(post.source_name, "KAI星算算力行情")
         self.assertEqual(post.source_author, "KAI星算")
+
+    def test_internal_brand_backfill_localizes_regions_in_english_copy(self):
+        post = MagicMock(
+            content="北美当前参考价为 5.04 卡时/h",
+            content_en="The current reference price in 北美 is 5.04 CH/h. KAI星算 market data.",
+            source_name="KAI星算算力行情",
+            source_author="KAI星算",
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [post]
+
+        self.assertEqual(_backfill_internal_branding(db), 1)
+        self.assertEqual(
+            post.content_en,
+            "The current reference price in North America is 5.04 CH/h. Compute Star Map market data.",
+        )
 
     def test_existing_internal_author_is_renamed_without_changing_identity(self):
         user = SimpleNamespace(username="WOD资讯", phone="wod-community")

@@ -145,7 +145,7 @@ test('401 staging and successful-login navigation preserve inquiry priority with
   const enterStart = login.indexOf('function enterAuthenticatedApp()')
   const enterEnd = login.indexOf('function runtimeKaiCallback()', enterStart)
   const enterFlow = login.slice(enterStart, enterEnd)
-  assert.match(enterFlow, /if \(authenticatedNavigationStarted\) return/)
+  assert.match(enterFlow, /if \(authenticatedNavigationStarted \|\| !userStore.isLogin \|\| !userStore.authReady\) return/)
   assert.ok(enterFlow.indexOf('consumeAuthReturnPath()') < enterFlow.indexOf('hasInquiryRequestPrefill()'))
   assert.match(enterFlow, /hasInquiryRequestPrefill\(\)[\s\S]*\/pages\/buy-request\/index\?compose=1/)
   assert.match(enterFlow, /if \(returnPath\)[\s\S]*url: returnPath[\s\S]*fail: \(\) => uni\.reLaunch\(\{ url: '\/pages\/index\/index' \}\)/)

@@ -980,6 +980,10 @@ for (const capability of commonCapabilities) {
 }
 
 const mirroredMobileFiles = [
+  'src/pages/login/index.vue',
+  'src/pages/privacy-consent/index.vue',
+  'src/utils/app-launch.ts',
+  'tests/login-startup-motion.test.ts',
   'src/api/buy-request.ts',
   'src/pages/buy-request/index.vue',
   'tests/buy-request-seller-view.test.ts',
@@ -1059,7 +1063,15 @@ const allowedMobileDrift = new Set([
   'nativeResources/ios/Resources/zh-Hant.lproj/InfoPlist.strings',
   'tests/privacy-manifest.test.ts',
 ])
-const ignoredMobileNames = new Set(['node_modules', 'dist', '.DS_Store', '.env.local'])
+const ignoredMobileNames = new Set([
+  'node_modules',
+  'dist',
+  'unpackage',
+  '.hbuilderx',
+  '.DS_Store',
+  '.env.local',
+  '.env.production',
+])
 
 function mobileFileMap(client) {
   const base = path.join(root, 'apps', client)

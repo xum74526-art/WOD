@@ -39,7 +39,7 @@
         <view class="payment-state-head">
           <view>
             <text class="payment-state-title">{{ paymentStateTitle }}</text>
-            <text class="payment-state-sub">{{ formatMoney(pendingPayment.amount_cny) }} {{ t('cny') }} · {{ formatNumber(pendingPayment.card_hours, { maximumFractionDigits: 6 }) }} {{ t('cardHour') }}</text>
+            <text class="payment-state-sub">{{ formatMoney(pendingPayment.amount_cny) }} {{ t('cny') }} · {{ fmtCardHours(pendingPayment.card_hours) }} {{ t('cardHour') }}</text>
           </view>
           <text class="payment-state-badge">{{ paymentStateBadge }}</text>
         </view>
@@ -133,7 +133,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { cancelRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type WalletInfo } from '@/api/wallet'
 import { useAssetStore } from '@/store/asset'
-import { fmtCH, formatMoney, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCardHours, fmtCH, formatMoney, formatNumber, toCardHours } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import SectionHeader from '@/components/SectionHeader.vue'

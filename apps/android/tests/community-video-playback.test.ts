@@ -429,12 +429,12 @@ test('legacy internal market sources always display the current KAI星算 brand'
   for (const page of [indexPage, detailPage]) {
     assert.match(page, /source_key === 'wod-market'/)
     assert.match(page, /return t\('ztwMarketName'\)/)
-    assert.match(page, /localizeInternalBrandText\(content, (?:post|value)\.source_key\)/)
-    assert.match(page, /localizeInternalBrandText\(topic, (?:post|value)\.source_key\)/)
+    assert.match(page, /localizeInternalBrandText\(content, (?:post|value)\.source_key, i18n\.lang\)/)
+    assert.match(page, /localizeInternalBrandText\(topic, (?:post|value)\.source_key, i18n\.lang\)/)
     assert.doesNotMatch(page, /return 'WOD Market'/)
   }
   assert.match(locale, /ztwMarketName: 'KAI星算算力行情'/)
-  assert.match(locale, /ztwMarketName: 'KAI星算 Compute Market'/)
+  assert.match(locale, /ztwMarketName: 'KAI Compute Market'/)
 })
 
 test('the app manifest enables the native VideoPlayer module', () => {

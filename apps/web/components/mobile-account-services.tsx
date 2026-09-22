@@ -39,7 +39,7 @@ function RevenueWorkspace() {
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [error, setError] = useState("");
   useEffect(() => { getRevenueBundle().then(([a, b, c, d]) => { setSummary(a); setPoints(b); setRecords(c); setRebate(d); }).catch((reason) => setError(errorMessage(reason))); }, []);
-  const max = Math.max(1, ...points.map((point) => Number(point.amount || 0)));
+  const max = Math.max(1, ...points.map((point) => Math.abs(Number(point.amount || 0))));
   const personalCap = Number(rebate?.monthly_cap ?? 0);
   const personalEntitled = Number(rebate?.month_entitled ?? 0);
   const personalCapUsed = Number(rebate?.cap_used ?? 0);
@@ -55,17 +55,17 @@ function RevenueWorkspace() {
   return <>
     {error && <div className="commerce-error">{error}</div>}
     <div className="mobile-data-spine">
-      <article><small>今日收益</small><strong>{amount(summary?.today)}</strong><span>卡时</span></article>
-      <article><small>累计收益</small><strong>{amount(summary?.total)}</strong><span>卡时</span></article>
-      <article><small>当前收益率</small><strong>{amount(summary?.rate)}%</strong><span>实时规则</span></article>
-      <article><small>{t("rebate.personal.monthRebated", "本月个人购买返佣")}</small><strong>{amount(rebate?.month_rebated)}</strong><span>{t("rebate.personal.currentTier", "当前等级 {rate}%", { rate: amount(rebate?.current_rate) })}</span></article>
+      <article><small>{t("earnings.realizedToday", "今日已实现收益")}</small><strong>{amount(summary?.today)}</strong><span>卡时</span></article>
+      <article><small>{t("earnings.realizedTotal", "累计已实现收益")}</small><strong>{amount(summary?.total)}</strong><span>卡时</span></article>
+      <article><small>{t("earnings.pendingRebate", "待结算购买返佣")}</small><strong>{amount(summary?.pending_rebate)}</strong><span>卡时</span></article>
+      <article><small>{t("earnings.unrealizedHoldingPnl", "持有未实现盈亏")}</small><strong>{amount(summary?.holding_unrealized_pnl)}</strong><span>{amount(summary?.holding_unrealized_pnl_rate)}%</span></article>
     </div>
     <div className="mobile-service-columns">
-      <section className="mobile-trend-panel"><header><div><small>30 DAY REVENUE</small><h2>收益走势</h2></div><TrendUp size={21}/></header>{points.length ? <div className="mobile-mini-bars" aria-label="近 30 天收益图">{points.map((point, index) => <span title={`${point.date}: ${amount(point.amount)}`} key={`${point.date}-${index}`}><i style={{ height: `${Math.max(4, Number(point.amount || 0) / max * 100)}%` }}/><small>{point.date.slice(5)}</small></span>)}</div> : <div className="mobile-inline-empty">暂无收益曲线</div>}</section>
+      <section className="mobile-trend-panel"><header><div><small>30 DAY AUDITED EARNINGS</small><h2>{t("earnings.trend", "已实现收益走势")}</h2></div><TrendUp size={21}/></header>{points.length ? <div className="mobile-mini-bars" aria-label="近 30 天已实现收益图">{points.map((point, index) => <span title={`${point.date}: ${amount(point.amount)}`} key={`${point.date}-${index}`}><i className={Number(point.amount || 0) < 0 ? "negative" : ""} style={{ height: `${Math.max(4, Math.abs(Number(point.amount || 0)) / max * 100)}%` }}/><small>{point.date.slice(5)}</small></span>)}</div> : <div className="mobile-inline-empty">暂无已实现收益曲线</div>}</section>
       <section className="mobile-rebate-panel"><header><Gift size={20}/><div><small>PERSONAL PURCHASE REBATE</small><h2>{t("rebate.personal.title", "个人购买返佣")}</h2></div></header><strong>{amount(rebate?.pending_rebate)}</strong><span>{t("rebate.personal.pending", "待到期结算（卡时）")}</span><p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买卡时总额计算，资产服务期结束后返佣入账。")}</p><footer>{tierHint}<br/>{t("rebate.personal.capProgress", "本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时 · {mode}", { entitled: amount(personalEntitled), used: amount(personalCapUsed), remaining: amount(personalCapRemaining), cap: amount(personalCap), mode: rewardMode })}</footer></section>
     </div>
-    <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>REVENUE LEDGER</small><h2>收益记录</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.id}><span><strong>+{amount(row.amount)} 卡时</strong><small>资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无收益记录</div>}</section>
-        {!summary?.revenue_settlement_enabled && <div className="workspace-service-note">当前收益统计仅包含已确认结算记录；未结算历史记录为 {amount(summary?.historical_test_total)} 卡时。</div>}
+    <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>AUDITED EARNINGS LEDGER</small><h2>{t("earnings.records", "已实现收益记录")}</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.record_key || `${row.source_type}:${row.id}`}><span><strong>{Number(row.amount || 0) > 0 ? "+" : ""}{amount(row.amount)} 卡时</strong><small>{row.source_type === "holding_sale" ? t("earnings.holdingSale", "持有资产出售盈亏") : t("earnings.purchaseRebate", "购买到期返佣")} · 资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无已实现收益记录</div>}</section>
+        {Number(summary?.historical_test_total || 0) > 0 && <div className="workspace-service-note">历史模拟收益 {amount(summary?.historical_test_total)} 卡时仅保留作审计，不计入余额或当前收益。</div>}
   </>;
 }
 

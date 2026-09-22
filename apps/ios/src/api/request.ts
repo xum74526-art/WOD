@@ -116,6 +116,14 @@ function expireSession(i18n: ReturnType<typeof useI18nStore>, requestToken: stri
   stageAuthReturnPath()
   clearAuth()
   uni.$emit('wod-auth-expired')
+  // The launch gate will choose login after restore completes. Re-launching
+  // here as well used to mount the login page twice and replay its entrance.
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+  const currentRoute = pages[pages.length - 1]?.route
+  if (currentRoute === 'pages/privacy-consent/index' || currentRoute === 'pages/login/index') {
+    expiringToken = null
+    return
+  }
   uni.reLaunch({
     url: '/pages/login/index',
     complete: () => {

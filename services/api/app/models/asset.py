@@ -19,7 +19,7 @@ class Asset(Base):
     value: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"))
     daily_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
     status: Mapped[str] = mapped_column(String(16), default="active")  # active/expired/sold/used
-    purchase_type: Mapped[str] = mapped_column(String(16), default="usage")  # usage; holding is retained only for legacy rows
+    purchase_type: Mapped[str] = mapped_column(String(16), default="usage")  # usage / holding
     sell_price: Mapped[float | None] = mapped_column(default=None)
     rebate_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # pending/rewarded/forfeited
     rebate_amount: Mapped[float | None] = mapped_column(default=None)  # 预计返佣金额

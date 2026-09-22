@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -11,11 +10,11 @@ from app.core.sensitive import last_four
 from app.db.session import get_db
 from app.models.bank_card import BankCard
 from app.models.ledger import Ledger
-from app.models.revenue import Revenue
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.schemas.wallet import LedgerOut, RechargeIn, WithdrawIn
 from app.services.payment_gateway import public_config as payment_public_config
+from app.services.audited_earnings import audited_earnings_summary
 from app.utils.response import BizError, success
 from app.services.wallet_balance import (
     LEGACY_REWARD_TYPES,
@@ -49,9 +48,7 @@ def _get_wallet(user: User, db: Session) -> Wallet:
 @router.get("")
 def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     w = _get_wallet(user, db)
-    total_income = db.query(func.coalesce(func.sum(Revenue.amount), 0)).filter(
-        Revenue.user_id == user.id
-    ).scalar()
+    earnings = audited_earnings_summary(user.id, db)
     historical_income = historical_synthetic_revenue(user.id, db)
     historical_rewards = historical_synthetic_rewards(user.id, db)
     # 查是否有绑定的银行卡
@@ -64,7 +61,8 @@ def wallet_info(user: User = Depends(get_current_user), db: Session = Depends(ge
         "promotional_frozen": float(w.promotional_frozen or 0),
         "withdrawable_balance": float(w.withdrawable_balance or 0),
         "withdraw_frozen": float(w.withdraw_frozen or 0),
-        "total_income": round(float(total_income), 2) if settings.REVENUE_SETTLEMENT_ENABLED else 0,
+        "total_income": earnings["total"],
+        "audited_earnings_enabled": True,
         "historical_test_revenue": round(float(historical_income), 2),
         "historical_test_rewards": round(float(historical_rewards), 2),
         "revenue_settlement_enabled": settings.REVENUE_SETTLEMENT_ENABLED,

@@ -12,10 +12,10 @@ test("English account display romanizes Chinese names without changing raw edita
   assert.equal(localizePersonName("alice_01", "en"), "alice_01");
   assert.equal(localizePersonName("WOD资讯", "zh-Hans"), "KAI星算平台行情");
   assert.equal(localizePersonName("WOD资讯", "zh-Hant"), "算力星圖平台行情");
-  assert.equal(localizePersonName("WOD资讯", "en"), "KAI星算 Platform Market");
+  assert.equal(localizePersonName("WOD资讯", "en"), "KAI Compute Market");
   assert.equal(localizePersonName("ZTW资讯", "zh-Hans"), "KAI星算平台行情");
   assert.equal(localizePersonName("ZTW资讯", "zh-Hant"), "算力星圖平台行情");
-  assert.equal(localizePersonName("ZTW资讯", "en"), "KAI星算 Platform Market");
+  assert.equal(localizePersonName("ZTW资讯", "en"), "KAI Compute Market");
   assert.equal(personNameInputValue("陈志强", "en", false), "Chen Zhiqiang");
   assert.equal(personNameSaveValue("陈志强", "Chen Zhiqiang", false), "陈志强");
   assert.equal(personNameSaveValue("陈志强", "Chen Z.", true), "Chen Z.");

@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   fmtCH,
   fmtCHr,
+  fmtCardHours,
   formatDeadline,
   formatMoney,
   formatNumber,
@@ -42,6 +43,11 @@ test('formatNumber safely normalizes non-finite API values', () => {
   assert.equal(formatNumber(undefined), '0')
   assert.equal(formatNumber(Number.NaN), '0')
   assert.equal(formatNumber(Number.POSITIVE_INFINITY), '0')
+})
+
+test('card-hour accounting values always display exactly two decimals', () => {
+  assert.equal(fmtCardHours('0.009980'), '0.01')
+  assert.equal(fmtCardHours(12), '12.00')
 })
 
 test('card-hour units follow an in-page language switch without storage reload', () => {

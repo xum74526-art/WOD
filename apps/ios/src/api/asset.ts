@@ -19,21 +19,29 @@ export interface AssetItem {
   remaining_days?: number
   purchase_type?: string
   current_price?: number
+  current_unit_price?: number
+  buy_price?: number
   pnl?: number
   pnl_pct?: number
+  price_observed_at?: string
   can_sell?: boolean
   rebate_status?: string
   rebate_amount?: number
   rebate_info?: { month_spent: number; month_rebated: number; current_rate: number; next_tier_hint: string; pending_rebate: number; monthly_cap: number }
   revenue_settlement_enabled?: boolean
+  audited_earnings_enabled?: boolean
   historical_test_revenue?: number
   reward_service_enabled?: boolean
   historical_test_reward?: number
   trading_unavailable_reason?: string
 }
 
-export function sellAsset(id: number) {
-  return request<{ id: number; status: string; sell_price: number; buy_price: number; pnl: number }>({ url: `/assets/${id}/sell`, method: 'POST' })
+export function sellAsset(id: number, expected_unit_price_card_hours: number, client_request_id: string) {
+  return request<{ id: number; status: string; sell_price: number; buy_price: number; pnl: number }>({
+    url: `/assets/${id}/sell`,
+    method: 'POST',
+    data: { expected_unit_price_card_hours, client_request_id },
+  })
 }
 
 export interface AssetSummary {
@@ -41,6 +49,7 @@ export interface AssetSummary {
   wallet_balance: number
   pending_revenue: number
   revenue_rate: number
+  audited_earnings_enabled: boolean
   revenue_settlement_enabled: boolean
   historical_test_revenue: number
   items: AssetItem[]

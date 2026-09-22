@@ -27,7 +27,9 @@ test("community service content is excluded from the legacy DOM translation brid
   const news = components.get("news-detail.tsx")!;
 
   assert.match(feed, /<p data-i18n-skip>\{content\}<\/p>/);
-  assert.match(feed, /<span data-i18n-skip>\{row\.topic\}<\/span>/);
+  assert.match(feed, /<span data-i18n-skip>\{topic\}<\/span>/);
+  assert.match(feed, /communityPostContent\(row, locale\)/);
+  assert.match(feed, /communityPostTopic\(row, locale\)/);
   assert.match(feed, /localizePersonName\([\s\S]*?communityDisplayText\(row\.author_name/);
   assert.match(comments, /<p data-i18n-skip>\{comment\.content\}<\/p>/);
   assert.match(video, /<h1 data-i18n-skip>\{video\.title\}<\/h1><p data-i18n-skip>\{video\.summary\}<\/p>/);

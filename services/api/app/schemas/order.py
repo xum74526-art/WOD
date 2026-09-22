@@ -13,7 +13,7 @@ class OrderCreateIn(BaseModel):
     hours: int | None = Field(default=None, ge=1, le=720)
     cycle_days: int | None = Field(default=None, ge=1, le=3650)
     expected_unit_price_card_hours: Decimal | None = None
-    purchase_type: str | None = "usage"  # usage / holding
+    purchase_type: Literal["usage", "holding"] = "usage"
     client_request_id: str | None = Field(default=None, min_length=12, max_length=64)
 
 

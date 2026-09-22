@@ -7,12 +7,14 @@ import { getMobileAssets, sellMobileAsset, type MobileAssetSummary } from "@/lib
 import { errorMessage } from "@/lib/commerce-ui";
 import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { assetStatusLabel } from "@/lib/asset-status";
+import { useI18n } from "@/components/locale-root";
 
 const filters = [
-  ["all", "全部"],
-  ["active", "运行中"],
-  ["expired", "已到期"],
-  ["sold", "已出售"],
+  ["all", "asset.filter.all", "全部"],
+  ["active", "asset.filter.active", "运行中"],
+  ["expired", "asset.filter.expired", "已到期"],
+  ["sold", "asset.filter.sold", "已出售"],
 ] as const;
 
 function amount(value: unknown) {
@@ -20,11 +22,8 @@ function amount(value: unknown) {
   return Number.isFinite(number) ? number.toFixed(2) : "0.00";
 }
 
-function statusLabel(status: string) {
-  return ({ active: "运行中", expired: "已到期", sold: "已出售", pending: "待生效" } as Record<string, string>)[status] || status;
-}
-
 export function MobileAssetsWorkspace() {
+  const { t } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const [data, setData] = useState<MobileAssetSummary | null>(null);
@@ -49,10 +48,12 @@ export function MobileAssetsWorkspace() {
     };
   }, [data]);
 
-  async function sell(id: number) {
-    if (!directTradeEnabled || !window.confirm("出售后资产将停止产生收益，确定继续？")) return;
+  async function sell(item: NonNullable<MobileAssetSummary["items"]>[number]) {
+    if (!directTradeEnabled || !item.current_unit_price) return;
+    if (!window.confirm(`确认按最新有效行情出售？\n预计到账 ${amount(item.current_price)} 卡时\n持有盈亏 ${Number(item.pnl || 0) >= 0 ? "+" : ""}${amount(item.pnl)} 卡时`)) return;
+    const id = item.id;
     setBusy(id); setError("");
-    try { await sellMobileAsset(id); await load(); }
+    try { await sellMobileAsset(id, item.current_unit_price, `web-asset-sale-${crypto.randomUUID()}`.slice(0, 64)); await load(); }
     catch (reason) { setError(errorMessage(reason)); }
     finally { setBusy(0); }
   }
@@ -71,7 +72,7 @@ export function MobileAssetsWorkspace() {
     </div>
 
     <div className="mobile-ops-toolbar">
-      <nav aria-label="资产状态筛选">{filters.map(([value, label]) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{label}</button>)}</nav>
+      <nav aria-label="资产状态筛选">{filters.map(([value, key, label]) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{t(key, label)}</button>)}</nav>
       <button onClick={() => void load()}><ArrowClockwise size={16}/>刷新</button>
     </div>
 
@@ -81,11 +82,11 @@ export function MobileAssetsWorkspace() {
       {data.items.map((item) => <article key={item.id}>
         <div className="mobile-asset-name"><i className={item.status === "active" ? "running" : ""}/><span><small>ASSET #{item.id}</small><Link href={`/account/assets/${item.id}`}><strong>{item.product_name || item.gpu_model || `算力资产 ${item.id}`}</strong></Link><em>{item.gpu_model || "GPU 算力"} · {item.quantity || 1} 台</em></span></div>
         <div className="mobile-asset-values"><span><Coins size={15}/>当前价值 <b>{amount(item.current_price ?? item.value)}</b></span><span><TrendUp size={15}/>累计收益 <b>{amount(item.accumulated_revenue)}</b></span>{item.pnl != null && <small className={item.pnl >= 0 ? "positive" : "negative"}>盈亏 {item.pnl >= 0 ? "+" : ""}{amount(item.pnl)}</small>}</div>
-        <div className="mobile-asset-period"><span><CalendarDots size={15}/>{item.remaining_days == null ? "未提供到期日" : `剩余 ${item.remaining_days} 天`}</span><small>{item.end_at ? new Date(item.end_at).toLocaleDateString("zh-CN") : "—"}</small></div>
-        <div className="mobile-asset-status"><b className={`status-${item.status}`}><Gauge size={14}/>{statusLabel(item.status)}</b>{item.can_sell && (directTradeEnabled ? <button disabled={busy === item.id} onClick={() => void sell(item.id)}>{busy === item.id ? "处理中" : "出售"}</button> : <Link href={requestCreateHref({ product_id: item.product_id, source: "existing_asset", product_name: item.product_name, gpu_model: item.gpu_model || item.product_name || "GPU", quantity: Math.max(Number(item.quantity) || 1, 1), gpu_hours: 24 })}>提交需求</Link>)}</div>
+        <div className="mobile-asset-period"><span><CalendarDots size={15}/>{item.purchase_type === "holding" ? "持有资产" : item.remaining_days == null ? "未提供到期日" : `剩余 ${item.remaining_days} 天`}</span><small>{item.purchase_type === "holding" ? "按有效行情估值" : item.end_at ? new Date(item.end_at).toLocaleDateString("zh-CN") : "—"}</small></div>
+        <div className="mobile-asset-status"><b className={`status-${item.status}`}><Gauge size={14}/>{assetStatusLabel(item.status, item.purchase_type, t)}</b>{item.can_sell && (directTradeEnabled ? <button disabled={busy === item.id} onClick={() => void sell(item)}>{busy === item.id ? "处理中" : "出售"}</button> : <Link href={requestCreateHref({ product_id: item.product_id, source: "existing_asset", product_name: item.product_name, gpu_model: item.gpu_model || item.product_name || "GPU", quantity: Math.max(Number(item.quantity) || 1, 1), gpu_hours: 24 })}>提交需求</Link>)}</div>
       </article>)}
     </div>}
 
-    {data && !data.revenue_settlement_enabled && <div className="workspace-service-note">收益结算服务当前未启用；页面只展示后端提供的真实历史数据，不生成模拟收益。</div>}
+    {data && data.audited_earnings_enabled === false && <div className="workspace-service-note">可核验收益数据暂时无法读取；资产价值与状态不受影响。</div>}
   </section>;
 }

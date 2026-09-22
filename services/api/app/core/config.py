@@ -112,6 +112,11 @@ class Settings(BaseSettings):
     # until the required company qualifications and payment rails are ready.
     # Inquiry submission and human follow-up remain available independently.
     DIRECT_TRADE_ENABLED: bool = False
+    # Holding purchases are a separate, higher-risk commitment. They are
+    # enabled only when the platform explicitly acts as the card-hour buyback
+    # counterparty for fresh KAI-operated quotes. Merchant-declared listings
+    # never inherit this switch.
+    HOLDING_TRADE_ENABLED: bool = False
     # Demand publication, supplier quoting and platform coordination are a
     # separate capability from wallet-backed direct trade. Keep this enabled
     # for the qualification-pending launch so clients can submit enquiries

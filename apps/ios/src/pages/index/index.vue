@@ -21,12 +21,12 @@
         <text class="hero-val">{{ fmtCHn(totalAsset) }}</text>
         <view class="hero-row">
           <view class="hero-sub">
-            <text class="sub-label">{{ t('todayRevenue') }}</text>
-            <text class="sub-val up">+{{ fmtCHn(rev?.today) }}</text>
+            <text class="sub-label">{{ t('todayRealizedEarnings') }}</text>
+            <text class="sub-val" :class="amountTone(rev?.today)">{{ signedCardHours(rev?.today) }} {{ t('cardHour') }}</text>
           </view>
           <view class="hero-sub">
-            <text class="sub-label">{{ t('totalRevenue') }}</text>
-            <text class="sub-val">{{ fmtCH(rev?.total) }}</text>
+            <text class="sub-label">{{ t('totalRealizedEarnings') }}</text>
+            <text class="sub-val" :class="amountTone(rev?.total)">{{ signedCardHours(rev?.total, false) }} {{ t('cardHour') }}</text>
           </view>
         </view>
       </view>
@@ -99,11 +99,11 @@
         <view v-for="a in assets" :key="a.id" class="card arow-s pressable" @tap="go('/pages/asset/detail?id=' + a.id)">
           <view class="al">
           <text class="an">{{ localizeProductName(a.product_name, i18n.lang) }}</text>
-            <text class="ag">{{ a.gpu_model }} · {{ t('剩余 {days} 天', { days: a.remaining_days ?? 0 }) }}</text>
+            <text class="ag">{{ a.gpu_model }} · {{ a.purchase_type === 'holding' ? t('holdingMode') : t('剩余 {days} 天', { days: a.remaining_days ?? 0 }) }}</text>
           </view>
           <view class="ar">
-            <text class="av up">+{{ fmtCHn(a.today_revenue) }}</text>
-            <text class="al2">{{ t('today') }}</text>
+            <text class="av" :class="(a.pnl ?? 0) >= 0 ? 'up' : 'down'">{{ a.purchase_type === 'holding' ? fmtCHn(a.current_price ?? a.value) : '+' + fmtCHn(a.today_revenue) }}</text>
+            <text class="al2">{{ t(a.purchase_type === 'holding' ? 'currentPrice' : 'today') }}</text>
           </view>
         </view>
       </scroll-view>
@@ -263,7 +263,7 @@ import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
-import { fmtCH, fmtCHn, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCH, fmtCHn, fmtCardHours, formatNumber, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
 import { usePageMotion } from '@/utils/page-motion'
 import type { Product } from '@/api/gpu'
@@ -603,6 +603,14 @@ function trendChangeText(trend: HotTrend): string {
 }
 function changeTone(value: number | null): string {
   return value == null || value === 0 ? 'neutral' : value > 0 ? 'rise' : 'fall'
+}
+function amountTone(value: number | null | undefined): string {
+  const amount = Number(value || 0)
+  return amount > 0 ? 'up' : amount < 0 ? 'down' : ''
+}
+function signedCardHours(value: number | null | undefined, positiveSign = true): string {
+  const amount = Number(value || 0)
+  return `${positiveSign && amount > 0 ? '+' : ''}${fmtCardHours(amount)}`
 }
 function compareHomeMarketCandidate(a: MarketRankingItem, b: MarketRankingItem): number {
   const aOfficial = /official/i.test(String(a.history_provenance?.kind || '')) ? 1 : 0

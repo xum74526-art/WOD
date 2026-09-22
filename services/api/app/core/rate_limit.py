@@ -80,6 +80,7 @@ payment_callback_rate_limit = SlidingWindowRateLimiter(limit=3000, window_second
 payment_admin_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
 payment_refund_request_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=3600)
 notification_broadcast_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=3600)
+admin_account_action_rate_limit = SlidingWindowRateLimiter(limit=60, window_seconds=60)
 
 
 def _identity_key(value: str) -> str:
@@ -177,3 +178,9 @@ def limit_notification_broadcast(user_id: int) -> None:
     """Bound accidental/replayed all-user announcements per administrator."""
 
     notification_broadcast_rate_limit.check(f"notification-broadcast:{int(user_id)}")
+
+
+def limit_admin_account_action(user_id: int) -> None:
+    """Contain accidental bulk account mutations from one admin session."""
+
+    admin_account_action_rate_limit.check(f"admin-account-action:{int(user_id)}")

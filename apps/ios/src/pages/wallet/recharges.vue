@@ -95,7 +95,7 @@
           </view>
           <view class="credit-column">
             <text class="meta-label">{{ t('estimatedCardHours') }}</text>
-            <text class="credit-value">{{ formatNumber(order.card_hours, { maximumFractionDigits: 6 }) }} {{ t('cardHour') }}</text>
+            <text class="credit-value">{{ fmtCardHours(order.card_hours) }} {{ t('cardHour') }}</text>
           </view>
         </view>
 
@@ -176,7 +176,7 @@
           </view>
           <view class="amount-row">
             <view><text class="meta-label">{{ t('refundRequestAmount') }}</text><text class="amount-value">¥{{ formatMoney(request.amount_cny) }}</text></view>
-            <view class="credit-column"><text class="meta-label">{{ t('estimatedCardHours') }}</text><text class="credit-value">{{ formatNumber(request.card_hours, { maximumFractionDigits: 6 }) }} {{ t('cardHour') }}</text></view>
+            <view class="credit-column"><text class="meta-label">{{ t('estimatedCardHours') }}</text><text class="credit-value">{{ fmtCardHours(request.card_hours) }} {{ t('cardHour') }}</text></view>
           </view>
           <view class="detail-grid">
             <view class="detail-cell"><text class="meta-label">{{ t('refundRequestOrder') }}</text><text class="detail-value business-reference">{{ displayBusinessReference(request.order_no) }}</text></view>
@@ -194,7 +194,7 @@
     <view v-if="refundOrder" class="refund-mask" @tap="closeRefundSheet">
       <view class="refund-sheet" @tap.stop>
         <view class="refund-sheet-head"><view><text>{{ t('applyForRefund') }}</text><text>{{ displayBusinessReference(refundOrder.order_no) }}</text></view><view role="button" @tap="closeRefundSheet">×</view></view>
-        <view class="refund-order-summary"><text>¥{{ formatMoney(refundOrder.amount_cny) }}</text><text>{{ formatNumber(refundOrder.card_hours, { maximumFractionDigits: 6 }) }} {{ t('cardHour') }}</text></view>
+        <view class="refund-order-summary"><text>¥{{ formatMoney(refundOrder.amount_cny) }}</text><text>{{ fmtCardHours(refundOrder.card_hours) }} {{ t('cardHour') }}</text></view>
         <text class="refund-notice">{{ t('refundReviewNotice') }}</text>
         <textarea v-model="refundReason" class="refund-textarea" :placeholder="t('refundRequestReasonPlaceholder')" :maxlength="500" />
         <text class="refund-count">{{ refundReason.length }}/500</text>
@@ -223,7 +223,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import DirectTradeRechargeRestartAction from '@/components/direct-trade/DirectTradeRechargeRestartAction.vue'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
-import { formatMoney, formatNumber } from '@/utils/format'
+import { fmtCardHours, formatMoney } from '@/utils/format'
 import { rechargeCanCancel, rechargeCanQuery, rechargeCanRequestRefund, rechargeHistoryPresentation, rechargeRefundRequestPresentation } from '@/utils/recharge-payment'
 import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
 import { displayBusinessReference } from '@/utils/display-reference'

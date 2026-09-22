@@ -32,11 +32,20 @@ export type MobileAsset = {
   remaining_days?: number;
   purchase_type?: string;
   current_price?: number;
+  current_unit_price?: number;
+  buy_price?: number;
   pnl?: number;
   pnl_pct?: number;
   can_sell?: boolean;
   rebate_status?: string;
   rebate_amount?: number;
+  audited_earnings_enabled?: boolean;
+  rebate_info?: {
+    pending_rebate?: number;
+    settled_rebate?: number;
+    rebate_amount?: number;
+    current_rate?: number;
+  };
   trading_unavailable_reason?: string;
 };
 
@@ -45,6 +54,7 @@ export type MobileAssetSummary = {
   wallet_balance: number;
   pending_revenue: number;
   revenue_rate: number;
+  audited_earnings_enabled: boolean;
   revenue_settlement_enabled: boolean;
   historical_test_revenue: number;
   items: MobileAsset[];
@@ -67,12 +77,30 @@ export type RevenueSummary = {
   today: number;
   total: number;
   rate: number;
+  settled_rebate_total: number;
+  settled_rebate_today: number;
+  pending_rebate: number;
+  holding_realized_pnl: number;
+  holding_realized_pnl_today: number;
+  holding_unrealized_pnl: number;
+  holding_unrealized_pnl_rate: number;
+  holding_active_assets: number;
+  holding_priced_assets: number;
+  audited_earnings_enabled: boolean;
   revenue_settlement_enabled: boolean;
   historical_test_total: number;
 };
 
 export type RevenuePoint = { date: string; amount: number };
-export type RevenueRecord = { id: number; asset_id?: number; amount: number; date?: string; created_at?: string };
+export type RevenueRecord = {
+  id: number;
+  record_key?: string;
+  source_type?: "consumer_rebate" | "holding_sale";
+  asset_id?: number;
+  amount: number;
+  date?: string;
+  created_at?: string;
+};
 
 export type RebateSummary = {
   program_code: "consumer_purchase_rebate";
@@ -141,6 +169,7 @@ export type MobileWallet = {
   withdrawable_balance: number;
   withdraw_frozen: number;
   total_income: number;
+  audited_earnings_enabled?: boolean;
   has_bank_card?: boolean;
   payment_service_enabled?: boolean;
   recharge_service_enabled?: boolean;
@@ -388,8 +417,14 @@ export function submitOnboarding(input: Omit<OnboardingItem, "id" | "status" | "
   return apiRequest<OnboardingItem>(canonicalApiPath("/onboarding"), { method: "POST", body: JSON.stringify(input) });
 }
 
-export function sellMobileAsset(id: number) {
-  return apiRequest<{ id: number; status: string; sell_price: number; pnl: number }>(canonicalApiPath(`/assets/${id}/sell`), { method: "POST" });
+export function sellMobileAsset(id: number, expectedUnitPrice: number, clientRequestId: string) {
+  return apiRequest<{ id: number; status: string; sell_price: number; pnl: number }>(canonicalApiPath(`/assets/${id}/sell`), {
+    method: "POST",
+    body: JSON.stringify({
+      expected_unit_price_card_hours: expectedUnitPrice,
+      client_request_id: clientRequestId,
+    }),
+  });
 }
 
 export function getRevenueBundle(range = 30) {

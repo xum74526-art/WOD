@@ -10,6 +10,8 @@ import {
   COMMUNITY_VIDEO_MAX_BYTES,
   COMMUNITY_VIDEO_MAX_DURATION_SECONDS,
   communityMediaUploadError,
+  communityPostContent,
+  communityPostTopic,
   communityShareText,
   isCommunityImageFile,
   isCommunityVideoFile,
@@ -132,4 +134,28 @@ test("community share copy matches the app and includes the source", () => {
   assert.equal(communityShareText({ content: "WOD 算力行情", source_key: "wod-market" }), "KAI星算 算力行情");
   assert.equal(communityShareText({ content: "WOD 算力行情", source_key: "user-post" }), "WOD 算力行情");
   assert.equal(communityShareText({ content: "x".repeat(120) }).length, 100);
+});
+
+test("platform-owned community copy uses the selected language without rewriting user posts", () => {
+  const internal = {
+    content: "RTX4090 今日算力观察\n\n北美当前参考价为 5.04 卡时/h。",
+    content_en: "RTX4090 Daily Compute Snapshot\n\nThe current reference price in 北美 is 5.04 CH/h. KAI星算 market data.",
+    topic: "算力行情",
+    topic_en: "Compute Market",
+    origin: "internal",
+    source_key: "wod-market",
+  };
+  assert.equal(
+    communityPostContent(internal, "en"),
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. Compute Star Map market data.",
+  );
+  assert.equal(communityPostTopic(internal, "en"), "Compute Market");
+  assert.equal(
+    communityShareText({ ...internal, source_url: "https://example.com/source" }, "en"),
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. Compute S\nhttps://example.com/source",
+  );
+
+  const userPost = { content: "北美用戶原文", origin: "user", source_key: null };
+  assert.equal(communityPostContent(userPost, "en"), "北美用戶原文");
+  assert.equal(communityPostContent(userPost, "zh-Hant"), "北美用戶原文");
 });

@@ -4,7 +4,7 @@
     <scroll-view scroll-y class="body">
       <view v-if="loading" class="state">{{ t('loading') }}</view>
       <view v-else-if="!order" class="state">
-        <EmptyState text="订单不存在">
+        <EmptyState :text="t('订单不存在')">
           <AppIcon name="order" :size="56" />
         </EmptyState>
       </view>
@@ -27,7 +27,7 @@
         <SectionHeader :title="t('k_a6d10d5a')" />
         <view class="card info-card">
           <view class="row"><text class="sk">{{ t('k_21c8bb00') }}</text><text class="sv">{{ order.purchase_type === 'holding' ? t('holdingMode') : order.purchase_type === 'usage' ? t('usageMode') : order.purchase_type || '-' }}</text></view>
-          <view class="row"><text class="sk">{{ t('k_0292a021') }}</text><text class="sv">{{ order.end_at ? `${formatDate(order.start_at)} ~ ${formatDate(order.end_at)}` : t('startsAfterDeliveryConfirmation') }}</text></view>
+          <view class="row"><text class="sk">{{ t('k_0292a021') }}</text><text class="sv">{{ order.purchase_type === 'holding' ? formatDate(order.start_at) : order.end_at ? `${formatDate(order.start_at)} ~ ${formatDate(order.end_at)}` : t('startsAfterDeliveryConfirmation') }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseDuration') }}</text><text class="sv">{{ orderDuration }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ t('quantityUnits', { count: order.quantity || 1 }) }}</text></view>
           <view v-if="order.end_at" class="row"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ orderRemaining }}</text></view>
@@ -163,15 +163,14 @@ async function fetchOrder() {
 
 const badge = computed(() => {
   const s = order.value?.status
-  if (s === 'paid') return { text: '待交付', type: 'running' as const }
-  if (s === 'delivering') return { text: '待确认', type: 'running' as const }
-  if (s === 'running') return { text: '运行中', type: 'running' as const }
-  if (s === 'completed') return { text: '已完成', type: 'done' as const }
+  if (s === 'paid') return { text: t('pendingDelivery'), type: 'running' as const }
+  if (s === 'delivering') return { text: t('pendingConfirm'), type: 'running' as const }
+  if (s === 'running') return { text: t('running'), type: 'running' as const }
+  if (s === 'completed') return { text: t('completed'), type: 'done' as const }
   if (s === 'disputed') return { text: t('争议处理中'), type: 'running' as const }
-  if (s === 'done') return { text: t('已到期'), type: 'expired' as const }
-  if (s === 'canceled') return { text: '已取消', type: 'canceled' as const }
-  if (s === 'expired') return { text: '已到期', type: 'expired' as const }
-  return { text: s || '待处理', type: 'default' as const }
+  if (s === 'done' || s === 'expired') return { text: t('expired'), type: 'expired' as const }
+  if (s === 'canceled') return { text: t('canceled'), type: 'canceled' as const }
+  return { text: t('statusPending'), type: 'default' as const }
 })
 const isHourlyOrder = computed(() => order.value?.purchase_unit === 'hour' || Number(order.value?.duration_hours ?? order.value?.purchase_hours) > 0)
 const canCancelOrder = computed(() => Boolean(order.value && (order.value.can_cancel ?? order.value.status === 'paid')))

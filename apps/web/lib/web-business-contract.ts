@@ -62,7 +62,7 @@ export function directOrderIntentSignature(input: {
   product_id: number;
   quantity: number;
   hours: number;
-  purchase_type: "usage";
+  purchase_type: "usage" | "holding";
   expected_unit_price_card_hours: number;
 }) {
   return JSON.stringify([

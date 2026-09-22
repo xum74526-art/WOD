@@ -26,12 +26,12 @@
             <text class="asset-panel__metric-label">{{ t('walletBalance') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value positive">{{ assetAvailable ? '+' + fmtCHn(todayRevenue) : '--' }}</text>
-            <text class="asset-panel__metric-label">{{ t('todayRevenue') }}</text>
+            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ assetAvailable ? `${todayRevenue > 0 ? '+' : ''}${fmtCardHours(todayRevenue)}` : '--' }}</text>
+            <text class="asset-panel__metric-label">{{ t('todayRealizedEarnings') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value positive">{{ walletAvailable ? fmtCHn(totalIncome) : '--' }}</text>
-            <text class="asset-panel__metric-label">{{ t('cumulativeRevenue') }}</text>
+            <text class="asset-panel__metric-value positive">{{ walletAvailable ? fmtCardHours(totalIncome) : '--' }}</text>
+            <text class="asset-panel__metric-label">{{ t('totalRealizedEarnings') }}</text>
           </view>
         </view>
       </view>
@@ -51,8 +51,8 @@
             <text class="asset-panel__summary-value">{{ walletAvailable ? fmtCH(walletBalance) : '--' }}</text>
           </view>
           <view class="asset-panel__summary-item">
-            <text class="asset-panel__summary-label">{{ t('pendingSettlement') }}</text>
-            <text class="asset-panel__summary-value">{{ assetAvailable ? fmtCH(summary?.pending_revenue) : '--' }}</text>
+            <text class="asset-panel__summary-label">{{ t('pendingUsageRebate') }}</text>
+            <text class="asset-panel__summary-value">{{ assetAvailable ? `${fmtCardHours(summary?.pending_revenue)} ${t('cardHour')}` : '--' }}</text>
           </view>
           <view class="asset-panel__summary-item">
             <text class="asset-panel__summary-label">{{ t('activeResources') }}</text>
@@ -81,11 +81,11 @@
             <view class="asset-panel__row-icon"><AppIcon name="gpu" :size="34" /></view>
             <view class="asset-panel__row-main">
               <text class="asset-panel__row-title">{{ localizeProductName(asset.product_name, i18n.lang) }}</text>
-              <text class="asset-panel__row-meta">{{ asset.gpu_model || t('computeResource') }} · {{ t(asset.status === 'active' ? 'running' : 'expired') }}</text>
+              <text class="asset-panel__row-meta">{{ asset.gpu_model || t('computeResource') }} · {{ t(asset.purchase_type === 'holding' ? 'holdingMode' : (asset.status === 'active' ? 'running' : 'expired')) }}</text>
             </view>
             <view class="asset-panel__row-side">
-              <text class="asset-panel__row-value positive">+{{ fmtCH(asset.today_revenue) }}</text>
-              <text class="asset-panel__row-hint">{{ t('today') }}</text>
+              <text class="asset-panel__row-value" :class="asset.purchase_type === 'holding' ? ((asset.pnl ?? 0) >= 0 ? 'positive' : 'danger') : 'positive'">{{ asset.purchase_type === 'holding' ? fmtCH(asset.current_price ?? asset.value) : '+' + fmtCH(asset.today_revenue) }}</text>
+              <text class="asset-panel__row-hint">{{ t(asset.purchase_type === 'holding' ? 'currentPrice' : 'today') }}</text>
             </view>
           </view>
         </view>
@@ -109,7 +109,7 @@ import { computed } from 'vue'
 import type { AssetItem, AssetSummary } from '@/api/asset'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHn } from '@/utils/format'
+import { fmtCH, fmtCHn, fmtCardHours } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const props = defineProps<{
@@ -136,4 +136,8 @@ const i18n = useI18nStore()
 const { t } = i18n
 const hasData = computed(() => !!props.summary || props.walletBalance > 0 || props.assets.length > 0)
 const updatedLabel = computed(() => props.updatedAt ? t('dataUpdated') : t('waitingForData'))
+
+function earningsTone(value: number): string {
+  return value > 0 ? 'positive' : value < 0 ? 'danger' : ''
+}
 </script>

@@ -134,12 +134,12 @@ function communityText(value?: string): string {
 
 function postContent(post: PostItem): string {
   const content = i18n.lang === 'en' && post.content_en ? post.content_en : communityText(post.content)
-  return localizeInternalBrandText(content, post.source_key)
+  return localizeInternalBrandText(content, post.source_key, i18n.lang)
 }
 
 function postTopic(post: PostItem): string {
   const topic = i18n.lang === 'en' && post.topic_en ? post.topic_en : communityText(post.topic || t('讨论'))
-  return localizeInternalBrandText(topic, post.source_key)
+  return localizeInternalBrandText(topic, post.source_key, i18n.lang)
 }
 
 function isAutoPost(post: PostItem): boolean {

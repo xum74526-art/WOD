@@ -1,21 +1,35 @@
 <template>
   <view class="direct-asset-actions">
-    <view v-if="asset.can_sell" class="action sell" @tap="sell">{{ t('sell') }}</view>
+    <view v-if="asset.can_sell" class="action sell" :class="{ disabled: submitting }" @tap="sell">{{ t(submitting ? '处理中...' : 'sell') }}</view>
     <view v-else-if="asset.purchase_type === 'usage'" class="action primary" @tap="renew">{{ t('renew') }}</view>
-    <view v-else class="action disabled">{{ t('holdingTradingUnavailable') }}</view>
+    <view v-else class="action disabled">{{ asset.trading_unavailable_reason ? tr(asset.trading_unavailable_reason) : t('holdingTradingUnavailable') }}</view>
   </view>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { sellAsset, type AssetItem } from '@/api/asset'
 import { fmtCH } from '@/utils/format'
 import { navigateBack, navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 
 const props = defineProps<{ asset: AssetItem }>()
-const { t } = useI18nStore()
+const { t, tr } = useI18nStore()
+const submitting = ref(false)
+const pendingRequestId = ref('')
+const pendingSignature = ref('')
+
+function requestId() {
+  const signature = `${props.asset.id}:${props.asset.current_unit_price ?? 0}`
+  if (!pendingRequestId.value || pendingSignature.value !== signature) {
+    pendingSignature.value = signature
+    pendingRequestId.value = `asset-sale-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
+  return pendingRequestId.value
+}
 
 function sell() {
+  if (submitting.value || !props.asset.can_sell || !props.asset.current_unit_price) return
   const pnl = props.asset.pnl ?? 0
   const sellPrice = props.asset.current_price ?? 0
   uni.showModal({
@@ -24,9 +38,16 @@ function sell() {
     confirmText: t('确认出售'),
     success: async result => {
       if (!result.confirm) return
-      const response = await sellAsset(props.asset.id)
-      uni.showToast({ title: `${t('出售成功')} ${t(response.pnl >= 0 ? '盈利' : '亏损')}${fmtCH(response.pnl)}`, icon: 'none' })
-      setTimeout(() => navigateBack(), 1000)
+      submitting.value = true
+      try {
+        const response = await sellAsset(props.asset.id, props.asset.current_unit_price!, requestId())
+        pendingRequestId.value = ''
+        pendingSignature.value = ''
+        uni.showToast({ title: `${t('出售成功')} ${t(response.pnl >= 0 ? '盈利' : '亏损')}${fmtCH(response.pnl)}`, icon: 'none' })
+        setTimeout(() => navigateBack(), 1000)
+      } finally {
+        submitting.value = false
+      }
     },
   })
 }

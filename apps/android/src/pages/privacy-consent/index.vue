@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <scroll-view scroll-y class="scroll">
+    <scroll-view v-if="needsConsent" scroll-y class="scroll">
       <view class="shell">
         <view class="topbar">
           <view class="brand">
@@ -104,6 +104,11 @@
         <text class="footer-note">{{ copy.footer }}</text>
       </view>
     </scroll-view>
+    <view v-else class="launch-placeholder">
+      <image class="launch-logo" src="/static/logo/logo.png" mode="aspectFit" />
+      <text class="brand-name">{{ copy.appName }}</text>
+      <view class="launch-progress" aria-hidden="true" />
+    </view>
   </view>
 </template>
 
@@ -125,6 +130,7 @@ import {
 } from '@/utils/privacy-consent'
 
 const i18n = useI18nStore()
+const needsConsent = ref(!hasCurrentPrivacyConsent())
 const agreementAccepted = ref(false)
 const hongKongProcessingAccepted = ref(false)
 const regionScope = ref<PrivacyRegionScope | ''>('')
@@ -188,15 +194,26 @@ function openLegal(type: 'agreement' | 'privacy') {
   uni.navigateTo({ url: `/pages/agreement/index?type=${type}&from=privacy-consent` })
 }
 
-function enterApp() {
+async function enterApp() {
   if (leaving) return
-  if (!useUserStore().token) {
-    leaving = true
+  leaving = true
+  const user = useUserStore()
+  if (!user.token || hasPendingLoginKaiCallback()) {
     uni.reLaunch({ url: '/pages/login/index' })
     return
   }
-  leaving = true
-  if (hasPendingLoginKaiCallback()) {
+  await user.restore()
+  if (!hasCurrentPrivacyConsent()) {
+    leaving = false
+    needsConsent.value = true
+    return
+  }
+  // An OAuth/password-reset callback may already have routed elsewhere while
+  // the saved session was being restored. Do not overwrite that destination.
+  const pages = getCurrentPages()
+  const route = pages[pages.length - 1]?.route
+  if (route && route !== 'pages/privacy-consent/index') return
+  if (!user.isLogin) {
     uni.reLaunch({ url: '/pages/login/index' })
     return
   }
@@ -221,6 +238,7 @@ function acceptAndContinue() {
     return
   }
   uni.$emit(PRIVACY_CONSENT_EVENT)
+  needsConsent.value = false
   enterApp()
 }
 
@@ -240,6 +258,11 @@ onLoad(() => {
 
 <style lang="scss" scoped>
 .page { min-height: 100vh; background: var(--bg); color: var(--text); }
+.launch-placeholder { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24rpx; }
+.launch-logo { width: 100rpx; height: 100rpx; border-radius: 24rpx; }
+.launch-progress { width: 32rpx; height: 32rpx; border: 3rpx solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: launch-spin 900ms linear infinite; }
+@keyframes launch-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .launch-progress { animation: none; } }
 .scroll { height: 100vh; }
 .shell { box-sizing: border-box; min-height: 100vh; padding: calc(24rpx + var(--safe-top)) 30rpx calc(44rpx + var(--safe-bottom)); }
 .topbar, .brand, .consent-row, .region-option, .cross-border-heading { display: flex; align-items: center; }

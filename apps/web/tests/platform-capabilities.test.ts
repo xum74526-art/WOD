@@ -16,8 +16,10 @@ test("Web capabilities use the canonical same-origin adapter and fail closed", (
 
   assert.match(model, /commerce_mode: "matchmaking"/);
   assert.match(model, /direct_trade_enabled: false/);
+  assert.match(model, /holding_trade_enabled: false/);
   assert.match(model, /payment_enabled: false/);
   assert.match(model, /const directTradeEnabled = source\.direct_trade_enabled === true/);
+  assert.match(model, /holding_trade_enabled: directTradeEnabled && source\.holding_trade_enabled === true/);
   assert.match(model, /payment_enabled: directTradeEnabled && source\.payment_enabled === true/);
   assert.match(model, /canonicalApiPath\("\/platform\/capabilities"\)/);
   assert.match(hook, /useState<PlatformCapabilities>\(FAIL_CLOSED_PLATFORM_CAPABILITIES\)/);
@@ -34,5 +36,6 @@ test("matchmaking availability is independent from direct purchasability", () =>
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(market, /directTradeEnabled \? row\.purchasable \?/);
   assert.match(detail, /matchmakingEnabled && product\.inquiry_available !== false/);
-  assert.match(detail, /if \(!directTradeEnabled \|\| !product\?\.purchasable/);
+  assert.match(detail, /if \(!directTradeEnabled\) return/);
+  assert.match(detail, /!product\.purchasable && !\(purchaseType === "holding" && holdingModeAvailable\)/);
 });

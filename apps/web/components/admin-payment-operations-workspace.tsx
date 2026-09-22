@@ -53,7 +53,7 @@ function money(value: number) {
 }
 
 function cardHours(value: number) {
-  return Number(value || 0).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  return Number(value || 0).toFixed(2);
 }
 
 function browserSessionStorage() {

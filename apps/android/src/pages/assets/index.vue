@@ -16,7 +16,6 @@
         <text class="asset-page-description">{{ currentPanelDescription }}</text>
       </view>
 
-      <view v-if="role === 'personal' && !revenueSettlementEnabled" class="service-warning">{{ t('revenueSettlementUnavailable') }}</view>
       <view v-if="role === 'personal' && (assetLoadError || walletLoadError)" class="service-warning">{{ t('partialAssetDataUnavailable') }}</view>
 
       <view :key="visiblePanelKey" class="asset-panel-host">
@@ -123,6 +122,7 @@ import { computed, ref } from 'vue'
 import { onBackPress, onLoad, onShow } from '@dcloudio/uni-app'
 import { getAssets, type AssetItem } from '@/api/asset'
 import { getWallet } from '@/api/wallet'
+import { getRevenueSummary } from '@/api/revenue'
 import ActionRequiredPanel from '@/components/assets/ActionRequiredPanel.vue'
 import AssetOverviewPanel from '@/components/assets/AssetOverviewPanel.vue'
 import AssetPanelPicker from '@/components/assets/AssetPanelPicker.vue'
@@ -167,7 +167,7 @@ const role = computed(() => userStore.role)
 
 const walletBalance = ref(0)
 const totalIncome = ref(0)
-const revenueSettlementEnabled = ref(false)
+const todayAuditedEarnings = ref(0)
 const tab = ref(0)
 const items = ref<AssetItem[]>([])
 const listLoading = ref(false)
@@ -184,8 +184,8 @@ const requestedPanel = ref<AssetPanelKey | null>(null)
 const summary = computed(() => assetStore.summary)
 const activeAssets = computed(() => (summary.value?.items ?? []).filter((asset) => asset.status === 'active'))
 const activeAssetCount = computed(() => activeAssets.value.reduce((sum, asset) => sum + Math.max(asset.quantity || 1, 1), 0))
-const todayComputeRevenue = computed(() => activeAssets.value.reduce((sum, asset) => sum + Number(asset.today_revenue || 0), 0))
-const expiringSevenDays = computed(() => activeAssets.value.filter((asset) => (asset.remaining_days ?? 999) <= 7).length)
+const todayComputeRevenue = computed(() => todayAuditedEarnings.value)
+const expiringSevenDays = computed(() => activeAssets.value.filter((asset) => asset.purchase_type === 'usage' && (asset.remaining_days ?? 999) <= 7).length)
 const totalAsset = computed(() => Number(summary.value?.total_value || 0) + walletBalance.value)
 const visiblePanelKey = computed(() => pickerOpen.value ? draftPanelKey.value : selectedPanelKey.value)
 
@@ -250,28 +250,29 @@ async function load() {
   walletLoadError.value = false
   walletBalance.value = 0
   totalIncome.value = 0
+  todayAuditedEarnings.value = 0
   items.value = []
 
   if (role.value === 'supplier') {
-    revenueSettlementEnabled.value = true
     await hostingStore.refresh()
     return
   }
 
-  const [walletResult, assetResult] = await Promise.allSettled([
+  const [walletResult, assetResult, _hostingResult, earningsResult] = await Promise.allSettled([
     getWallet(),
     assetStore.refresh(),
     hostingStore.refresh(),
+    getRevenueSummary(),
   ])
 
   if (walletResult.status === 'fulfilled') {
     walletBalance.value = walletResult.value.balance
     totalIncome.value = walletResult.value.total_income
-    revenueSettlementEnabled.value = walletResult.value.revenue_settlement_enabled === true
   }
+  if (earningsResult.status === 'fulfilled') todayAuditedEarnings.value = Number(earningsResult.value.today || 0)
 
   walletLoadError.value = walletResult.status === 'rejected'
-  assetLoadError.value = assetResult.status === 'rejected'
+  assetLoadError.value = assetResult.status === 'rejected' || earningsResult.status === 'rejected'
 
   await loadItems()
 }
@@ -281,11 +282,12 @@ async function loadItems() {
   listError.value = false
   try {
     if (tab.value === 2) {
-      items.value = (await getAssets('expired')).items
+      const [expired, sold] = await Promise.all([getAssets('expired'), getAssets('sold')])
+      items.value = [...expired.items, ...sold.items].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
     } else {
       const active = (await getAssets('active')).items
       items.value = tab.value === 1
-        ? active.filter((asset) => (asset.remaining_days ?? 999) <= 7)
+        ? active.filter((asset) => asset.purchase_type === 'usage' && (asset.remaining_days ?? 999) <= 7)
         : active
     }
   } catch {

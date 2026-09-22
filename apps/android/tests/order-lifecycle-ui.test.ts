@@ -52,6 +52,17 @@ test('buyer actions follow server capability flags with legacy status fallback',
   assert.match(orderDetail, /v-if="canCancelOrder"/)
 })
 
+test('buyer order states and missing-order feedback follow the selected language', () => {
+  assert.match(orderDetail, /<EmptyState :text="t\('订单不存在'\)">/)
+  for (const key of ['pendingDelivery', 'pendingConfirm', 'running', 'completed', 'expired', 'canceled', 'statusPending']) {
+    assert.match(orderDetail, new RegExp(`text: t\\('${key}'\\)`))
+  }
+  assert.doesNotMatch(orderDetail, /return \{ text: s \|\| '待处理'/)
+  assert.match(i18n, /pendingDelivery: 'Awaiting Delivery'/)
+  assert.match(i18n, /pendingConfirm: 'Awaiting Confirmation'/)
+  assert.match(i18n, /completed: 'Completed'/)
+})
+
 test('seller order queue delivers valid SSH through the canonical order endpoint and refreshes', () => {
   assert.match(supplierApi, /url: `\/orders\/\$\{id\}\/deliver`/)
   assert.match(supplierApi, /data: \{ ssh_info \}/)

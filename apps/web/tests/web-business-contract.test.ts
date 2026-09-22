@@ -27,9 +27,9 @@ test("legacy community brand values are renamed for display without changing bac
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 
   const feed = fs.readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
-  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key\)/);
-  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key\)/);
-  assert.match(feed, /communityDisplayText\(row\.content, row\.source_key\)/);
+  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key, locale\)/);
+  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key, locale\)/);
+  assert.match(feed, /communityPostContent\(row, locale\)/);
 });
 
 test("all live market requests force KAI Pricing as the only source", () => {
@@ -375,7 +375,9 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(detail, /beginInquiry/);
   assert.match(detail, /\/account\/requests/);
   assert.match(detail, /createDirectOrder/);
-  assert.match(detail, /if \(!directTradeEnabled \|\| !product\?\.purchasable/);
+  assert.match(detail, /holdingTradeEnabled = capabilities\.holding_trade_enabled === true/);
+  assert.match(detail, /purchaseType === "holding" && holdingModeAvailable/);
+  assert.match(detail, /if \(!directTradeEnabled \|\| !product/);
   assert.match(detail, /matchmakingEnabled && product\.inquiry_available !== false/);
   assert.match(detail, /product\.seller_name/);
   assert.match(detail, /product\.fulfillment_mode/);

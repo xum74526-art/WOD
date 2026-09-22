@@ -32,7 +32,11 @@ test('product inquiry preserves configuration and market context without checkou
   assert.match(product, /const target = userStore\.isLogin \? '\/pages\/buy-request\/index\?compose=1' : '\/pages\/login\/index'/)
   assert.match(product, /nav\(target\)/)
   assert.doesNotMatch(product, /uni\.reLaunch\(\{ url: '\/pages\/login\/index' \}\)/)
-  assert.doesNotMatch(product, /createOrder|getWallet|getRebateSummary|ConfirmSheet/)
+  // The detail page may read the authenticated rebate policy for the gated
+  // direct-trade preview, but still cannot create an order or touch a wallet
+  // outside the dedicated checkout component.
+  assert.match(product, /if \(!userStore\.isLogin \|\| !commerce\.directTradeEnabled\)/)
+  assert.doesNotMatch(product, /createOrder|getWallet|ConfirmSheet/)
 })
 
 test('request form requires contact details, carries listing identity, and supports closed-loop proposals', () => {

@@ -7,6 +7,7 @@ const FAIL_CLOSED_CAPABILITIES: PlatformCapabilities = Object.freeze({
   commerce_mode: 'unavailable',
   matchmaking_enabled: false,
   direct_trade_enabled: false,
+  holding_trade_enabled: false,
   payment_enabled: false,
   recharge_enabled: false,
   withdraw_enabled: false,
@@ -35,6 +36,8 @@ export const useCommerceStore = defineStore('commerce', () => {
     && capabilities.value.matchmaking_enabled === true
     && !directTradeEnabled.value)
   const inquiryMode = computed(() => matchmakingEnabled.value)
+  const holdingTradeEnabled = computed(() => directTradeEnabled.value
+    && capabilities.value.holding_trade_enabled === true)
   const paymentEnabled = computed(() => directTradeEnabled.value && capabilities.value.payment_enabled === true)
   const rechargeEnabled = computed(() => paymentEnabled.value && capabilities.value.recharge_enabled === true)
   const withdrawEnabled = computed(() => directTradeEnabled.value && capabilities.value.withdraw_enabled === true)
@@ -60,6 +63,7 @@ export const useCommerceStore = defineStore('commerce', () => {
           commerce_mode: String(next?.commerce_mode || 'unavailable'),
           matchmaking_enabled: next?.matchmaking_enabled === true,
           direct_trade_enabled: next?.direct_trade_enabled === true,
+          holding_trade_enabled: next?.holding_trade_enabled === true,
           payment_enabled: next?.payment_enabled === true,
           recharge_enabled: next?.recharge_enabled === true,
           withdraw_enabled: next?.withdraw_enabled === true,
@@ -89,6 +93,7 @@ export const useCommerceStore = defineStore('commerce', () => {
     directTradeEnabled,
     matchmakingEnabled,
     inquiryMode,
+    holdingTradeEnabled,
     paymentEnabled,
     rechargeEnabled,
     withdrawEnabled,

@@ -28,7 +28,7 @@ test('signed-in users explicitly bind Kai identity without replacing their sessi
   assert.match(settingsSource, /kaiIdentityBindingConfirm/)
   assert.match(appSource, /callback\.bindTicket/)
   assert.match(appSource, /user\.bindKaiIdentity\(callback\.bindTicket\)/)
-  assert.match(loginSource, /<view class="method-switch">/)
+  assert.match(loginSource, /<view class="method-switch"[^>]*>/)
   assert.match(loginSource, /startKaiAuth\(mode\.value\)/)
   assert.match(loginSource, /PENDING_KAI_INTENT_KEY/)
   assert.doesNotMatch(loginSource, /identity_not_bound/)

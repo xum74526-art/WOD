@@ -298,6 +298,14 @@ def request_password_reset(db: Session, email: str) -> tuple[str, str] | None:
         )
         db.commit()
         return None
+    token = _queue_password_reset_for_user(db, user, stored_email)
+    db.commit()
+    return token, stored_email
+
+
+def _queue_password_reset_for_user(db: Session, user: User, stored_email: str) -> str:
+    """Queue a reset proof inside the caller's current transaction."""
+
     now = utcnow()
     _expire_open_tokens(db, user.id, (PASSWORD_RESET_EMAIL,), now)
     token = _new_token()
@@ -319,7 +327,38 @@ def request_password_reset(db: Session, email: str) -> tuple[str, str] | None:
         token_row=token_row,
         expires_at=token_row.expires_at,
     )
-    db.commit()
+    return token
+
+
+def request_password_reset_for_user(db: Session, user: User) -> tuple[str, str]:
+    """Queue recovery mail for an administrator-selected account.
+
+    The administrator never receives the opaque reset token or the complete
+    address.  This helper merely avoids asking support staff to know or enter a
+    user's private recovery address.
+    """
+
+    require_email_delivery()
+    expected_auth_version = int(user.auth_version or 0)
+    lock_active_user(db, user.id)
+    db.refresh(user)
+    ensure_active_user(user)
+    stored_email = reveal(user.recovery_email)
+    if (
+        not stored_email
+        or user.recovery_email_verified_at is None
+        or not user.recovery_email_fingerprint
+        or fingerprint(stored_email) != user.recovery_email_fingerprint
+        or int(user.auth_version or 0) != expected_auth_version
+    ):
+        db.rollback()
+        raise BizError(
+            "该账号未绑定已验证的找回邮箱；请让用户使用已绑定的 KAI 身份登录，或先完成身份核验后绑定邮箱",
+            status_code=409,
+        )
+    token = _queue_password_reset_for_user(db, user, stored_email)
+    # Deliberately leave commit ownership to the privileged account-action
+    # service so the mail outbox and immutable admin audit row commit together.
     return token, stored_email
 
 

@@ -277,12 +277,12 @@ function communityText(value?: string): string {
 
 function postContent(value: PostItem): string {
   const content = i18n.lang === 'en' && value.content_en ? value.content_en : communityText(value.content)
-  return localizeInternalBrandText(content, value.source_key)
+  return localizeInternalBrandText(content, value.source_key, i18n.lang)
 }
 
 function postTopic(value: PostItem): string {
   const topic = i18n.lang === 'en' && value.topic_en ? value.topic_en : communityText(value.topic || t('讨论'))
-  return localizeInternalBrandText(topic, value.source_key)
+  return localizeInternalBrandText(topic, value.source_key, i18n.lang)
 }
 
 function isAutoPost(value: PostItem): boolean {

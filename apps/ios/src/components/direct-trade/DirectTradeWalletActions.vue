@@ -70,7 +70,7 @@ import {
   DEFAULT_RECHARGE_TTL_SECONDS,
   effectiveRechargeMinimum,
   effectiveWithdrawalMinimum,
-  MINIMUM_RECHARGE_CNY,
+  RECHARGE_BUILD_MINIMUM_CNY,
   readStoredRechargeSession,
   type RechargePrefill,
   type StoredRechargeSession,
@@ -90,7 +90,7 @@ const commerce = useCommerceStore()
 const PENDING_PAYMENT_KEY = 'wod-pending-recharge-order'
 const RECHARGE_REQUEST_INTENT_KEY = 'wod-recharge-request-intent'
 const WITHDRAWAL_REQUEST_INTENT_KEY = 'wod-withdrawal-request-intent'
-const quickAmounts = [MINIMUM_RECHARGE_CNY, 50, 100]
+const quickAmounts = [RECHARGE_BUILD_MINIMUM_CNY, 50, 100]
 const submitting = ref(false)
 const withdrawConfig = ref<WithdrawalConfig | null>(null)
 const bankCards = ref<Array<BankCardItem & { displayName: string }>>([])

@@ -62,6 +62,8 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
   const renew = bodySchema("/api/orders/{oid}/renew", "post");
   assert.ok(create.properties?.hours);
   assert.ok(create.properties?.client_request_id);
+  assert.deepEqual(create.properties?.purchase_type?.enum, ["usage", "holding"]);
+  assert.equal(create.required?.includes("purchase_type") ?? false, false);
   assert.ok(renew.properties?.hours);
   assert.ok(renew.required?.includes("client_request_id"));
   for (const [path, method] of [
@@ -96,6 +98,20 @@ test("hourly order and Qixiang recharge operations match the canonical backend",
   );
   assert.equal(contract.paths["/api/payments/mapay/recharge-orders"]?.post, undefined);
   assert.equal(contract.paths["/api/payments/mapay/checkout/{token}"]?.get, undefined);
+});
+
+test("holding assets require an idempotent, price-confirmed sale request", () => {
+  const sale = bodySchema("/api/assets/{aid}/sell", "post");
+  assert.deepEqual(sale.required, ["client_request_id", "expected_unit_price_card_hours"]);
+  assert.deepEqual(
+    {
+      minLength: sale.properties?.client_request_id?.minLength,
+      maxLength: sale.properties?.client_request_id?.maxLength,
+      pattern: sale.properties?.client_request_id?.pattern,
+    },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
+  assert.ok(sale.properties?.expected_unit_price_card_hours);
 });
 
 test("administrator payment operations match the canonical backend", () => {
@@ -177,4 +193,31 @@ test("administrator and finance lists expose the platform filter", () => {
     const names = operation(path, "get").parameters?.map((parameter) => parameter.name) ?? [];
     assert.ok(names.includes("platform"), `${path} must expose the platform filter`);
   }
+});
+
+test("administrator account actions are explicit, audited, and idempotent", () => {
+  const action = bodySchema("/api/admin/users/{user_id}/actions", "post");
+  assert.deepEqual(action.properties?.action?.enum, [
+    "send_password_reset",
+    "freeze",
+    "unfreeze",
+    "delete",
+  ]);
+  assert.deepEqual(action.required, ["action", "client_request_id", "reason"]);
+  assert.deepEqual(
+    {
+      minLength: action.properties?.client_request_id?.minLength,
+      maxLength: action.properties?.client_request_id?.maxLength,
+      pattern: action.properties?.client_request_id?.pattern,
+    },
+    { minLength: 12, maxLength: 64, pattern: "^[A-Za-z0-9._:-]+$" },
+  );
+  assert.deepEqual(
+    { minLength: action.properties?.reason?.minLength, maxLength: action.properties?.reason?.maxLength },
+    { minLength: 4, maxLength: 500 },
+  );
+
+  const historyNames = operation("/api/admin/users/{user_id}/actions", "get").parameters?.map((parameter) => parameter.name) ?? [];
+  assert.ok(historyNames.includes("page"));
+  assert.ok(historyNames.includes("page_size"));
 });

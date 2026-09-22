@@ -14,7 +14,7 @@
         </EmptyState>
       </view>
       <template v-else>
-        <view v-if="asset.revenue_settlement_enabled === false" class="service-warning">{{ t('revenueSettlementUnavailable') }}</view>
+        <view v-if="asset.purchase_type === 'usage' && asset.audited_earnings_enabled === false" class="service-warning">{{ t('revenueSettlementUnavailable') }}</view>
         <view v-if="asset.reward_service_enabled === false && asset.historical_test_reward" class="service-warning">{{ t('rewardServiceUnavailable') }}</view>
         <view class="card hero">
           <view class="hero-top">
@@ -41,7 +41,7 @@
               </text>
             </view>
           </view>
-          <view v-else-if="asset.revenue_settlement_enabled" class="hero-grid">
+          <view v-else-if="asset.purchase_type === 'usage' && asset.revenue_settlement_enabled" class="hero-grid">
             <view class="hg-item">
               <text class="hg-label">{{ t('todayRevenue') }}</text>
               <AmountText :value="toCardHours(asset.today_revenue ?? 0)" prefix="卡时" size="md" trend="up" />
@@ -53,8 +53,9 @@
           </view>
         </view>
 
-        <SectionHeader v-if="!asset.can_sell && asset.revenue_settlement_enabled" :title="t('accountRevenueLast7Days')" />
-        <view v-if="!asset.can_sell && asset.revenue_settlement_enabled" class="card chart-card">
+        <view v-if="asset.purchase_type === 'holding' && !asset.can_sell && asset.trading_unavailable_reason" class="service-warning">{{ tr(asset.trading_unavailable_reason) }}</view>
+        <SectionHeader v-if="asset.purchase_type === 'usage' && asset.audited_earnings_enabled" :title="t('accountRevenueLast7Days')" />
+        <view v-if="asset.purchase_type === 'usage' && asset.audited_earnings_enabled" class="card chart-card">
           <view v-if="accountRevenueChartLoading" class="chart-state">{{ t('loading') }}</view>
           <view v-else-if="accountRevenueChartFailed" class="chart-state unavailable">{{ t('accountRevenueChartUnavailable') }}</view>
           <Chart v-else :points="accountRevenueChart" value-key="amount" :height="180" />
@@ -64,8 +65,8 @@
         <view class="card info-card">
           <view class="row"><text class="sk">{{ t('k_21c8bb00') }}</text><text class="sv">{{ t(asset.purchase_type === 'holding' ? 'holdingMode' : 'usageMode') }}</text></view>
           <view class="row"><text class="sk">{{ t('k_b44c0f33') }}</text><text class="sv">{{ formatDate(asset.start_at) || '-' }}</text></view>
-          <view class="row" v-if="!asset.can_sell"><text class="sk">{{ t('k_eccb8cdc') }}</text><text class="sv">{{ formatDate(asset.end_at) || '-' }}</text></view>
-          <view class="row" v-if="!asset.can_sell"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ t('{days} 天', { days: asset.remaining_days ?? 0 }) }}</text></view>
+          <view class="row" v-if="asset.purchase_type === 'usage'"><text class="sk">{{ t('k_eccb8cdc') }}</text><text class="sv">{{ formatDate(asset.end_at) || '-' }}</text></view>
+          <view class="row" v-if="asset.purchase_type === 'usage'"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ t('{days} 天', { days: asset.remaining_days ?? 0 }) }}</text></view>
           <view class="row" v-if="asset.rebate_status === 'pending' && asset.rebate_amount">
             <text class="sk">{{ t('k_64913945') }}</text>
             <text class="sv up">+{{ fmtCHn(asset.rebate_amount) }} {{ t('cardHour') }}</text>
@@ -123,7 +124,7 @@ import { saveInquiryRequestPrefill } from '@/utils/inquiry-request'
 import { ACCOUNT_REVENUE_RANGE_DAYS, startAssetDetailRequests } from '@/utils/asset-detail-requests'
 
 const i18n = useI18nStore()
-const { t } = i18n
+const { t, tr } = i18n
 const commerce = useCommerceStore()
 const asset = ref<AssetItem | null>(null)
 const assetLoading = ref(true)
@@ -168,14 +169,17 @@ onLoad(async (opts) => {
 })
 
 const badge = computed(() => {
+  const current = asset.value
   const s = asset.value?.status
-  if (s === 'active' || s === 'running') return { text: '持有中', type: 'running' as const }
-  if (s === 'expired') return { text: '已到期', type: 'expired' as const }
-  if (s === 'sold') return { text: '已出售', type: 'done' as const }
-  if (s === 'used') return { text: '使用中', type: 'running' as const }
-  if (s === 'done') return { text: '已完成', type: 'done' as const }
-  if (s === 'canceled') return { text: '已取消', type: 'canceled' as const }
-  return { text: s || '待处理', type: 'default' as const }
+  if (s === 'active' || s === 'running') {
+    return { text: t(current?.purchase_type === 'holding' ? 'holding' : 'running'), type: 'running' as const }
+  }
+  if (s === 'expired') return { text: t('expired'), type: 'expired' as const }
+  if (s === 'sold') return { text: t('sold'), type: 'done' as const }
+  if (s === 'used') return { text: t('使用中'), type: 'running' as const }
+  if (s === 'done') return { text: t('completed'), type: 'done' as const }
+  if (s === 'canceled') return { text: t('canceled'), type: 'canceled' as const }
+  return { text: t('statusPending'), type: 'default' as const }
 })
 
 function goOrder() {

@@ -15,8 +15,22 @@
 | 社区 | 图文、用户视频、聚合视频、评论、点赞和关注流程一致 |
 | 视频 | 聚合视频使用受信任的元数据请求和原生播放器，支持进度、全屏及 0.5/0.8/1/1.25/1.5/2 倍速 |
 
-`npm run check:client-experience` 会检查关键能力证据和要求完全镜像的 Mobile 文件。新增共享
+`npm run check:experience-parity` 会检查关键能力证据和要求完全镜像的 Mobile 文件。新增共享
 功能时应同时更新两端及该检查，避免只在一个平台出现入口或修复。
+
+## 启动与登录页交互
+
+Android/iOS 启动时由本地隐私入口决定是否展示同意页面；已有有效同意记录时只显示启动占位，
+等待本机会话恢复后直接进入登录页或首页。过期会话在启动页、登录页被清除时，API 层不再重复
+重建登录页。普通目标页在 `onReady` 关闭原生启动封面；登录页还需等待视图层确认表单已经可见，
+避免原生服务层与视图层之间的通信延迟暴露空白，并保留 8 秒的兜底关闭机制。
+
+登录页只在首次渲染后播放品牌与表单入场；从找回密码、协议页或后台返回时不重播。
+登录/注册与手机号/Kai 切换使用滑块和表单高度过渡，输入框显示聚焦反馈，提交按钮展示加载与成功
+状态，并在请求及成功跳转期间阻止重复提交。减少动态效果设置下关闭位移和连续旋转。
+
+`tests/login-startup-motion.test.ts` 覆盖启动封面关闭、过期会话、页面返回与重复提交；实际发布包
+还需录制冷启动及返回登录页，确认未出现隐私页、首页或整页透明闪帧。H5 测试不能代替原生 APK/IPA 验收。
 
 ## 平台差异
 
@@ -37,7 +51,7 @@ npm test --prefix apps/android
 npm test --prefix apps/ios
 npm run type-check --prefix apps/android
 npm run type-check --prefix apps/ios
-npm run check:client-experience
+npm run check:experience-parity
 npm run build:android:app
 npm run build:ios:app
 ```

@@ -21,6 +21,12 @@ def matchmaking_enabled() -> bool:
     return settings.MATCHMAKING_ENABLED is True
 
 
+def holding_trade_enabled() -> bool:
+    """Return the explicit server-owned holding/buyback capability."""
+
+    return direct_trade_enabled() and settings.HOLDING_TRADE_ENABLED is True
+
+
 def credential_escrow_enabled() -> bool:
     return (
         matchmaking_enabled()
@@ -75,6 +81,7 @@ def platform_capabilities() -> dict:
         "matchmaking_enabled": matchmaking_enabled(),
         "credential_escrow_enabled": credential_escrow_enabled(),
         "direct_trade_enabled": direct_trade_enabled(),
+        "holding_trade_enabled": holding_trade_enabled(),
         "payment_enabled": payment_enabled(),
         "recharge_enabled": recharge_enabled(),
         "withdraw_enabled": withdrawal_enabled(),
@@ -92,6 +99,12 @@ def require_direct_trade_enabled() -> None:
 
     if not direct_trade_enabled():
         raise BizError(INQUIRY_ONLY_MESSAGE, status_code=409)
+
+
+def require_holding_trade_enabled() -> None:
+    require_direct_trade_enabled()
+    if not holding_trade_enabled():
+        raise BizError("持有交易服务暂未开放", status_code=409)
 
 
 def require_recharge_enabled() -> None:

@@ -5,6 +5,7 @@ export type PlatformCapabilities = {
   commerce_mode: "direct_trade" | "matchmaking" | "history_only";
   matchmaking_enabled: boolean;
   direct_trade_enabled: boolean;
+  holding_trade_enabled: boolean;
   payment_enabled: boolean;
   recharge_enabled: boolean;
   withdraw_enabled: boolean;
@@ -15,6 +16,7 @@ export const FAIL_CLOSED_PLATFORM_CAPABILITIES: PlatformCapabilities = Object.fr
   commerce_mode: "matchmaking",
   matchmaking_enabled: true,
   direct_trade_enabled: false,
+  holding_trade_enabled: false,
   payment_enabled: false,
   recharge_enabled: false,
   withdraw_enabled: false,
@@ -37,6 +39,7 @@ export function normalizePlatformCapabilities(value: unknown): PlatformCapabilit
       : matchmakingEnabled ? "matchmaking" : "history_only",
     matchmaking_enabled: matchmakingEnabled,
     direct_trade_enabled: directTradeEnabled,
+    holding_trade_enabled: directTradeEnabled && source.holding_trade_enabled === true,
     payment_enabled: directTradeEnabled && source.payment_enabled === true,
     recharge_enabled: directTradeEnabled && source.recharge_enabled === true,
     withdraw_enabled: directTradeEnabled && source.withdraw_enabled === true,

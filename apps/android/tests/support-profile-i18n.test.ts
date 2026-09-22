@@ -50,7 +50,7 @@ test('an edited nickname is displayed and submitted exactly as entered', () => {
 test('legacy WOD news account is presented with the KAI星算 brand without changing stored data', () => {
   assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hans'), 'KAI星算平台行情')
   assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'zh-Hant'), '算力星圖平台行情')
-  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'KAI星算 Platform Market')
+  assert.equal(profileUsernameDisplayValue('WOD资讯', 'WOD资讯', false, 'en'), 'KAI Compute Market')
   assert.equal(profileUsernameSubmissionValue('WOD资讯', 'KAI星算平台行情', false), 'WOD资讯')
 })
 

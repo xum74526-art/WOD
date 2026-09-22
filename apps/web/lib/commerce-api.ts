@@ -1,5 +1,6 @@
 import { apiEnvelopeRequest, apiRequest, publicApiEnvelopeRequest, type ApiEnvelope } from "@/lib/api";
 import { hourlyOrderBody } from "@/lib/web-business-contract";
+import type { ProductPurchaseType } from "@/lib/product-purchase";
 
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
 export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
@@ -342,7 +343,7 @@ export function renewOrder(id: number, hours: number, clientRequestId: string) {
     body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
   });
 }
-export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: "usage"; expected_unit_price_card_hours: number }, clientRequestId: string) {
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: ProductPurchaseType; expected_unit_price_card_hours: number }, clientRequestId: string) {
   return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },

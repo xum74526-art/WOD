@@ -19,7 +19,8 @@ test('login and registration share one labeled contact action inside the auth ca
   assert.match(after, /^\s+<\/view>\s+<\/view>\s+<\/view>\s+<\/template>/)
   // Contact must not submit authentication or bypass consent.
   assert.match(page, /if \(!agree.value\) \{ uni.showToast/)
-  assert.match(page, /if \(userStore.isLogin\) \{\s+clearPendingLoginKaiCallback\(\)\s+stopCaptchaExpiryTimer\(\)\s+setTimeout\(enterAuthenticatedApp, 800\)/)
+  assert.match(page, /if \(userStore.isLogin\) \{\s+clearPendingLoginKaiCallback\(\)\s+stopCaptchaExpiryTimer\(\)\s+void restoreExistingSession\(\)/)
+  assert.match(page, /await userStore.restore\(\)[\s\S]*pageVisible && userStore.isLogin/)
 })
 
 test('settings has one labeled contact row before deletion and logout controls', () => {

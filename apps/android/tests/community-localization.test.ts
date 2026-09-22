@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
+import { localizeInternalBrandText, localizePersonName } from '../src/utils/localize-content.ts'
+
 const indexSource = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
 const detailSource = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
 const localeSource = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
@@ -28,4 +30,21 @@ test('community navigation and empty-state keys have English translations', () =
   ]) {
     assert.ok(localeSource.includes(translation), `missing translation: ${translation}`)
   }
+})
+
+test('first-party market posts remove mixed Chinese from English display copy', () => {
+  assert.equal(localizePersonName('KAI星算平台行情', 'en'), 'KAI Compute Market')
+  assert.equal(
+    localizeInternalBrandText(
+      'The current reference price in 北美 is 5.04 CH/h. KAI星算 market data.',
+      'wod-market',
+      'en',
+    ),
+    'The current reference price in North America is 5.04 CH/h. Compute Star Map market data.',
+  )
+  assert.equal(
+    localizeInternalBrandText('北美用戶原文', 'user-post', 'en'),
+    '北美用戶原文',
+    'user-authored content must remain untouched',
+  )
 })

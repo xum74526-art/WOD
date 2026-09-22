@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from decimal import Decimal
+
+from pydantic import BaseModel, Field
 
 from app.schemas.common import OrmModel
 
@@ -22,7 +24,25 @@ class AssetOut(OrmModel):
     gpu_model: str | None = None
     today_revenue: float = 0
     accumulated_revenue: float = 0
+    audited_earnings_enabled: bool = True
     remaining_days: int | None = None
+    current_price: float | None = None
+    current_unit_price: float | None = None
+    buy_price: float | None = None
+    pnl: float | None = None
+    pnl_pct: float | None = None
+    price_observed_at: datetime | None = None
+    can_sell: bool = False
+    trading_unavailable_reason: str | None = None
+
+
+class AssetSellIn(BaseModel):
+    client_request_id: str = Field(
+        min_length=12,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    expected_unit_price_card_hours: Decimal = Field(gt=0)
 
 
 class AssetSummary(BaseModel):
@@ -30,4 +50,5 @@ class AssetSummary(BaseModel):
     wallet_balance: float
     pending_revenue: float
     revenue_rate: float
+    audited_earnings_enabled: bool = True
     items: list[AssetOut]

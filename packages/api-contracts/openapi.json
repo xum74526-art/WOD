@@ -149,6 +149,52 @@
         "title": "AddressUpdate",
         "type": "object"
       },
+      "AdminUserActionIn": {
+        "properties": {
+          "action": {
+            "enum": [
+              "send_password_reset",
+              "freeze",
+              "unfreeze",
+              "delete"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "client_request_id": {
+            "maxLength": 64,
+            "minLength": 12,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "confirm_username": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Username"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 4,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "client_request_id",
+          "reason"
+        ],
+        "title": "AdminUserActionIn",
+        "type": "object"
+      },
       "AppReleaseInfo": {
         "properties": {
           "application_id": {
@@ -269,6 +315,35 @@
           }
         },
         "title": "ApproveWithdrawalIn",
+        "type": "object"
+      },
+      "AssetSellIn": {
+        "properties": {
+          "client_request_id": {
+            "maxLength": 64,
+            "minLength": 12,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "expected_unit_price_card_hours": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Expected Unit Price Card Hours"
+          }
+        },
+        "required": [
+          "client_request_id",
+          "expected_unit_price_card_hours"
+        ],
+        "title": "AssetSellIn",
         "type": "object"
       },
       "AuthorizationResponse": {
@@ -3085,16 +3160,13 @@
             "type": "integer"
           },
           "purchase_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "default": "usage",
-            "title": "Purchase Type"
+            "enum": [
+              "usage",
+              "holding"
+            ],
+            "title": "Purchase Type",
+            "type": "string"
           },
           "quantity": {
             "default": 1,
@@ -6820,6 +6892,28 @@
           },
           {
             "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "suspended",
+                    "deleting",
+                    "deleted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {
@@ -6868,6 +6962,127 @@
           }
         ],
         "summary": "Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/actions": {
+      "get": {
+        "operationId": "user_account_actions_api_admin_users__user_id__actions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "User Account Actions",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "manage_user_account_api_admin_users__user_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Manage User Account",
         "tags": [
           "admin"
         ]
@@ -6984,6 +7199,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetSellIn"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -13028,6 +13253,8 @@
             "required": false,
             "schema": {
               "default": 30,
+              "maximum": 365,
+              "minimum": 1,
               "title": "Range Days",
               "type": "integer"
             }

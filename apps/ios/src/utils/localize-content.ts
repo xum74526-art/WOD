@@ -4,11 +4,11 @@ import { toTraditionalChinese } from './traditional-chinese.ts'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
-  'WOD资讯': 'KAI星算 Platform Market',
-  'ZTW资讯': 'KAI星算 Platform Market',
-  'ZTW資訊': 'KAI星算 Platform Market',
-  'KAI星算资讯': 'KAI星算 Platform Market',
-  'KAI星算資訊': 'KAI星算 Platform Market',
+  'WOD资讯': 'KAI Compute Market',
+  'ZTW资讯': 'KAI Compute Market',
+  'ZTW資訊': 'KAI Compute Market',
+  'KAI星算资讯': 'KAI Compute Market',
+  'KAI星算資訊': 'KAI Compute Market',
 }
 
 const PLATFORM_NEWS_NAMES = new Set([
@@ -164,6 +164,28 @@ const TERM_EN: Record<string, string> = {
   '未披露': 'Undisclosed',
 }
 
+const INTERNAL_REGION_EN: Array<[string, string]> = [
+  ['全球 / 未披露', 'Global / Undisclosed'],
+  ['全球／未披露', 'Global / Undisclosed'],
+  ['全球/未披露', 'Global / Undisclosed'],
+  ['中国大陆', 'Mainland China'],
+  ['华北', 'North China'],
+  ['华东', 'East China'],
+  ['华中', 'Central China'],
+  ['华南', 'South China'],
+  ['东北', 'Northeast China'],
+  ['西北', 'Northwest China'],
+  ['西南', 'Southwest China'],
+  ['亚太', 'Asia Pacific'],
+  ['北美', 'North America'],
+  ['欧洲', 'Europe'],
+  ['中东', 'Middle East'],
+  ['南美', 'South America'],
+  ['非洲', 'Africa'],
+  ['海外', 'Overseas'],
+  ['未披露', 'Undisclosed'],
+]
+
 function term(value: string): string {
   return TERM_EN[value] ?? value
 }
@@ -212,7 +234,7 @@ function translateGeneratedPost(source: string): string | null {
 export function localizePersonName(value: string, lang: AppLanguage): string {
   if (!value) return value
   if (PLATFORM_NEWS_NAMES.has(value)) {
-    return lang === 'en' ? 'KAI星算 Platform Market' : lang === 'zh-Hant' ? '算力星圖平台行情' : 'KAI星算平台行情'
+    return lang === 'en' ? 'KAI Compute Market' : lang === 'zh-Hant' ? '算力星圖平台行情' : 'KAI星算平台行情'
   }
   if (lang === 'zh-Hans') return value
   if (lang === 'zh-Hant') return value === '体验用户' ? toTraditionalChinese(value) : value
@@ -256,10 +278,22 @@ export function localizeCommunityText(value: string, lang: AppLanguage): string 
   return COMMUNITY_EN[value] ?? translateGeneratedPost(value) ?? value
 }
 
-/** Rename only historical first-party news copy; never rewrite user-authored content. */
-export function localizeInternalBrandText(value: string, sourceKey?: string | null): string {
+/** Localize only first-party market copy; never rewrite user-authored content. */
+export function localizeInternalBrandText(
+  value: string,
+  sourceKey?: string | null,
+  lang: AppLanguage = 'zh-Hans',
+): string {
   if (!value || sourceKey !== 'wod-market') return value
-  return value.replace(/(?:WOD|ZTW)(?![A-Z0-9_-])/g, 'KAI星算')
+  const branded = value.replace(/(?:WOD|ZTW)(?![A-Z0-9_-])/g, 'KAI星算')
+  if (lang === 'zh-Hant') return toTraditionalChinese(branded)
+  if (lang !== 'en') return branded
+
+  let localized = branded
+    .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, 'KAI Compute Market')
+    .replace(/KAI星算/g, 'Compute Star Map')
+  for (const [source, target] of INTERNAL_REGION_EN) localized = localized.replaceAll(source, target)
+  return localized
 }
 
 export function localizeProductName(value: string | null | undefined, lang: AppLanguage): string {

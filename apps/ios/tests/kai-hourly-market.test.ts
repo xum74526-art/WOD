@@ -12,6 +12,8 @@ const marketApi = source('../src/api/market.ts')
 const orderApi = source('../src/api/order.ts')
 const homePage = source('../src/pages/index/index.vue')
 const productPage = source('../src/pages/product/detail.vue')
+const directCheckout = source('../src/components/direct-trade/DirectTradeProductCheckout.vue')
+const directAssetActions = source('../src/components/direct-trade/DirectTradeAssetActions.vue')
 const quotePage = source('../src/pages/quote/index.vue')
 const marketPage = source('../src/pages/market/index.vue')
 const orderList = source('../src/pages/orders/index.vue')
@@ -71,7 +73,7 @@ test('new inquiry and renewal requests keep integer-hour requirements without ch
   assert.match(productPage, /saveInquiryRequestPrefill\([\s\S]*?gpu_hours: hours\.value/)
   assert.doesNotMatch(productPage, /createOrder\(/)
   assert.doesNotMatch(productPage, /purchaseCycles|cycleLabel/)
-  assert.match(orderApi, /export type PurchaseType = 'usage'/)
+  assert.match(orderApi, /export type PurchaseType = 'usage' \| 'holding'/)
   assert.match(orderApi, /expected_unit_price_card_hours\?: number/)
   assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours \}/)
   assert.match(orderApi, /renewOrder\(id: number, hours: number, client_request_id: string\)/)
@@ -82,19 +84,24 @@ test('new inquiry and renewal requests keep integer-hour requirements without ch
   assert.doesNotMatch(renewBlock, /product_id/)
 })
 
-test('hourly inquiry exposes usage requirements while retaining historical holding display elsewhere', () => {
+test('hourly inquiry stays available while direct KAI checkout distinguishes usage and holding', () => {
   assert.match(productPage, /t\('hourlyComputeRequirement'\)/)
   assert.match(productPage, /saveInquiryRequestPrefill/)
   assert.match(productPage, /gpu_hours: hours\.value/)
-  assert.doesNotMatch(productPage, /createOrder\(|walletBalance|confirmUsagePurchase/)
-  assert.doesNotMatch(productPage, /t\('holdingMode'\)|confirmHoldingPurchase|buyHolding|purchaseType\s*=\s*'holding'/)
+  assert.doesNotMatch(productPage, /createOrder\(|walletBalance/)
+  assert.match(productPage, /holdingModeAvailable/)
+  assert.match(productPage, /purchaseType === 'holding'/)
+  assert.match(productPage, /commerce\.holdingTradeEnabled/)
+  assert.match(directCheckout, /confirmHoldingPurchase/)
+  assert.match(directCheckout, /props\.purchaseType/)
+  assert.match(directAssetActions, /expected_unit_price_card_hours|current_unit_price|sellAsset/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   assert.match(createBlock, /hours: number/)
   assert.match(createBlock, /purchase_type: PurchaseType/)
   assert.doesNotMatch(createBlock, /cycle_days/)
 })
 
-test('usage expiry rebate utility remains correct but is not advertised in inquiry checkout', () => {
+test('usage expiry rebate utility is shown only for usage checkout', () => {
   const tiers = [
     { max_month_spent: 10000, rate: 3 },
     { max_month_spent: 50000, rate: 5 },
@@ -112,8 +119,9 @@ test('usage expiry rebate utility remains correct but is not advertised in inqui
   assert.deepEqual(estimateUsageExpiryRebate(9.99, 'usage', true, 0, 10, tiers, 20000), { amount: 0, ratePercent: 0 })
   assert.deepEqual(estimateUsageExpiryRebate(33.5, 'usage', true, 0, 10, tiers, 20000), { amount: 1.01, ratePercent: 3 })
   assert.deepEqual(estimateUsageExpiryRebate(10, 'usage', true, 0, 0, tiers, 0), { amount: 0, ratePercent: 0 })
-  assert.doesNotMatch(productPage, /getRebateSummary|estimatedExpiryRebate|estRebate/)
-  assert.doesNotMatch(productPage, /purchaseType === 'holding'/)
+  assert.match(productPage, /getRebateSummary|estimatedExpiryRebate/)
+  assert.match(productPage, /purchaseType === 'usage'/)
+  assert.match(directCheckout, /purchaseType === 'usage'/)
 })
 
 test('personal and seller rebate mechanisms are separate and explain their bases', () => {

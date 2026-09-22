@@ -26,8 +26,8 @@
             <text class="asset-panel__metric-label">{{ t('activeResources') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value positive">+{{ fmtCHn(todayRevenue) }}</text>
-            <text class="asset-panel__metric-label">{{ t('todayComputeRevenue') }}</text>
+            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ todayRevenue > 0 ? '+' : '' }}{{ fmtCardHours(todayRevenue) }}</text>
+            <text class="asset-panel__metric-label">{{ t('todayRealizedEarnings') }}</text>
           </view>
           <view class="asset-panel__metric">
             <text class="asset-panel__metric-value" :class="expiringCount ? 'warning' : ''">{{ expiringCount }}</text>
@@ -65,8 +65,8 @@
               </text>
             </view>
             <view class="asset-panel__row-side">
-              <text class="asset-panel__row-value positive">+{{ fmtCH(asset.today_revenue) }}</text>
-              <text class="asset-panel__row-hint">{{ t('today') }}</text>
+              <text class="asset-panel__row-value" :class="asset.purchase_type === 'holding' ? ((asset.pnl ?? 0) >= 0 ? 'positive' : 'danger') : 'positive'">{{ asset.purchase_type === 'holding' ? fmtCH(asset.current_price ?? asset.value) : '+' + fmtCH(asset.today_revenue) }}</text>
+              <text class="asset-panel__row-hint">{{ t(asset.purchase_type === 'holding' ? 'currentPrice' : 'today') }}</text>
             </view>
           </view>
         </view>
@@ -91,7 +91,7 @@ import type { AssetItem, AssetSummary } from '@/api/asset'
 import AppIcon from '@/components/AppIcon.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHn } from '@/utils/format'
+import { fmtCH, fmtCHn, fmtCardHours } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const props = defineProps<{
@@ -114,11 +114,17 @@ defineEmits<{
 
 const i18n = useI18nStore()
 const { t } = i18n
-const tabLabels = computed(() => [t('running'), t('upcomingExpiry'), t('expired')])
-const emptyTitle = computed(() => props.tab === 1 ? t('noUpcomingExpiry') : props.tab === 2 ? t('noExpiredAssets') : t('noComputeAssets'))
+const tabLabels = computed(() => [t('running'), t('upcomingExpiry'), t('assetHistory')])
+const emptyTitle = computed(() => props.tab === 1 ? t('noUpcomingExpiry') : props.tab === 2 ? t('noAssetHistory') : t('noComputeAssets'))
 
 function remainingText(asset: AssetItem) {
+  if (asset.status === 'sold') return t('sold')
   if (asset.status !== 'active') return t('expired')
+  if (asset.purchase_type === 'holding') return t('holdingMode')
   return t('remainingDaysCount', { days: asset.remaining_days ?? 0 })
+}
+
+function earningsTone(value: number): string {
+  return value > 0 ? 'positive' : value < 0 ? 'danger' : ''
 }
 </script>

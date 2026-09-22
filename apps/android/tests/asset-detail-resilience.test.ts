@@ -57,14 +57,24 @@ test('the chart is explicitly account-wide for the last seven days', () => {
   assert.match(detail, /:title="t\('accountRevenueLast7Days'\)"/)
   assert.match(i18n, /assetNotFound: '资产不存在'/)
   assert.match(i18n, /assetNotFound: 'Asset not found'/)
-  assert.match(i18n, /accountRevenueLast7Days: '账户近 7 天总收益'/)
-  assert.match(i18n, /accountRevenueLast7Days: 'Total account revenue \(last 7 days\)'/)
-  assert.match(i18n, /accountRevenueChartUnavailable: '账户近 7 天总收益暂时无法加载，不影响本资产信息。'/)
-  assert.match(i18n, /accountRevenueChartUnavailable: 'Total account revenue for the last 7 days is temporarily unavailable\. This does not affect the asset details\.'/)
+  assert.match(i18n, /accountRevenueLast7Days: '账户近 7 天已实现收益'/)
+  assert.match(i18n, /accountRevenueLast7Days: 'Account realized earnings \(last 7 days\)'/)
+  assert.match(i18n, /accountRevenueChartUnavailable: '账户近 7 天已实现收益暂时无法加载，不影响本资产信息。'/)
+  assert.match(i18n, /accountRevenueChartUnavailable: 'Account realized earnings for the last 7 days are temporarily unavailable\. This does not affect the asset details\.'/)
 
   const chartFunction = revenueApi.match(/export function getRevenueChart[\s\S]*?\n\}/)?.[0] || ''
   assert.match(chartFunction, /url: '\/revenue\/chart'/)
   assert.match(chartFunction, /data: \{ range_days: rangeDays \}/)
   assert.match(chartFunction, /silent: options\.silent/)
   assert.doesNotMatch(chartFunction, /asset_id|assetId/)
+})
+
+test('asset badge distinguishes holding assets from usage assets and localizes every state', () => {
+  assert.match(detail, /current\?\.purchase_type === 'holding' \? 'holding' : 'running'/)
+  for (const key of ['expired', 'sold', 'completed', 'canceled', 'statusPending']) {
+    assert.match(detail, new RegExp(`text: t\\('${key}'\\)`))
+  }
+  assert.match(detail, /text: t\('使用中'\)/)
+  assert.doesNotMatch(detail, /return \{ text: '持有中'/)
+  assert.doesNotMatch(detail, /return \{ text: s \|\| '待处理'/)
 })

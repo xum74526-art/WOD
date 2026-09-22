@@ -1,11 +1,11 @@
 <template>
   <view class="direct-checkout">
     <view class="buy-btn" :class="{ disabled: submitting || disabled }" @tap="openConfirm">
-      {{ t(submitting ? '处理中...' : (disabled ? 'viewDetail' : 'k_25575fc0')) }}
+      {{ t(submitting ? '处理中...' : (disabled ? 'viewDetail' : (purchaseType === 'holding' ? 'buyHolding' : 'k_25575fc0'))) }}
     </view>
     <ConfirmSheet
       :visible="showConfirm"
-      :title="t('confirmUsagePurchase')"
+      :title="t(purchaseType === 'holding' ? 'confirmHoldingPurchase' : 'confirmUsagePurchase')"
       :desc="`${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(totalCardHours)} ${t('cardHour')}`"
       :confirmText="t('k_936de2c4')"
       @cancel="cancelConfirm"
@@ -15,6 +15,12 @@
         <text>{{ t('k_99b6bb88') }}</text>
         <text class="confirm-value">{{ fmtCardHours(totalCardHours) }} {{ t('cardHour') }}</text>
       </view>
+      <view v-if="purchaseType === 'usage'" class="confirm-fee rebate-row">
+        <text>{{ t('estimatedExpiryRebate') }}</text>
+        <text class="confirm-value">{{ fmtCardHours(estimatedRebate || 0) }} {{ t('cardHour') }}<template v-if="estimatedRebateRate"> · {{ estimatedRebateRate }}%</template></text>
+      </view>
+      <text v-if="purchaseType === 'usage'" class="confirm-note">{{ t('rebateEstimateCheckoutNotice') }}</text>
+      <text v-else class="confirm-note">{{ t('holdingRisk') }}</text>
     </ConfirmSheet>
   </view>
 </template>
@@ -22,6 +28,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { createOrder } from '@/api/order'
+import type { PurchaseType } from '@/api/order'
 import type { Product } from '@/api/gpu'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import { directTradeCardHoursPerGpuHour } from '@/utils/direct-trade'
@@ -34,6 +41,9 @@ const props = defineProps<{
   product: Product
   hours: number
   quantity: number
+  purchaseType: PurchaseType
+  estimatedRebate?: number
+  estimatedRebateRate?: number
   disabled?: boolean
   unavailableMessage?: string
 }>()
@@ -48,7 +58,7 @@ const pricePerGpuHour = computed(() => directTradeCardHoursPerGpuHour(props.prod
 const totalCardHours = computed(() => pricePerGpuHour.value * props.hours * props.quantity)
 
 function ensureRequestId(): string {
-  const signature = `${props.product.id}:${props.hours}:${props.quantity}:${pricePerGpuHour.value}`
+  const signature = `${props.product.id}:${props.hours}:${props.quantity}:${props.purchaseType}:${pricePerGpuHour.value}`
   if (!pendingRequestId.value || pendingRequestSignature.value !== signature) {
     pendingRequestSignature.value = signature
     pendingRequestId.value = `wod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
@@ -79,7 +89,7 @@ async function submitOrder() {
     const created = await createOrder(
       props.product.id,
       props.hours,
-      'usage',
+      props.purchaseType,
       props.quantity,
       ensureRequestId(),
       pricePerGpuHour.value,
@@ -100,4 +110,6 @@ async function submitOrder() {
 .buy-btn.disabled { opacity: 0.45; }
 .confirm-fee { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; color: var(--text-sub); }
 .confirm-value { color: var(--up); font-weight: 700; }
+.rebate-row { margin-top: 18rpx; }
+.confirm-note { display: block; margin-top: 18rpx; color: var(--text-sub); font-size: 22rpx; line-height: 1.55; }
 </style>

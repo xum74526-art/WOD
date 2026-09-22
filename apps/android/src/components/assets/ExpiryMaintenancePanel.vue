@@ -99,6 +99,6 @@ defineEmits<{
 
 const i18n = useI18nStore()
 const { t } = i18n
-const expiringSevenDays = computed(() => props.assets.filter((asset) => asset.status === 'active' && (asset.remaining_days ?? 999) <= 7))
+const expiringSevenDays = computed(() => props.assets.filter((asset) => asset.status === 'active' && asset.purchase_type === 'usage' && (asset.remaining_days ?? 999) <= 7))
 const expiringThreeDays = computed(() => expiringSevenDays.value.filter((asset) => (asset.remaining_days ?? 999) <= 3))
 </script>
