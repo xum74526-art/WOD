@@ -78,3 +78,20 @@ test('login, registration and the native icon present the KAI星算 brand', () =
   assert.doesNotMatch(legalDocuments.slice(legalDocuments.indexOf('const PRIVACY_EN'), legalDocuments.indexOf('function agreementZh')), /KAI星算/)
   assert.doesNotMatch(legalDocuments.slice(legalDocuments.indexOf('function agreementEn'), legalDocuments.indexOf('const PROTECTED_LEGAL_VALUES')), /KAI星算/)
 })
+
+test('native home-screen names follow the selected system language', () => {
+  const localizedNames = [
+    ['en', 'KAI Star'],
+    ['zh-Hans', 'KAI星算'],
+    ['zh-Hant', 'KAI星算'],
+  ] as const
+
+  for (const [locale, expectedName] of localizedNames) {
+    const infoPlistStrings = readFileSync(
+      resolve(appRoot, `nativeResources/ios/Resources/${locale}.lproj/InfoPlist.strings`),
+      'utf8',
+    )
+    assert.match(infoPlistStrings, new RegExp(`"CFBundleDisplayName"\\s*=\\s*"${expectedName}";`))
+    assert.match(infoPlistStrings, new RegExp(`"CFBundleName"\\s*=\\s*"${expectedName}";`))
+  }
+})

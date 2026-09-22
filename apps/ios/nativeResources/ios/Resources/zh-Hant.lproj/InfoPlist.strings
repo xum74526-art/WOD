@@ -1,2 +1,4 @@
+"CFBundleDisplayName" = "KAI星算";
+"CFBundleName" = "KAI星算";
 "NSPhotoLibraryUsageDescription" = "用於選擇頭像或身分認證資料。";
 "NSCameraUsageDescription" = "用於拍攝頭像或身分認證資料。";

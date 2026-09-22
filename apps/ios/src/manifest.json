@@ -46,7 +46,7 @@
             "ios" : {
                 "appid" : "com.kai.ztwstarmap",
                 "devices" : "iphone",
-                "dSYMs" : true,
+                "dSYMs" : false,
                 "urltypes" : "kai",
                 "privacyDescription" : {
                     "NSPhotoLibraryUsageDescription" : "用于选择头像或身份认证资料。",
