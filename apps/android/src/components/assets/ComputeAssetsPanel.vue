@@ -16,7 +16,7 @@
       <view class="asset-panel__hero">
         <text class="asset-panel__eyebrow">{{ t('computeAssetValue') }}</text>
         <view class="asset-panel__amount">
-          <text class="asset-panel__amount-value">{{ fmtCHn(summary?.total_value) }}</text>
+          <text class="asset-panel__amount-value">{{ fmtCardHours(summary?.total_value) }}</text>
           <text class="asset-panel__amount-unit">{{ t('cardHour') }}</text>
         </view>
         <text class="asset-panel__hero-note">{{ t('computeAssetsSummary') }}</text>
@@ -65,8 +65,8 @@
               </text>
             </view>
             <view class="asset-panel__row-side">
-              <text class="asset-panel__row-value" :class="asset.purchase_type === 'holding' ? ((asset.pnl ?? 0) >= 0 ? 'positive' : 'danger') : 'positive'">{{ asset.purchase_type === 'holding' ? fmtCH(asset.current_price ?? asset.value) : '+' + fmtCH(asset.today_revenue) }}</text>
-              <text class="asset-panel__row-hint">{{ t(asset.purchase_type === 'holding' ? 'currentPrice' : 'today') }}</text>
+              <text class="asset-panel__row-value" :class="earningsTone(assetEarnings(asset))">{{ signedAssetEarnings(asset) }}</text>
+              <text class="asset-panel__row-hint">{{ t(asset.purchase_type === 'holding' ? 'pnl' : 'rebateInfo') }}</text>
             </view>
           </view>
         </view>
@@ -91,7 +91,7 @@ import type { AssetItem, AssetSummary } from '@/api/asset'
 import AppIcon from '@/components/AppIcon.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHn, fmtCardHours } from '@/utils/format'
+import { fmtCardHours } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const props = defineProps<{
@@ -126,5 +126,14 @@ function remainingText(asset: AssetItem) {
 
 function earningsTone(value: number): string {
   return value > 0 ? 'positive' : value < 0 ? 'danger' : ''
+}
+
+function assetEarnings(asset: AssetItem): number {
+  return Number(asset.purchase_type === 'holding' ? asset.pnl : asset.rebate_amount) || 0
+}
+
+function signedAssetEarnings(asset: AssetItem): string {
+  const value = assetEarnings(asset)
+  return `${value > 0 ? '+' : ''}${fmtCardHours(value)}`
 }
 </script>

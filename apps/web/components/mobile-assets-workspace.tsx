@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowClockwise, CalendarDots, Coins, Cpu, Gauge, ShoppingCart, TrendUp } from "@phosphor-icons/react";
-import { getMobileAssets, sellMobileAsset, type MobileAssetSummary } from "@/lib/mobile-business-api";
+import { getMobileAssets, getRevenueSummary, sellMobileAsset, type MobileAsset, type MobileAssetSummary, type RevenueSummary } from "@/lib/mobile-business-api";
 import { errorMessage } from "@/lib/commerce-ui";
 import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
@@ -27,13 +27,24 @@ export function MobileAssetsWorkspace() {
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const [data, setData] = useState<MobileAssetSummary | null>(null);
+  const [earnings, setEarnings] = useState<RevenueSummary | null>(null);
+  const [earningsUnavailable, setEarningsUnavailable] = useState(false);
   const [filter, setFilter] = useState<(typeof filters)[number][0]>("all");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(0);
 
   const load = useCallback(async () => {
     setError("");
-    try { setData(await getMobileAssets(filter)); }
+    try {
+      const [assetsResult, earningsResult] = await Promise.allSettled([
+        getMobileAssets(filter),
+        getRevenueSummary(),
+      ]);
+      if (assetsResult.status === "rejected") throw assetsResult.reason;
+      setData(assetsResult.value);
+      setEarnings(earningsResult.status === "fulfilled" ? earningsResult.value : null);
+      setEarningsUnavailable(earningsResult.status === "rejected");
+    }
     catch (reason) { setError(errorMessage(reason)); }
   }, [filter]);
 
@@ -44,9 +55,12 @@ export function MobileAssetsWorkspace() {
     return {
       active: items.filter((item) => item.status === "active").reduce((sum, item) => sum + Math.max(item.quantity || 1, 1), 0),
       expiring: items.filter((item) => item.status === "active" && Number(item.remaining_days) <= 7).length,
-      today: items.reduce((sum, item) => sum + Number(item.today_revenue || 0), 0),
     };
   }, [data]);
+
+  function assetEarnings(item: MobileAsset) {
+    return item.purchase_type === "holding" ? Number(item.pnl || 0) : Number(item.rebate_amount || 0);
+  }
 
   async function sell(item: NonNullable<MobileAssetSummary["items"]>[number]) {
     if (!directTradeEnabled || !item.current_unit_price) return;
@@ -67,7 +81,7 @@ export function MobileAssetsWorkspace() {
     <div className="mobile-data-spine" aria-label="资产摘要">
       <article><small>资产总值</small><strong>{amount(data?.total_value)}</strong><span>卡时</span></article>
       <article><small>运行中算力</small><strong>{metrics.active}</strong><span>个实例</span></article>
-      <article><small>今日收益</small><strong>{amount(metrics.today)}</strong><span>卡时</span></article>
+      <article><small>今日已实现收益</small><strong>{earnings ? amount(earnings.today) : "—"}</strong><span>卡时</span></article>
       <article className={metrics.expiring ? "is-warning" : ""}><small>7 天内到期</small><strong>{metrics.expiring}</strong><span>待续费</span></article>
     </div>
 
@@ -81,12 +95,13 @@ export function MobileAssetsWorkspace() {
       <header><span>算力资源</span><span>价值与收益</span><span>运行周期</span><span>状态</span></header>
       {data.items.map((item) => <article key={item.id}>
         <div className="mobile-asset-name"><i className={item.status === "active" ? "running" : ""}/><span><small>ASSET #{item.id}</small><Link href={`/account/assets/${item.id}`}><strong>{item.product_name || item.gpu_model || `算力资产 ${item.id}`}</strong></Link><em>{item.gpu_model || "GPU 算力"} · {item.quantity || 1} 台</em></span></div>
-        <div className="mobile-asset-values"><span><Coins size={15}/>当前价值 <b>{amount(item.current_price ?? item.value)}</b></span><span><TrendUp size={15}/>累计收益 <b>{amount(item.accumulated_revenue)}</b></span>{item.pnl != null && <small className={item.pnl >= 0 ? "positive" : "negative"}>盈亏 {item.pnl >= 0 ? "+" : ""}{amount(item.pnl)}</small>}</div>
+        <div className="mobile-asset-values"><span><Coins size={15}/>当前价值 <b>{amount(item.current_price ?? item.value)}</b></span><span><TrendUp size={15}/>{item.purchase_type === "holding" ? "持有浮动盈亏" : "购买返佣"} <b>{assetEarnings(item) > 0 ? "+" : ""}{amount(assetEarnings(item))}</b></span>{item.purchase_type === "usage" && <small>待结算 {amount(item.pending_rebate)} · 已结算 {amount(item.settled_rebate)} 卡时</small>}</div>
         <div className="mobile-asset-period"><span><CalendarDots size={15}/>{item.purchase_type === "holding" ? "持有资产" : item.remaining_days == null ? "未提供到期日" : `剩余 ${item.remaining_days} 天`}</span><small>{item.purchase_type === "holding" ? "按有效行情估值" : item.end_at ? new Date(item.end_at).toLocaleDateString("zh-CN") : "—"}</small></div>
         <div className="mobile-asset-status"><b className={`status-${item.status}`}><Gauge size={14}/>{assetStatusLabel(item.status, item.purchase_type, t)}</b>{item.can_sell && (directTradeEnabled ? <button disabled={busy === item.id} onClick={() => void sell(item)}>{busy === item.id ? "处理中" : "出售"}</button> : <Link href={requestCreateHref({ product_id: item.product_id, source: "existing_asset", product_name: item.product_name, gpu_model: item.gpu_model || item.product_name || "GPU", quantity: Math.max(Number(item.quantity) || 1, 1), gpu_hours: 24 })}>提交需求</Link>)}</div>
       </article>)}
     </div>}
 
     {data && data.audited_earnings_enabled === false && <div className="workspace-service-note">可核验收益数据暂时无法读取；资产价值与状态不受影响。</div>}
+    {earningsUnavailable && <div className="workspace-service-note">实时收益汇总暂时无法读取；资产列表中的购买返佣和持有盈亏仍来自可核验记录。</div>}
   </section>;
 }

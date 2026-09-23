@@ -9,7 +9,7 @@
       <view class="gpu-price">
         <text class="price-label">{{ t(commerce.directTradeEnabled ? '国内参考价' : commerce.matchmakingEnabled && product.inquiry_available !== false ? 'servicePrice' : 'operationTemporarilyUnavailable') }}</text>
         <view v-if="commerce.directTradeEnabled" class="price-row">
-          <text class="price">{{ fmtCH(directTradeCardHoursPerGpuHour(product)) }}</text>
+          <text class="price">{{ fmtCardHours(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHour') }}</text>
           <text class="unit">/h</text>
         </view>
         <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="price-row">
@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Product } from '@/api/gpu'
-import { fmtCH } from '@/utils/format'
+import { fmtCardHours } from '@/utils/format'
 import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { useI18nStore } from '@/store/i18n'

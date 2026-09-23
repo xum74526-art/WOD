@@ -18,7 +18,7 @@
 
       <view class="hero">
         <text class="hero-label">{{ t('totalAssets') }}</text>
-        <text class="hero-val">{{ fmtCHn(totalAsset) }}</text>
+        <text class="hero-val">{{ fmtCardHours(totalAsset) }}</text>
         <view class="hero-row">
           <view class="hero-sub">
             <text class="sub-label">{{ t('todayRealizedEarnings') }}</text>
@@ -102,8 +102,8 @@
             <text class="ag">{{ a.gpu_model }} · {{ a.purchase_type === 'holding' ? t('holdingMode') : t('剩余 {days} 天', { days: a.remaining_days ?? 0 }) }}</text>
           </view>
           <view class="ar">
-            <text class="av" :class="(a.pnl ?? 0) >= 0 ? 'up' : 'down'">{{ a.purchase_type === 'holding' ? fmtCHn(a.current_price ?? a.value) : '+' + fmtCHn(a.today_revenue) }}</text>
-            <text class="al2">{{ t(a.purchase_type === 'holding' ? 'currentPrice' : 'today') }}</text>
+            <text class="av" :class="assetEarningsTone(a)">{{ assetEarningsAmount(a) }}</text>
+            <text class="al2">{{ assetEarningsLabel(a) }}</text>
           </view>
         </view>
       </scroll-view>
@@ -193,11 +193,11 @@
           <image class="pimg" :src="productImage(p)" mode="aspectFill" lazy-load :fade-show="false" @error="markProductImageFailed(p.id)" />
           <view class="pl">
             <text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text>
-            <text class="pm">{{ p.memory }} · {{ t('revenueDataUnavailable') }}</text>
+            <text class="pm">{{ featuredProductMeta(p) }}</text>
           </view>
           <view class="pr">
             <template v-if="commerce.directTradeEnabled">
-              <text class="pp">{{ fmtCHn(directTradeCardHoursPerGpuHour(p)) }}</text>
+              <text class="pp">{{ fmtCardHours(directTradeCardHoursPerGpuHour(p)) }}</text>
               <text class="p-buy">{{ t(directTradeProductPurchasable(p) ? 'k_25575fc0' : 'viewDetail') }}</text>
             </template>
             <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
@@ -261,9 +261,10 @@ import { useCommerceStore } from '@/store/commerce'
 import { getWallet } from '@/api/wallet'
 import { getRevenueSummary, getRevenueChart } from '@/api/revenue'
 import { getProducts } from '@/api/gpu'
+import type { AssetItem } from '@/api/asset'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
-import { fmtCH, fmtCHn, fmtCardHours, formatAmount, formatNumber, toCardHours } from '@/utils/format'
+import { fmtCHn, fmtCardHours, formatAmount, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
 import type { Product } from '@/api/gpu'
 import type { RevenueSummary, RevenuePoint } from '@/api/revenue'
@@ -276,6 +277,7 @@ import CandlestickChart from '@/components/CandlestickChart.vue'
 import HomePromoCarousel from '@/components/HomePromoCarousel.vue'
 import { useI18nStore } from '@/store/i18n'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'
+import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
 import { directTradeCardHoursPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
@@ -609,6 +611,23 @@ function amountTone(value: number | null | undefined): string {
 function signedCardHours(value: number | null | undefined, positiveSign = true): string {
   const amount = Number(value || 0)
   return `${positiveSign && amount > 0 ? '+' : ''}${fmtCardHours(amount)}`
+}
+function assetEarningsAmount(asset: AssetItem): string {
+  const amount = Number(asset.purchase_type === 'holding' ? asset.pnl : asset.rebate_amount) || 0
+  return `${amount > 0 ? '+' : ''}${fmtCardHours(amount)}`
+}
+function assetEarningsLabel(asset: AssetItem): string {
+  return t(asset.purchase_type === 'holding' ? 'pnl' : 'rebateInfo')
+}
+function assetEarningsTone(asset: AssetItem): string {
+  const amount = Number(asset.purchase_type === 'holding' ? asset.pnl : asset.rebate_amount) || 0
+  return amount > 0 ? 'up' : amount < 0 ? 'down' : ''
+}
+function featuredProductMeta(product: Product): string {
+  const parts = [product.memory]
+  if (product.region_name) parts.push(localizeRegionName(product.region_name, i18n.lang, product.region_code))
+  if (Number.isFinite(Number(product.stock))) parts.push(t('countDevices', { count: Math.max(0, Math.floor(Number(product.stock))) }))
+  return parts.filter(Boolean).join(' · ')
 }
 function compareHomeMarketCandidate(a: MarketRankingItem, b: MarketRankingItem): number {
   const aOfficial = /official/i.test(String(a.history_provenance?.kind || '')) ? 1 : 0

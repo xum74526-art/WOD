@@ -39,6 +39,8 @@ export type MobileAsset = {
   can_sell?: boolean;
   rebate_status?: string;
   rebate_amount?: number;
+  pending_rebate?: number;
+  settled_rebate?: number;
   audited_earnings_enabled?: boolean;
   rebate_info?: {
     pending_rebate?: number;
@@ -429,11 +431,15 @@ export function sellMobileAsset(id: number, expectedUnitPrice: number, clientReq
 
 export function getRevenueBundle(range = 30) {
   return Promise.all([
-    apiRequest<RevenueSummary>(canonicalApiPath("/revenue")),
+    getRevenueSummary(),
     apiRequest<RevenuePoint[]>(canonicalApiPath(`/revenue/chart?range_days=${range}`)),
     apiRequest<RevenueRecord[]>(canonicalApiPath("/revenue/records")),
     getUserRebate(),
   ]);
+}
+
+export function getRevenueSummary() {
+  return apiRequest<RevenueSummary>(canonicalApiPath("/revenue"));
 }
 
 export function getUserRebate() {

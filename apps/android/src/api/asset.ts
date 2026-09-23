@@ -27,7 +27,9 @@ export interface AssetItem {
   can_sell?: boolean
   rebate_status?: string
   rebate_amount?: number
-  rebate_info?: { month_spent: number; month_rebated: number; current_rate: number; next_tier_hint: string; pending_rebate: number; monthly_cap: number }
+  pending_rebate?: number
+  settled_rebate?: number
+  rebate_info?: { month_spent: number; month_rebated: number; current_rate: number; next_tier_hint: string; pending_rebate: number; settled_rebate?: number; rebate_amount?: number; monthly_cap: number }
   revenue_settlement_enabled?: boolean
   audited_earnings_enabled?: boolean
   historical_test_revenue?: number

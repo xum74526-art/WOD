@@ -621,11 +621,7 @@ def get_supplier_summary(supplier_user_id: int, db: Session) -> dict:
     }
 
 
-def get_asset_consumer_reward(asset_id: int, db: Session) -> dict | None:
-    rows = db.query(RewardAccrual).filter(
-        RewardAccrual.program_code == PROGRAM_CONSUMER,
-        RewardAccrual.asset_id == asset_id,
-    ).order_by(RewardAccrual.id.asc()).all()
+def _summarize_asset_consumer_reward(rows: list[RewardAccrual]) -> dict | None:
     if not rows:
         return None
     eligible_rows = [row for row in rows if row.status != "forfeited"]
@@ -646,3 +642,28 @@ def get_asset_consumer_reward(asset_id: int, db: Session) -> dict | None:
         "settled_rebate": float(settled),
         "policy_versions": sorted({row.policy_version for row in rows}),
     }
+
+
+def get_assets_consumer_rewards(asset_ids: list[int], db: Session) -> dict[int, dict]:
+    """Return audited purchase-rebate facts for a group of assets in one query."""
+    normalized_ids = sorted({int(asset_id) for asset_id in asset_ids if int(asset_id) > 0})
+    if not normalized_ids:
+        return {}
+    rows = db.query(RewardAccrual).filter(
+        RewardAccrual.program_code == PROGRAM_CONSUMER,
+        RewardAccrual.asset_id.in_(normalized_ids),
+    ).order_by(RewardAccrual.asset_id.asc(), RewardAccrual.id.asc()).all()
+    grouped: dict[int, list[RewardAccrual]] = {}
+    for row in rows:
+        if row.asset_id is None:
+            continue
+        grouped.setdefault(int(row.asset_id), []).append(row)
+    return {
+        asset_id: summary
+        for asset_id, asset_rows in grouped.items()
+        if (summary := _summarize_asset_consumer_reward(asset_rows)) is not None
+    }
+
+
+def get_asset_consumer_reward(asset_id: int, db: Session) -> dict | None:
+    return get_assets_consumer_rewards([asset_id], db).get(int(asset_id))

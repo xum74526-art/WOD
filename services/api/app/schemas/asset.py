@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import OrmModel
+from app.schemas.common import OrmModel, ResponseBase
 
 
 class AssetOut(OrmModel):
@@ -25,6 +25,15 @@ class AssetOut(OrmModel):
     today_revenue: float = 0
     accumulated_revenue: float = 0
     audited_earnings_enabled: bool = True
+    rebate_status: str | None = None
+    rebate_amount: float | None = None
+    pending_rebate: float = 0
+    settled_rebate: float = 0
+    reward_service_enabled: bool = False
+    revenue_settlement_enabled: bool = False
+    historical_test_revenue: float = 0
+    historical_test_reward: float = 0
+    rebate_info: dict | None = None
     remaining_days: int | None = None
     current_price: float | None = None
     current_unit_price: float | None = None
@@ -51,4 +60,14 @@ class AssetSummary(BaseModel):
     pending_revenue: float
     revenue_rate: float
     audited_earnings_enabled: bool = True
+    revenue_settlement_enabled: bool = False
+    historical_test_revenue: float = 0
     items: list[AssetOut]
+
+
+class AssetResponse(ResponseBase):
+    data: AssetOut
+
+
+class AssetSummaryResponse(ResponseBase):
+    data: AssetSummary

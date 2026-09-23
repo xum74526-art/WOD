@@ -235,6 +235,11 @@ class AuditedEarningsTests(unittest.TestCase):
         asset_summary = my_assets(None, self.user, self.db)["data"]
         self.assertEqual(asset_summary["pending_revenue"], 4.0)
         self.assertTrue(asset_summary["audited_earnings_enabled"])
+        usage_asset = next(item for item in asset_summary["items"] if item["purchase_type"] == "usage")
+        self.assertEqual(usage_asset["rebate_status"], "pending")
+        self.assertEqual(usage_asset["rebate_amount"], 7.0)
+        self.assertEqual(usage_asset["pending_rebate"], 4.0)
+        self.assertEqual(usage_asset["settled_rebate"], 3.0)
 
     def test_chart_and_records_exclude_legacy_simulator_rows(self):
         chart = audited_earnings_chart(self.user.id, 3, self.db)

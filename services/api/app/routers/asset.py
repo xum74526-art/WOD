@@ -16,8 +16,13 @@ from app.models.product import Product
 from app.models.revenue import Revenue
 from app.models.user import User
 from app.models.wallet import Wallet
-from app.schemas.asset import AssetOut, AssetSellIn
+from app.schemas.asset import AssetOut, AssetResponse, AssetSellIn, AssetSummaryResponse
 from app.services.holding_trade import holding_asset_quote, settle_holding_asset_sale
+from app.services.reward_entitlements import (
+    get_asset_consumer_reward,
+    get_assets_consumer_rewards,
+    get_consumer_summary,
+)
 from app.services.trade_mode import require_holding_trade_enabled
 from app.services.wallet_balance import spendable_wallet_balance
 from app.utils.response import BizError, success
@@ -25,7 +30,7 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/assets", tags=["asset"])
 
 
-def _asset_out(a: Asset, db: Session) -> dict:
+def _asset_out(a: Asset, db: Session, reward: dict | None = None) -> dict:
     p = db.query(Product).filter(Product.id == a.product_id).first()
     out = AssetOut.model_validate(a).model_dump()
     quantity = max(int(a.quantity or 1), 1)
@@ -47,6 +52,10 @@ def _asset_out(a: Asset, db: Session) -> dict:
     out["reward_service_enabled"] = program_enabled(PROGRAM_CONSUMER)
     out["today_revenue"] = round(float(today_rev), 4) if settings.REVENUE_SETTLEMENT_ENABLED else 0
     out["accumulated_revenue"] = round(float(total_rev), 4) if settings.REVENUE_SETTLEMENT_ENABLED else 0
+    out["rebate_status"] = reward["rebate_status"] if reward else None
+    out["rebate_amount"] = reward["rebate_amount"] if reward else 0
+    out["pending_rebate"] = reward["pending_rebate"] if reward else 0
+    out["settled_rebate"] = reward["settled_rebate"] if reward else 0
     if a.end_at and a.status == "active":
         end = a.end_at.replace(tzinfo=timezone.utc) if a.end_at.tzinfo is None else a.end_at
         out["remaining_days"] = max(0, (end - datetime.now(timezone.utc)).days)
@@ -57,7 +66,7 @@ def _asset_out(a: Asset, db: Session) -> dict:
     return out
 
 
-@router.get("")
+@router.get("", response_model=AssetSummaryResponse)
 def my_assets(
     status_filter: str | None = None,
     user: User = Depends(get_current_user),
@@ -69,14 +78,14 @@ def my_assets(
     else:
         q = q.filter(Asset.status == "active")
     items = q.order_by(Asset.created_at.desc()).all()
+    rewards_by_asset = get_assets_consumer_rewards([item.id for item in items], db)
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).first()
     wallet_balance = float(spendable_wallet_balance(wallet, db)) if wallet else 0
     today = date.today()
     today_total = db.query(func.coalesce(func.sum(Revenue.amount), 0)).filter(
         Revenue.user_id == user.id, Revenue.date == today
     ).scalar()
-    out_items = [_asset_out(item, db) for item in items]
-    from app.services.reward_entitlements import get_consumer_summary
+    out_items = [_asset_out(item, db, rewards_by_asset.get(item.id)) for item in items]
     consumer_reward = get_consumer_summary(user.id, db)
     total_value = sum(
         float(item.get("current_price"))
@@ -99,19 +108,16 @@ def my_assets(
     })
 
 
-@router.get("/{aid}")
+@router.get("/{aid}", response_model=AssetResponse)
 def asset_detail(aid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     a = db.query(Asset).filter(Asset.id == aid, Asset.user_id == user.id).first()
     if not a:
         raise BizError("资产不存在", status_code=404)
-    out = _asset_out(a, db)
+    reward = get_asset_consumer_reward(a.id, db)
+    out = _asset_out(a, db, reward)
     # Legacy asset flags remain visible only as historical audit data. Current
     # rewards are derived exclusively from versioned accrual rows.
     out["historical_test_reward"] = a.rebate_amount if a.rebate_status == "rewarded" else 0
-    from app.services.reward_entitlements import get_asset_consumer_reward, get_consumer_summary
-    reward = get_asset_consumer_reward(a.id, db)
-    out["rebate_status"] = reward["rebate_status"] if reward else None
-    out["rebate_amount"] = reward["rebate_amount"] if reward else None
     if reward:
         out["rebate_info"] = {**get_consumer_summary(a.user_id, db), **reward}
     return success(out)

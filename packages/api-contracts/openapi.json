@@ -317,6 +317,329 @@
         "title": "ApproveWithdrawalIn",
         "type": "object"
       },
+      "AssetOut": {
+        "properties": {
+          "accumulated_revenue": {
+            "default": 0,
+            "title": "Accumulated Revenue",
+            "type": "number"
+          },
+          "audited_earnings_enabled": {
+            "default": true,
+            "title": "Audited Earnings Enabled",
+            "type": "boolean"
+          },
+          "buy_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buy Price"
+          },
+          "can_sell": {
+            "default": false,
+            "title": "Can Sell",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price"
+          },
+          "current_unit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Unit Price"
+          },
+          "daily_rate": {
+            "title": "Daily Rate",
+            "type": "number"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "gpu_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Model"
+          },
+          "historical_test_revenue": {
+            "default": 0,
+            "title": "Historical Test Revenue",
+            "type": "number"
+          },
+          "historical_test_reward": {
+            "default": 0,
+            "title": "Historical Test Reward",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "pending_rebate": {
+            "default": 0,
+            "title": "Pending Rebate",
+            "type": "number"
+          },
+          "pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl"
+          },
+          "pnl_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Pct"
+          },
+          "price_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Observed At"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "purchase_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Type"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "rebate_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rebate Amount"
+          },
+          "rebate_info": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rebate Info"
+          },
+          "rebate_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rebate Status"
+          },
+          "remaining_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Days"
+          },
+          "revenue_settlement_enabled": {
+            "default": false,
+            "title": "Revenue Settlement Enabled",
+            "type": "boolean"
+          },
+          "reward_service_enabled": {
+            "default": false,
+            "title": "Reward Service Enabled",
+            "type": "boolean"
+          },
+          "settled_rebate": {
+            "default": 0,
+            "title": "Settled Rebate",
+            "type": "number"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "today_revenue": {
+            "default": 0,
+            "title": "Today Revenue",
+            "type": "number"
+          },
+          "trading_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trading Unavailable Reason"
+          },
+          "unit_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Value"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "quantity",
+          "value",
+          "daily_rate",
+          "status"
+        ],
+        "title": "AssetOut",
+        "type": "object"
+      },
+      "AssetResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AssetOut"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AssetResponse",
+        "type": "object"
+      },
       "AssetSellIn": {
         "properties": {
           "client_request_id": {
@@ -344,6 +667,79 @@
           "expected_unit_price_card_hours"
         ],
         "title": "AssetSellIn",
+        "type": "object"
+      },
+      "AssetSummary": {
+        "properties": {
+          "audited_earnings_enabled": {
+            "default": true,
+            "title": "Audited Earnings Enabled",
+            "type": "boolean"
+          },
+          "historical_test_revenue": {
+            "default": 0,
+            "title": "Historical Test Revenue",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssetOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "pending_revenue": {
+            "title": "Pending Revenue",
+            "type": "number"
+          },
+          "revenue_rate": {
+            "title": "Revenue Rate",
+            "type": "number"
+          },
+          "revenue_settlement_enabled": {
+            "default": false,
+            "title": "Revenue Settlement Enabled",
+            "type": "boolean"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          },
+          "wallet_balance": {
+            "title": "Wallet Balance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total_value",
+          "wallet_balance",
+          "pending_revenue",
+          "revenue_rate",
+          "items"
+        ],
+        "title": "AssetSummary",
+        "type": "object"
+      },
+      "AssetSummaryResponse": {
+        "properties": {
+          "code": {
+            "default": 0,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AssetSummary"
+          },
+          "msg": {
+            "default": "ok",
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AssetSummaryResponse",
         "type": "object"
       },
       "AuthorizationResponse": {
@@ -7196,7 +7592,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AssetSummaryResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7241,7 +7639,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponse"
+                }
               }
             },
             "description": "Successful Response"
