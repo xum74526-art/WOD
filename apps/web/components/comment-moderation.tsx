@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { canonicalApiPath as path } from "@/lib/canonical-api";
+import { useI18n } from "@/components/locale-root";
 
 type ReportStatus = "pending" | "resolved" | "dismissed" | "";
 type Resolution = "dismissed" | "content_removed" | "user_restricted";
@@ -36,22 +37,23 @@ const targetNames: Record<ReportItem["target_type"], string> = {
 };
 
 export function CommentModeration() {
+  const { t, dateLocale } = useI18n();
   const [items, setItems] = useState<ReportItem[]>([]);
   const [status, setStatus] = useState<ReportStatus>("pending");
-  const [message, setMessage] = useState("正在读取举报队列……");
+  const [message, setMessage] = useState(() => t("admin.moderation.loading", "正在读取举报队列……"));
   const [busy, setBusy] = useState<number | null>(null);
 
   const load = useCallback(async () => {
-    setMessage("正在读取举报队列……");
+    setMessage(t("admin.moderation.loading", "正在读取举报队列……"));
     try {
       const query = new URLSearchParams({ page: "1", page_size: "100", status });
       const result = await apiRequest<ReportPage>(path(`/admin/community/reports?${query}`));
       setItems(result.items);
-      setMessage(result.items.length ? "" : "当前没有符合条件的举报");
+      setMessage(result.items.length ? "" : t("admin.moderation.empty", "当前没有符合条件的举报"));
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "暂时无法连接服务，请稍后重试");
+      setMessage(reason instanceof Error ? reason.message : t("admin.moderation.loadError", "暂时无法连接服务，请稍后重试"));
     }
-  }, [status]);
+  }, [status, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -61,8 +63,10 @@ export function CommentModeration() {
       content_removed: "下架被举报内容",
       user_restricted: "限制账号并下架其内容",
     };
-    if (!window.confirm(`确定要${labels[resolution]}吗？`)) return;
-    const note = window.prompt("处置备注（可留空）", "");
+    if (!window.confirm(t("admin.moderation.confirm", "确定要“{action}”吗？", {
+      action: t(`admin.moderation.action.${resolution}`, labels[resolution]),
+    }))) return;
+    const note = window.prompt(t("admin.moderation.notePrompt", "处置备注（可留空）"), "");
     if (note === null) return;
     setBusy(item.id);
     setMessage("");
@@ -73,7 +77,7 @@ export function CommentModeration() {
       });
       await load();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "处置失败，请稍后重试");
+      setMessage(reason instanceof Error ? reason.message : t("admin.moderation.reviewError", "处置失败，请稍后重试"));
     } finally {
       setBusy(null);
     }
@@ -92,15 +96,15 @@ export function CommentModeration() {
     {message && <div className="data-empty"><strong>{message}</strong></div>}
     <div className="moderation-list">{items.map((item) => <article key={item.id}>
       <header>
-        <strong>{targetNames[item.target_type]} #{item.target_id}</strong>
-        <span>{item.status}</span>
-        <span>{item.reason}</span>
-        <small>{new Date(item.created_at).toLocaleString("zh-CN")}</small>
+        <strong>{t(`admin.moderation.target.${item.target_type}`, targetNames[item.target_type])} #{item.target_id}</strong>
+        <span>{t(`admin.moderation.status.${item.status}`, item.status)}</span>
+        <span data-i18n-skip>{item.reason}</span>
+        <small>{new Date(item.created_at).toLocaleString(dateLocale)}</small>
       </header>
-      <p>{item.target.excerpt || (item.target.author ? `账号：${item.target.author.username}` : "举报对象已不存在")}</p>
-      {item.details && <p>举报补充：{item.details}</p>}
+      <p data-i18n-skip={Boolean(item.target.excerpt) || undefined}>{item.target.excerpt || (item.target.author ? t("admin.moderation.account", "账号：{username}", { username: item.target.author.username }) : t("admin.moderation.missingTarget", "举报对象已不存在"))}</p>
+      {item.details && <p>{t("admin.moderation.details", "举报补充：")}<span data-i18n-skip>{item.details}</span></p>}
       <footer>
-        <span>举报人：{item.reporter?.username || `#${item.reporter?.id || "未知"}`} · 作者：{item.target.author?.username || "未知"} · 来源：{item.created_platform}</span>
+        <span>{t("admin.moderation.reporter", "举报人：")}<span data-i18n-skip>{item.reporter?.username || `#${item.reporter?.id || t("admin.moderation.unknown", "未知")}`}</span> · {t("admin.moderation.author", "作者：")}<span data-i18n-skip>{item.target.author?.username || t("admin.moderation.unknown", "未知")}</span> · {t("admin.moderation.source", "来源：")}{item.created_platform}</span>
         {item.status === "pending" && <div>
           <button disabled={busy === item.id} onClick={() => void review(item, "dismissed")}>驳回</button>
           {item.target_type !== "user" && <button className="danger" disabled={busy === item.id} onClick={() => void review(item, "content_removed")}>下架内容</button>}

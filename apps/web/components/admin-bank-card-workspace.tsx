@@ -111,8 +111,8 @@ export function AdminBankCardWorkspace() {
           <Bank size={21}/>
           <span>
             <small>CARD #{row.id} · USER #{row.user_id} · {platformLabel(row.created_platform)}</small>
-            <h2>{row.bank_name}</h2>
-            <p>{row.username || "用户"} · {row.holder}</p>
+            <h2 data-i18n-skip>{row.bank_name}</h2>
+            <p><span data-i18n-skip={Boolean(row.username) || undefined}>{row.username || "用户"}</span> · <span data-i18n-skip>{row.holder}</span></p>
           </span>
           <b>{labels[row.status] || row.status}</b>
         </header>
@@ -122,7 +122,7 @@ export function AdminBankCardWorkspace() {
           <div><dt>登记模式</dt><dd>{row.verification_mode}</dd></div>
           <div><dt>最后操作端</dt><dd>{platformLabel(row.last_modified_platform)}</dd></div>
         </dl>
-        {row.reject_reason && <p className="finance-review-reason">{row.reject_reason}</p>}
+        {row.reject_reason && <p className="finance-review-reason" data-i18n-skip>{row.reject_reason}</p>}
         {row.verification_mode === "manual_review" && ["registered", "pending_review", "rejected"].includes(row.status) && <footer>
           <button disabled={busy === row.id} onClick={() => void review(row, false)}><X size={15}/>驳回</button>
           <button className="commerce-primary" disabled={busy === row.id} onClick={() => void review(row, true)}><Check size={15}/>通过复核</button>

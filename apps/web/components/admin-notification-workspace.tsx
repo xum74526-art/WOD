@@ -44,7 +44,7 @@ function draftSignature(draft: BroadcastDraft) {
 }
 
 export function AdminNotificationWorkspace() {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [rows, setRows] = useState<AdminNotificationBroadcast[]>([]);
   const [form, setForm] = useState({
     title: "",
@@ -83,13 +83,13 @@ export function AdminNotificationWorkspace() {
     const title = form.title.trim();
     const content = form.content.trim();
     if (!title || !content) {
-      setError("请填写消息标题和正文");
+      setError(t("admin.notification.required", "请填写消息标题和正文"));
       return;
     }
     const isMajorAnnouncement = form.notification_type === "major_announcement";
     const confirmation = isMajorAnnouncement
-      ? "确认发布这条重大公告吗？内容会在 Web 公开首页和 App 首页展示，并进入所有有效账号的消息中心。请确认正文不含内部或个人信息。"
-      : "确认向所有有效账号发布这条站内消息吗？发布后会立即进入收件箱。";
+      ? t("admin.notification.confirmMajor", "确认发布这条重大公告吗？内容会在 Web 公开首页和 App 首页展示，并进入所有有效账号的消息中心。请确认正文不含内部或个人信息。")
+      : t("admin.notification.confirmRegular", "确认向所有有效账号发布这条站内消息吗？发布后会立即进入收件箱。");
     if (!window.confirm(confirmation)) return;
     let expiresAt: string | null = null;
     try {
@@ -121,8 +121,8 @@ export function AdminNotificationWorkspace() {
       const result = await createAdminNotificationBroadcast(input);
       pendingRequest.current = null;
       setMessage(isMajorAnnouncement
-        ? `重大公告已发布，三端首页将显示，${result.recipient_count} 个有效账号也会收到站内消息。`
-        : `已发布，${result.recipient_count} 个有效账号将收到消息。`);
+        ? t("admin.notification.majorPublished", "重大公告已发布，三端首页将显示，{count} 个有效账号也会收到站内消息。", { count: result.recipient_count })
+        : t("admin.notification.published", "已发布，{count} 个有效账号将收到消息。", { count: result.recipient_count }));
       setForm((current) => ({ ...current, content: "", content_en: "", expires_at: "" }));
       await load();
     } catch (reason) {
@@ -134,23 +134,19 @@ export function AdminNotificationWorkspace() {
 
   async function revoke(row: AdminNotificationBroadcast) {
     if (revokingId !== null) return;
-    const reason = window.prompt(
-      locale === "en"
-        ? "Enter a revocation reason (at least 2 characters). This notice will immediately disappear from every client."
-        : "请输入撤销原因（至少 2 个字）。撤销后公告会立即从所有端下架。",
-    )?.trim();
+    const reason = window.prompt(t("admin.notification.revokePrompt", "请输入撤销原因（至少 2 个字）。撤销后公告会立即从所有端下架。"))?.trim();
     if (!reason) return;
     if (reason.length < 2) {
-      setError(locale === "en" ? "Enter at least 2 characters." : "撤销原因至少需要 2 个字");
+      setError(t("admin.notification.revokeShort", "撤销原因至少需要 2 个字"));
       return;
     }
-    if (!window.confirm(locale === "en" ? "Revoke this notice now?" : "确认立即撤销这条公告吗？")) return;
+    if (!window.confirm(t("admin.notification.revokeConfirm", "确认立即撤销这条公告吗？"))) return;
     setRevokingId(row.id);
     setError("");
     setMessage("");
     try {
       await revokeAdminNotificationBroadcast(row.id, reason);
-      setMessage(locale === "en" ? "The notice was revoked and removed from all inboxes." : "公告已撤销，并已从所有用户通知中心下架。审计记录仍然保留。");
+      setMessage(t("admin.notification.revoked", "公告已撤销，并已从所有用户通知中心下架。审计记录仍然保留。"));
       await load();
     } catch (reasonValue) {
       setError(errorMessage(reasonValue));
@@ -193,7 +189,11 @@ export function AdminNotificationWorkspace() {
 
     <section className="notification-broadcast-history">
       <header><div><p>DELIVERY AUDIT</p><h2>最近发布记录</h2></div><button type="button" onClick={() => void load()} disabled={loading}><ClockCounterClockwise size={16} />{loading ? "读取中" : "刷新"}</button></header>
-      {rows.length ? <div>{rows.map((row) => <article key={row.id}><span className="notification-broadcast-history__dot"><Bell size={17} /></span><div><header><strong>{row.title}</strong><small>{TYPE_LABELS[row.notification_type] || row.notification_type} · {formatDate(row.created_at)}</small></header><p>{row.content}</p><footer><span>已送达 {row.recipient_count} 个有效账号</span>{row.expires_at && <span>有效期至 {formatDate(row.expires_at)}</span>}{row.revoked_at && <span>撤销于 {formatDate(row.revoked_at)} · {row.revoke_reason}</span>}<code>{row.client_request_id}</code></footer></div><div className="notification-broadcast-history__actions"><b className={`status-chip status-chip--${row.status === "completed" ? "published" : row.status}`}>{statusLabel(row.status)}</b>{row.status === "completed" && <button type="button" className="commerce-danger" disabled={revokingId !== null} onClick={() => void revoke(row)}><Prohibit size={14} />{revokingId === row.id ? "撤销中…" : "撤销"}</button>}</div></article>)}</div> : <div className="commerce-empty"><Bell size={26} /><strong>{loading ? "正在读取发布记录…" : "还没有发布记录"}</strong></div>}
+      {rows.length ? <div>{rows.map((row) => {
+        const localizedTitle = locale === "en" && row.title_en ? row.title_en : row.title;
+        const localizedContent = locale === "en" && row.content_en ? row.content_en : row.content;
+        return <article key={row.id}><span className="notification-broadcast-history__dot"><Bell size={17} /></span><div><header><strong data-i18n-skip>{localizedTitle}</strong><small>{TYPE_LABELS[row.notification_type] || row.notification_type} · {formatDate(row.created_at)}{locale === "en" && !row.title_en && <em> · {t("admin.notification.originalLanguage", "原文内容")}</em>}</small></header><p data-i18n-skip>{localizedContent}</p><footer><span>已送达 {row.recipient_count} 个有效账号</span>{row.expires_at && <span>有效期至 {formatDate(row.expires_at)}</span>}{row.revoked_at && <span>撤销于 {formatDate(row.revoked_at)} · <i data-i18n-skip>{row.revoke_reason}</i></span>}<code>{row.client_request_id}</code></footer></div><div className="notification-broadcast-history__actions"><b className={`status-chip status-chip--${row.status === "completed" ? "published" : row.status}`}>{statusLabel(row.status)}</b>{row.status === "completed" && <button type="button" className="commerce-danger" disabled={revokingId !== null} onClick={() => void revoke(row)}><Prohibit size={14} />{revokingId === row.id ? "撤销中…" : "撤销"}</button>}</div></article>;
+      })}</div> : <div className="commerce-empty"><Bell size={26} /><strong>{loading ? "正在读取发布记录…" : "还没有发布记录"}</strong></div>}
     </section>
   </section>;
 }

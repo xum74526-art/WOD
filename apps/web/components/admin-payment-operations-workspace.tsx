@@ -44,6 +44,7 @@ import {
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import type { AuditPlatform } from "@/lib/mobile-finance-api";
 import { formatFinancialAmount } from "@/lib/financial-format";
+import { useI18n } from "@/components/locale-root";
 
 const PAYMENT_OPERATION_INTENT_KEY = "kai-admin-payment-operation-intent:v1";
 
@@ -90,6 +91,7 @@ function eventTransition(event: AdminPaymentEvent) {
 }
 
 export function AdminPaymentOperationsWorkspace() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<WorkspaceTab>("orders");
   const [orders, setOrders] = useState<AdminRechargeItem[]>([]);
   const [orderStatus, setOrderStatus] = useState("review");
@@ -328,9 +330,15 @@ export function AdminPaymentOperationsWorkspace() {
     if (note.length < 3) { setError("执行资金操作前，请填写至少 3 个字的核验依据或处理原因。"); return; }
     const isReview = ["review", "late_paid_review"].includes(order.status);
     const wording = action === "credit"
-      ? `确认${paymentReviewProviderLabel(order.provider)}已显示支付成功，并为用户入账 ${cardHours(order.card_hours)} 卡时？`
-      : `确认对充值单 ${order.order_no} 发起人民币 ¥${money(order.amount_cny)} 全额原支付渠道退款？这不是钱包订单退卡时。`;
-    if (!window.confirm(`${wording}\n\n确认前请再次核对商户后台交易号、金额和支付状态。`)) return;
+      ? t("admin.payment.confirmCredit", "确认{provider}已显示支付成功，并为用户入账 {cardHours} 卡时？", {
+        provider: t(`admin.payment.provider.${order.provider}`, paymentReviewProviderLabel(order.provider)),
+        cardHours: cardHours(order.card_hours),
+      })
+      : t("admin.payment.confirmRefund", "确认对充值单 {orderNo} 发起人民币 ¥{amount} 全额原支付渠道退款？这不是钱包订单退卡时。", {
+        orderNo: order.order_no,
+        amount: money(order.amount_cny),
+      });
+    if (!window.confirm(`${wording}\n\n${t("admin.payment.confirmEvidence", "确认前请再次核对商户后台交易号、金额和支付状态。")}`)) return;
     if (!beginMutation(`order-${order.id}-${action}`)) return;
 
     const storage = browserSessionStorage();
@@ -368,14 +376,19 @@ export function AdminPaymentOperationsWorkspace() {
       }
       setOrderNote("");
       setSuccess(action === "credit"
-        ? `充值单 ${order.order_no} 已按服务端核验结果完成入账。`
+        ? t("admin.payment.creditSuccess", "充值单 {orderNo} 已按服务端核验结果完成入账。", { orderNo: order.order_no })
         : refundResult
-          ? `人民币原路退款 ${refundResult.refund_no} 当前状态：${paymentRefundStatusLabel(refundResult.status)}；请以退款记录和商户后台为准。`
-          : `充值单 ${order.order_no} 的人民币原路退款请求已受理；请刷新退款记录核对最终结果。`);
+          ? t("admin.payment.refundAccepted", "人民币原路退款 {refundNo} 当前状态：{status}；请以退款记录和商户后台为准。", {
+            refundNo: refundResult.refund_no,
+            status: t(`admin.payment.refundStatus.${refundResult.status}`, paymentRefundStatusLabel(refundResult.status)),
+          })
+          : t("admin.payment.refundQueued", "充值单 {orderNo} 的人民币原路退款请求已受理；请刷新退款记录核对最终结果。", { orderNo: order.order_no }));
       await Promise.all([loadOrders(), loadOrderDetail(order.id)]);
     } catch (reason) {
       setError(isUncertainApiFailure(reason)
-        ? `本次${action === "credit" ? "入账" : "原路退款"}结果暂不确定，请先刷新详情核对；以相同备注重试时会复用同一请求标识。`
+        ? t("admin.payment.uncertain", "本次{action}结果暂不确定，请先刷新详情核对；以相同备注重试时会复用同一请求标识。", {
+          action: t(`admin.payment.action.${action}`, action === "credit" ? "入账" : "原路退款"),
+        })
         : errorMessage(reason));
     } finally {
       finishMutation();
@@ -402,17 +415,23 @@ export function AdminPaymentOperationsWorkspace() {
     const note = refundRequestNote.trim();
     if (note.length < 3) { setError("请填写至少 3 个字的审核依据或驳回原因。"); return; }
     const wording = action === "approve"
-      ? `确认批准退款申请 ${refundRequestDetail.request_no}？系统将立即尝试发起人民币 ¥${money(refundRequestDetail.amount_cny)} 全额原支付渠道退款，并冻结或冲正对应卡时。`
-      : `确认驳回退款申请 ${refundRequestDetail.request_no}？本次操作不会发起人民币退款，也不会扣减用户卡时。`;
-    if (!window.confirm(`${wording}\n\n审核结论会写入支付审计记录，请确认申请原因、充值单和支付状态已核对。`)) return;
+      ? t("admin.payment.approveRequestConfirm", "确认批准退款申请 {requestNo}？系统将立即尝试发起人民币 ¥{amount} 全额原支付渠道退款，并冻结或冲正对应卡时。", {
+        requestNo: refundRequestDetail.request_no,
+        amount: money(refundRequestDetail.amount_cny),
+      })
+      : t("admin.payment.rejectRequestConfirm", "确认驳回退款申请 {requestNo}？本次操作不会发起人民币退款，也不会扣减用户卡时。", { requestNo: refundRequestDetail.request_no });
+    if (!window.confirm(`${wording}\n\n${t("admin.payment.reviewAuditConfirm", "审核结论会写入支付审计记录，请确认申请原因、充值单和支付状态已核对。")}`)) return;
     if (!beginMutation(`refund-request-${refundRequestDetail.id}-${action}`)) return;
     try {
       const result = await reviewAdminPaymentRefundRequest(refundRequestDetail.id, { action, note });
       setRefundRequestDetail(result);
       setRefundRequestNote("");
       setSuccess(action === "reject"
-        ? `退款申请 ${result.request_no} 已驳回，未发起人民币退款。`
-        : `退款申请 ${result.request_no} 已批准，当前状态：${paymentRefundRequestStatusLabel(result.status)}。请继续以原路退款记录和支付渠道结果为准。`);
+        ? t("admin.payment.requestRejected", "退款申请 {requestNo} 已驳回，未发起人民币退款。", { requestNo: result.request_no })
+        : t("admin.payment.requestApproved", "退款申请 {requestNo} 已批准，当前状态：{status}。请继续以原路退款记录和支付渠道结果为准。", {
+          requestNo: result.request_no,
+          status: t(`admin.payment.requestStatus.${result.status}`, paymentRefundRequestStatusLabel(result.status)),
+        }));
       await loadRefundRequests();
     } catch (reason) {
       setError(isUncertainApiFailure(reason)
@@ -430,13 +449,19 @@ export function AdminPaymentOperationsWorkspace() {
     const wording = outcome === "succeeded"
       ? "商户后台明确显示退款成功；确认后将完成卡时冲正，并把充值单标记为已原路退款。"
       : "商户后台明确显示退款失败；确认后将释放被冻结的卡时，并恢复充值单原状态。";
-    if (!window.confirm(`${wording}\n\n退款号：${refundDetail.refund_no}\n该结论必须来自商户后台证据，不能根据用户截图或页面回跳判断。`)) return;
+    if (!window.confirm(t("admin.payment.resolveConfirm", "{decision}\n\n退款号：{refundNo}\n该结论必须来自商户后台证据，不能根据用户截图或页面回跳判断。", {
+      decision: t(`admin.payment.resolveDecision.${outcome}`, wording),
+      refundNo: refundDetail.refund_no,
+    }))) return;
     if (!beginMutation(`refund-${refundDetail.id}-${outcome}`)) return;
     try {
       const result = await resolveAdminPaymentRefund(refundDetail.id, { outcome, note });
       setRefundDetail(result);
       setRefundNote("");
-      setSuccess(`人民币原路退款 ${result.refund_no} 已确认${outcome === "succeeded" ? "成功" : "失败"}。`);
+      setSuccess(t("admin.payment.resolveSuccess", "人民币原路退款 {refundNo} 已确认{outcome}。", {
+        refundNo: result.refund_no,
+        outcome: t(`admin.payment.outcome.${outcome}`, outcome === "succeeded" ? "成功" : "失败"),
+      }));
       await loadRefunds();
     } catch (reason) {
       setError(isUncertainApiFailure(reason)
@@ -462,7 +487,7 @@ export function AdminPaymentOperationsWorkspace() {
       <h1>充值与人民币原路退款</h1>
       <span>复核支付渠道充值、追踪支付事件，并在商户后台证据充分时执行入账；人民币原支付渠道退款仅支持七相充值。</span>
     </div>
-    <div className="payment-operation-boundary"><Warning size={19}/><div><strong>两类退款必须分开处理</strong><span>本页处理七相充值的人民币原支付渠道退款，并可能冻结或冲正对应卡时；<Link href="/admin/disputes">钱包订单争议退款</Link>只退回买家钱包卡时，不会自动退回人民币。</span></div></div>
+    <div className="payment-operation-boundary"><Warning size={19}/><div><strong>两类退款必须分开处理</strong><span>{t("admin.payment.boundaryPrefix", "本页处理七相充值的人民币原支付渠道退款，并可能冻结或冲正对应卡时；")} <Link href="/admin/disputes">{t("admin.payment.walletDisputeLink", "钱包订单争议退款")}</Link> {t("admin.payment.boundarySuffix", "只退回买家钱包卡时，不会自动退回人民币。")}</span></div></div>
     <nav className="payment-operation-tabs" aria-label="支付运营视图">
       <button type="button" className={tab === "orders" ? "active" : ""} aria-current={tab === "orders" ? "page" : undefined} onClick={() => changeTab("orders")}><Coins size={17}/>充值订单</button>
       <button type="button" className={tab === "requests" ? "active" : ""} aria-current={tab === "requests" ? "page" : undefined} onClick={() => changeTab("requests")}><ClipboardText size={17}/>用户退款申请</button>
@@ -483,24 +508,24 @@ export function AdminPaymentOperationsWorkspace() {
       </form>
       <div className="review-console admin-payment-console">
         <aside>
-          {orders.length ? <div className="review-queue">{orders.map((row) => <button type="button" className={selectedOrderId === row.id ? "active" : ""} key={row.id} onClick={() => { setSelectedOrderId(row.id); setOrderNote(""); setError(""); setSuccess(""); }}><span><small>{row.order_no} · {platformLabel(row.created_platform)}</small><strong>{row.user.username || `用户 #${row.user.id}`}</strong><em>¥{money(row.amount_cny)} · {row.provider_trade_no || "暂无渠道交易号"}</em></span><b className={`status-chip status-chip--${paymentStatusTone(row.status)}`}>{paymentStatusLabel(row.status)}</b></button>)}</div> : <div className="commerce-empty"><Coins size={24}/><strong>{loadingOrders ? "正在读取充值订单…" : "当前筛选条件下没有充值订单"}</strong></div>}
+          {orders.length ? <div className="review-queue">{orders.map((row) => <button type="button" className={selectedOrderId === row.id ? "active" : ""} key={row.id} onClick={() => { setSelectedOrderId(row.id); setOrderNote(""); setError(""); setSuccess(""); }}><span><small>{row.order_no} · {platformLabel(row.created_platform)}</small><strong data-i18n-skip={Boolean(row.user.username) || undefined}>{row.user.username || `用户 #${row.user.id}`}</strong><em>¥{money(row.amount_cny)} · {row.provider_trade_no || "暂无渠道交易号"}</em></span><b className={`status-chip status-chip--${paymentStatusTone(row.status)}`}>{paymentStatusLabel(row.status)}</b></button>)}</div> : <div className="commerce-empty"><Coins size={24}/><strong>{loadingOrders ? "正在读取充值订单…" : "当前筛选条件下没有充值订单"}</strong></div>}
           <AdminQueuePagination page={orderPage} total={orderTotal} loading={loadingOrders} onPageChange={setOrderPage}/>
         </aside>
         <article className="review-dossier payment-operation-dossier">
           {orderDetail ? <>
-            <header><div><p>{orderDetail.order.order_no} / PAYMENT #{orderDetail.order.id}</p><h2>{orderDetail.order.user.username || `用户 #${orderDetail.order.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(orderDetail.order.status)}`}>{paymentStatusLabel(orderDetail.order.status)}</span></header>
+            <header><div><p>{orderDetail.order.order_no} / PAYMENT #{orderDetail.order.id}</p><h2 data-i18n-skip={Boolean(orderDetail.order.user.username) || undefined}>{orderDetail.order.user.username || `用户 #${orderDetail.order.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(orderDetail.order.status)}`}>{paymentStatusLabel(orderDetail.order.status)}</span></header>
             <dl>
               <div><dt>人民币 / 入账卡时</dt><dd>¥ {money(orderDetail.order.amount_cny)} / {cardHours(orderDetail.order.card_hours)} 卡时</dd></div>
               <div><dt>支付渠道</dt><dd>{orderDetail.order.provider} · {orderDetail.order.channel || "未记录"}<small>{orderDetail.order.provider_trade_no || "暂无渠道交易号"}</small></dd></div>
               <div><dt>渠道状态</dt><dd>{orderDetail.order.provider_status || "尚未记录"}</dd></div>
-              <div><dt>失败原因</dt><dd>{orderDetail.order.failure_reason || "无"}</dd></div>
+              <div><dt>失败原因</dt><dd data-i18n-skip={Boolean(orderDetail.order.failure_reason) || undefined}>{orderDetail.order.failure_reason || "无"}</dd></div>
               <div><dt>支付 / 入账时间</dt><dd>{formatDate(orderDetail.order.paid_at)}<small>入账：{formatDate(orderDetail.order.credited_at)}</small></dd></div>
               <div><dt>最近查单</dt><dd>{formatDate(orderDetail.order.last_reconciled_at)}<small>累计 {orderDetail.order.reconcile_attempts || 0} 次</small></dd></div>
               <div><dt>创建 / 最后修改来源</dt><dd>{platformLabel(orderDetail.order.created_platform)} / {platformLabel(orderDetail.order.last_modified_platform)}</dd></div>
               <div><dt>客户端请求标识</dt><dd className="payment-operation-mono">{orderDetail.order.client_request_id || "历史订单未记录"}</dd></div>
             </dl>
-            {orderDetail.refund_request && <section className="payment-refund-summary payment-refund-request-summary"><div><h3>关联用户退款申请</h3><p><strong>{orderDetail.refund_request.request_no}</strong> · {paymentRefundRequestStatusLabel(orderDetail.refund_request.status)}<br/>{orderDetail.refund_request.reason}</p></div><button type="button" onClick={() => openRefundRequest(orderDetail.refund_request!)}>查看申请</button></section>}
-            {orderDetail.refund && <section className="payment-refund-summary"><h3>关联人民币原路退款</h3><p><strong>{orderDetail.refund.refund_no}</strong> · {paymentRefundStatusLabel(orderDetail.refund.status)} · {refundHoldLabel(orderDetail.refund.wallet_hold_status)}<br/>{orderDetail.refund.reason}</p></section>}
+            {orderDetail.refund_request && <section className="payment-refund-summary payment-refund-request-summary"><div><h3>关联用户退款申请</h3><p><strong>{orderDetail.refund_request.request_no}</strong> · {paymentRefundRequestStatusLabel(orderDetail.refund_request.status)}<br/><span data-i18n-skip>{orderDetail.refund_request.reason}</span></p></div><button type="button" onClick={() => openRefundRequest(orderDetail.refund_request!)}>查看申请</button></section>}
+            {orderDetail.refund && <section className="payment-refund-summary"><h3>关联人民币原路退款</h3><p><strong>{orderDetail.refund.refund_no}</strong> · {paymentRefundStatusLabel(orderDetail.refund.status)} · {refundHoldLabel(orderDetail.refund.wallet_hold_status)}<br/><span data-i18n-skip>{orderDetail.refund.reason}</span></p></section>}
             <section><h3>支付事件（服务端审计记录）</h3>{orderDetail.events.length ? <ol className="payment-event-list">{orderDetail.events.map((event) => <li key={event.id}><header><strong>{event.event_type}</strong><time>{formatDate(event.created_at)}</time></header><p>{eventTransition(event)} · {event.source} / {event.actor_type}{event.actor_user_id ? ` #${event.actor_user_id}` : ""}</p>{event.detail && <dl>{Object.entries(event.detail).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value ?? "未记录")}</dd></div>)}</dl>}</li>)}</ol> : <p>尚无支付事件记录。</p>}</section>
             {(orderActions.canCredit || orderActions.canRefund) && <footer className="payment-operation-actions">
               <label><span>核验依据 / 处理原因（至少 3 字）</span><textarea maxLength={500} rows={4} value={orderNote} onChange={(event) => setOrderNote(event.target.value)} placeholder="记录商户后台交易号、支付状态、金额及核验结论；不要填写密钥或签名"/></label>
@@ -524,22 +549,22 @@ export function AdminPaymentOperationsWorkspace() {
       </form>
       <div className="review-console admin-payment-console">
         <aside>
-          {refundRequests.length ? <div className="review-queue">{refundRequests.map((row) => <button type="button" className={selectedRefundRequestId === row.id ? "active" : ""} key={row.id} onClick={() => { setSelectedRefundRequestId(row.id); setRefundRequestNote(""); setError(""); setSuccess(""); }}><span><small>{row.request_no} · {platformLabel(row.created_platform)}</small><strong>{row.user.username || `用户 #${row.user.id}`}</strong><em>{row.order_no || `PAYMENT #${row.payment_order_id}`} · ¥{money(row.amount_cny)}</em></span><b className={`status-chip status-chip--${paymentStatusTone(row.status)}`}>{paymentRefundRequestStatusLabel(row.status)}</b></button>)}</div> : <div className="commerce-empty"><ClipboardText size={24}/><strong>{loadingRefundRequests ? "正在读取退款申请…" : "当前筛选条件下没有退款申请"}</strong></div>}
+          {refundRequests.length ? <div className="review-queue">{refundRequests.map((row) => <button type="button" className={selectedRefundRequestId === row.id ? "active" : ""} key={row.id} onClick={() => { setSelectedRefundRequestId(row.id); setRefundRequestNote(""); setError(""); setSuccess(""); }}><span><small>{row.request_no} · {platformLabel(row.created_platform)}</small><strong data-i18n-skip={Boolean(row.user.username) || undefined}>{row.user.username || `用户 #${row.user.id}`}</strong><em>{row.order_no || `PAYMENT #${row.payment_order_id}`} · ¥{money(row.amount_cny)}</em></span><b className={`status-chip status-chip--${paymentStatusTone(row.status)}`}>{paymentRefundRequestStatusLabel(row.status)}</b></button>)}</div> : <div className="commerce-empty"><ClipboardText size={24}/><strong>{loadingRefundRequests ? "正在读取退款申请…" : "当前筛选条件下没有退款申请"}</strong></div>}
           <AdminQueuePagination page={refundRequestPage} total={refundRequestTotal} loading={loadingRefundRequests} onPageChange={setRefundRequestPage}/>
         </aside>
         <article className="review-dossier payment-operation-dossier">
           {refundRequestDetail ? <>
-            <header><div><p>{refundRequestDetail.request_no} / REQUEST #{refundRequestDetail.id}</p><h2>{refundRequestDetail.user.username || `用户 #${refundRequestDetail.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(refundRequestDetail.status)}`}>{paymentRefundRequestStatusLabel(refundRequestDetail.status)}</span></header>
+            <header><div><p>{refundRequestDetail.request_no} / REQUEST #{refundRequestDetail.id}</p><h2 data-i18n-skip={Boolean(refundRequestDetail.user.username) || undefined}>{refundRequestDetail.user.username || `用户 #${refundRequestDetail.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(refundRequestDetail.status)}`}>{paymentRefundRequestStatusLabel(refundRequestDetail.status)}</span></header>
             <dl>
               <div><dt>关联充值单</dt><dd>{refundRequestDetail.order_no || `PAYMENT #${refundRequestDetail.payment_order_id}`}<small>{paymentStatusLabel(refundRequestDetail.payment_status || "未知状态")}</small></dd></div>
               <div><dt>人民币 / 对应卡时</dt><dd>¥ {money(refundRequestDetail.amount_cny)} / {cardHours(refundRequestDetail.card_hours)} 卡时</dd></div>
-              <div><dt>申请用户</dt><dd>{refundRequestDetail.user.username || "未设置用户名"}<small>USER #{refundRequestDetail.user.id}</small></dd></div>
+              <div><dt>申请用户</dt><dd><span data-i18n-skip={Boolean(refundRequestDetail.user.username) || undefined}>{refundRequestDetail.user.username || "未设置用户名"}</span><small>USER #{refundRequestDetail.user.id}</small></dd></div>
               <div><dt>申请来源 / 时间</dt><dd>{platformLabel(refundRequestDetail.created_platform)}<small>{formatDate(refundRequestDetail.created_at)}</small></dd></div>
               <div><dt>审核管理员</dt><dd>{refundRequestDetail.reviewed_by ? `ADMIN #${refundRequestDetail.reviewed_by}` : "尚未审核"}<small>{formatDate(refundRequestDetail.reviewed_at)}</small></dd></div>
               <div><dt>客户端请求标识</dt><dd className="payment-operation-mono">{refundRequestDetail.client_request_id}</dd></div>
             </dl>
-            <section><h3>用户申请原因</h3><p>{refundRequestDetail.reason}</p></section>
-            {refundRequestDetail.review_note && <section><h3>管理员审核说明</h3><p>{refundRequestDetail.review_note}</p></section>}
+            <section><h3>用户申请原因</h3><p data-i18n-skip>{refundRequestDetail.reason}</p></section>
+            {refundRequestDetail.review_note && <section><h3>管理员审核说明</h3><p data-i18n-skip>{refundRequestDetail.review_note}</p></section>}
             {refundRequestDetail.payment_refund && <section className="payment-refund-summary payment-refund-request-summary"><div><h3>已关联人民币原路退款</h3><p><strong>{refundRequestDetail.payment_refund.refund_no}</strong> · {paymentRefundStatusLabel(refundRequestDetail.payment_refund.status)} · {refundHoldLabel(refundRequestDetail.payment_refund.wallet_hold_status)}<br/>{refundRequestDetail.payment_refund.provider_message || "支付渠道尚未返回补充说明"}</p></div><button type="button" onClick={() => { setRefundStatus(""); setSelectedRefundId(refundRequestDetail.payment_refund!.id); setRefundNote(""); setError(""); setSuccess(""); setTab("refunds"); }}>查看原路退款</button></section>}
             {canReviewPaymentRefundRequest(refundRequestDetail.status) && <footer className="payment-operation-actions">
               <div className="payment-provider-evidence"><Warning size={18}/><span>批准后系统会立即尝试原支付渠道全额退款，并冻结或冲正对应卡时。驳回只记录审核结论，不退款，也不扣减用户卡时。</span></div>
@@ -573,8 +598,8 @@ export function AdminPaymentOperationsWorkspace() {
               <div><dt>操作管理员</dt><dd>ADMIN #{refundDetail.actor_user_id}</dd></div>
               <div><dt>幂等请求标识</dt><dd className="payment-operation-mono">{refundDetail.client_request_id}</dd></div>
             </dl>
-            <section><h3>退款原因</h3><p>{refundDetail.reason}</p></section>
-            {refundDetail.resolution_note && <section><h3>最终核验结论</h3><p>{refundDetail.resolution_note}</p></section>}
+            <section><h3>退款原因</h3><p data-i18n-skip>{refundDetail.reason}</p></section>
+            {refundDetail.resolution_note && <section><h3>最终核验结论</h3><p data-i18n-skip>{refundDetail.resolution_note}</p></section>}
             {canResolveUnknownPaymentRefund(refundDetail.status) && <footer className="payment-operation-actions">
               <div className="payment-provider-evidence"><Warning size={18}/><span>必须由另一名管理员登录七相商户后台，核对退款号与最终状态。不要根据用户截图、页面回跳或一次网络超时做结论。</span></div>
               <label><span>商户后台证据与核验结论（至少 3 字）</span><textarea maxLength={500} rows={4} value={refundNote} onChange={(event) => setRefundNote(event.target.value)} placeholder="记录商户后台退款状态、核验时间及可追溯依据；不要填写密钥或签名"/></label>

@@ -44,7 +44,7 @@ test("admin overview uses component translations and legacy queues have English 
   }
 });
 
-test("every static Chinese admin label has an English compatibility translation", () => {
+test("every admin-system Chinese literal is translated directly or covered by the compatibility map", () => {
   const components = [
     "admin-dashboard.tsx",
     "admin-buy-request-workspace.tsx",
@@ -64,19 +64,93 @@ test("every static Chinese admin label has an English compatibility translation"
     const url = new URL(`../components/${component}`, import.meta.url);
     const source = fs.readFileSync(url, "utf8");
     const file = ts.createSourceFile(url.pathname, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const insideTranslationCall = (node: ts.Node) => {
+      let parent = node.parent;
+      while (parent && !ts.isSourceFile(parent)) {
+        if (ts.isCallExpression(parent) && ts.isIdentifier(parent.expression) && parent.expression.text === "t") return true;
+        parent = parent.parent;
+      }
+      return false;
+    };
     const visit = (node: ts.Node) => {
-      if (ts.isJsxText(node)) {
-        const text = node.text.trim();
-        if (/[\u3400-\u9fff]/.test(text)) visibleChinese.add(text);
-      }
-      if (ts.isStringLiteral(node) && ts.isJsxAttribute(node.parent) && /[\u3400-\u9fff]/.test(node.text)) {
-        visibleChinese.add(node.text);
-      }
+      let text = "";
+      if (ts.isJsxText(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) text = node.text;
+      if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) text = node.text;
+      text = text.replace(/\s+/g, " ").trim();
+      if (/[\u3400-\u9fff]/.test(text) && !insideTranslationCall(node)) visibleChinese.add(text);
       ts.forEachChild(node, visit);
     };
     visit(file);
   }
 
   const missing = [...visibleChinese].filter((text) => !adminLegacyEnglish[text]);
+  assert.deepEqual(missing, []);
+});
+
+test("supplier admission and shared admin controls render from explicit locale keys", () => {
+  const supplierPage = fs.readFileSync(new URL("../app/supplier/apply/page.tsx", import.meta.url), "utf8");
+  const supplierForm = fs.readFileSync(new URL("../components/supplier-application-form.tsx", import.meta.url), "utf8");
+  const sourceFilter = fs.readFileSync(new URL("../components/admin-platform-filter.tsx", import.meta.url), "utf8");
+  const pagination = fs.readFileSync(new URL("../components/admin-queue-pagination.tsx", import.meta.url), "utf8");
+  const shell = fs.readFileSync(new URL("../components/product-shell.tsx", import.meta.url), "utf8");
+  const payments = fs.readFileSync(new URL("../components/admin-payment-operations-workspace.tsx", import.meta.url), "utf8");
+
+  for (const key of [
+    "supplier.apply.title",
+    "supplier.apply.description",
+    "supplier.apply.formTitle",
+    "supplier.apply.formDescriptionLink",
+  ]) assert.match(supplierPage, new RegExp(key.replaceAll(".", "\\.")));
+  for (const key of [
+    "supplier.apply.field.company",
+    "supplier.apply.field.contact",
+    "supplier.apply.field.phone",
+    "supplier.apply.field.region",
+    "supplier.apply.field.description",
+    "supplier.apply.submit",
+  ]) assert.match(supplierForm, new RegExp(key.replaceAll(".", "\\.")));
+
+  assert.match(sourceFilter, /t\("admin\.filter\.allSources"/);
+  assert.match(pagination, /t\("admin\.pagination\.summary"/);
+  assert.match(shell, /KAI Compute Cloud Administrator/);
+  assert.match(payments, /t\("admin\.payment\.boundaryPrefix"/);
+  assert.match(payments, /<\/Link> \{t\("admin\.payment\.boundarySuffix"/);
+  assert.doesNotMatch(payments, /<\/Link>只退回/);
+});
+
+test("explicit admin translations have an English key or a mapped English fallback", () => {
+  const localeSource = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
+  const englishKeys = new Set([...localeSource.matchAll(/^\s*"([^"]+)":/gm)].map((match) => match[1]));
+  const components = [
+    "admin-buy-request-workspace.tsx",
+    "admin-platform-audit-workspace.tsx",
+    "supplier-review.tsx",
+    "admin-dispute-workspace.tsx",
+    "admin-notification-workspace.tsx",
+    "admin-payment-operations-workspace.tsx",
+    "comment-moderation.tsx",
+    "admin-platform-filter.tsx",
+    "admin-queue-pagination.tsx",
+  ];
+  const missing: string[] = [];
+
+  for (const component of components) {
+    const url = new URL(`../components/${component}`, import.meta.url);
+    const source = fs.readFileSync(url, "utf8");
+    const file = ts.createSourceFile(url.pathname, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "t") {
+        const [keyNode, fallbackNode] = node.arguments;
+        if (ts.isStringLiteral(keyNode) && ts.isStringLiteral(fallbackNode) && /[\u3400-\u9fff]/.test(fallbackNode.text)) {
+          if (!englishKeys.has(keyNode.text) && !adminLegacyEnglish[fallbackNode.text]) {
+            missing.push(`${component}: ${keyNode.text}`);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(file);
+  }
+
   assert.deepEqual(missing, []);
 });

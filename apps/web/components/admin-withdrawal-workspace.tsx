@@ -159,8 +159,8 @@ export function AdminWithdrawalWorkspace() {
     {paying && <form className="finance-payment-form" onSubmit={submitPayment}>
       <header><Bank size={20}/><div><small>{paying.row.order_no}</small><h2>登记银行打款</h2></div></header>
       <div className="finance-payment-instructions">
-        <span><small>收款人</small><strong>{paying.instructions.holder}</strong></span>
-        <span><small>开户行</small><strong>{paying.instructions.bank_name}</strong></span>
+        <span><small>收款人</small><strong data-i18n-skip>{paying.instructions.holder}</strong></span>
+        <span><small>开户行</small><strong data-i18n-skip>{paying.instructions.bank_name}</strong></span>
         <span><small>银行卡号</small><strong>{paying.instructions.card_number}</strong></span>
       </div>
       <label>银行流水号<input required value={payment.bank_reference} onChange={(event) => setPayment({ ...payment, bank_reference: event.target.value })}/></label>
@@ -177,20 +177,20 @@ export function AdminWithdrawalWorkspace() {
         <header>
           <div>
             <small>{row.order_no} · {platformLabel(row.created_platform)}</small>
-            <h2>{row.user?.username || `用户 #${row.user?.id || "-"}`}</h2>
+            <h2 data-i18n-skip={Boolean(row.user?.username) || undefined}>{row.user?.username || `用户 #${row.user?.id || "-"}`}</h2>
             <span>申请时间（北京时间） {formatPlatformDateTime(row.created_at)} · 最后操作 {platformLabel(row.last_modified_platform)}</span>
           </div>
           <strong>¥ {formatFinancialAmount(row.net_amount_cny)}</strong>
           <b className={`status-chip status-chip--${row.status === "paid" ? "published" : ["rejected", "failed", "canceled"].includes(row.status) ? "rejected" : "pending_review"}`}>{labels[row.status]}</b>
         </header>
         <div className="admin-bank-slip"><Bank size={20}/><dl>
-          <div><dt>收款人</dt><dd>{row.bank_card.holder}</dd></div>
-          <div><dt>开户银行</dt><dd>{row.bank_card.bank_name}</dd></div>
+          <div><dt>收款人</dt><dd data-i18n-skip>{row.bank_card.holder}</dd></div>
+          <div><dt>开户银行</dt><dd data-i18n-skip>{row.bank_card.bank_name}</dd></div>
           <div><dt>银行卡</dt><dd>尾号 {row.bank_card.card_last4 || row.bank_card.card_number.slice(-4)}</dd></div>
           <div><dt>卡时 / 汇率</dt><dd>{formatFinancialAmount(row.amount_card_hours)} / {formatFinancialAmount(row.locked_rate_cny)}</dd></div>
         </dl></div>
-        {row.review_note && <p>{row.review_note}</p>}
-        {row.failure_reason && <p>{row.failure_reason}</p>}
+        {row.review_note && <p data-i18n-skip>{row.review_note}</p>}
+        {row.failure_reason && <p data-i18n-skip>{row.failure_reason}</p>}
         {row.status === "paid" && <p>打款时间（北京时间）：{formatPlatformDateTime(row.paid_at)}</p>}
         {canViewPayoutReceipt(row) && <div className="finance-photo-links"><a href={financeWithdrawalReceipt(row.id)} target="_blank" rel="noreferrer">下载打款凭证</a></div>}
         <footer>

@@ -108,6 +108,12 @@ function redirectForRole(user: AuthUser, variant: WorkspaceVariant) {
   return null;
 }
 
+export function localizedWorkspaceDisplayName(name: string, locale: "zh-Hant" | "zh-Hans" | "en") {
+  if (name !== "WOD 云端管理员" && name !== "WOD 雲端管理員") return name;
+  if (locale === "en") return "KAI Compute Cloud Administrator";
+  return locale === "zh-Hant" ? "KAI星算雲端管理員" : "KAI星算云端管理员";
+}
+
 export function ProductShell({ children, variant = "account" }: { children: React.ReactNode; variant?: WorkspaceVariant }) {
   const { locale, t } = useI18n();
   const pathname = usePathname();
@@ -197,7 +203,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
       <a className="skip-to-content" href="#workspace-content">{t("accessibility.skipToContent", "跳到主要内容")}</a>
       <aside className="workspace-sidebar">
         <Brand />
-        <div className="workspace-identity"><span>{roleName}</span><strong>{workspaceName}</strong><small>{user.display_name}</small></div>
+        <div className="workspace-identity"><span>{roleName}</span><strong>{workspaceName}</strong><small>{localizedWorkspaceDisplayName(user.display_name, locale)}</small></div>
         <nav aria-label={t("workspace.navigation", "{name}导航", { name: workspaceName })}>
           {navigation.map((item) => {
             const Icon = item.icon;

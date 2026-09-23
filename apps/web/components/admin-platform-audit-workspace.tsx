@@ -20,6 +20,7 @@ import {
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import type { AuditPlatform } from "@/lib/mobile-finance-api";
 import { formatFinancialAmount } from "@/lib/financial-format";
+import { useI18n } from "@/components/locale-root";
 
 type View = "users" | "orders" | "recharges";
 type PendingUserAction = { user: AdminUserItem; action: AdminUserActionKind };
@@ -41,6 +42,7 @@ function actionDescription(action: AdminUserActionKind) {
 }
 
 export function AdminPlatformAuditWorkspace() {
+  const { t } = useI18n();
   const [platform, setPlatform] = useState<AuditPlatform | "">("");
   const [view, setView] = useState<View>("users");
   const [search, setSearch] = useState("");
@@ -99,7 +101,10 @@ export function AdminPlatformAuditWorkspace() {
         reason: actionReason,
         confirm_username: pendingAction.action === "delete" ? confirmUsername : undefined,
       });
-      setNotice(`${pendingAction.user.username}：${actionLabels[pendingAction.action]}已提交。`);
+      setNotice(t("admin.platform.actionSubmitted", "{username}：{action}已提交。", {
+        username: pendingAction.user.username,
+        action: t(`admin.platform.action.${pendingAction.action}`, actionLabels[pendingAction.action]),
+      }));
       setPendingAction(null); setActionReason(""); setConfirmUsername("");
       await load();
     } catch (reason) { setError(errorMessage(reason)); }
@@ -128,14 +133,14 @@ export function AdminPlatformAuditWorkspace() {
     {notice && <div className="commerce-success">{notice}</div>}
 
     {pendingAction && <form className={`admin-account-action-panel${pendingAction.action === "delete" ? " admin-account-action-panel--danger" : ""}`} onSubmit={submitUserAction}>
-      <div><small>账号管理 · 用户 #{pendingAction.user.id}</small><h2>{actionLabels[pendingAction.action]}：{pendingAction.user.username}</h2><p>{actionDescription(pendingAction.action)}</p></div>
+      <div><small>账号管理 · 用户 #{pendingAction.user.id}</small><h2>{t(`admin.platform.action.${pendingAction.action}`, actionLabels[pendingAction.action])}：<span data-i18n-skip>{pendingAction.user.username}</span></h2><p>{actionDescription(pendingAction.action)}</p></div>
       <label>操作原因<textarea required minLength={4} maxLength={500} value={actionReason} onChange={(event) => setActionReason(event.target.value)} placeholder="请填写可供审计复核的原因，不要填写密码、验证码、证件号或银行卡号"/></label>
       {pendingAction.action === "delete" && <label>输入完整用户名确认<input required value={confirmUsername} onChange={(event) => setConfirmUsername(event.target.value)} placeholder={pendingAction.user.username}/></label>}
-      <footer><button type="button" className="outline-link" disabled={actionBusy} onClick={() => setPendingAction(null)}>取消</button><button className={pendingAction.action === "delete" ? "commerce-danger" : "commerce-primary"} disabled={actionBusy || actionReason.trim().length < 4 || (pendingAction.action === "delete" && confirmUsername.trim() !== pendingAction.user.username)}>{actionBusy ? "提交中" : `确认${actionLabels[pendingAction.action]}`}</button></footer>
+      <footer><button type="button" className="outline-link" disabled={actionBusy} onClick={() => setPendingAction(null)}>取消</button><button className={pendingAction.action === "delete" ? "commerce-danger" : "commerce-primary"} disabled={actionBusy || actionReason.trim().length < 4 || (pendingAction.action === "delete" && confirmUsername.trim() !== pendingAction.user.username)}>{actionBusy ? "提交中" : t("admin.platform.confirmAction", "确认{action}", { action: t(`admin.platform.action.${pendingAction.action}`, actionLabels[pendingAction.action]) })}</button></footer>
     </form>}
 
     {view === "users" && <div className="admin-settlement-list">{users.length ? users.map((row) => <article key={row.id}>
-      <header><div><small>用户 #{row.id} · {platformLabel(row.created_platform)}</small><h2>{row.username}</h2><span>{formatDate(row.created_at)}</span></div><b className={`status-chip ${row.account_status === "active" ? "status-chip--published" : "status-chip--pending_review"}`}>{statusLabels[row.account_status] || row.account_status}</b></header>
+      <header><div><small>用户 #{row.id} · {platformLabel(row.created_platform)}</small><h2 data-i18n-skip>{row.username}</h2><span>{formatDate(row.created_at)}</span></div><b className={`status-chip ${row.account_status === "active" ? "status-chip--published" : "status-chip--pending_review"}`}>{statusLabels[row.account_status] || row.account_status}</b></header>
       <p>{row.phone_masked || "未绑定手机号"} · 找回邮箱{row.recovery_email_verified ? "已验证" : "未验证"} · KAI 身份{row.kai_identity_bound ? "已绑定" : "未绑定"} · {row.password_set ? "已设置密码" : "未设置本地密码"} · 商家状态 {row.supplier_status}</p>
       <footer className="admin-account-actions">
         {row.role !== "admin" && row.account_status !== "deleted" && row.account_status !== "deleting" && <>
@@ -145,11 +150,11 @@ export function AdminPlatformAuditWorkspace() {
         </>}
         <button type="button" disabled={historyBusy} onClick={() => void toggleUserHistory(row)}><ClockCounterClockwise size={15}/>{historyUserId === row.id ? "收起记录" : "操作记录"}</button>
       </footer>
-      {historyUserId === row.id && <div className="admin-account-history">{historyRows.length ? historyRows.map((action) => <div key={action.id}><span>{actionLabels[action.action] || action.action} · 管理员 #{action.actor_user_id}</span><strong>{action.reason}</strong><time>{action.created_at ? formatDate(action.created_at) : "时间待同步"} · {statusLabels[action.previous_status] || action.previous_status} → {statusLabels[action.new_status] || action.new_status}</time></div>) : <p>暂无账号管理操作记录</p>}</div>}
+      {historyUserId === row.id && <div className="admin-account-history">{historyRows.length ? historyRows.map((action) => <div key={action.id}><span>{actionLabels[action.action] || action.action} · 管理员 #{action.actor_user_id}</span><strong data-i18n-skip>{action.reason}</strong><time>{action.created_at ? formatDate(action.created_at) : "时间待同步"} · {statusLabels[action.previous_status] || action.previous_status} → {statusLabels[action.new_status] || action.new_status}</time></div>) : <p>暂无账号管理操作记录</p>}</div>}
     </article>) : <div className="commerce-empty"><Users size={25}/><strong>没有符合条件的用户</strong></div>}
-      {userTotal > 20 && <nav className="admin-account-pagination" aria-label="用户列表分页"><button type="button" disabled={loading || userPage <= 1} onClick={() => setUserPage((page) => Math.max(1, page - 1))}>上一页</button><span>第 {userPage} / {Math.ceil(userTotal / 20)} 页 · 共 {userTotal} 个账号</span><button type="button" disabled={loading || userPage >= Math.ceil(userTotal / 20)} onClick={() => setUserPage((page) => page + 1)}>下一页</button></nav>}
+      {userTotal > 20 && <nav className="admin-account-pagination" aria-label="用户列表分页"><button type="button" disabled={loading || userPage <= 1} onClick={() => setUserPage((page) => Math.max(1, page - 1))}>上一页</button><span>{t("admin.platform.userPageSummary", "第 {page} / {pages} 页 · 共 {total} 个账号", { page: userPage, pages: Math.ceil(userTotal / 20), total: userTotal })}</span><button type="button" disabled={loading || userPage >= Math.ceil(userTotal / 20)} onClick={() => setUserPage((page) => page + 1)}>下一页</button></nav>}
     </div>}
-    {view === "orders" && <div className="admin-settlement-list">{orders.length ? orders.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2>{row.product.name || row.product.gpu_model || `商品 #${row.product.id}`}</h2><span>{row.user.username || `用户 #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>{formatFinancialAmount(row.amount_card_hours)} 卡时</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{row.quantity} 台 · {row.purchase_hours ? `${row.purchase_hours} 小时` : row.cycle_days ? `${row.cycle_days} 天（历史）` : "时长未记录"}</p></article>) : <div className="commerce-empty"><Receipt size={25}/><strong>没有符合条件的订单</strong></div>}</div>}
+    {view === "orders" && <div className="admin-settlement-list">{orders.length ? orders.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2 data-i18n-skip={Boolean(row.product.name || row.product.gpu_model) || undefined}>{row.product.name || row.product.gpu_model || t("admin.platform.productFallback", "商品 #{id}", { id: row.product.id })}</h2><span data-i18n-skip>{row.user.username || `USER #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>{formatFinancialAmount(row.amount_card_hours)} 卡时</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{row.quantity} 台 · {row.purchase_hours ? `${row.purchase_hours} 小时` : row.cycle_days ? t("admin.platform.historicDays", "{days} 天（历史）", { days: row.cycle_days }) : "时长未记录"}</p></article>) : <div className="commerce-empty"><Receipt size={25}/><strong>没有符合条件的订单</strong></div>}</div>}
     {view === "recharges" && <div className="admin-settlement-list">{recharges.length ? recharges.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2>{row.provider} / {row.channel}</h2><span>{row.user.username || `用户 #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>¥ {formatFinancialAmount(row.amount_cny)}</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{formatFinancialAmount(row.card_hours)} 卡时 · 汇率 {formatFinancialAmount(row.card_hour_rate)}</p></article>) : <div className="commerce-empty"><Wallet size={25}/><strong>没有符合条件的充值订单</strong></div>}</div>}
   </section>;
 }

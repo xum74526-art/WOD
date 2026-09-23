@@ -109,8 +109,8 @@ export function AdminKycWorkspace() {
         <header>
           <div>
             <small>KYC #{row.id} · USER #{row.user_id} · {platformLabel(row.created_platform)}</small>
-            <h2>{row.real_name}</h2>
-            <span>{row.username} · {formatDate(row.created_at)}</span>
+            <h2 data-i18n-skip>{row.real_name}</h2>
+            <span><span data-i18n-skip>{row.username}</span> · {formatDate(row.created_at)}</span>
           </div>
           <b className={`status-chip status-chip--${row.status === "verified" ? "published" : row.status === "rejected" ? "rejected" : "pending_review"}`}>{labels[row.status]}</b>
         </header>
@@ -124,7 +124,7 @@ export function AdminKycWorkspace() {
           {row.front_photo_uploaded && <a href={financeVerificationPhoto(row.id, "front")} target="_blank" rel="noreferrer">查看身份证正面</a>}
           {row.back_photo_uploaded && <a href={financeVerificationPhoto(row.id, "back")} target="_blank" rel="noreferrer">查看身份证反面</a>}
         </div>
-        {row.reject_reason && <p>{row.reject_reason}</p>}
+        {row.reject_reason && <p data-i18n-skip>{row.reject_reason}</p>}
         {row.status === "pending" && <footer>
           <button disabled={busy === row.id} onClick={() => void review(row, false)}><X size={15}/>驳回</button>
           <button className="commerce-primary" disabled={busy === row.id} onClick={() => void review(row, true)}><Check size={15}/>通过认证</button>
