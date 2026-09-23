@@ -9,8 +9,8 @@
 | App 名称 | KAI星算 |
 | DCloud AppID | `__UNI__47CF9D3` |
 | Bundle ID | `com.kai.ztwstarmap` |
-| Marketing Version | `1.2.1` |
-| Build | `124` |
+| Marketing Version | `1.2.3` |
+| Build | `127` |
 | 支持设备 | iPhone |
 | 生产 API | `https://wod.kai.com/api` |
 | 业务模式 | 默认撮合；直接交易版须使用新 Build、开启编译门禁并单独完成支付合规与审核 |
