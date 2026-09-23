@@ -8,6 +8,7 @@ import {
   minimumRechargeAmountCny,
   minimumWithdrawalCardHours,
   rechargeBlocksNewOrder,
+  rechargeMatchesActiveOrder,
   rechargeCanCancel,
   rechargeCanPay,
   rechargeCanQuery,
@@ -32,6 +33,14 @@ test("recharge only succeeds after the backend has credited card hours", () => {
   assert.equal(rechargeUiState({ status: "paid", credited_at: "2026-08-24T01:00:00" }), "success");
   assert.equal(rechargeBlocksNewOrder({ status: "paid" }), true);
   assert.equal(rechargeBlocksNewOrder(null), false);
+});
+
+test("only the same active amount and payment channel are treated as a duplicate", () => {
+  const active = { status: "pending", amount_cny: "100.00", channel: "alipay" };
+  assert.equal(rechargeMatchesActiveOrder(active, 100, "alipay"), true);
+  assert.equal(rechargeMatchesActiveOrder(active, 50, "alipay"), false);
+  assert.equal(rechargeMatchesActiveOrder(active, 100, "wxpay"), false);
+  assert.equal(rechargeMatchesActiveOrder({ ...active, status: "failed" }, 100, "alipay"), false);
 });
 
 test("refund states take precedence over credited_at and never render as recharge success", () => {
@@ -83,6 +92,7 @@ test("wallet buttons use the defensive capability helpers instead of raw flags",
   assert.match(workspace, /rechargeCanCancel\(pendingPayment\)/);
   assert.match(workspace, /rechargeCanQuery\(row\)/);
   assert.match(workspace, /rechargeCanCancel\(row\)/);
+  assert.match(workspace, /rechargeMatchesActiveOrder\(pendingPayment, normalizedValue, recharge\.payment_type\)/);
   assert.doesNotMatch(workspace, /can_query !== false|can_pay !== false/);
   assert.match(workspace, /rechargeEntryEnabled && rechargeCanRestart\(pendingPayment\) && <button/);
 });

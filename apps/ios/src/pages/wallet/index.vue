@@ -14,6 +14,7 @@
         <DirectTradeWalletActions
           v-if="commerce.directTradeEnabled"
           :wallet="wallet"
+          :pending-payment="pendingPayment"
           :recharge-prefill="directRechargePrefill"
           :open-withdrawal="directWithdrawRequested"
           @payment-started="handleDirectPaymentStarted"

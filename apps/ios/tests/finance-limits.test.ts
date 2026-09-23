@@ -15,7 +15,7 @@ test('mobile finance minimums never fall below the production limits', () => {
   assert.equal(effectiveRechargeMinimum(undefined), 10)
   assert.equal(effectiveRechargeMinimum(0.01), 10)
   assert.equal(effectiveRechargeMinimum(20), 20)
-  assert.equal(resolveRechargeBuildMinimum('0.01'), 0.01)
+  assert.equal(resolveRechargeBuildMinimum('0.01'), 10)
   assert.equal(resolveRechargeBuildMinimum('0'), 10)
   assert.equal(resolveRechargeBuildMinimum('20'), 10)
   assert.equal(effectiveWithdrawalMinimum(undefined), 10)

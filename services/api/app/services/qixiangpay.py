@@ -477,6 +477,23 @@ def create_recharge_order(
                 return payment_output(existing, checkout_token_for(existing.order_no))
 
         now = utc_now()
+        duplicate = db.query(PaymentOrder).filter(
+            PaymentOrder.user_id == user_id,
+            PaymentOrder.provider == PROVIDER,
+            PaymentOrder.channel == channel,
+            PaymentOrder.amount_cny == amount,
+            PaymentOrder.credited_at.is_(None),
+            or_(
+                PaymentOrder.status.in_(("paid", "review", "late_paid_review")),
+                (PaymentOrder.status == "pending") & (PaymentOrder.expires_at > now),
+            ),
+        ).order_by(PaymentOrder.id.desc()).first()
+        if duplicate:
+            raise BizError(
+                "已有相同金额和支付方式的充值订单正在等待支付或入账，请先处理原订单或更换金额",
+                status_code=409,
+            )
+
         pending_limit = min(max(int(settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER), 1), 20)
         pending_count = db.query(func.count(PaymentOrder.id)).filter(
             PaymentOrder.user_id == user_id,

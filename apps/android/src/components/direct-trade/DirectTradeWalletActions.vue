@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { WalletInfo, RechargePaymentType } from '@/api/wallet'
+import type { WalletInfo, RechargePaymentOrder, RechargePaymentType } from '@/api/wallet'
 import { createRechargePayment } from '@/api/wallet'
 import { getBankCards, type BankCardItem } from '@/api/bank-card'
 import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/api/withdrawal'
@@ -71,6 +71,8 @@ import {
   effectiveRechargeMinimum,
   effectiveWithdrawalMinimum,
   RECHARGE_BUILD_MINIMUM_CNY,
+  rechargeMatchesActiveOrder,
+  rechargeSessionMatches,
   readStoredRechargeSession,
   type RechargePrefill,
   type StoredRechargeSession,
@@ -81,6 +83,7 @@ import { useCommerceStore } from '@/store/commerce'
 
 const props = defineProps<{
   wallet: WalletInfo | null
+  pendingPayment?: RechargePaymentOrder | null
   rechargePrefill?: RechargePrefill | null
   openWithdrawal?: boolean
 }>()
@@ -143,16 +146,6 @@ function openRecharge(prefill?: RechargePrefill | null) {
     uni.showToast({ title: t('mapayKeyPending'), icon: 'none' })
     return
   }
-  if (currentSession()) {
-    uni.showModal({
-      title: t('activeRechargeExistsTitle'),
-      content: t('activeRechargeExists'),
-      showCancel: false,
-      confirmText: t('viewRechargeOrders'),
-      success: result => { if (result.confirm) nav('/pages/wallet/recharges') },
-    })
-    return
-  }
   sheet.type = 'recharge'
   sheet.amount = prefill?.amount || ''
   sheet.paymentType = prefill?.paymentType && paymentMethods.value.some(item => item.value === prefill.paymentType)
@@ -205,6 +198,18 @@ async function submitRecharge() {
     if (!rechargeEnabled.value) uni.showToast({ title: t('mapayKeyPending'), icon: 'none' })
     return
   }
+  if (rechargeMatchesActiveOrder(props.pendingPayment, amount, sheet.paymentType)
+    || rechargeSessionMatches(currentSession(), amount, sheet.paymentType)) {
+    uni.showModal({
+      title: t('activeRechargeExistsTitle'),
+      content: t('activeRechargeExists'),
+      showCancel: true,
+      cancelText: t('checkAmountAgain'),
+      confirmText: t('viewRechargeOrders'),
+      success: result => { if (result.confirm) nav('/pages/wallet/recharges') },
+    })
+    return
+  }
   submitting.value = true
   try {
     const requestId = financialRequestId(
@@ -221,6 +226,8 @@ async function submitRecharge() {
       checkoutUrl,
       fallbackExpiresAtMs: Date.now() + Number(props.wallet?.payment_config?.checkout_ttl_seconds || DEFAULT_RECHARGE_TTL_SECONDS) * 1000,
       successNotified: false,
+      amountCny: amount,
+      paymentType: sheet.paymentType,
     }
     uni.setStorageSync(PENDING_PAYMENT_KEY, session)
     uni.removeStorageSync(RECHARGE_REQUEST_INTENT_KEY)

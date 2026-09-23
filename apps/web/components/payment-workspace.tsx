@@ -10,6 +10,7 @@ import {
   minimumRechargeAmountCny,
   minimumWithdrawalCardHours,
   rechargeBlocksNewOrder,
+  rechargeMatchesActiveOrder,
   rechargeCanCancel,
   rechargeCanPay,
   rechargeCanQuery,
@@ -204,8 +205,9 @@ export function PaymentWorkspace() {
     }
     const normalizedValue = Number(value.toFixed(2));
     if (!paymentTypes.includes(recharge.payment_type)) { setError("当前支付渠道未启用"); return; }
-    if (rechargeBlocksNewOrder(pendingPayment)) {
-      setMessage("当前充值仍在等待支付或入账，请继续支付、查询状态，或使用“更换充值金额”。");
+    if (rechargeMatchesActiveOrder(pendingPayment, normalizedValue, recharge.payment_type)) {
+      setError("");
+      setMessage("已有一笔相同金额和支付方式的充值订单正在等待支付或入账。请继续处理该订单，或修改金额/支付方式后再提交。");
       return;
     }
     const rate = Number(paymentConfig?.card_hour_rmb_rate || 0);
@@ -452,7 +454,7 @@ export function PaymentWorkspace() {
       </nav>
     </section>}
     {(rechargeEntryEnabled || withdrawalEntryEnabled) ? <div className="mobile-service-columns wallet-actions">
-      {rechargeEntryEnabled && <form ref={rechargeFormRef} className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（人民币，最低 {amount(rechargeMinimum)} 元）<input type="number" min={rechargeMinimum} max={paymentConfig?.max_amount_cny || undefined} step="0.01" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge" || rechargeBlocksNewOrder(pendingPayment)}>{busy === "recharge" ? "正在创建…" : rechargeBlocksNewOrder(pendingPayment) ? "请先处理当前充值订单" : rechargeEnabled ? "确认金额并前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>创建订单前会再次确认金额；只有服务端确认卡时到账后才显示充值成功。</p></form>}
+      {rechargeEntryEnabled && <form ref={rechargeFormRef} className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（人民币，最低 {amount(rechargeMinimum)} 元）<input type="number" min={rechargeMinimum} max={paymentConfig?.max_amount_cny || undefined} step="0.01" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge"}>{busy === "recharge" ? "正在创建…" : rechargeEnabled ? "确认金额并前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>相同金额和支付方式会提示已有订单；其他金额可以继续充值。到账仍以服务端确认为准。</p></form>}
       {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时（最低 {amount(withdrawalMinimum)} 卡时）<input type="number" min={withdrawalMinimum} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.001" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
     </div> : <div className="workspace-service-note">在线充值与提现暂未开放。已有余额、历史流水和订单状态仍可查询；如需算力服务，请前往需求页面提交信息并等待人工联系。</div>}
     <section className="mobile-record-panel wallet-ledger">

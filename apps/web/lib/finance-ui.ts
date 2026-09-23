@@ -13,6 +13,8 @@ export type RechargeStateSource = {
   order_no?: string | null;
   status?: string | null;
   credited_at?: string | null;
+  amount_cny?: number | string | null;
+  channel?: string | null;
   can_pay?: boolean | null;
   can_query?: boolean | null;
   can_cancel?: boolean | null;
@@ -102,6 +104,19 @@ export function rechargeBlocksNewOrder(order?: RechargeStateSource | null) {
   if (!order) return false;
   const state = rechargeUiState(order);
   return state === "pending" || state === "processing";
+}
+
+/** Only the same amount and payment channel count as a duplicate active recharge. */
+export function rechargeMatchesActiveOrder(
+  order: RechargeStateSource | null | undefined,
+  amountCny: number,
+  paymentType: "alipay" | "wxpay",
+) {
+  if (!rechargeBlocksNewOrder(order)) return false;
+  const existingAmount = Number(order?.amount_cny);
+  return Number.isFinite(existingAmount)
+    && Math.round(existingAmount * 100) === Math.round(amountCny * 100)
+    && String(order?.channel || "").trim().toLowerCase() === paymentType;
 }
 
 export function rechargeCanRestart(order?: RechargeStateSource | null) {

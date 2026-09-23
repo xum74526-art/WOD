@@ -117,11 +117,15 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def _new_order(self, channel: str = "alipay") -> tuple[PaymentOrder, str]:
+    def _new_order(
+        self,
+        channel: str = "alipay",
+        amount: Decimal = Decimal("0.01"),
+    ) -> tuple[PaymentOrder, str]:
         output = create_recharge_order(
             self.db,
             self.user.id,
-            Decimal("0.01"),
+            amount,
             payment_type=channel,
         )
         order = self.db.query(PaymentOrder).filter_by(order_no=output["order_no"]).one()
@@ -270,6 +274,53 @@ class QixiangPayPaymentTests(unittest.TestCase):
         )
         self.assertEqual(output["amount_cny"], 10.0)
 
+    def test_active_duplicate_blocks_only_the_same_amount_and_payment_type(self):
+        first = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("10.00"),
+            payment_type="alipay",
+            client_request_id="duplicate-scope-first-0001",
+        )
+        with self.assertRaisesRegex(BizError, "相同金额和支付方式") as duplicate:
+            create_recharge_order(
+                self.db,
+                self.user.id,
+                Decimal("10.00"),
+                payment_type="alipay",
+                client_request_id="duplicate-scope-second-0002",
+            )
+        self.assertEqual(duplicate.exception.status_code, 409)
+
+        different_amount = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("20.00"),
+            payment_type="alipay",
+            client_request_id="duplicate-scope-amount-0003",
+        )
+        different_type = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("10.00"),
+            payment_type="wxpay",
+            client_request_id="duplicate-scope-channel-0004",
+        )
+        first_order = self.db.query(PaymentOrder).filter_by(order_no=first["order_no"]).one()
+        first_order.expires_at = utc_now() - timedelta(seconds=1)
+        self.db.commit()
+        after_expiry = create_recharge_order(
+            self.db,
+            self.user.id,
+            Decimal("10.00"),
+            payment_type="alipay",
+            client_request_id="duplicate-scope-expired-0005",
+        )
+        self.assertNotEqual(first["order_no"], different_amount["order_no"])
+        self.assertNotEqual(first["order_no"], different_type["order_no"])
+        self.assertNotEqual(first["order_no"], after_expiry["order_no"])
+        self.assertEqual(self.db.query(PaymentOrder).count(), 4)
+
     def test_new_orders_are_qixiangpay_with_five_minute_deadline(self):
         order, _ = self._new_order()
         self.assertEqual(order.provider, "qixiangpay")
@@ -287,7 +338,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             user_id,
             (
                 (Decimal("40000.00"), "parallel-daily-limit-0001"),
-                (Decimal("40000.00"), "parallel-daily-limit-0002"),
+                (Decimal("40001.00"), "parallel-daily-limit-0002"),
             ),
         )
 
@@ -298,10 +349,35 @@ class QixiangPayPaymentTests(unittest.TestCase):
         try:
             orders = inspection.query(PaymentOrder).filter_by(user_id=user_id).all()
             self.assertEqual(len(orders), 1)
-            self.assertEqual(
+            self.assertIn(
                 sum((order.amount_cny for order in orders), Decimal("0")),
-                Decimal("40000.00"),
+                (Decimal("40000.00"), Decimal("40001.00")),
             )
+        finally:
+            inspection.close()
+
+    def test_concurrent_duplicate_recharge_creates_only_one_order(self):
+        settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 5
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
+        Session, user_id = self._file_sqlite_sessions()
+
+        results = self._run_parallel_recharge_creates(
+            Session,
+            user_id,
+            (
+                (Decimal("10.00"), "parallel-duplicate-order-0001"),
+                (Decimal("10.00"), "parallel-duplicate-order-0002"),
+            ),
+        )
+
+        self.assertEqual(sorted(kind for kind, _ in results), ["error", "ok"])
+        error = next(payload for kind, payload in results if kind == "error")
+        self.assertEqual(error["status_code"], 409)
+        inspection = Session()
+        try:
+            orders = inspection.query(PaymentOrder).filter_by(user_id=user_id).all()
+            self.assertEqual(len(orders), 1)
+            self.assertEqual(orders[0].amount_cny, Decimal("10.00"))
         finally:
             inspection.close()
 
@@ -315,7 +391,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             user_id,
             (
                 (Decimal("10.00"), "parallel-pending-limit-0001"),
-                (Decimal("10.00"), "parallel-pending-limit-0002"),
+                (Decimal("11.00"), "parallel-pending-limit-0002"),
             ),
         )
 
@@ -568,9 +644,12 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "money": "0.02",
             "param": "different-param",
         }
-        for field, value in mutations.items():
+        for index, (field, value) in enumerate(mutations.items()):
             with self.subTest(field=field):
-                order, _ = self._new_order("alipay")
+                order, _ = self._new_order(
+                    "alipay",
+                    Decimal("0.10") + (Decimal(index) / Decimal("100")),
+                )
                 params = self._callback(order)
                 params[field] = value
                 params["sign"] = sign_params(params)
@@ -605,7 +684,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.assertEqual(late_result["status"], "late_paid_review")
         self.assertIsNone(late_result["credited_at"])
 
-        unknown, _ = self._new_order()
+        unknown, _ = self._new_order(amount=Decimal("0.02"))
         with patch(
             "app.services.qixiangpay.httpx.get",
             return_value=self._query_response(unknown, status=7),
@@ -727,7 +806,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             0,
         )
 
-        active, _ = self._new_order()
+        active, _ = self._new_order(amount=Decimal("0.02"))
         with patch(
             "app.services.qixiangpay.httpx.get",
             return_value=self._query_response(active, status=0),
@@ -736,7 +815,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
                 cancel_recharge_order(self.db, active)
         self.assertEqual(active_error.exception.status_code, 409)
 
-        paid, _ = self._new_order()
+        paid, _ = self._new_order(amount=Decimal("0.03"))
         self.assertTrue(handle_notification(self.db, self._callback(paid)))
         self.db.refresh(paid)
         with patch("app.services.qixiangpay.httpx.get") as unnecessary_query:
@@ -746,14 +825,16 @@ class QixiangPayPaymentTests(unittest.TestCase):
         unnecessary_query.assert_not_called()
 
     def test_create_rejects_missing_insecure_or_unapproved_payurl(self):
-        for payurl in (
+        for index, payurl in enumerate((
             None,
             "http://cashier.example.test/pay/unsafe",
             "https://evil.example.test/pay/lookalike",
             "https://cashier.example.test:444/pay/wrong-port",
-        ):
+        )):
             with self.subTest(payurl=payurl):
-                order, token = self._new_order()
+                order, token = self._new_order(
+                    amount=Decimal("0.10") + (Decimal(index) / Decimal("100")),
+                )
                 payload = {
                     "code": 1,
                     "msg": "ok",
@@ -783,7 +864,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
                 query_provider_and_reconcile(self.db, missing)
         self.assertEqual(missing_error.exception.status_code, 502)
 
-        conflict, _ = self._new_order()
+        conflict, _ = self._new_order(amount=Decimal("0.02"))
         conflict.provider_trade_no = "QX-ORIGINAL"
         self.db.commit()
         with patch(
@@ -875,7 +956,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.db.refresh(order)
         self.assertEqual(order.provider_status, CREATE_UNKNOWN)
 
-        second, _ = self._new_order()
+        second, _ = self._new_order(amount=Decimal("0.02"))
         with patch("app.services.qixiangpay.httpx.get", return_value=oversized):
             with self.assertRaises(BizError) as query_error:
                 query_provider_and_reconcile(self.db, second)

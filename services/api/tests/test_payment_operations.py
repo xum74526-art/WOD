@@ -135,11 +135,16 @@ class PaymentOperationsTests(unittest.TestCase):
         self.engine.dispose()
         self.tempdir.cleanup()
 
-    def _new_order(self, *, request_id: str | None = None) -> PaymentOrder:
+    def _new_order(
+        self,
+        *,
+        request_id: str | None = None,
+        amount_cny: Decimal = Decimal("10.02"),
+    ) -> PaymentOrder:
         output = create_recharge_order(
             self.db,
             self.user_id,
-            Decimal("10.02"),
+            amount_cny,
             payment_type="alipay",
             client_request_id=request_id,
         )
@@ -588,7 +593,7 @@ class PaymentOperationsTests(unittest.TestCase):
 
     def test_collection_kill_switch_preserves_history_query_and_refund(self):
         query_order = self._new_order()
-        refund_order = self._new_order()
+        refund_order = self._new_order(amount_cny=Decimal("11.02"))
         refund_amount = self._mark_paid(refund_order)
 
         settings.PAYMENT_SERVICE_ENABLED = False
@@ -637,7 +642,7 @@ class PaymentOperationsTests(unittest.TestCase):
 
     def test_provider_switch_controls_callback_but_collection_switch_does_not(self):
         accepted_order = self._new_order()
-        disabled_order = self._new_order()
+        disabled_order = self._new_order(amount_cny=Decimal("11.02"))
         accepted_callback = self._success_callback(accepted_order)
         disabled_callback = self._success_callback(disabled_order)
 

@@ -44,6 +44,12 @@ test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
   assert.doesNotMatch(locale, /码支付订单号|MaPay order|MaPay has no merchant/)
 })
 
+test('an existing recharge blocks only the same amount and payment channel', () => {
+  assert.match(walletActions, /rechargeMatchesActiveOrder\(props\.pendingPayment, amount, sheet\.paymentType\)/)
+  assert.match(walletActions, /rechargeSessionMatches\(currentSession\(\), amount, sheet\.paymentType\)/)
+  assert.doesNotMatch(walletActions, /if \(currentSession\(\)\) \{/)
+})
+
 test('wallet hides all new recharge and withdrawal entry points', () => {
   assert.doesNotMatch(walletPage, /0\.01/)
   assert.doesNotMatch(walletPage, /createRechargePayment|createWithdrawal|openRecharge|openWithdraw|payAndRecharge/)

@@ -1450,7 +1450,7 @@ const ZH: Record<string, string> = {
   cancelBeforeRestartRecharge: '请先取消当前订单或等待订单结束',
   paymentQueryUnavailable: '该订单当前不可查询',
   activeRechargeExistsTitle: '已有待支付订单',
-  activeRechargeExists: '当前订单仍在支付时限内。可继续支付；如金额填写错误，请在订单卡片选择“更换金额”，旧订单会保留在充值订单中。',
+  activeRechargeExists: '已有一笔相同金额和支付方式的充值订单正在等待支付或入账。请继续处理该订单，或修改金额/支付方式后再提交。',
   confirmRechargeAmountTitle: '确认充值金额',
   confirmRechargeAmountContent: '充值 ¥{amount}，预计到账 {cardHours} 卡时。请确认金额无误后再进入支付。',
   checkAmountAgain: '检查金额',
@@ -3324,7 +3324,7 @@ const EN: Record<string, string> = {
   cancelBeforeRestartRecharge: 'Cancel the current order or wait until it ends before recharging again.',
   paymentQueryUnavailable: 'This order cannot be queried now.',
   activeRechargeExistsTitle: 'Payment Already Pending',
-  activeRechargeExists: 'This order is still within its payment window. Continue payment, or use Change Amount on the order card if the amount is wrong. The old order remains in Recharge Orders.',
+  activeRechargeExists: 'A recharge with the same amount and payment method is already awaiting payment or credit. Continue that order, or change the amount or payment method before submitting.',
   confirmRechargeAmountTitle: 'Confirm Recharge Amount',
   confirmRechargeAmountContent: 'Recharge ¥{amount} for an estimated {cardHours} CH. Confirm the amount before opening checkout.',
   checkAmountAgain: 'Review Amount',
@@ -3843,6 +3843,7 @@ const EXTRA_EN: Record<string, string> = {
   '商家入驻申请未通过': 'Merchant application was not approved',
   '请联系客服核对资料后重新提交': 'Contact support to verify your details before resubmitting.',
   '充值服务尚未接入': 'Top-up service is not connected yet',
+  '已有相同金额和支付方式的充值订单正在等待支付或入账，请先处理原订单或更换金额': 'A recharge with the same amount and payment method is already awaiting payment or credit. Handle the existing order or choose another amount.',
   '提现服务尚未接入': 'Withdrawal service is not connected yet',
   // Older API responses used this shorter sentence. Translate it
   // as one unit so `tr()` never produces mixed copy such as

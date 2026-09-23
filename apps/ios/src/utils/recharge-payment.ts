@@ -31,6 +31,8 @@ export interface StoredRechargeSession {
   checkoutUrl: string
   fallbackExpiresAtMs: number | null
   successNotified: boolean
+  amountCny: number | null
+  paymentType: RechargePaymentChannel | null
 }
 
 export type RechargePaymentChannel = 'alipay' | 'wxpay'
@@ -54,24 +56,13 @@ export interface RechargeHistoryPresentation {
 export const DEFAULT_RECHARGE_TTL_SECONDS = 5 * 60
 export const MINIMUM_RECHARGE_CNY = 10
 export const MINIMUM_WITHDRAW_CARD_HOURS = 10
-const ABSOLUTE_MINIMUM_RECHARGE_CNY = 0.01
 
-export function resolveRechargeBuildMinimum(value: unknown): number {
-  const amount = Number(value)
-  if (!Number.isFinite(amount) || amount < ABSOLUTE_MINIMUM_RECHARGE_CNY || amount > MINIMUM_RECHARGE_CNY) {
-    return MINIMUM_RECHARGE_CNY
-  }
-  return Math.round(amount * 100) / 100
+export function resolveRechargeBuildMinimum(_value: unknown): number {
+  return MINIMUM_RECHARGE_CNY
 }
 
-/**
- * Production stays at the conservative 10 CNY floor. A signed test build may
- * explicitly lower that floor, while the server-provided minimum remains
- * authoritative and can always raise it again.
- */
-export const RECHARGE_BUILD_MINIMUM_CNY = resolveRechargeBuildMinimum(
-  import.meta.env?.VITE_RECHARGE_MIN_AMOUNT_CNY,
-)
+/** Production clients never lower the formal 10 CNY recharge floor. */
+export const RECHARGE_BUILD_MINIMUM_CNY = MINIMUM_RECHARGE_CNY
 
 function configuredMinimum(value: unknown, floor: number): number {
   const amount = Number(value)
@@ -295,6 +286,8 @@ export function readStoredRechargeSession(value: unknown): StoredRechargeSession
       checkoutUrl: '',
       fallbackExpiresAtMs: null,
       successNotified: false,
+      amountCny: null,
+      paymentType: null,
     }
   }
   if (!value || typeof value !== 'object') return null
@@ -309,5 +302,36 @@ export function readStoredRechargeSession(value: unknown): StoredRechargeSession
       ? Number(raw.fallbackExpiresAtMs)
       : null,
     successNotified: raw.successNotified === true,
+    amountCny: raw.amountCny != null && Number.isFinite(Number(raw.amountCny)) && Number(raw.amountCny) > 0
+      ? Math.round(Number(raw.amountCny) * 100) / 100
+      : null,
+    paymentType: normalizeRechargeChannel(raw.paymentType),
   }
+}
+
+/** Match only the still-live checkout represented by this device's recovery session. */
+export function rechargeSessionMatches(
+  session: StoredRechargeSession | null | undefined,
+  amountCny: number,
+  paymentType: RechargePaymentChannel,
+  nowMs = Date.now(),
+): boolean {
+  if (!session || session.amountCny === null || session.paymentType !== paymentType) return false
+  if (session.fallbackExpiresAtMs !== null && session.fallbackExpiresAtMs <= nowMs) return false
+  return Math.round(session.amountCny * 100) === Math.round(amountCny * 100)
+}
+
+/** A duplicate is the same amount and channel while the server order is still active. */
+export function rechargeMatchesActiveOrder(
+  order: RechargeRestartSource | null | undefined,
+  amountCny: number,
+  paymentType: RechargePaymentChannel,
+): boolean {
+  if (!order) return false
+  const state = rechargeUiState(order, paymentRemainingMs(order))
+  if (state !== 'pending' && state !== 'processing') return false
+  const existingAmount = Number(order.amount_cny)
+  return Number.isFinite(existingAmount)
+    && Math.round(existingAmount * 100) === Math.round(amountCny * 100)
+    && normalizeRechargeChannel(order.channel) === paymentType
 }

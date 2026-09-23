@@ -9,6 +9,8 @@ import {
   paymentRemainingMs,
   readStoredRechargeSession,
   readRechargePrefillQuery,
+  rechargeMatchesActiveOrder,
+  rechargeSessionMatches,
   rechargeCanCancel,
   rechargeCanQuery,
   rechargeCanRestart,
@@ -163,6 +165,8 @@ test('legacy stored order number is upgraded without losing recovery', () => {
     checkoutUrl: '',
     fallbackExpiresAtMs: null,
     successNotified: false,
+    amountCny: null,
+    paymentType: null,
   })
   assert.deepEqual(readStoredRechargeSession({ version: 1, orderNo: 'WODR456' }), {
     version: 1,
@@ -170,5 +174,27 @@ test('legacy stored order number is upgraded without losing recovery', () => {
     checkoutUrl: '',
     fallbackExpiresAtMs: null,
     successNotified: false,
+    amountCny: null,
+    paymentType: null,
   })
+})
+
+test('only a live recharge with the same amount and channel is a duplicate', () => {
+  const session = readStoredRechargeSession({
+    version: 1,
+    orderNo: 'WODR789',
+    amountCny: 100,
+    paymentType: 'alipay',
+    fallbackExpiresAtMs: 20_000,
+  })
+  assert.equal(rechargeSessionMatches(session, 100, 'alipay', 10_000), true)
+  assert.equal(rechargeSessionMatches(session, 50, 'alipay', 10_000), false)
+  assert.equal(rechargeSessionMatches(session, 100, 'wxpay', 10_000), false)
+  assert.equal(rechargeSessionMatches(session, 100, 'alipay', 20_000), false)
+
+  const active = { status: 'pending', amount_cny: '100.00', channel: 'alipay' }
+  assert.equal(rechargeMatchesActiveOrder(active, 100, 'alipay'), true)
+  assert.equal(rechargeMatchesActiveOrder(active, 50, 'alipay'), false)
+  assert.equal(rechargeMatchesActiveOrder(active, 100, 'wxpay'), false)
+  assert.equal(rechargeMatchesActiveOrder({ ...active, status: 'failed' }, 100, 'alipay'), false)
 })
