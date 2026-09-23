@@ -478,7 +478,7 @@ const PROTECTED_LEGAL_VALUES = [LEGAL_OPERATOR, LEGAL_ADDRESS, LEGAL_ICP_FILING]
 function toTraditionalLegalText(value: string): string {
   let converted = toTraditionalChinese(value)
   for (const legalValue of PROTECTED_LEGAL_VALUES) {
-    converted = converted.replaceAll(toTraditionalChinese(legalValue), legalValue)
+    converted = converted.split(toTraditionalChinese(legalValue)).join(legalValue)
   }
   return converted
 }

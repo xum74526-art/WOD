@@ -7,6 +7,8 @@ import { localizeInternalBrandText, localizePersonName } from '../src/utils/loca
 const indexSource = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
 const detailSource = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
 const localeSource = readFileSync(new URL('../src/store/i18n.ts', import.meta.url), 'utf8')
+const contentLocalizationSource = readFileSync(new URL('../src/utils/localize-content.ts', import.meta.url), 'utf8')
+const legalDocumentsSource = readFileSync(new URL('../src/config/legal-documents.ts', import.meta.url), 'utf8')
 
 test('community categories and empty states follow the active language', () => {
   assert.match(indexSource, /:items="\[t\('recommend'\), t\('follow'\), t\('latest'\)\]"/)
@@ -47,4 +49,9 @@ test('first-party market posts remove mixed Chinese from English display copy', 
     '北美用戶原文',
     'user-authored content must remain untouched',
   )
+})
+
+test('App localization avoids String.replaceAll for older DCloud service runtimes', () => {
+  assert.doesNotMatch(contentLocalizationSource, /\.replaceAll\(/)
+  assert.doesNotMatch(legalDocumentsSource, /\.replaceAll\(/)
 })

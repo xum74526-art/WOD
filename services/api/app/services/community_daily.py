@@ -944,6 +944,145 @@ def _choose_candidates(
     return selected
 
 
+def _internal_template_index(batch: str, index: int, template_count: int) -> int:
+    """Rotate first-party editorial formats from day to day."""
+
+    try:
+        day_ordinal = datetime.strptime(batch, "%Y-%m-%d").date().toordinal()
+    except ValueError:
+        day_ordinal = sum(ord(value) for value in batch)
+    return (day_ordinal + index) % max(template_count, 1)
+
+
+def _internal_product_copy(product: Product, batch: str, index: int) -> tuple[str, str]:
+    """Build varied, factual first-party copy from the current product record."""
+
+    name = str(getattr(product, "name", None) or getattr(product, "gpu_model", None) or "GPU").strip()
+    region_name = getattr(product, "region_name", None)
+    region_code = getattr(product, "region_code", None)
+    region_zh = str(region_name or "平台").strip()
+    region_en = _internal_region_en(region_name, region_code)
+    memory = str(getattr(product, "memory", None) or "未披露").strip()
+    memory_en = memory if memory != "未披露" else "not listed"
+    cuda = str(getattr(product, "cuda", None) or "未披露").strip()
+    cuda_en = cuda if cuda != "未披露" else "not listed"
+    price_value = float(getattr(product, "price", 0) or 0)
+    price = f"{price_value:.3f}"
+    stock = max(int(getattr(product, "stock", 0) or 0), 0)
+    six_hour_cost = f"{price_value * 6:.3f}"
+    twelve_hour_cost = f"{price_value * 12:.3f}"
+    day_cost = f"{price_value * 24:.3f}"
+    try:
+        parsed_day = datetime.strptime(batch, "%Y-%m-%d")
+        date_zh = f"{parsed_day.month}月{parsed_day.day}日"
+        date_en = f"{parsed_day.strftime('%b')} {parsed_day.day}"
+    except ValueError:
+        date_zh = batch
+        date_en = batch
+    unit_en = "unit" if stock == 1 else "units"
+
+    templates = (
+        (
+            f"{name}｜{date_zh}行情快报",
+            f"{region_zh}当前参考价为 {price} 卡时/GPU小时，站内可用量为 {stock} 台。数据来自KAI星算当日商品与行情记录，下单前请以确认页为准。",
+            f"{name} | {date_en} Market Brief",
+            f"The current reference quote in {region_en} is {price} CH per GPU-hour, with {stock} {unit_en} available. Data comes from today's KAI Compute Market records; confirm the final checkout details before ordering.",
+        ),
+        (
+            f"{name}｜库存与可用量观察",
+            f"当前站内可用量为 {stock} 台，参考价 {price} 卡时/GPU小时，区域为{region_zh}。库存会随订单和行情同步变化，提交前建议再次刷新商品详情。",
+            f"{name} | Capacity Watch",
+            f"Current platform availability is {stock} {unit_en} at a reference quote of {price} CH per GPU-hour in {region_en}. Availability changes with orders and market updates, so refresh the product page before submitting.",
+        ),
+        (
+            f"{name}｜24小时用量预算",
+            f"按当前参考价测算，1 台连续使用 24 小时约需 {day_cost} 卡时；实际金额会按所选时长和数量计算。该示例仅用于预算，不构成价格承诺。",
+            f"{name} | 24-Hour Usage Budget",
+            f"At the current reference quote, one GPU for 24 hours is approximately {day_cost} CH. The final amount depends on the selected duration and quantity; this example is for budgeting only and is not a price commitment.",
+        ),
+        (
+            f"{name}｜短时任务成本参考",
+            f"按当前参考价，1 台使用 6 小时约为 {six_hour_cost} 卡时，使用 12 小时约为 {twelve_hour_cost} 卡时。开始任务前请同时核对显存、CUDA 和预计运行时间。",
+            f"{name} | Short-Run Cost Guide",
+            f"At the current reference quote, one GPU is approximately {six_hour_cost} CH for 6 hours or {twelve_hour_cost} CH for 12 hours. Check VRAM, CUDA, and expected runtime before starting the workload.",
+        ),
+        (
+            f"{name}｜区域资源提示",
+            f"该商品当前展示区域为{region_zh}，参考价 {price} 卡时/GPU小时，可用量 {stock} 台。选择区域时还应结合网络时延、数据位置和交付安排。",
+            f"{name} | Region Planning Note",
+            f"This listing is currently shown in {region_en} at {price} CH per GPU-hour with {stock} {unit_en} available. Consider network latency, data location, and delivery arrangements when choosing a region.",
+        ),
+        (
+            f"{name}｜配置核对清单",
+            f"当前记录的显存为 {memory}，CUDA 为 {cuda}。下单前请对照模型大小、框架版本和依赖环境，避免因配置不匹配产生闲置时间。",
+            f"{name} | Configuration Checklist",
+            f"The current listing records {memory_en} of memory and CUDA {cuda_en}. Before ordering, compare the model size, framework version, and dependencies to avoid idle time caused by configuration mismatches.",
+        ),
+        (
+            f"{name}｜下单前检查",
+            f"建议依次确认区域{region_zh}、可用量 {stock} 台、参考价 {price} 卡时/GPU小时，以及所需时长和数量。确认页会给出本次订单的最终计算结果。",
+            f"{name} | Pre-Order Check",
+            f"Review the region ({region_en}), availability ({stock} {unit_en}), reference quote ({price} CH per GPU-hour), duration, and quantity. The confirmation screen shows the final calculation for the order.",
+        ),
+        (
+            f"{name}｜算力使用规划",
+            f"如果任务时长尚未确定，可先用 6 小时预算 {six_hour_cost} 卡时和 24 小时预算 {day_cost} 卡时进行区间估算，再根据实际任务调整。",
+            f"{name} | Compute Usage Planning",
+            f"If the runtime is uncertain, use the 6-hour estimate of {six_hour_cost} CH and the 24-hour estimate of {day_cost} CH as a planning range, then adjust it to the actual workload.",
+        ),
+        (
+            f"{name}｜报价说明",
+            f"当前 {price} 卡时/GPU小时为KAI星算站内参考价，记录时间为{date_zh}。价格、库存和交付状态可能变化，最终信息以订单确认页为准。",
+            f"{name} | Quote Explanation",
+            f"The current KAI Compute Market reference quote is {price} CH per GPU-hour as of {date_en}. Price, availability, and fulfillment status may change; the order confirmation screen is authoritative.",
+        ),
+        (
+            f"{name}｜容量选择建议",
+            f"当前可用量为 {stock} 台。多卡任务除数量外，还应确认通信方式、任务并行策略和所需时长；平台会按实际选择的 GPU 数量与小时数计算。",
+            f"{name} | Capacity Selection Guide",
+            f"Current availability is {stock} {unit_en}. For multi-GPU workloads, also confirm communication, parallelism, and runtime; the platform calculates the amount from the selected GPU quantity and hours.",
+        ),
+    )
+    title_zh, body_zh, title_en, body_en = templates[
+        _internal_template_index(batch, index, len(templates))
+    ]
+    return f"{title_zh}\n\n{body_zh}", f"{title_en}\n\n{body_en}"
+
+
+INTERNAL_COMPUTE_TIPS = (
+    (
+        "训练任务启动检查",
+        "开始训练前先确认显存、CUDA、框架版本和预计运行时长，可减少环境不匹配与闲置成本。",
+        "Training Startup Check",
+        "Before training, confirm VRAM, CUDA, the framework version, and expected runtime to reduce environment mismatches and idle cost.",
+    ),
+    (
+        "推理任务容量提示",
+        "部署推理服务前，建议先估算峰值并发、显存占用和响应时延，再选择 GPU 数量与使用时长。",
+        "Inference Capacity Tip",
+        "Before deploying inference, estimate peak concurrency, memory use, and response latency, then choose the GPU quantity and duration.",
+    ),
+    (
+        "算力预算小贴士",
+        "预算时请同时计算单价、GPU 数量和运行小时数，并为测试、重试和数据准备预留余量。",
+        "Compute Budget Tip",
+        "Include the unit quote, GPU quantity, and runtime in the budget, with room for testing, retries, and data preparation.",
+    ),
+    (
+        "多卡任务准备事项",
+        "多卡任务除了显存总量，还应核对互联方式、并行策略和框架支持情况，避免扩容后效率不升反降。",
+        "Multi-GPU Preparation",
+        "For multi-GPU workloads, check interconnects, parallelism, and framework support in addition to total memory so scaling remains efficient.",
+    ),
+    (
+        "交付信息安全提醒",
+        "请只通过平台约定流程接收交付信息，不要在社区、评论或公开页面发布密码、密钥和身份资料。",
+        "Delivery Security Reminder",
+        "Receive delivery details only through the platform workflow, and never post passwords, keys, or identity data in community or public pages.",
+    ),
+)
+
+
 def _internal_candidates(db: Session, batch: str, count: int, start_index: int = 0) -> list[Candidate]:
     products = db.query(Product).filter(Product.status == "on").order_by(Product.id.desc()).limit(max(20, count * 3)).all()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -952,17 +1091,14 @@ def _internal_candidates(db: Session, batch: str, count: int, start_index: int =
         index = start_index + offset
         product = products[index % len(products)] if products else None
         if product:
-            name = product.name
-            region = product.region_name or "平台"
-            region_en = _internal_region_en(product.region_name, product.region_code)
-            price = f"{float(product.price):.3f}"
-            stock = product.stock or 0
-            content_zh = f"{name} 今日算力观察\n\n{region}当前参考价为 {price} 卡时/h，可租 {stock} 台。价格和库存来自KAI星算最新站内行情，实际下单前请再次确认。"
-            content_en = f"{name} Daily Compute Snapshot\n\nThe current reference price in {region_en} is {price} CH/h, with {stock} units available. Price and availability come from the latest KAI Compute Market data; confirm again before ordering."
-            title = f"{name} {batch} compute snapshot {index}"
+            content_zh, content_en = _internal_product_copy(product, batch, index)
+            title = f"{product.name} {batch} first-party market note {index}"
         else:
-            content_zh = f"今日算力使用提示 #{index + 1}\n\n开始训练前先确认显存、CUDA 版本和预计运行时长，可减少环境不匹配和闲置成本。"
-            content_en = f"Daily Compute Tip #{index + 1}\n\nCheck VRAM, the CUDA version, and expected runtime before training to reduce environment mismatches and idle cost."
+            tip = INTERNAL_COMPUTE_TIPS[
+                _internal_template_index(batch, index, len(INTERNAL_COMPUTE_TIPS))
+            ]
+            content_zh = f"{tip[0]}\n\n{tip[1]}"
+            content_en = f"{tip[2]}\n\n{tip[3]}"
             title = f"KAI Compute Market tip {batch} {index}"
         result.append(Candidate(
             source_key=INTERNAL_SOURCE_KEY,
@@ -1045,7 +1181,15 @@ def generate_daily_posts(count: int | None = None) -> int:
         branded_internal_posts = _backfill_internal_branding(db)
         if removed_games or localized_videos or branded_internal_posts:
             db.commit()
-        existing_count = db.query(Post).filter(Post.publish_batch == batch).count()
+        aggregated_publication_enabled = settings.COMMUNITY_AGGREGATED_CONTENT_ENABLED
+        existing_query = db.query(Post).filter(Post.publish_batch == batch)
+        if not aggregated_publication_enabled:
+            # App-store releases intentionally hide third-party aggregation.
+            # Hidden rows must not consume the daily public-content quota;
+            # otherwise users only see stale fallback posts even though the
+            # scheduler reports a full batch.
+            existing_query = existing_query.filter(Post.origin == "internal")
+        existing_count = existing_query.count()
 
         run = ContentIngestRun(batch=batch, target_count=target, status="running")
         db.add(run)
@@ -1053,12 +1197,18 @@ def generate_daily_posts(count: int | None = None) -> int:
         db.refresh(run)
         run_id = run.id
 
-        video_target = max(0, min(settings.COMMUNITY_DAILY_VIDEO_TARGET, target))
-        existing_video_count = db.query(Post).filter(
-            Post.publish_batch == batch,
-            Post.content_type == "video",
-            Post.video_provider.in_(PLAYABLE_VIDEO_PROVIDERS),
-        ).count()
+        video_target = (
+            max(0, min(settings.COMMUNITY_DAILY_VIDEO_TARGET, target))
+            if aggregated_publication_enabled
+            else 0
+        )
+        existing_video_count = 0
+        if video_target:
+            existing_video_count = db.query(Post).filter(
+                Post.publish_batch == batch,
+                Post.content_type == "video",
+                Post.video_provider.in_(PLAYABLE_VIDEO_PROVIDERS),
+            ).count()
         missing_total = max(0, target - existing_count)
         missing_videos = max(0, video_target - existing_video_count)
         if missing_total == 0 and missing_videos == 0:
@@ -1073,7 +1223,7 @@ def generate_daily_posts(count: int | None = None) -> int:
 
         candidates: list[Candidate] = []
         errors: list[str] = []
-        if settings.COMMUNITY_ONLINE_ENABLED:
+        if settings.COMMUNITY_ONLINE_ENABLED and aggregated_publication_enabled:
             enabled_specs = [
                 SOURCE_BY_KEY[key] for key, row in source_rows.items()
                 if key in SOURCE_BY_KEY and row.enabled and row.rights_status == "allowed"
@@ -1129,12 +1279,17 @@ def generate_daily_posts(count: int | None = None) -> int:
 
         db.flush()
         created = len(selected) + max(0, remaining)
-        final_count = db.query(Post).filter(Post.publish_batch == batch).count()
-        final_video_count = db.query(Post).filter(
-            Post.publish_batch == batch,
-            Post.content_type == "video",
-            Post.video_provider.in_(PLAYABLE_VIDEO_PROVIDERS),
-        ).count()
+        final_query = db.query(Post).filter(Post.publish_batch == batch)
+        if not aggregated_publication_enabled:
+            final_query = final_query.filter(Post.origin == "internal")
+        final_count = final_query.count()
+        final_video_count = 0
+        if video_target:
+            final_video_count = db.query(Post).filter(
+                Post.publish_batch == batch,
+                Post.content_type == "video",
+                Post.video_provider.in_(PLAYABLE_VIDEO_PROVIDERS),
+            ).count()
         run.candidate_count = len(candidates)
         run.published_count = created
         run.skipped_count = skipped

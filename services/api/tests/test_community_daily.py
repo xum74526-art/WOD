@@ -69,6 +69,8 @@ class CommunityDailyTests(unittest.TestCase):
             name="RTX4090 24GB",
             region_name="北美",
             region_code="north_america",
+            memory="24GB",
+            cuda="12.4",
             price=5.04,
             stock=10,
         )
@@ -78,9 +80,43 @@ class CommunityDailyTests(unittest.TestCase):
         candidate = _internal_candidates(db, "2026-09-22", 1)[0]
 
         self.assertIn("North America", candidate.content_en)
-        self.assertIn("5.040 CH/h", candidate.content_en)
+        self.assertIn("5.040 CH per GPU-hour", candidate.content_en)
         self.assertNotIn("北美", candidate.content_en)
         self.assertNotRegex(candidate.content_en, r"[\u3400-\u9fff]")
+
+    def test_internal_market_posts_rotate_distinct_first_party_templates(self):
+        product = SimpleNamespace(
+            name="RTX 6000 Ada 48GB",
+            region_name="华东",
+            region_code="east_china",
+            memory="48GB",
+            cuda="12.4",
+            price=9.924,
+            stock=2,
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [product]
+
+        candidates = _internal_candidates(db, "2026-09-23", 10)
+        chinese_titles = [candidate.content_zh.splitlines()[0] for candidate in candidates]
+        english_titles = [candidate.content_en.splitlines()[0] for candidate in candidates]
+
+        self.assertEqual(len(set(chinese_titles)), 10)
+        self.assertEqual(len(set(english_titles)), 10)
+        self.assertTrue(all(candidate.origin == "internal" for candidate in candidates))
+        self.assertTrue(all(candidate.source_key == "wod-market" for candidate in candidates))
+        self.assertNotRegex("\n".join(candidate.content_en for candidate in candidates), r"[\u3400-\u9fff]")
+        self.assertIn("9.924", "\n".join(candidate.content_zh for candidate in candidates))
+
+    def test_internal_tips_are_varied_when_no_products_are_available(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+        candidates = _internal_candidates(db, "2026-09-23", 5)
+
+        self.assertEqual(len({candidate.content_zh for candidate in candidates}), 5)
+        self.assertEqual(len({candidate.content_en for candidate in candidates}), 5)
+        self.assertNotRegex("\n".join(candidate.content_en for candidate in candidates), r"[\u3400-\u9fff]")
 
     def test_internal_region_fails_closed_without_leaking_unknown_chinese(self):
         self.assertEqual(_internal_region_en("北美", None), "North America")

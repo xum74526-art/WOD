@@ -294,7 +294,11 @@ export function localizeInternalBrandText(
     .replace(/Compute Star Map(?:\s+market)?/gi, 'KAI Star Market')
     .replace(/KAI星算\s+market/gi, 'KAI Star Market')
     .replace(/KAI星算/g, 'KAI')
-  for (const [source, target] of INTERNAL_REGION_EN) localized = localized.replaceAll(source, target)
+  // DCloud's App service runtime can lag the system WebView's JavaScript
+  // feature set. Keep this path compatible with runtimes that do not expose
+  // String.prototype.replaceAll; otherwise English first-party posts abort
+  // the whole community render after the API response arrives.
+  for (const [source, target] of INTERNAL_REGION_EN) localized = localized.split(source).join(target)
   return localized
 }
 
