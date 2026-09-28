@@ -2,6 +2,18 @@
   <view class="page">
     <AppNavBar :title="t('coupons')" />
     <view class="shell">
+      <view class="card redeem-card">
+        <view class="redeem-copy">
+          <text class="redeem-title">{{ t('couponRedeemTitle') }}</text>
+          <text class="redeem-hint">{{ t('couponRedeemHint') }}</text>
+        </view>
+        <view class="redeem-form">
+          <input v-model="redeemCode" class="redeem-input" :placeholder="t('couponCodePlaceholder')" maxlength="48" confirm-type="done" @confirm="submitRedeem" />
+          <view class="redeem-button" :class="{ disabled: redeeming || !redeemCode.trim() }" role="button" @tap="submitRedeem">
+            {{ t(redeeming ? 'couponRedeeming' : 'couponRedeem') }}
+          </view>
+        </view>
+      </view>
       <view class="seg-wrap">
         <SegmentedControl :items="tabLabels" :model-value="tab" @update:model-value="onTab" />
       </view>
@@ -47,7 +59,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getCoupons, type CouponItem, type CouponStatus } from '@/api/coupon'
+import { getCoupons, redeemCoupon, type CouponItem, type CouponStatus } from '@/api/coupon'
 import { formatDate, fmtCardHours } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
@@ -59,6 +71,8 @@ const list = ref<CouponItem[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const tab = ref(0)
+const redeemCode = ref('')
+const redeeming = ref(false)
 const STATUS: CouponStatus[] = ['available', 'used', 'expired']
 const tabLabels = computed(() => [t('couponAvailable'), t('couponUsed'), t('couponExpired')])
 const emptyText = computed(() => [
@@ -67,6 +81,10 @@ const emptyText = computed(() => [
   t('couponEmptyExpired'),
 ][tab.value])
 
+function couponError(error: unknown, fallback: string) {
+  return localizedErrorMessage(error, fallback)
+}
+
 async function load() {
   loading.value = true
   loadError.value = ''
@@ -74,12 +92,29 @@ async function load() {
     list.value = await getCoupons(STATUS[tab.value])
   } catch (error) {
     list.value = []
-    loadError.value = localizedErrorMessage(error, 'couponLoadFailedHint')
+    loadError.value = couponError(error, 'couponLoadFailedHint')
   }
   finally { loading.value = false }
 }
 onShow(() => load())
 function onTab(v: number) { tab.value = v; load() }
+
+async function submitRedeem() {
+  const code = redeemCode.value.trim()
+  if (!code || redeeming.value) return
+  redeeming.value = true
+  try {
+    await redeemCoupon(code)
+    redeemCode.value = ''
+    tab.value = 0
+    await load()
+    uni.showToast({ title: t('couponRedeemSuccess'), icon: 'success' })
+  } catch (error) {
+    uni.showToast({ title: couponError(error, 'couponRedeemFailed'), icon: 'none' })
+  } finally {
+    redeeming.value = false
+  }
+}
 
 function statusText(status: CouponStatus) {
   return t(status === 'available' ? 'couponAvailable' : status === 'used' ? 'couponUsed' : 'couponExpired')
@@ -97,6 +132,14 @@ function couponDateText(coupon: CouponItem) {
 .shell { padding: 0 32rpx calc(132rpx + var(--safe-bottom)); }
 .seg-wrap { margin: 16rpx 0 24rpx; }
 .card { background: var(--card); border-radius: var(--radius); border: 1rpx solid var(--border); }
+.redeem-card { margin: 16rpx 0 24rpx; padding: 26rpx; }
+.redeem-copy { display: flex; flex-direction: column; gap: 6rpx; }
+.redeem-title { color: var(--text); font-size: 27rpx; font-weight: 800; }
+.redeem-hint { color: var(--text-sub); font-size: 21rpx; line-height: 1.5; }
+.redeem-form { display: flex; align-items: center; gap: 14rpx; margin-top: 20rpx; }
+.redeem-input { min-width: 0; flex: 1; height: 76rpx; padding: 0 22rpx; color: var(--text); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 14rpx; font-size: 24rpx; }
+.redeem-button { min-width: 132rpx; height: 76rpx; padding: 0 20rpx; display: flex; align-items: center; justify-content: center; color: #fff; background: var(--primary); border-radius: 14rpx; font-size: 24rpx; font-weight: 700; }
+.redeem-button.disabled { opacity: .45; }
 .coupon-stack { display: flex; flex-direction: column; gap: 16rpx; }
 .load-state { min-height: 300rpx; padding: 44rpx 32rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 26rpx; }
 .load-error { flex-direction: column; gap: 14rpx; text-align: center; }

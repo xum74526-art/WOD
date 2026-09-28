@@ -271,12 +271,13 @@ export function exchangeKaiTicket(ticket: string) {
   });
 }
 
-export function kaiWebAuthorizationUrl(intent: "login" | "register" | "recover", returnTo = "/") {
+export function kaiWebAuthorizationUrl(intent: "login" | "register" | "recover", returnTo = "/", inviteCode = "") {
   const query = new URLSearchParams({ intent });
   if (intent !== "recover") {
     query.set("return_to", returnTo);
     query.set("terms_accepted", "1");
   }
+  if (intent === "register" && inviteCode.trim()) query.set("invite_code", inviteCode.trim().toUpperCase().slice(0, 16));
   return `${apiBaseUrl}/api/v1/auth/kai/start?${query.toString()}`;
 }
 

@@ -175,6 +175,9 @@ test('invite page shows both mechanisms, visible compliance rules, and server-ow
     'inviteAntiAbuseRule',
     'inviteRewardRestriction',
     'fmtCardHours',
+    'copyInviteLink',
+    'loadMoreRecords',
+    'inviteCommissionFriendSource',
   ]) assert.ok(invitePage.includes(marker), `invite page must retain ${marker}`)
 
   assert.doesNotMatch(invitePage, /current_tier|next_tier_hint|fmtCHn/)
@@ -209,6 +212,7 @@ test('mobile invite contract accepts V2 fields while retaining legacy response f
   ]) assert.match(inviteApi, new RegExp(`${field}\\?`))
   assert.match(inviteApi, /items: InviteRecordItem\[\]/)
   assert.match(inviteApi, /reward_card_hours: number/)
+  assert.match(inviteApi, /invitee_phone_masked\?: string/)
   assert.match(inviteApi, /url: '\/invite\/commissions'/)
   assert.match(requestApi, /export class ApiRequestError extends Error/)
   assert.match(requestApi, /new ApiRequestError\(msg, res\.statusCode\)/)

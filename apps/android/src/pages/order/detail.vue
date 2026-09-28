@@ -19,8 +19,8 @@
             <StatusBadge :text="badge.text" :type="badge.type" />
           </view>
           <view class="hero-amount">
-            <text class="hero-label">{{ t('k_cc6be3d9') }}</text>
-            <AmountText :value="order.amount_card_hours ?? order.amount" :prefix="t('cardHour')" size="lg" />
+            <text class="hero-label">{{ order.coupon_discount ? t('couponPayable') : t('k_cc6be3d9') }}</text>
+            <AmountText :value="order.payable_amount_card_hours ?? order.amount_card_hours ?? order.amount" :prefix="t('cardHour')" size="lg" />
           </view>
         </view>
 
@@ -30,6 +30,8 @@
           <view class="row"><text class="sk">{{ t('k_0292a021') }}</text><text class="sv">{{ order.purchase_type === 'holding' ? formatDate(order.start_at) : order.end_at ? `${formatDate(order.start_at)} ~ ${formatDate(order.end_at)}` : t('startsAfterDeliveryConfirmation') }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseDuration') }}</text><text class="sv">{{ orderDuration }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ t('quantityUnits', { count: order.quantity || 1 }) }}</text></view>
+          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponOriginalAmount') }}</text><text class="sv">{{ fmtCH(order.amount_card_hours ?? order.amount) }}</text></view>
+          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponDiscount') }}</text><text class="sv up">-{{ fmtCH(order.coupon_discount) }}</text></view>
           <view v-if="order.end_at" class="row"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ orderRemaining }}</text></view>
           <view class="row" v-if="order.purchase_type !== 'holding' && order.revenue_settlement_enabled"><text class="sk">{{ t('cumulativeRevenue') }}</text><text class="sv up">{{ fmtCH(order.accumulated_revenue ?? 0) }}</text></view>
           <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ order.gpu_model || '-' }}</text></view>

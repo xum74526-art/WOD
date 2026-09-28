@@ -21,7 +21,10 @@ test('coupon page exposes all real backend states in both locale dictionaries', 
   assert.match(page, /couponExpired/)
 })
 
-test('coupon UI does not advertise hard-coded redemption codes or mint coupons', () => {
-  assert.doesNotMatch(page, /WOD10|WOD50|NEW88|redeemCoupon/)
-  assert.doesNotMatch(api, /\/coupons\/redeem|redeemCoupon/)
+test('coupon UI redeems server-issued codes without advertising hard-coded codes', () => {
+  assert.doesNotMatch(page, /WOD10|WOD50|NEW88/)
+  assert.doesNotMatch(api, /WOD10|WOD50|NEW88/)
+  assert.match(page, /redeemCoupon\(code\)/)
+  assert.match(api, /\/coupons\/redeem/)
+  assert.match(api, /\/coupons\/available/)
 })

@@ -38,6 +38,10 @@ class ExternalAuthFlow(Base):
     # first-party client recorded agreement acceptance before redirecting.
     terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    # A registration flow may carry one already-resolved inviter.  Persisting
+    # the user id (rather than a plaintext code in OAuth state/query data)
+    # keeps the relationship server-owned across the external redirect.
+    inviter_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     platform: Mapped[str] = mapped_column(String(16), default="legacy")
     client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     return_url: Mapped[str] = mapped_column(String(1024))

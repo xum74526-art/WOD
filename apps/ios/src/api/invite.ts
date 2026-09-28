@@ -76,6 +76,7 @@ export interface InviteRecordsResponse {
 
 export interface InviteCommissionItem {
   id: number
+  invitee_phone_masked?: string
   source_type: 'order' | 'renewal'
   order_id: number | null
   order_renewal_id: number | null
@@ -99,8 +100,12 @@ export function getInviteSummary() {
   return request<InviteSummary>({ url: '/invite/summary' })
 }
 
-export function getInviteRecords() {
-  return request<InviteRecordsResponse>({ url: '/invite/records' })
+export function getInviteRecords(page = 1, pageSize = 50) {
+  return request<InviteRecordsResponse>({
+    url: '/invite/records',
+    data: { page, page_size: pageSize },
+    silent: true,
+  })
 }
 
 export function getInviteCommissions(page = 1, pageSize = 50) {

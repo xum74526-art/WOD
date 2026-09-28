@@ -191,10 +191,24 @@ def kai_start(data: KaiStartIn, db: Session = Depends(get_db)):
         data.client_id,
         allow_admin_before_identity=True,
     )
+    inviter_id = None
+    if data.invite_code:
+        if data.intent != "register":
+            raise BizError("邀请码仅适用于新账号注册")
+        inviter = db.query(InviteCode).join(
+            User, User.id == InviteCode.user_id,
+        ).filter(
+            InviteCode.code == data.invite_code,
+            User.account_status == "active",
+        ).first()
+        if inviter is None:
+            raise BizError("邀请码无效，请检查后重试")
+        inviter_id = inviter.user_id
     authorization_url = kai_auth.create_authorization_flow(
         db,
         data.intent,
         data.return_url,
+        inviter_id=inviter_id,
         platform=platform,
         client_id=client_id,
         terms_accepted=data.terms_accepted,
@@ -304,6 +318,7 @@ async def kai_callback(
             platform=flow.platform or "legacy",
             client_id=flow.client_id,
             allow_create=bool(flow.terms_accepted),
+            inviter_id=flow.inviter_id,
         )
     except BizError as exc:
         if exc.code == KAI_TERMS_REQUIRED_CODE:

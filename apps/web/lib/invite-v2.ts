@@ -55,6 +55,8 @@ export type InviteRecord = {
 
 export type InviteRecordBundle = {
   total: number;
+  fixedRewardTotal: number;
+  friendRebateTotal: number;
   fixedRewardRecords: InviteRecord[];
   friendRebateRecords: InviteRecord[];
 };
@@ -256,8 +258,12 @@ export function normalizeInviteRecordBundle(value: unknown, commissions?: unknow
   const unique = [...new Map(all.map((record) => [record.key, record])).values()];
   const fixedRewardRecords = unique.filter((record) => record.kind !== "friend_rebate");
   const friendRebateRecords = unique.filter((record) => record.kind === "friend_rebate");
+  const fixedRewardTotal = integerFrom(source, ["total"], fixedRewardRecords.length);
+  const friendRebateTotal = integerFrom(commissionSource, ["total"], friendRebateRecords.length);
   return {
-    total: integerFrom(source, ["total"], unique.length),
+    total: fixedRewardTotal + friendRebateTotal,
+    fixedRewardTotal,
+    friendRebateTotal,
     fixedRewardRecords,
     friendRebateRecords,
   };

@@ -323,7 +323,7 @@ async function submitKai() {
   }
   submitting.value = true
   try {
-    const result = await startKaiAuth(mode.value)
+    const result = await startKaiAuth(mode.value, mode.value === 'register' ? form.invite_code : '')
     uni.setStorageSync(PENDING_KAI_INTENT_KEY, createPendingKaiLoginIntent(mode.value))
     externalKaiAuthorizationPending.value = true
     if (!openExternalAuthorization(result.authorization_url)) {
@@ -515,6 +515,11 @@ async function submit() {
 }
 
 onLoad((options) => {
+  const incomingInviteCode = String(options?.invite_code ?? options?.invite ?? '').trim().toUpperCase().slice(0, 16)
+  if (incomingInviteCode) {
+    form.invite_code = incomingInviteCode
+    mode.value = 'register'
+  }
   const callback = parseKaiAuthQuery(options)
   if (callback) void handleKaiCallback(callback)
   else handleStagedKaiCallback()

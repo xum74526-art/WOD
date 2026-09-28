@@ -3,6 +3,9 @@
 // `useI18n().t()` directly; this map keeps every existing queue usable while
 // those screens are migrated without changing their business behavior.
 export const adminLegacyEnglish: Record<string, string> = {
+  "设备托管": "Device Hosting",
+  "受理设备托管申请，记录联系、通过或驳回结论，并把处理结果同步给用户。": "Accept device-hosting requests, record contact, approval, or rejection, and synchronize the result to the user.",
+  "进入托管队列": "Open hosting queue",
   "平台运营控制台": "Platform Operations Console",
   "这里只处理平台级审核与仲裁，不混入买家采购或商家经营功能。": "Manage platform-level review and arbitration here, without mixing in buyer procurement or supplier operations.",
   "管理员统一处理需求、用户、订单、充值、实名、银行卡和提现；敏感操作均保留审计记录。": "Administrators centrally manage requests, users, orders, recharges, identity checks, bank cards, and withdrawals. Sensitive actions retain an audit trail.",

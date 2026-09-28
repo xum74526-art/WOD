@@ -9,6 +9,7 @@ import {
   Gift,
   LockKey,
   Receipt,
+  ShareNetwork,
   ShieldCheck,
   TrendUp,
   UserCheck,
@@ -17,7 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import { useI18n } from "@/components/locale-root";
 import { errorMessage } from "@/lib/commerce-ui";
-import { getInviteBundle, type InviteRecord, type InviteSummary } from "@/lib/mobile-business-api";
+import { getInviteBundle, getInviteCommissionPage, getInviteRecordPage, type InviteRecord, type InviteSummary } from "@/lib/mobile-business-api";
 import { formatFinancialAmount } from "@/lib/financial-format";
 import styles from "./referral-workspace.module.css";
 
@@ -169,9 +170,16 @@ export function ReferralWorkspace() {
   const [summary, setSummary] = useState<InviteSummary | null>(null);
   const [fixedRecords, setFixedRecords] = useState<InviteRecord[]>([]);
   const [rebateRecords, setRebateRecords] = useState<InviteRecord[]>([]);
+  const [fixedTotal, setFixedTotal] = useState(0);
+  const [rebateTotal, setRebateTotal] = useState(0);
+  const [fixedPage, setFixedPage] = useState(1);
+  const [rebatePage, setRebatePage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeTab, setActiveTab] = useState<RecordTab>("fixed");
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [linkError, setLinkError] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -182,6 +190,8 @@ export function ReferralWorkspace() {
         setSummary(nextSummary);
         setFixedRecords(records.fixedRewardRecords);
         setRebateRecords(records.friendRebateRecords);
+        setFixedTotal(records.fixedRewardTotal);
+        setRebateTotal(records.friendRebateTotal);
       })
       .catch((reason) => { if (active) setError(errorMessage(reason)); });
     return () => { active = false; };
@@ -208,6 +218,53 @@ export function ReferralWorkspace() {
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopyError(true);
+    }
+  }
+
+  async function shareInvite() {
+    if (!summary?.code) return;
+    setLinkError(false);
+    const url = `${window.location.origin}/register?invite_code=${encodeURIComponent(summary.code)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: t("invite.link.shareTitle", "邀请好友加入 KAI 星算"),
+          text: t("invite.link.shareText", "注册时使用我的邀请码 {code}", { code: summary.code }),
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+      }
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === "AbortError") return;
+      setLinkError(true);
+    }
+  }
+
+  async function loadMoreRecords() {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      if (activeTab === "fixed") {
+        const nextPage = fixedPage + 1;
+        const result = await getInviteRecordPage(nextPage);
+        setFixedRecords((current) => [...new Map([...current, ...result.items].map((item) => [item.key, item])).values()]);
+        setFixedTotal(result.total);
+        setFixedPage(nextPage);
+      } else {
+        const nextPage = rebatePage + 1;
+        const result = await getInviteCommissionPage(nextPage);
+        setRebateRecords((current) => [...new Map([...current, ...result.items].map((item) => [item.key, item])).values()]);
+        setRebateTotal(result.total);
+        setRebatePage(nextPage);
+      }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -238,11 +295,17 @@ export function ReferralWorkspace() {
       <div className={styles.codeBlock}>
         <span>{t("invite.code.label", "我的邀请码")}</span>
         <strong>{summary.code || "-"}</strong>
-        <button type="button" onClick={() => void copyCode()} disabled={!summary.code}>
-          {copied ? <CheckCircle size={17}/> : <Copy size={17}/>}
-          {copied ? t("invite.code.copied", "已复制") : t("invite.code.copy", "复制邀请码")}
-        </button>
-        <small aria-live="polite">{copyError ? t("invite.code.copyFailed", "复制失败，请手动复制邀请码") : t("invite.code.caption", "好友注册时填写，邀请关系绑定后不可更改")}</small>
+        <div className={styles.codeActions}>
+          <button type="button" onClick={() => void copyCode()} disabled={!summary.code}>
+            {copied ? <CheckCircle size={17}/> : <Copy size={17}/>}
+            {copied ? t("invite.code.copied", "已复制") : t("invite.code.copy", "复制邀请码")}
+          </button>
+          <button type="button" className={styles.secondaryAction} onClick={() => void shareInvite()} disabled={!summary.code}>
+            {linkCopied ? <CheckCircle size={17}/> : <ShareNetwork size={17}/>}
+            {linkCopied ? t("invite.link.copied", "邀请链接已复制") : t("invite.link.share", "分享邀请链接")}
+          </button>
+        </div>
+        <small aria-live="polite">{copyError || linkError ? t("invite.code.copyFailed", "复制失败，请手动复制邀请码") : t("invite.code.caption", "好友打开链接即可自动填写邀请码，邀请关系绑定后不可更改")}</small>
       </div>
 
       <div className={styles.quotaBlock}>
@@ -314,14 +377,14 @@ export function ReferralWorkspace() {
     <section className={styles.records}>
       <header>
         <div><h2>{t("invite.records.title", "邀请奖励记录")}</h2><p>{t("invite.records.subtitle", "固定奖励和好友消费返佣分别核对")}</p></div>
-        <span>{fixedRecords.length + rebateRecords.length}</span>
+        <span>{fixedTotal + rebateTotal}</span>
       </header>
       <div className={styles.recordTabs} role="tablist" aria-label={t("invite.records.tabs", "奖励记录分类")}>
         <button type="button" role="tab" aria-selected={activeTab === "fixed"} className={activeTab === "fixed" ? styles.activeTab : ""} onClick={() => setActiveTab("fixed")}>
-          <Gift size={17}/>{t("invite.records.fixedTab", "达标奖励")}<span>{fixedRecords.length}</span>
+          <Gift size={17}/>{t("invite.records.fixedTab", "达标奖励")}<span>{fixedTotal}</span>
         </button>
         <button type="button" role="tab" aria-selected={activeTab === "rebate"} className={activeTab === "rebate" ? styles.activeTab : ""} onClick={() => setActiveTab("rebate")}>
-          <TrendUp size={17}/>{t("invite.records.rebateTab", "消费返佣")}<span>{rebateRecords.length}</span>
+          <TrendUp size={17}/>{t("invite.records.rebateTab", "消费返佣")}<span>{rebateTotal}</span>
         </button>
       </div>
       <div className={styles.recordList} role="tabpanel">
@@ -329,6 +392,9 @@ export function ReferralWorkspace() {
           ? displayedRecords.map((row) => <RecordRow row={row} summary={summary} key={row.key}/>)
           : <div className={styles.empty}><UsersThree size={28}/><strong>{activeTab === "fixed" ? t("invite.records.emptyFixed", "还没有达标奖励记录") : t("invite.records.emptyRebate", "还没有消费返佣记录")}</strong><span>{t("invite.records.emptyHint", "好友满足对应条件后，记录会由服务端自动生成。")}</span></div>}
       </div>
+      {displayedRecords.length < (activeTab === "fixed" ? fixedTotal : rebateTotal) && <button className={styles.loadMore} type="button" disabled={loadingMore} onClick={() => void loadMoreRecords()}>
+        {loadingMore ? t("invite.records.loadingMore", "正在加载…") : t("invite.records.loadMore", "加载更多记录")}
+      </button>}
     </section>
 
     <section className={styles.complianceNote}>

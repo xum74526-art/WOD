@@ -90,6 +90,13 @@
   letter-spacing: .055em;
 }
 
+.codeActions {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .codeBlock button {
   min-height: 39px;
   width: max-content;
@@ -104,6 +111,11 @@
   gap: 7px;
   font: 720 12px var(--font-sans);
   cursor: pointer;
+}
+
+.codeBlock .secondaryAction {
+  color: var(--invite-accent);
+  background: var(--invite-surface);
 }
 
 .codeBlock button:disabled { opacity: .52; cursor: not-allowed; }
@@ -335,6 +347,19 @@
 
 .recordList { padding: 8px 20px 18px; }
 
+.loadMore {
+  min-height: 40px;
+  margin: 0 20px 18px;
+  border: 1px solid var(--invite-line);
+  border-radius: var(--radius-control);
+  color: var(--invite-accent);
+  background: var(--invite-muted);
+  font: 700 11px var(--font-sans);
+  cursor: pointer;
+}
+
+.loadMore:disabled { opacity: .58; cursor: wait; }
+
 .recordRow {
   position: relative;
   min-height: 76px;
@@ -414,6 +439,7 @@
   .skeleton i:first-child { grid-column: auto; }
   .codeBlock { padding: 24px 20px; grid-template-columns: 1fr; }
   .codeBlock > strong { font-size: 30px; }
+  .codeActions { width: 100%; }
   .codeBlock button { width: 100%; }
   .quotaBlock { padding: 20px; }
   .quotaBlock dl { grid-template-columns: 1fr 1fr; }

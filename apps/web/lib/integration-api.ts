@@ -67,25 +67,6 @@ export type ManualKycApplication = NonNullable<KycSnapshot["application"]> & {
   };
 };
 
-export type PrivateObject = {
-  id: number;
-  object_no: string;
-  category: string;
-  filename: string;
-  mime_type: string;
-  size_bytes: number;
-  status: string;
-  is_private: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type PrivateFilesSnapshot = {
-  provider: ProviderDescriptor;
-  max_upload_bytes: number;
-  objects: PrivateObject[];
-};
-
 export function getWalletSnapshot() {
   return apiRequest<WalletSnapshot>("/api/v1/account/wallet");
 }
@@ -135,44 +116,5 @@ export function rejectAdminKyc(id: number, version: number, note: string) {
   return apiRequest<ManualKycApplication>(`/api/v1/admin/kyc/${id}/reject`, {
     method: "POST",
     body: JSON.stringify({ version, note }),
-  });
-}
-
-export function getPrivateFiles() {
-  return apiRequest<PrivateFilesSnapshot>("/api/v1/account/files");
-}
-
-export async function uploadPrivateFile(
-  file: File,
-  category: "kyc_document" | "supplier_document" | "contract" | "delivery_artifact" | "general_private",
-) {
-  const initialized = await apiRequest<{
-    file: PrivateObject;
-    upload_id: string;
-    upload_url: string;
-    method: string;
-    headers: Record<string, string>;
-    expires_at: string;
-  }>("/api/v1/files/upload/init", {
-    method: "POST",
-    body: JSON.stringify({
-      category,
-      filename: file.name,
-      mime_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-    }),
-  });
-  const uploadResponse = await fetch(initialized.upload_url, {
-    method: initialized.method,
-    headers: initialized.headers,
-    body: file,
-  });
-  if (!uploadResponse.ok) throw new Error(`文件上传失败 (${uploadResponse.status})`);
-  return apiRequest<PrivateObject>("/api/v1/files/upload/complete", {
-    method: "POST",
-    body: JSON.stringify({
-      upload_id: initialized.upload_id,
-      etag: uploadResponse.headers.get("ETag"),
-    }),
   });
 }

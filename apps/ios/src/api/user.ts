@@ -67,9 +67,17 @@ export function getKaiAuthConfig() {
   return request<KaiAuthConfig>({ url: '/auth/kai/config', silent: true })
 }
 
-export function startKaiAuth(intent: 'login' | 'register') {
+export function startKaiAuth(intent: 'login' | 'register', inviteCode = '') {
   return request<{ authorization_url: string }>({
-    url: '/auth/kai/start', method: 'POST', data: { intent, return_url: KAI_AUTH_APP_RETURN_URL, client_id: CLIENT_PLATFORM, terms_accepted: true },
+    url: '/auth/kai/start', method: 'POST', data: {
+      intent,
+      return_url: KAI_AUTH_APP_RETURN_URL,
+      client_id: CLIENT_PLATFORM,
+      terms_accepted: true,
+      ...(intent === 'register' && inviteCode.trim()
+        ? { invite_code: inviteCode.trim().toUpperCase().slice(0, 16) }
+        : {}),
+    },
   })
 }
 

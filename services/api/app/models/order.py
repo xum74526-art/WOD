@@ -28,6 +28,12 @@ class Order(Base):
     created_platform: Mapped[str] = mapped_column(String(16), default="legacy", index=True)
     last_modified_platform: Mapped[str] = mapped_column(String(16), default="legacy", index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 4))
+    coupon_id: Mapped[int | None] = mapped_column(
+        ForeignKey("coupons.id"), nullable=True, index=True,
+    )
+    coupon_discount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), default=Decimal("0"), server_default="0",
+    )
     status: Mapped[str] = mapped_column(String(16), default="running")  # paid/delivering/disputed/completed/running/done/canceled
     purchase_type: Mapped[str] = mapped_column(String(16), default="usage")  # usage(使用) / holding(持有)
     product_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)

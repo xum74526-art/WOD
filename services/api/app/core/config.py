@@ -209,12 +209,14 @@ class Settings(BaseSettings):
     QIXIANGPAY_CHECKOUT_TTL_SECONDS: int = 300
     QIXIANGPAY_PROVIDER_TIMEZONE: str = "Asia/Shanghai"
     QIXIANGPAY_MIN_AMOUNT_CNY: float = 10.0
-    QIXIANGPAY_MAX_AMOUNT_CNY: float = 50000.0
+    # Confirmed merchant-channel limits: CNY 40,000 per order and
+    # CNY 10,000,000 in aggregate per account per calendar day.
+    QIXIANGPAY_MAX_AMOUNT_CNY: float = 40000.0
     # Payment risk and reconciliation bounds are enforced server-side.  The
     # scheduler remains disabled until provider-side sandbox/production
     # evidence has been completed.
     PAYMENT_MAX_PENDING_ORDERS_PER_USER: int = 5
-    PAYMENT_DAILY_RECHARGE_LIMIT_CNY: float = 50000.0
+    PAYMENT_DAILY_RECHARGE_LIMIT_CNY: float = 10000000.0
     PAYMENT_RECONCILIATION_ENABLED: bool = False
     PAYMENT_RECONCILIATION_INTERVAL_SECONDS: int = 60
     PAYMENT_RECONCILIATION_BATCH_SIZE: int = 20

@@ -28,7 +28,7 @@
           <view class="o-bottom">
             <view class="o-amount">
               <text class="o-amt-label">{{ t('cardHour') }}</text>
-              <text class="o-amt-val">{{ fmtCardHours(o.amount_card_hours ?? o.amount) }}</text>
+              <text class="o-amt-val">{{ fmtCardHours(o.payable_amount_card_hours ?? o.amount_card_hours ?? o.amount) }}</text>
             </view>
             <view v-if="o.revenue_settlement_enabled" class="o-amount">
               <text class="o-amt-label">{{ t('cumulativeRevenue') }}</text>

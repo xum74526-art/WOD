@@ -8,7 +8,7 @@ import { ApiError, getCurrentUser, type AuthUser } from "@/lib/api";
 import { createDirectOrder, getPublicProduct, type PublicProduct } from "@/lib/commerce-api";
 import { loginHref } from "@/lib/auth-navigation";
 import { ProductImage } from "@/components/product-image";
-import { getUserRebate, type RebateSummary } from "@/lib/mobile-business-api";
+import { getUserRebate, listAvailableCoupons, type Coupon, type RebateSummary } from "@/lib/mobile-business-api";
 import { clampPurchaseHours, estimateProductExpiryRebate, type ProductPurchaseType } from "@/lib/product-purchase";
 import { useI18n } from "@/components/locale-root";
 import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
@@ -29,6 +29,9 @@ export function ProductDetail({ productId }: { productId: string }) {
   const [product, setProduct] = useState<PublicProduct | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [rebate, setRebate] = useState<RebateSummary | null>(null);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   const [error, setError] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [purchaseHours, setPurchaseHours] = useState(24);
@@ -84,6 +87,12 @@ export function ProductDetail({ productId }: { productId: string }) {
     () => product ? product.unit_price_ch * purchaseHours * quantity : 0,
     [purchaseHours, product, quantity],
   );
+  const selectedCoupon = useMemo(
+    () => coupons.find((coupon) => coupon.id === selectedCouponId) || null,
+    [coupons, selectedCouponId],
+  );
+  const couponDiscount = selectedCoupon ? Math.min(Number(selectedCoupon.amount || 0), walletTotal) : 0;
+  const payableTotal = Math.max(0, walletTotal - couponDiscount);
   const rebateEstimate = useMemo(
     () => estimateProductExpiryRebate(walletTotal, purchaseType, rebate),
     [purchaseType, rebate, walletTotal],
@@ -123,6 +132,7 @@ export function ProductDetail({ productId }: { productId: string }) {
       hours,
       purchase_type: purchaseType,
       expected_unit_price_card_hours: product.unit_price_ch,
+      ...(selectedCouponId ? { coupon_id: selectedCouponId } : {}),
     };
     const intent = ensureDirectOrderIntent(
       pendingOrderIntent.current,
@@ -136,6 +146,8 @@ export function ProductDetail({ productId }: { productId: string }) {
   function cancelPurchase() {
     if (busy) return;
     pendingOrderIntent.current = null;
+    setSelectedCouponId(null);
+    setCoupons([]);
     setConfirmOpen(false);
   }
 
@@ -160,12 +172,25 @@ export function ProductDetail({ productId }: { productId: string }) {
     router.push(user ? requestHref : loginHref(requestHref));
   }
 
-  function beginPurchase() {
+  async function beginPurchase() {
     if (!directTradeEnabled) return;
     if (!user) { router.push(loginHref(`/market/products/${productId}`)); return; }
     if (!product || (!product.purchasable && !(purchaseType === "holding" && holdingModeAvailable)) || product.purchase_unit !== "hour") return;
     const hours = clampPurchaseHours(purchaseHours);
     normalizeHours(hours);
+    setCoupons([]);
+    setSelectedCouponId(null);
+    pendingOrderIntent.current = null;
+    if (purchaseType === "usage") {
+      setCouponLoading(true);
+      try {
+        setCoupons(await listAvailableCoupons(walletTotal, product.id, "usage"));
+      } catch {
+        setCoupons([]);
+      } finally {
+        setCouponLoading(false);
+      }
+    }
     ensurePendingOrder(hours);
     setConfirmOpen(true);
   }
@@ -253,9 +278,9 @@ export function ProductDetail({ productId }: { productId: string }) {
       <label>{directTradeEnabled ? t("product.quantity", "数量") : t("product.requestQuantity", "需求数量")}<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>{Array.from({ length: directTradeEnabled ? Math.min(Math.max(product.available_quantity, 1), 10) : 10 }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value} {t("market.units", "台")}</option>)}</select></label>
       <label>{directTradeEnabled ? t("product.purchaseMode", "购买模式") : t("product.serviceMode", "服务方式")}<select value={directTradeEnabled ? purchaseType : "hourly"} disabled={!directTradeEnabled || !holdingModeAvailable} onChange={(event) => setPurchaseType(event.target.value as ProductPurchaseType)} aria-label={t("product.serviceMode.current", "当前服务方式")}><option value="usage">{t("product.mode.usage", "使用")}</option>{holdingModeAvailable && <option value="holding">{t("product.mode.holdingSellable", "持有并可出售")}</option>}{!directTradeEnabled && <option value="hourly">{t("product.mode.hourly", "按小时算力服务")}</option>}</select><small className="product-hour-hint">{directTradeEnabled ? purchaseType === "holding" ? t("product.holding.assetHint", "持有立即生成资产，可在个人资产按最新有效 KAI 行情出售。") : t("product.usage.assetHint", "使用模式在有效 SSH 交付并验收后生成使用资产。") : t("product.inquiry.noCharge", "当前仅收集需求，不在线支付、不自动扣款。")}</small></label>
       {directTradeEnabled && <><div className="purchase-total"><span>{t("product.walletTotal", "预计钱包扣款")}</span><strong>{formatFinancialAmount(walletTotal, locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</strong></div><div className="product-rebate-estimate"><span>{t("product.rebate.label", "预计到期个人购买返佣")}</span><strong>{purchaseType === "holding" ? t("product.rebate.notEligible", "不参与") : rebateAmountText}</strong><small>{rebatePolicyText}</small></div></>}
-      <button className="sandbox-purchase-button" type="button" disabled={directTradeEnabled ? !hourlyPurchase || busy || authLoading || Boolean(user && !directPurchaseAvailable) : authLoading || !matchmakingEnabled || product.inquiry_available === false} onClick={directTradeEnabled ? beginPurchase : beginInquiry}>{directTradeEnabled && hourlyPurchase && directPurchaseAvailable && user && !busy ? <Wallet size={17}/> : <CheckCircle size={17}/>} {directTradeEnabled ? purchaseLabel : inquiryLabel}</button>
+      <button className="sandbox-purchase-button" type="button" disabled={directTradeEnabled ? !hourlyPurchase || busy || couponLoading || authLoading || Boolean(user && !directPurchaseAvailable) : authLoading || !matchmakingEnabled || product.inquiry_available === false} onClick={directTradeEnabled ? () => void beginPurchase() : beginInquiry}>{directTradeEnabled && hourlyPurchase && directPurchaseAvailable && user && !busy ? <Wallet size={17}/> : <CheckCircle size={17}/>} {directTradeEnabled ? couponLoading ? t("product.coupon.loading", "正在读取优惠券…") : purchaseLabel : inquiryLabel}</button>
       <p>{directTradeEnabled ? t("product.sellerDirectNotice", "卖方为 {seller}，{fulfillment}。余额、冻结金额和订单状态均来自统一业务后端。", { seller: sellerName, fulfillment: fulfillmentLabel }) : t("product.sellerInquiryNotice", "卖方为 {seller}，{fulfillment}。提交后由人工联系确认配置、库存、价格和交付安排。", { seller: sellerName, fulfillment: fulfillmentLabel })}</p>
       {error && <div className="commerce-error">{error}</div>}
     </aside>
-  </div>{directTradeEnabled && confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPurchase(); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label={t("product.confirm.close", "关闭购买确认")} disabled={busy} onClick={cancelPurchase}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">{t("product.confirm.title", "确认{mode}购买", { mode: purchaseType === "holding" ? t("product.mode.holding", "持有") : t("product.mode.usage", "使用") })}</h2><p>{displayName}</p><dl><div><dt>{t("product.seller", "卖方")}</dt><dd>{sellerName} · {purchaseType === "holding" ? t("product.holding.registration", "平台持有资产登记") : fulfillmentLabel}</dd></div><div><dt>{t("product.gpuQuantity", "GPU / 数量")}</dt><dd>{product.gpu_model} × {quantity} {t("market.units", "台")}</dd></div><div><dt>{t("product.purchaseHours", "购买时长")}</dt><dd>{purchaseHours} GPU {t("product.hours", "小时")}</dd></div><div><dt>{t("product.purchaseMode", "购买模式")}</dt><dd>{purchaseType === "holding" ? t("product.mode.holdingSellable", "持有并可出售") : t("product.mode.usage", "使用")}</dd></div><div><dt>{t("product.walletDebit", "钱包扣款")}</dt><dd>{formatFinancialAmount(walletTotal, locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</dd></div>{purchaseType === "usage" && <div><dt>{t("product.rebate.label", "预计到期个人购买返佣")}</dt><dd>{rebateAmountText}</dd></div>}</dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={cancelPurchase}>{t("product.confirm.back", "返回修改")}</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? t("product.confirm.creating", "正在创建订单…") : t("product.confirm.submit", "确认并下单")}</button></div><small>{purchaseType === "holding" ? t("product.holding.confirmNotice", "持有资产不提供 SSH 使用、使用收益或购买返佣；出售按最新有效 KAI 行情结算为卡时。") : t("product.rebate.settlement", "页面金额为预计值；确认交付时服务端会按个人等级和剩余额度最终重算，实际金额以资产到期结算为准。")}</small></section></div>}</>;
+  </div>{directTradeEnabled && confirmOpen && <div className="product-purchase-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPurchase(); }}><section className="product-purchase-confirm" role="dialog" aria-modal="true" aria-labelledby="product-purchase-confirm-title"><button type="button" className="product-purchase-confirm__close" aria-label={t("product.confirm.close", "关闭购买确认")} disabled={busy} onClick={cancelPurchase}><X size={18}/></button><p className="hero-eyebrow">ORDER CONFIRMATION</p><h2 id="product-purchase-confirm-title">{t("product.confirm.title", "确认{mode}购买", { mode: purchaseType === "holding" ? t("product.mode.holding", "持有") : t("product.mode.usage", "使用") })}</h2><p>{displayName}</p><dl><div><dt>{t("product.seller", "卖方")}</dt><dd>{sellerName} · {purchaseType === "holding" ? t("product.holding.registration", "平台持有资产登记") : fulfillmentLabel}</dd></div><div><dt>{t("product.gpuQuantity", "GPU / 数量")}</dt><dd>{product.gpu_model} × {quantity} {t("market.units", "台")}</dd></div><div><dt>{t("product.purchaseHours", "购买时长")}</dt><dd>{purchaseHours} GPU {t("product.hours", "小时")}</dd></div><div><dt>{t("product.purchaseMode", "购买模式")}</dt><dd>{purchaseType === "holding" ? t("product.mode.holdingSellable", "持有并可出售") : t("product.mode.usage", "使用")}</dd></div>{purchaseType === "usage" && <div><dt>{t("product.coupon.select", "优惠券")}</dt><dd><select className="product-coupon-select" value={selectedCouponId ?? ""} onChange={(event) => { setSelectedCouponId(event.target.value ? Number(event.target.value) : null); pendingOrderIntent.current = null; }}><option value="">{t("product.coupon.none", "不使用优惠券")}</option>{coupons.map((coupon) => <option value={coupon.id} key={coupon.id}>{coupon.name} · -{formatFinancialAmount(Math.min(coupon.amount, walletTotal), locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</option>)}</select></dd></div>}<div><dt>{t("product.orderGross", "订单原价")}</dt><dd>{formatFinancialAmount(walletTotal, locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</dd></div>{selectedCoupon && <div><dt>{t("product.coupon.discount", "优惠券抵扣")}</dt><dd>-{formatFinancialAmount(couponDiscount, locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</dd></div>}<div><dt>{t("product.walletDebit", "钱包扣款")}</dt><dd>{formatFinancialAmount(payableTotal, locale === "en" ? "en-US" : "zh-CN")} {locale === "en" ? "CH" : "卡时"}</dd></div>{purchaseType === "usage" && <div><dt>{t("product.rebate.label", "预计到期个人购买返佣")}</dt><dd>{rebateAmountText}</dd></div>}</dl><div className="product-purchase-confirm__actions"><button type="button" disabled={busy} onClick={cancelPurchase}>{t("product.confirm.back", "返回修改")}</button><button type="button" disabled={busy} onClick={() => void purchase()}>{busy ? t("product.confirm.creating", "正在创建订单…") : t("product.confirm.submit", "确认并下单")}</button></div><small>{purchaseType === "holding" ? t("product.holding.confirmNotice", "持有资产不提供 SSH 使用、使用收益或购买返佣；出售按最新有效 KAI 行情结算为卡时。") : t("product.rebate.settlement", "页面金额为预计值；确认交付时服务端会按个人等级和剩余额度最终重算，实际金额以资产到期结算为准。")}</small></section></div>}</>;
 }

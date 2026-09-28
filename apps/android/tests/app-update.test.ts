@@ -28,7 +28,7 @@ test('version comparison uses the native numeric code and handles dotted fallbac
     platform: CLIENT_PLATFORM,
     application_id: 'com.kai.ztwstarmap',
     available: true,
-    latest_version_name: '1.2.2',
+    latest_version_name: '1.2.3',
     latest_version_code: 122,
     update_url: updateUrls[CLIENT_PLATFORM],
   }), true)
@@ -67,10 +67,10 @@ test('the app wires automatic and manual update checks through its platform adap
   const update = readFileSync(resolve(appRoot, 'src/utils/app-update.ts'), 'utf8')
   const api = readFileSync(resolve(appRoot, 'src/api/platform.ts'), 'utf8')
 
-  assert.equal(manifest.versionName, '1.2.2')
-  assert.equal(manifest.versionCode, '123')
-  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.2'/)
-  assert.match(update, /APP_FALLBACK_VERSION_CODE = 123/)
+  assert.equal(manifest.versionName, '1.2.3')
+  assert.equal(manifest.versionCode, '124')
+  assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.3'/)
+  assert.match(update, /APP_FALLBACK_VERSION_CODE = 124/)
   assert.match(app, /checkForAppUpdate\(CLIENT_PLATFORM\)/)
   assert.match(settings, /checkForAppUpdate\(CLIENT_PLATFORM, \{ manual: true \}\)/)
   assert.match(settings, /appUpdateCheck/)

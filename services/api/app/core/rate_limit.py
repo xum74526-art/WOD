@@ -81,6 +81,9 @@ payment_admin_rate_limit = SlidingWindowRateLimiter(limit=30, window_seconds=60)
 payment_refund_request_rate_limit = SlidingWindowRateLimiter(limit=5, window_seconds=3600)
 notification_broadcast_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=3600)
 admin_account_action_rate_limit = SlidingWindowRateLimiter(limit=60, window_seconds=60)
+admin_onboarding_action_rate_limit = SlidingWindowRateLimiter(limit=120, window_seconds=60)
+coupon_redeem_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=600)
+admin_coupon_action_rate_limit = SlidingWindowRateLimiter(limit=60, window_seconds=60)
 
 
 def _identity_key(value: str) -> str:
@@ -184,3 +187,21 @@ def limit_admin_account_action(user_id: int) -> None:
     """Contain accidental bulk account mutations from one admin session."""
 
     admin_account_action_rate_limit.check(f"admin-account-action:{int(user_id)}")
+
+
+def limit_admin_onboarding_action(user_id: int) -> None:
+    """Bound hosting-review writes without consuming the account-action bucket."""
+
+    admin_onboarding_action_rate_limit.check(f"admin-onboarding-action:{int(user_id)}")
+
+
+def limit_coupon_redeem(user_id: int) -> None:
+    """Slow online guessing without exposing redemption codes in limiter keys."""
+
+    coupon_redeem_rate_limit.check(f"coupon-redeem:{int(user_id)}")
+
+
+def limit_admin_coupon_action(user_id: int) -> None:
+    """Contain accidental campaign creation or repeated status changes."""
+
+    admin_coupon_action_rate_limit.check(f"admin-coupon-action:{int(user_id)}")

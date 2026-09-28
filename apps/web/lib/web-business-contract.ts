@@ -62,15 +62,17 @@ export function directOrderIntentSignature(input: {
   product_id: number;
   quantity: number;
   hours: number;
-  purchase_type: "usage" | "holding";
-  expected_unit_price_card_hours: number;
+    purchase_type: "usage" | "holding";
+    expected_unit_price_card_hours: number;
+    coupon_id?: number;
 }) {
   return JSON.stringify([
     input.product_id,
     input.quantity,
     input.hours,
     input.purchase_type,
-    input.expected_unit_price_card_hours,
+      input.expected_unit_price_card_hours,
+      input.coupon_id ?? null,
   ]);
 }
 

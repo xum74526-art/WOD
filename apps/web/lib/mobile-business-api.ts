@@ -72,6 +72,10 @@ export type OnboardingItem = {
   location?: string;
   remark?: string;
   status: string;
+  review_note?: string;
+  reviewed_at?: string;
+  updated_at?: string;
+  version?: number;
   created_at?: string;
 };
 
@@ -123,7 +127,18 @@ export type RebateSummary = {
   reward_mode: "disabled" | "test_card_hours" | "live";
 };
 
-export type Coupon = { id: number; name: string; amount: number; min_amount: number; status: string; expires_at?: string };
+export type Coupon = {
+  id: number;
+  campaign_id?: number | null;
+  product_id?: number | null;
+  name: string;
+  amount: number;
+  min_amount: number;
+  status: "available" | "used" | "expired";
+  expires_at?: string | null;
+  used_at?: string | null;
+  used_order_id?: number | null;
+};
 
 export type BankCard = {
   id: number;
@@ -208,6 +223,7 @@ export type RechargePaymentConfig = {
   card_hour_rmb_rate: number;
   min_amount_cny: number;
   max_amount_cny: number;
+  daily_limit_cny: number;
   checkout_mode: "hosted_page";
   checkout_ttl_seconds?: number;
   payment_types?: Array<"alipay" | "wxpay">;
@@ -415,7 +431,7 @@ export function getOnboardingMine() {
   return apiRequest<OnboardingItem[]>(canonicalApiPath("/onboarding/mine"));
 }
 
-export function submitOnboarding(input: Omit<OnboardingItem, "id" | "status" | "created_at">) {
+export function submitOnboarding(input: Pick<OnboardingItem, "entity_type" | "contact" | "phone" | "device_model" | "device_count" | "location" | "remark">) {
   return apiRequest<OnboardingItem>(canonicalApiPath("/onboarding"), { method: "POST", body: JSON.stringify(input) });
 }
 
@@ -449,7 +465,7 @@ export function getUserRebate() {
 export async function getInviteBundle(): Promise<readonly [InviteSummary, InviteRecordBundle]> {
   const [summaryResult, recordsResult, commissionsResult] = await Promise.allSettled([
     apiRequest<unknown>(canonicalApiPath("/invite/summary")),
-    apiRequest<unknown>(canonicalApiPath("/invite/records")),
+    apiRequest<unknown>(canonicalApiPath("/invite/records?page=1&page_size=50")),
     apiRequest<unknown>(canonicalApiPath("/invite/commissions?page=1&page_size=50")),
   ]);
   if (summaryResult.status === "rejected") throw summaryResult.reason;
@@ -468,6 +484,18 @@ export async function getInviteBundle(): Promise<readonly [InviteSummary, Invite
   return [summary, normalizeInviteRecordBundle(recordsResult.value, commissions)] as const;
 }
 
+export async function getInviteRecordPage(page: number, pageSize = 50) {
+  const value = await apiRequest<unknown>(canonicalApiPath(`/invite/records?page=${page}&page_size=${pageSize}`));
+  const bundle = normalizeInviteRecordBundle(value, { total: 0, items: [] });
+  return { total: bundle.fixedRewardTotal, items: bundle.fixedRewardRecords };
+}
+
+export async function getInviteCommissionPage(page: number, pageSize = 50) {
+  const value = await apiRequest<unknown>(canonicalApiPath(`/invite/commissions?page=${page}&page_size=${pageSize}`));
+  const bundle = normalizeInviteRecordBundle({ total: 0, items: [] }, value);
+  return { total: bundle.friendRebateTotal, items: bundle.friendRebateRecords };
+}
+
 export function listCoupons(status = "") {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiRequest<Coupon[]>(canonicalApiPath(`/coupons${query}`));
@@ -475,6 +503,15 @@ export function listCoupons(status = "") {
 
 export function redeemCoupon(code: string) {
   return apiRequest<Coupon>(canonicalApiPath("/coupons/redeem"), { method: "POST", body: JSON.stringify({ code }) });
+}
+
+export function listAvailableCoupons(amount: number, productId: number, purchaseType: "usage" | "holding" = "usage") {
+  const query = new URLSearchParams({
+    amount: String(amount),
+    product_id: String(productId),
+    purchase_type: purchaseType,
+  });
+  return apiRequest<Coupon[]>(canonicalApiPath(`/coupons/available?${query.toString()}`));
 }
 
 export function getBankCardBundle() {

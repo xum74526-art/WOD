@@ -10,6 +10,10 @@ export interface OnboardingItem {
   location?: string
   remark?: string
   status: 'submitted' | 'contacted' | 'approved' | 'rejected' | string
+  review_note?: string
+  reviewed_at?: string
+  updated_at?: string
+  version?: number
   created_at?: string
 }
 

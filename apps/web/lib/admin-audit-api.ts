@@ -4,6 +4,28 @@ import type { AuditPlatform } from "@/lib/mobile-finance-api";
 import type { MobileBuyQuote, MobileBuyRequestDeal, MobileBuyRequestEvent } from "@/lib/mobile-buy-request-api";
 
 export type AdminCounts = { users: number; orders: number; recharge_orders: number; verifications: number; bank_cards: number; withdrawals: number };
+export type AdminCouponCampaignStatus = "active" | "scheduled" | "disabled" | "expired" | "exhausted";
+export type AdminCouponCampaign = {
+  id: number;
+  code_hint: string;
+  name: string;
+  amount: number;
+  min_amount: number;
+  product_id: number | null;
+  max_redemptions: number;
+  redeemed_count: number;
+  coupon_ttl_days: number;
+  status: AdminCouponCampaignStatus;
+  starts_at: string | null;
+  expires_at: string;
+  created_by: number;
+  last_modified_by: number;
+  created_platform: string;
+  version: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+export type AdminCouponCampaignCreated = AdminCouponCampaign & { code: string };
 export type AdminOverview = { created_platform: AuditPlatform | null; counts: AdminCounts; by_platform: Array<{ created_platform: AuditPlatform; counts: AdminCounts }> };
 export type AdminUserItem = {
   id: number;
@@ -222,6 +244,27 @@ export type AdminNotificationBroadcastInput = {
   action_url?: string | null;
   expires_at?: string | null;
 };
+export type AdminOnboardingItem = {
+  id: number;
+  user_id: number;
+  username: string | null;
+  entity_type: "personal" | "company";
+  contact: string;
+  phone: string;
+  device_model: string;
+  device_count: number;
+  location: string | null;
+  remark: string | null;
+  status: "submitted" | "contacted" | "approved" | "rejected";
+  review_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_platform: AuditPlatform;
+  last_modified_platform: AuditPlatform;
+  version: number;
+  created_at: string;
+  updated_at: string | null;
+};
 
 function query(input: { platform?: AuditPlatform; keyword?: string; status?: string; orderNo?: string; requestNo?: string; requestType?: string; page?: number; pageSize?: number }) {
   const params = new URLSearchParams({ page: String(input.page ?? 1), page_size: String(input.pageSize ?? 100) });
@@ -265,6 +308,78 @@ export function revokeAdminNotificationBroadcast(id: number, reason: string) {
 
 export function listAdminUsers(input: { platform?: AuditPlatform; keyword?: string; status?: string; page?: number; pageSize?: number } = {}) {
   return apiRequest<AdminPage<AdminUserItem>>(canonicalApiPath(`/admin/users${query(input)}`));
+}
+
+export function listAdminOnboardings(input: {
+  platform?: AuditPlatform;
+  keyword?: string;
+  status?: string;
+  entityType?: "personal" | "company" | "";
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  if (input.platform) params.set("platform", input.platform);
+  if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
+  if (input.status?.trim()) params.set("status", input.status.trim());
+  if (input.entityType) params.set("entity_type", input.entityType);
+  return apiRequest<AdminPage<AdminOnboardingItem>>(
+    canonicalApiPath(`/admin/onboardings?${params.toString()}`),
+  );
+}
+
+export function reviewAdminOnboarding(
+  id: number,
+  input: { status: "contacted" | "approved" | "rejected"; expected_version: number; note?: string },
+) {
+  return apiRequest<AdminOnboardingItem>(canonicalApiPath(`/admin/onboardings/${id}/review`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAdminCouponCampaigns(input: {
+  status?: AdminCouponCampaignStatus | "";
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  if (input.status) params.set("status", input.status);
+  if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
+  return apiRequest<AdminPage<AdminCouponCampaign>>(
+    canonicalApiPath(`/admin/coupon-campaigns?${params.toString()}`),
+  );
+}
+
+export function createAdminCouponCampaign(input: {
+  name: string;
+  amount: number;
+  min_amount: number;
+  max_redemptions: number;
+  coupon_ttl_days: number;
+  product_id?: number;
+  starts_at?: string;
+  expires_at: string;
+  code?: string;
+}) {
+  return apiRequest<AdminCouponCampaignCreated>(canonicalApiPath("/admin/coupon-campaigns"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAdminCouponCampaignStatus(id: number, input: { status: "active" | "disabled"; expected_version: number }) {
+  return apiRequest<AdminCouponCampaign>(canonicalApiPath(`/admin/coupon-campaigns/${id}/status`), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function manageAdminUser(id: number, input: {

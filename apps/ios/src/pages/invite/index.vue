@@ -27,6 +27,9 @@
               @tap="copyCode"
             >{{ t('copyInviteCode') }}</view>
           </view>
+          <view class="link-button" role="button" :aria-label="t('copyInviteLink')" @tap="copyInviteLink">
+            {{ t('copyInviteLink') }}
+          </view>
         </view>
 
         <view v-if="info && !info.rewards_enabled" class="card reward-warning">
@@ -216,6 +219,9 @@
             </view>
           </view>
         </template>
+        <view v-if="activeHasMore" class="load-more" role="button" @tap="loadMoreRecords">
+          {{ loadingMore ? t('inviteLoadingMore') : t('inviteLoadMore') }}
+        </view>
       </template>
     </view>
   </view>
@@ -251,6 +257,11 @@ const { t } = useI18nStore()
 const info = ref<InviteSummary | null>(null)
 const fixedRewardRecords = ref<InviteRecordItem[]>([])
 const friendRebateRecords = ref<InviteCommissionItem[]>([])
+const fixedRewardTotal = ref(0)
+const friendRebateTotal = ref(0)
+const fixedRewardPage = ref(1)
+const friendRebatePage = ref(1)
+const loadingMore = ref(false)
 const activeRecordTab = ref<'fixed' | 'rebate'>('fixed')
 const loading = ref(true)
 const loadError = ref(false)
@@ -261,6 +272,9 @@ const remainingSlotsText = computed(() => policy.value.dailySlotsRemaining == nu
   ? t('inviteRuleDataUnavailableShort')
   : t('inviteRemainingSlots', { count: policy.value.dailySlotsRemaining }))
 const tierProgressStyle = computed(() => ({ width: `${policy.value.tierProgressPercent ?? 0}%` }))
+const activeHasMore = computed(() => activeRecordTab.value === 'fixed'
+  ? fixedRewardRecords.value.length < fixedRewardTotal.value
+  : friendRebateRecords.value.length < friendRebateTotal.value)
 const inviteRules = computed(() => [
   t('inviteQualificationRule', { amount: policy.value.fixedRewardCardHours, count: policy.value.dailyLimit }),
   t('inviteDailyQuotaRule', { amount: policy.value.fixedRewardCardHours }),
@@ -283,6 +297,16 @@ function uniqueRecords(records: InviteRecordItem[]): InviteRecordItem[] {
   })
 }
 
+function uniqueCommissionRecords(records: InviteCommissionItem[]): InviteCommissionItem[] {
+  const seen = new Set<string>()
+  return records.filter((record) => {
+    const key = String(record.id)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 async function load() {
   loading.value = true
   loadError.value = false
@@ -296,8 +320,14 @@ async function load() {
   if (recordsResult.status === 'fulfilled') {
     const payload = recordsResult.value
     fixedRewardRecords.value = uniqueRecords(payload.items ?? [])
+    fixedRewardTotal.value = payload.total ?? fixedRewardRecords.value.length
+    fixedRewardPage.value = 1
   }
-  if (commissionsResult.status === 'fulfilled') friendRebateRecords.value = commissionsResult.value.items
+  if (commissionsResult.status === 'fulfilled') {
+    friendRebateRecords.value = uniqueCommissionRecords(commissionsResult.value.items ?? [])
+    friendRebateTotal.value = commissionsResult.value.total ?? friendRebateRecords.value.length
+    friendRebatePage.value = 1
+  }
   const commissionIsLegacy404 = commissionsResult.status === 'rejected'
     && commissionsResult.reason instanceof ApiRequestError
     && commissionsResult.reason.statusCode === 404
@@ -316,6 +346,39 @@ function copyCode() {
     data: info.value.code,
     success: () => uni.showToast({ title: t('inviteCodeCopied'), icon: 'success' }),
   })
+}
+
+function copyInviteLink() {
+  if (!info.value?.code) return
+  const link = `https://wod.kai.com/register?invite_code=${encodeURIComponent(info.value.code)}`
+  uni.setClipboardData({
+    data: link,
+    success: () => uni.showToast({ title: t('inviteLinkCopied'), icon: 'success' }),
+  })
+}
+
+async function loadMoreRecords() {
+  if (loadingMore.value || !activeHasMore.value) return
+  loadingMore.value = true
+  try {
+    if (activeRecordTab.value === 'fixed') {
+      const nextPage = fixedRewardPage.value + 1
+      const payload = await getInviteRecords(nextPage)
+      fixedRewardRecords.value = uniqueRecords([...fixedRewardRecords.value, ...(payload.items ?? [])])
+      fixedRewardTotal.value = payload.total ?? fixedRewardRecords.value.length
+      fixedRewardPage.value = nextPage
+    } else {
+      const nextPage = friendRebatePage.value + 1
+      const payload = await getInviteCommissions(nextPage)
+      friendRebateRecords.value = uniqueCommissionRecords([...friendRebateRecords.value, ...(payload.items ?? [])])
+      friendRebateTotal.value = payload.total ?? friendRebateRecords.value.length
+      friendRebatePage.value = nextPage
+    }
+  } catch {
+    uni.showToast({ title: t('inviteRecordsLoadFailed'), icon: 'none' })
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 function displayCount(value: number | null): string {
@@ -347,9 +410,12 @@ function friendRecordDetail(record: InviteCommissionItem): string {
 
 function commissionSourceLabel(record: InviteCommissionItem): string {
   const id = record.source_type === 'renewal' ? record.order_renewal_id : record.order_id
-  return record.source_type === 'renewal'
+  const source = record.source_type === 'renewal'
     ? t('inviteCommissionRenewal', { id: id ?? t('notAvailableShort') })
     : t('inviteCommissionOrder', { id: id ?? t('notAvailableShort') })
+  return record.invitee_phone_masked
+    ? t('inviteCommissionFriendSource', { phone: record.invitee_phone_masked, source })
+    : source
 }
 
 function recordStatusClass(key: string): string {
@@ -379,6 +445,7 @@ function recordStatusClass(key: string): string {
 .code-label { display: block; color: rgba(255,255,255,0.72); font-size: 20rpx; }
 .code { display: block; margin-top: 4rpx; color: #fff; font-size: 42rpx; font-weight: 850; letter-spacing: 5rpx; font-variant-numeric: tabular-nums; }
 .copy-button { min-height: 68rpx; padding: 0 24rpx; display: flex; align-items: center; justify-content: center; border-radius: 18rpx; color: #076779; background: #fff; font-size: 24rpx; font-weight: 800; }
+.link-button { min-height: 66rpx; margin-top: 14rpx; display: flex; align-items: center; justify-content: center; border: 1rpx solid rgba(255,255,255,0.42); border-radius: 18rpx; color: #fff; background: rgba(4,62,72,0.18); font-size: 23rpx; font-weight: 750; }
 
 .reward-warning { margin-bottom: 20rpx; padding: 22rpx 26rpx; color: #9b6a08; background: rgba(250, 191, 42, 0.1); border-color: rgba(250, 191, 42, 0.26); font-size: 23rpx; line-height: 1.55; }
 .daily-card, .reward-card, .rebate-card { margin-bottom: 20rpx; padding: 28rpx; }
@@ -447,4 +514,5 @@ function recordStatusClass(key: string): string {
 .record-status.pending { color: var(--primary); background: rgba(12,174,195,0.1); }
 .record-status.muted { color: var(--text-sub); background: var(--bg); }
 .record-amount { color: var(--up); font-size: 23rpx; font-weight: 800; }
+.load-more { min-height: 76rpx; margin: 18rpx 0 8rpx; display: flex; align-items: center; justify-content: center; border: 1rpx solid var(--card-border); border-radius: 20rpx; color: var(--primary); background: var(--card); font-size: 23rpx; font-weight: 750; }
 </style>

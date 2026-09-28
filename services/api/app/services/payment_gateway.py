@@ -111,7 +111,11 @@ def payment_readiness_errors() -> list[str]:
             errors.append("qixiangpay_amount_range_invalid")
         if not 1 <= int(settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER) <= 20:
             errors.append("payment_pending_limit_invalid")
-        if not _finite_positive(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY):
+        if (
+            not _finite_positive(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY)
+            or float(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY)
+            < float(settings.QIXIANGPAY_MAX_AMOUNT_CNY)
+        ):
             errors.append("payment_daily_limit_invalid")
     if settings.QIXIANGPAY_REFUND_ENABLED:
         if not settings.QIXIANGPAY_ENABLED:

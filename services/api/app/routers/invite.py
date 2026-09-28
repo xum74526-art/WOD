@@ -277,18 +277,18 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
             ),
             "tiers": tier_rows(),
             "fixed_reward_card_hours": float(INVITE_V2_FIXED_REWARD),
-            "fixed_reward_total": round(float(fixed_total), 2),
-            "fixed_reward_pending": round(float(fixed_pending), 2),
-            "commission_total": round(float(commission_total), 2),
-            "commission_pending": round(float(commission_pending), 2),
+            "fixed_reward_total": round(float(fixed_total), 3),
+            "fixed_reward_pending": round(float(fixed_pending), 3),
+            "commission_total": round(float(commission_total), 3),
+            "commission_pending": round(float(commission_pending), 3),
             "total_eligible_consumption_card_hours": round(
                 float(totals["eligible_consumption_total"]), 6
             ),
             "eligible_friend_spend_card_hours": round(
                 float(totals["eligible_consumption_total"]), 6
             ),
-            "total_reward": round(float(fixed_total + commission_total), 2),
-            "pending_reward": round(float(fixed_pending + commission_pending), 2),
+            "total_reward": round(float(fixed_total + commission_total), 3),
+            "pending_reward": round(float(fixed_pending + commission_pending), 3),
             "daily_limit": INVITE_V2_DAILY_LIMIT,
             "daily_used": slots_used,
             "daily_remaining": INVITE_V2_DAILY_LIMIT - slots_used,
@@ -335,8 +335,8 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         "invited_count": invited_count,
         "qualified_count": qualified_count,
         "unverified_count": unverified,
-        "total_reward": round(float(total_reward), 2),
-        "pending_reward": round(float(pending_reward), 2),
+        "total_reward": round(float(total_reward), 3),
+        "pending_reward": round(float(pending_reward), 3),
         "pending_count": pending,
         "rewarded_count": rewarded,
         "current_tier": f"{int(rate * 100)}%",
@@ -355,8 +355,8 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         "fixed_reward_card_hours": float(INVITE_V2_FIXED_REWARD),
         "fixed_reward_total": 0,
         "fixed_reward_pending": 0,
-        "commission_total": round(float(total_reward), 2),
-        "commission_pending": round(float(pending_reward), 2),
+        "commission_total": round(float(total_reward), 3),
+        "commission_pending": round(float(pending_reward), 3),
         "total_eligible_consumption_card_hours": 0,
         "eligible_friend_spend_card_hours": 0,
         "daily_limit": INVITE_V2_DAILY_LIMIT,
@@ -388,11 +388,20 @@ def records(
     items = query.order_by(InviteRecord.created_at.desc(), InviteRecord.id.desc()).offset(
         (page - 1) * page_size
     ).limit(page_size).all()
+    accrual_ids = {
+        item.fixed_reward_accrual_id
+        for item in items
+        if item.fixed_reward_accrual_id is not None
+    }
+    accruals = {
+        accrual.id: accrual
+        for accrual in db.query(RewardAccrual).filter(
+            RewardAccrual.id.in_(accrual_ids),
+        ).all()
+    } if accrual_ids else {}
     output = []
     for item in items:
-        accrual = db.query(RewardAccrual).filter(
-            RewardAccrual.id == item.fixed_reward_accrual_id,
-        ).first() if item.fixed_reward_accrual_id else None
+        accrual = accruals.get(item.fixed_reward_accrual_id)
         is_v2 = item.qualification_policy_version == INVITE_V2_RELATIONSHIP_VERSION
         masked_phone = _mask_phone(item.invitee_phone)
         output.append({
@@ -437,12 +446,33 @@ def commissions(
     items = query.order_by(RewardAccrual.created_at.desc(), RewardAccrual.id.desc()).offset(
         (page - 1) * page_size
     ).limit(page_size).all()
+    order_ids = {item.order_id for item in items if item.order_id is not None}
+    order_users = {
+        order_id: user_id
+        for order_id, user_id in db.query(Order.id, Order.user_id).filter(
+            Order.id.in_(order_ids),
+        ).all()
+    } if order_ids else {}
+    invitee_ids = set(order_users.values())
+    invitee_phones = {
+        invitee_id: invitee_phone
+        for invitee_id, invitee_phone in db.query(
+            InviteRecord.invitee_id,
+            InviteRecord.invitee_phone,
+        ).filter(
+            InviteRecord.inviter_id == user.id,
+            InviteRecord.invitee_id.in_(invitee_ids),
+        ).all()
+    } if invitee_ids else {}
     return success({
         "total": total,
         "page": page,
         "page_size": page_size,
         "items": [{
             "id": item.id,
+            "invitee_phone_masked": _mask_phone(
+                invitee_phones.get(order_users.get(item.order_id))
+            ) if order_users.get(item.order_id) in invitee_phones else "",
             "source_type": item.source_type,
             "order_id": item.order_id,
             "order_renewal_id": item.order_renewal_id,

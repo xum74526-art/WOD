@@ -75,7 +75,7 @@ test('new inquiry and renewal requests keep integer-hour requirements without ch
   assert.doesNotMatch(productPage, /purchaseCycles|cycleLabel/)
   assert.match(orderApi, /export type PurchaseType = 'usage' \| 'holding'/)
   assert.match(orderApi, /expected_unit_price_card_hours\?: number/)
-  assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours \}/)
+  assert.match(orderApi, /data: \{ product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours, coupon_id \}/)
   assert.match(orderApi, /renewOrder\(id: number, hours: number, client_request_id: string\)/)
   const createBlock = orderApi.match(/export function createOrder[\s\S]*?\n\}/)?.[0] || ''
   const renewBlock = orderApi.match(/export function renewOrder[\s\S]*?\n\}/)?.[0] || ''

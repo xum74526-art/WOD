@@ -13,6 +13,9 @@ export interface OrderItem {
   billing_unit?: 'GPU_HOUR' | string | null
   amount: number
   amount_card_hours?: number
+  coupon_id?: number | null
+  coupon_discount?: number
+  payable_amount_card_hours?: number
   purchase_type?: string
   ssh_info?: string
   status: string
@@ -67,11 +70,12 @@ export function createOrder(
   quantity = 1,
   client_request_id?: string,
   expected_unit_price_card_hours?: number,
+  coupon_id?: number,
 ) {
   return request<OrderItem>({
     url: '/orders',
     method: 'POST',
-    data: { product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours },
+    data: { product_id, hours, purchase_type, quantity, client_request_id, expected_unit_price_card_hours, coupon_id },
   })
 }
 

@@ -30,7 +30,7 @@ _ENSURE = {
         "delivery_due_at", "delivered_at", "confirmation_due_at", "confirmed_at",
         "canceled_at", "stock_released_at", "disputed_at", "dispute_due_at", "dispute_reason",
         "dispute_resolution", "dispute_resolution_note", "dispute_resolved_at",
-        "dispute_resolved_by", "product_snapshot",
+        "dispute_resolved_by", "product_snapshot", "coupon_id", "coupon_discount",
     ],
     "buy_requests": ["client_request_id"],
     "order_renewals": ["created_platform"],
@@ -95,8 +95,17 @@ _ENSURE = {
         "qualification_day", "daily_slot", "qualification_order_id",
         "qualification_reason", "fixed_reward_accrual_id",
     ],
-    "external_auth_flows": ["user_id", "platform", "client_id", "terms_accepted"],
+    "external_auth_flows": ["user_id", "inviter_id", "platform", "client_id", "terms_accepted"],
     "external_auth_tickets": ["platform", "client_id"],
+    "compute_onboardings": [
+        "review_note", "reviewed_by", "reviewed_at", "updated_at",
+        "created_platform", "last_modified_platform", "version",
+    ],
+    "coupons": [
+        "campaign_id", "product_id", "redeemed_at", "used_at", "used_order_id",
+        "created_platform", "last_modified_platform", "version",
+    ],
+    "coupon_campaigns": ["last_modified_by"],
 }
 
 _DATETIME_COLS = {
@@ -112,21 +121,24 @@ _DATETIME_COLS = {
     "identity_verified_at", "qualified_at",
     "recovery_email_verified_at",
     "expires_at", "revoked_at",
+    "redeemed_at", "used_at",
 }
 _DATE_COLS = {"qualification_day"}
 _INTEGER_COLS = {
     "quantity", "purchase_hours", "video_duration", "stock", "supplier_id",
     "ref_payment_order_id", "ref_order_renewal_id", "ref_reward_accrual_id",
     "ref_merchant_settlement_id", "ref_payment_refund_id", "reviewed_by", "payout_actor_id",
-    "dispute_resolved_by", "user_id",
+    "dispute_resolved_by", "user_id", "inviter_id",
     "source_max_configurable_quantity", "platform_stock_cap",
     "daily_slot", "qualification_order_id", "fixed_reward_accrual_id",
     "auth_version", "moderated_by", "reconcile_attempts", "revoked_by_user_id",
+    "coupon_id", "campaign_id", "product_id", "used_order_id", "last_modified_by", "version",
 }
 _NUMERIC_COLS = {
     "sell_price", "source_price", "exchange_rate", "reliability",
     "withdrawable_balance", "withdraw_frozen", "promotional_balance",
     "promotional_frozen",
+    "coupon_discount",
 }
 _BOOLEAN_COLS = {"phone_bound", "password_set", "terms_accepted"}
 _JSON_COLS = {"product_snapshot"}
@@ -152,6 +164,12 @@ def _ensure_columns(db_engine=None):
                     col_type = "INTEGER NOT NULL DEFAULT 0"
                 elif table == "products" and col == "version":
                     col_type = "INTEGER NOT NULL DEFAULT 1"
+                elif table == "compute_onboardings" and col == "version":
+                    col_type = "INTEGER NOT NULL DEFAULT 1"
+                elif table == "coupons" and col == "version":
+                    col_type = "INTEGER NOT NULL DEFAULT 1"
+                elif table == "orders" and col == "coupon_discount":
+                    col_type = "NUMERIC NOT NULL DEFAULT 0"
                 elif col in {
                     "client_request_id", "create_request_hash", "consent_version",
                 }:
@@ -188,6 +206,12 @@ def _ensure_columns(db_engine=None):
                 "UPDATE orders SET last_modified_platform = 'legacy' "
                 "WHERE last_modified_platform IS NULL OR TRIM(last_modified_platform) = ''"
             ))
+            conn.execute(text(
+                "UPDATE orders SET coupon_discount = 0 WHERE coupon_discount IS NULL"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_orders_coupon_id ON orders (coupon_id)"
+            ))
     if "users" in insp.get_table_names():
         with target_engine.begin() as conn:
             conn.execute(text("UPDATE users SET auth_version = 0 WHERE auth_version IS NULL"))
@@ -197,6 +221,62 @@ def _ensure_columns(db_engine=None):
             conn.execute(text(
                 "UPDATE payment_orders SET reconcile_attempts = 0 "
                 "WHERE reconcile_attempts IS NULL"
+            ))
+    if "compute_onboardings" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE compute_onboardings SET version = 1 "
+                "WHERE version IS NULL OR version < 1"
+            ))
+            conn.execute(text(
+                "UPDATE compute_onboardings SET created_platform = 'legacy' "
+                "WHERE created_platform IS NULL OR TRIM(created_platform) = ''"
+            ))
+            conn.execute(text(
+                "UPDATE compute_onboardings SET last_modified_platform = created_platform "
+                "WHERE last_modified_platform IS NULL OR TRIM(last_modified_platform) = ''"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_compute_onboardings_status "
+                "ON compute_onboardings (status)"
+            ))
+    if "coupons" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            if target_engine.dialect.name == "postgresql":
+                conn.execute(text(
+                    "ALTER TABLE coupons ALTER COLUMN amount TYPE NUMERIC(18, 6) "
+                    "USING amount::numeric"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE coupons ALTER COLUMN min_amount TYPE NUMERIC(18, 6) "
+                    "USING min_amount::numeric"
+                ))
+            conn.execute(text(
+                "UPDATE coupons SET version = 1 WHERE version IS NULL OR version < 1"
+            ))
+            conn.execute(text(
+                "UPDATE coupons SET created_platform = 'legacy' "
+                "WHERE created_platform IS NULL OR TRIM(created_platform) = ''"
+            ))
+            conn.execute(text(
+                "UPDATE coupons SET last_modified_platform = created_platform "
+                "WHERE last_modified_platform IS NULL OR TRIM(last_modified_platform) = ''"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_user_campaign "
+                "ON coupons (user_id, campaign_id) WHERE campaign_id IS NOT NULL"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_coupons_status ON coupons (status)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_coupons_used_order_id ON coupons (used_order_id)"
+            ))
+    if "coupon_campaigns" in insp.get_table_names():
+        with target_engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE coupon_campaigns SET last_modified_by = created_by "
+                "WHERE last_modified_by IS NULL"
             ))
     for table in ("posts", "comments"):
         if table in insp.get_table_names():
@@ -234,6 +314,7 @@ def _ensure_columns(db_engine=None):
         "community_blocks": ("created_platform",),
         "community_reports": ("created_platform",),
         "invite_records": ("created_platform", "last_modified_platform"),
+        "compute_onboardings": ("created_platform", "last_modified_platform"),
     }
     table_names = set(insp.get_table_names())
     for table, columns in attribution_columns.items():

@@ -10,6 +10,13 @@ class KaiStartIn(BaseModel):
     return_url: str | None = Field(default=None, max_length=1024)
     client_id: str | None = Field(default=None, min_length=1, max_length=64)
     terms_accepted: StrictBool = False
+    invite_code: str | None = Field(default=None, max_length=16)
+
+    @field_validator("invite_code", mode="before")
+    @classmethod
+    def normalize_invite_code(cls, value):
+        normalized = str(value or "").strip().upper()
+        return normalized or None
 
 
 class KaiBindStartIn(BaseModel):

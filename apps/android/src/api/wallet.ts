@@ -39,6 +39,7 @@ export interface PaymentConfig {
   card_hour_rmb_rate: number
   min_amount_cny: number
   max_amount_cny: number
+  daily_limit_cny: number
   checkout_mode: 'hosted_page'
   checkout_ttl_seconds?: number
   payment_types?: RechargePaymentType[]

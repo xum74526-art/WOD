@@ -59,7 +59,7 @@ function applicationToDevice(item: OnboardingItem): HostingDeviceItem {
     status: applicationStatus(item.status),
     location: item.location || '',
     createdAt: item.created_at,
-    note: item.remark,
+    note: item.review_note || item.remark,
   }
 }
 

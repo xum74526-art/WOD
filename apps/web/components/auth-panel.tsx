@@ -140,7 +140,12 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     const params = new URLSearchParams(window.location.search);
     const requestedReturnTo = params.get("return_to") || params.get("next");
     const returnTo = requestedReturnTo ? normalizeReturnPath(requestedReturnTo) : "";
-    const suffix = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
+    const incomingInviteCode = (params.get("invite_code") || params.get("invite") || "").trim().toUpperCase().slice(0, 16);
+    if (isRegister && incomingInviteCode) setInviteCode(incomingInviteCode);
+    const switchParams = new URLSearchParams();
+    if (returnTo) switchParams.set("return_to", returnTo);
+    if (incomingInviteCode) switchParams.set("invite_code", incomingInviteCode);
+    const suffix = switchParams.size ? `?${switchParams.toString()}` : "";
     setSwitchHref(`${isRegister ? "/login" : "/register"}${suffix}`);
     const kaiError = params.get("kai_error");
     if (kaiError) {
@@ -195,7 +200,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     try {
       if (method === "kai") {
         if (!kaiConfigured) throw new Error(t("auth.kai.notConfigured", "KAI 统一认证尚未配置"));
-        window.location.assign(kaiWebAuthorizationUrl(mode, safeReturnPath()));
+        window.location.assign(kaiWebAuthorizationUrl(mode, safeReturnPath(), isRegister ? inviteCode.trim() : ""));
         return;
       }
       if (isRegister) {

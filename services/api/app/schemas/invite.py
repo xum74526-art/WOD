@@ -120,6 +120,7 @@ class InviteRelationshipListResponse(BaseModel):
 
 class InviteCommissionOut(BaseModel):
     id: int
+    invitee_phone_masked: str = ""
     source_type: Literal["order", "renewal"]
     order_id: int | None = None
     order_renewal_id: int | None = None

@@ -288,14 +288,17 @@ test("Web registration offers phone and KAI registration, with transparent first
   assert.match(panel, /value=\{inviteCode\}[^\r\n]*maxLength=\{16\}/);
   assert.match(panel, /role="tab"[\s\S]*?setMethod\("password"\)[\s\S]*?role="tab"[\s\S]*?setMethod\("kai"\)/);
   assert.doesNotMatch(panel, /!isRegister\s*&&\s*<button[^>]+role="tab"/);
-  assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\)\)/);
+  assert.match(panel, /kaiWebAuthorizationUrl\(mode, safeReturnPath\(\), isRegister \? inviteCode\.trim\(\) : ""\)/);
+  assert.match(panel, /params\.get\("invite_code"\)/);
   assert.match(panel, /首次完成 KAI 统一认证会自动创建KAI星算账号/);
   assert.doesNotMatch(panel, /identity_not_bound|PENDING_KAI_INTENT_KEY|KAI_REGISTRATION_NOTICE_KEY/);
   assert.match(panel, /isRegister \? t\("auth\.kai\.continueRegistration"/);
   assert.match(panel, /t\("auth\.kai\.signIn"/);
   assert.match(panel, /\(isRegister \|\| method === "kai"\) && !acceptedTerms/);
   assert.match(api, /query\.set\("terms_accepted", "1"\)/);
+  assert.match(api, /intent === "register" && inviteCode\.trim\(\)/);
   assert.match(adapter, /terms_accepted: termsAccepted/);
+  assert.match(adapter, /invite_code: inviteCode/);
 });
 
 test("released clients do not describe canonical data as coming from mobile", () => {

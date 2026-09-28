@@ -176,6 +176,7 @@ def create_authorization_flow(
     return_url: str | None = None,
     *,
     user_id: int | None = None,
+    inviter_id: int | None = None,
     platform: str = "legacy",
     client_id: str | None = None,
     terms_accepted: bool = False,
@@ -188,6 +189,8 @@ def create_authorization_flow(
         raise BizError("此统一认证操作必须先登录", status_code=401)
     if intent not in authenticated_intents and user_id is not None:
         raise BizError("统一认证流程目标用户无效")
+    if inviter_id is not None and intent != "register":
+        raise BizError("邀请码仅适用于新账号注册")
 
     _cleanup_expired(db)
     state = secrets.token_urlsafe(32)
@@ -204,6 +207,7 @@ def create_authorization_flow(
             intent=intent,
             terms_accepted=bool(terms_accepted),
             user_id=user_id,
+            inviter_id=inviter_id,
             platform=platform,
             client_id=client_id,
             return_url=_return_url(return_url),

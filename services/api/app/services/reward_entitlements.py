@@ -268,13 +268,19 @@ def _create_consumer_accrual(
 
 
 def create_consumer_order_accrual(order: Order, asset: Asset, event_at: datetime, db: Session):
+    # Coupon value is a platform subsidy, not buyer spend. Do not stack a
+    # purchase rebate on the discounted portion of the same order.
+    eligible_spend = max(
+        Decimal("0"),
+        Decimal(str(order.amount or 0)) - Decimal(str(order.coupon_discount or 0)),
+    )
     return _create_consumer_accrual(
         order,
         asset,
         source_type="order",
         source_id=order.id,
         order_renewal_id=None,
-        base_amount=Decimal(str(order.amount or 0)),
+        base_amount=eligible_spend,
         event_at=event_at,
         db=db,
     )

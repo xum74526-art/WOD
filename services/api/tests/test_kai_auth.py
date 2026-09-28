@@ -26,6 +26,7 @@ from app.models import (  # noqa: F401
     ExternalAuthTicket,
     ExternalIdentity,
     InviteCode,
+    InviteRecord,
     User,
     Wallet,
 )
@@ -225,6 +226,47 @@ class KaiAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.query(InviteCode).count(), 1)
         self.db.refresh(identity)
         self.assertTrue(identity.email_verified)
+
+    def test_kai_registration_preserves_inviter_and_creates_one_relationship(self):
+        self.configure()
+        inviter = self._user("13900000009")
+        self.db.add(InviteCode(user_id=inviter.id, code="ZTWTEST9", invited_count=0))
+        self.db.commit()
+
+        kai_auth.create_authorization_flow(
+            self.db,
+            "register",
+            inviter_id=inviter.id,
+            platform="ios",
+            client_id="ios",
+            terms_accepted=True,
+        )
+        self.assertEqual(self.db.query(ExternalAuthFlow).one().inviter_id, inviter.id)
+
+        invited, _ticket, created = resolve_or_create_kai_login(
+            self.db,
+            {"sub": "kai-invited-user", "name": "Invited KAI User"},
+            platform="ios",
+            client_id="ios",
+            allow_create=True,
+            inviter_id=inviter.id,
+        )
+        self.assertTrue(created)
+        self.assertEqual(invited.invited_by, inviter.id)
+        relationship = self.db.query(InviteRecord).filter_by(invitee_id=invited.id).one()
+        self.assertEqual(relationship.inviter_id, inviter.id)
+        self.assertEqual(relationship.created_platform, "ios")
+
+        repeated, _ticket, repeated_created = resolve_or_create_kai_login(
+            self.db,
+            {"sub": "kai-invited-user", "name": "Invited KAI User"},
+            platform="web",
+            client_id="web",
+            inviter_id=None,
+        )
+        self.assertFalse(repeated_created)
+        self.assertEqual(repeated.id, invited.id)
+        self.assertEqual(self.db.query(InviteRecord).filter_by(invitee_id=invited.id).count(), 1)
 
     def test_kai_email_claim_never_merges_distinct_subjects(self):
         self.configure()

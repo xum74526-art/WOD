@@ -12,6 +12,7 @@
           <text>{{ t('rechargeRateLockedHint') }}</text>
           <text>1 {{ t('cardHour') }} = {{ formatAmount(cardHourRate) }} {{ t('cny') }}</text>
         </view>
+        <text class="recharge-limit-hint">{{ t('rechargeLimitsHint', { max: formatMoney(maximumAmount), daily: formatMoney(dailyLimit) }) }}</text>
         <view class="input-wrap"><text>¥</text><input v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeCny')" /></view>
         <view class="quick-amounts">
           <view v-for="amount in quickAmounts" :key="amount" class="quick-amount pressable" @tap="sheet.amount = String(amount)">¥{{ amount }}</view>
@@ -119,7 +120,8 @@ const rechargeEnabled = computed(() => commerce.rechargeEnabled
   && paymentMethods.value.length > 0)
 const cardHourRate = computed(() => Number(props.wallet?.payment_config?.card_hour_rmb_rate || 1.002))
 const minimumAmount = computed(() => effectiveRechargeMinimum(props.wallet?.payment_config?.min_amount_cny))
-const maximumAmount = computed(() => Number(props.wallet?.payment_config?.max_amount_cny || 50_000))
+const maximumAmount = computed(() => Number(props.wallet?.payment_config?.max_amount_cny || 40_000))
+const dailyLimit = computed(() => Number(props.wallet?.payment_config?.daily_limit_cny || 10_000_000))
 const minimumWithdrawal = computed(() => effectiveWithdrawalMinimum(withdrawConfig.value?.min_card_hours))
 const withdrawGross = computed(() => Math.max(0, Number(sheet.amount) || 0) * Number(withdrawConfig.value?.rate_cny_per_card_hour || 0))
 const withdrawFee = computed(() => withdrawGross.value * Number(withdrawConfig.value?.fee_rate || 0))
@@ -289,6 +291,7 @@ async function submitWithdrawal() {
 .sheet { width: 100%; padding: 34rpx 32rpx calc(34rpx + var(--safe-bottom)); background: var(--bg); border-radius: 30rpx 30rpx 0 0; animation: wallet-sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .sheet-title { display: block; margin-bottom: 24rpx; color: var(--text); font-size: 32rpx; font-weight: 800; }
 .rate-card, .withdraw-preview { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 18rpx; color: var(--text-sub); background: var(--bg-2); border-radius: 16rpx; }
+.recharge-limit-hint { display: block; margin-top: 14rpx; color: var(--text-sub); font-size: 22rpx; line-height: 1.45; }
 .input-wrap { min-height: 88rpx; margin-top: 20rpx; padding: 0 20rpx; display: flex; align-items: center; gap: 16rpx; color: var(--text); border: 1rpx solid var(--border); border-radius: 16rpx; }
 .input-wrap input { flex: 1; color: var(--text); }
 .quick-amounts, .payment-methods, .sheet-actions { display: flex; gap: 14rpx; margin-top: 18rpx; }

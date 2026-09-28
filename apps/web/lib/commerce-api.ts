@@ -115,6 +115,9 @@ export type Order = {
   price_unit: string;
   quantity: number;
   purchase_type?: "usage" | "holding";
+  coupon_id?: number | null;
+  coupon_discount?: number;
+  payable_amount_card_hours?: number;
   purchase_hours?: number | null;
   market_source?: "kai" | "wod" | null;
   cycle_days?: number | null;
@@ -343,7 +346,7 @@ export function renewOrder(id: number, hours: number, clientRequestId: string) {
     body: JSON.stringify(hourlyOrderBody(hours, clientRequestId)),
   });
 }
-export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: ProductPurchaseType; expected_unit_price_card_hours: number }, clientRequestId: string) {
+export function createDirectOrder(input: { product_id: number; quantity: number; hours: number; purchase_type: ProductPurchaseType; expected_unit_price_card_hours: number; coupon_id?: number }, clientRequestId: string) {
   return apiRequest<{ order: Order }>("/api/v1/account/orders/direct", {
     method: "POST",
     headers: { "Idempotency-Key": clientRequestId },

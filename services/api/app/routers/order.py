@@ -52,6 +52,11 @@ from app.services.funding_allocation import (
     reserve_order_funding,
     spend_renewal_funding,
 )
+from app.services.coupon_service import (
+    apply_coupon_to_order,
+    claim_coupon_for_order,
+    restore_coupon_from_order,
+)
 from app.services.invite_rewards_v2 import (
     process_invite_order_event,
     process_invite_renewal_event,
@@ -156,6 +161,7 @@ def _same_order_request(order: Order, data: OrderCreateIn) -> bool:
         and int(order.quantity or 1) == int(data.quantity)
         and duration_matches
         and str(order.purchase_type or "usage") == str(data.purchase_type or "usage")
+        and (int(order.coupon_id) if order.coupon_id is not None else None) == data.coupon_id
     )
 
 
@@ -190,6 +196,10 @@ def _order_out(o: Order, db: Session) -> dict:
         out.update(product_provider_info(p, db))
     out["billing_unit"] = "GPU_HOUR"
     out["amount_card_hours"] = float(o.amount)
+    coupon_discount = Decimal(str(o.coupon_discount or 0))
+    out["coupon_id"] = o.coupon_id
+    out["coupon_discount"] = float(coupon_discount)
+    out["payable_amount_card_hours"] = float(max(Decimal("0"), Decimal(str(o.amount)) - coupon_discount))
     # Reconstruct the effective booked unit price from the immutable order
     # amount.  Reading today's Product.price here would silently reinterpret a
     # historical order whenever KAI publishes a new quote.
@@ -462,7 +472,15 @@ def create_order(
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).with_for_update().first()
     if not wallet:
         raise BizError("钱包不存在", status_code=404)
-    if spendable_wallet_balance(wallet, db) < amount:
+    coupon, coupon_discount = claim_coupon_for_order(
+        db,
+        coupon_id=data.coupon_id,
+        user_id=user.id,
+        product_id=p.id,
+        purchase_type=data.purchase_type,
+        gross_amount=amount,
+    )
+    if spendable_wallet_balance(wallet, db) + coupon_discount < amount:
         raise BizError("余额不足")
 
     try:
@@ -479,7 +497,9 @@ def create_order(
             user_id=user.id, product_id=p.id, quantity=data.quantity,
             cycle_days=cycle_days, purchase_hours=purchase_hours,
             created_platform=platform, last_modified_platform=platform,
-            amount=amount, status="completed" if holding_purchase else "paid", purchase_type=data.purchase_type,
+            amount=amount, coupon_id=coupon.id if coupon else None,
+            coupon_discount=coupon_discount,
+            status="completed" if holding_purchase else "paid", purchase_type=data.purchase_type,
             product_snapshot=product_snapshot,
             lifecycle_policy_version=HOLDING_LIFECYCLE_POLICY if holding_purchase else "reserved-v1",
             start_at=now, end_at=None,
@@ -490,6 +510,15 @@ def create_order(
         )
         db.add(order)
         db.flush()
+        if coupon is not None:
+            apply_coupon_to_order(
+                db,
+                coupon=coupon,
+                order=order,
+                wallet=wallet,
+                discount=coupon_discount,
+                platform=platform,
+            )
         reserve_order_funding(order, wallet, amount, db)
         if holding_purchase:
             capture_order_funding(order, wallet, db, captured_at=now)
@@ -747,6 +776,12 @@ def _refund_reserved_order(
         raise BizError("钱包不存在", status_code=404)
     now = datetime.now(timezone.utc)
     refund_order_funding(order, wallet, db, refunded_at=now)
+    restore_coupon_from_order(
+        db,
+        order=order,
+        wallet=wallet,
+        platform=platform,
+    )
 
     product = db.query(Product).filter(Product.id == order.product_id).with_for_update().first()
     if product:

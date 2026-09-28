@@ -4,7 +4,7 @@ import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -30,6 +30,7 @@ from app.services.qixiangpay import (
     create_recharge_order,
     handle_notification,
     public_config,
+    provider_day_utc_bounds,
     query_provider_and_reconcile,
     resolve_checkout_client_ip,
     sign_params,
@@ -106,10 +107,10 @@ class QixiangPayPaymentTests(unittest.TestCase):
         settings.QIXIANGPAY_CHECKOUT_TTL_SECONDS = 300
         settings.QIXIANGPAY_PROVIDER_TIMEZONE = "Asia/Shanghai"
         settings.QIXIANGPAY_MIN_AMOUNT_CNY = 0.01
-        settings.QIXIANGPAY_MAX_AMOUNT_CNY = 50000
+        settings.QIXIANGPAY_MAX_AMOUNT_CNY = 40000
         settings.CARD_HOUR_RMB_RATE = 1.002
         settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 5
-        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 10000000
 
     def tearDown(self):
         for name, value in self.original.items():
@@ -258,7 +259,10 @@ class QixiangPayPaymentTests(unittest.TestCase):
 
     def test_configured_ten_yuan_minimum_is_enforced(self):
         settings.QIXIANGPAY_MIN_AMOUNT_CNY = 10
-        self.assertEqual(public_config()["min_amount_cny"], 10.0)
+        config = public_config()
+        self.assertEqual(config["min_amount_cny"], 10.0)
+        self.assertEqual(config["max_amount_cny"], 40000.0)
+        self.assertEqual(config["daily_limit_cny"], 10000000.0)
         with self.assertRaises(BizError):
             create_recharge_order(
                 self.db,
@@ -273,6 +277,13 @@ class QixiangPayPaymentTests(unittest.TestCase):
             payment_type="alipay",
         )
         self.assertEqual(output["amount_cny"], 10.0)
+
+    def test_daily_limit_uses_provider_calendar_day(self):
+        start, end = provider_day_utc_bounds(
+            datetime(2026, 9, 28, 1, 30, tzinfo=timezone.utc)
+        )
+        self.assertEqual(start, datetime(2026, 9, 27, 16, 0))
+        self.assertEqual(end, datetime(2026, 9, 28, 16, 0))
 
     def test_active_duplicate_blocks_only_the_same_amount_and_payment_type(self):
         first = create_recharge_order(
@@ -330,15 +341,16 @@ class QixiangPayPaymentTests(unittest.TestCase):
 
     def test_concurrent_daily_limit_admission_is_serialized_across_connections(self):
         settings.PAYMENT_MAX_PENDING_ORDERS_PER_USER = 5
-        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 50000
+        settings.QIXIANGPAY_MAX_AMOUNT_CNY = 10000000
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = 10000000
         Session, user_id = self._file_sqlite_sessions()
 
         results = self._run_parallel_recharge_creates(
             Session,
             user_id,
             (
-                (Decimal("40000.00"), "parallel-daily-limit-0001"),
-                (Decimal("40001.00"), "parallel-daily-limit-0002"),
+                (Decimal("6000000.00"), "parallel-daily-limit-0001"),
+                (Decimal("6000001.00"), "parallel-daily-limit-0002"),
             ),
         )
 
@@ -351,7 +363,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             self.assertEqual(len(orders), 1)
             self.assertIn(
                 sum((order.amount_cny for order in orders), Decimal("0")),
-                (Decimal("40000.00"), Decimal("40001.00")),
+                (Decimal("6000000.00"), Decimal("6000001.00")),
             )
         finally:
             inspection.close()

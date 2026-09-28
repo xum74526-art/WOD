@@ -115,6 +115,7 @@ def resolve_or_create_kai_login(
     platform: str,
     client_id: str | None,
     allow_create: bool = False,
+    inviter_id: int | None = None,
 ) -> tuple[User, str, bool]:
     """Return one local user and handoff ticket for a verified KAI subject.
 
@@ -157,6 +158,7 @@ def resolve_or_create_kai_login(
                 password_set=False,
                 avatar=_optional_text(claims.get("picture"), 512),
                 created_platform=platform,
+                invited_by=inviter_id,
             )
             db.add(user)
             db.flush()
@@ -182,6 +184,21 @@ def resolve_or_create_kai_login(
                     ),
                 ]
             )
+            db.flush()
+            if inviter_id is not None:
+                inviter = db.query(User).filter(
+                    User.id == inviter_id,
+                    User.account_status == "active",
+                ).first()
+                if inviter is None:
+                    raise BizError("邀请码无效，请检查后重试")
+                from app.routers.invite import create_invite_relationship
+                create_invite_relationship(
+                    user,
+                    inviter_id,
+                    db,
+                    platform=platform,
+                )
             ticket = _stage_ticket(
                 db,
                 user.id,

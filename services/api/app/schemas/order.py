@@ -14,6 +14,7 @@ class OrderCreateIn(BaseModel):
     cycle_days: int | None = Field(default=None, ge=1, le=3650)
     expected_unit_price_card_hours: Decimal | None = None
     purchase_type: Literal["usage", "holding"] = "usage"
+    coupon_id: int | None = Field(default=None, ge=1)
     client_request_id: str | None = Field(default=None, min_length=12, max_length=64)
 
 
@@ -72,6 +73,9 @@ class OrderOut(OrmModel):
     last_modified_platform: str = "legacy"
     amount: float
     amount_card_hours: float | None = None
+    coupon_id: int | None = None
+    coupon_discount: float = 0
+    payable_amount_card_hours: float | None = None
     price_cny_per_gpu_hour: float | None = None
     status: str
     purchase_type: str | None = "usage"

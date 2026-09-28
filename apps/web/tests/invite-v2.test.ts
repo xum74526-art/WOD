@@ -133,6 +133,7 @@ test("qualification records and commission records stay separated", () => {
     items: [
       {
         id: 23,
+        invitee_phone_masked: "138****0001",
         source_type: "order",
         order_id: 88,
         base_card_hours: 100,
@@ -164,8 +165,12 @@ test("qualification records and commission records stay separated", () => {
   assert.equal(records.friendRebateRecords[0].eligibleConsumptionCardHours, 100);
   assert.equal(records.friendRebateRecords[0].ratePercent, 4);
   assert.equal(records.friendRebateRecords[0].amountCardHours, 4);
+  assert.equal(records.friendRebateRecords[0].inviteePhone, "138****0001");
   assert.equal(records.friendRebateRecords[1].sourceType, "renewal");
   assert.equal(records.friendRebateRecords[1].orderRenewalId, "109");
+  assert.equal(records.fixedRewardTotal, 2);
+  assert.equal(records.friendRebateTotal, 2);
+  assert.equal(records.total, 4);
 });
 
 test("Web referral page exposes both mechanisms and the approved compliance boundaries", () => {
@@ -192,6 +197,8 @@ test("Web referral page exposes both mechanisms and the approved compliance boun
   assert.match(component, /normalized === "未绑定手机号"/);
   assert.match(component, /row\.sourceType === "renewal" && row\.orderRenewalId/);
   assert.match(component, /invite\.records\.renewalReference/);
+  assert.match(component, /shareInvite/);
+  assert.match(component, /loadMoreRecords/);
   assert.doesNotMatch(`${component}\n${locale}`, /15%.*20%.*25%|first-order rebate rate/i);
   assert.doesNotMatch(component, /[—–]/);
 });

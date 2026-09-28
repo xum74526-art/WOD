@@ -591,6 +591,13 @@ class PaymentOperationsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "payment_checkout_allowed_hosts_invalid"):
             assert_payment_configuration_safe()
 
+    def test_collection_readiness_rejects_daily_limit_below_single_order_limit(self):
+        settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY = (
+            settings.QIXIANGPAY_MAX_AMOUNT_CNY - 0.01
+        )
+        with self.assertRaisesRegex(RuntimeError, "payment_daily_limit_invalid"):
+            assert_payment_configuration_safe()
+
     def test_collection_kill_switch_preserves_history_query_and_refund(self):
         query_order = self._new_order()
         refund_order = self._new_order(amount_cny=Decimal("11.02"))

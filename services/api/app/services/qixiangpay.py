@@ -70,6 +70,23 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def provider_day_utc_bounds(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Return the provider calendar-day bounds as naive UTC timestamps."""
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    else:
+        current = current.astimezone(timezone.utc)
+    provider_zone = ZoneInfo(settings.QIXIANGPAY_PROVIDER_TIMEZONE)
+    local_start = current.astimezone(provider_zone).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    utc_start = local_start.astimezone(timezone.utc).replace(tzinfo=None)
+    utc_end = (local_start + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None)
+    return utc_start, utc_end
+
+
 def canonicalize(params: dict) -> str:
     """Return the exact Qixiang Pay MD5 canonical string.
 
@@ -217,6 +234,7 @@ def public_config() -> dict:
         "card_hour_rmb_rate": float(settings.CARD_HOUR_RMB_RATE),
         "min_amount_cny": float(settings.QIXIANGPAY_MIN_AMOUNT_CNY),
         "max_amount_cny": float(settings.QIXIANGPAY_MAX_AMOUNT_CNY),
+        "daily_limit_cny": float(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY),
         "checkout_mode": "hosted_page",
         "checkout_ttl_seconds": checkout_ttl_seconds(),
         "payment_types": list(configured_payment_types()),
@@ -504,11 +522,14 @@ def create_recharge_order(
         ).scalar()
         if int(pending_count or 0) >= pending_limit:
             raise BizError("未完成的充值订单过多，请先完成或等待订单过期", status_code=429)
-        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start, day_end = provider_day_utc_bounds(
+            now.replace(tzinfo=timezone.utc)
+        )
         daily_total = db.query(func.coalesce(func.sum(PaymentOrder.amount_cny), 0)).filter(
             PaymentOrder.user_id == user_id,
             PaymentOrder.provider == PROVIDER,
             PaymentOrder.created_at >= day_start,
+            PaymentOrder.created_at < day_end,
             PaymentOrder.status.notin_(("failed", "canceled")),
         ).scalar()
         daily_limit = Decimal(str(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY)).quantize(

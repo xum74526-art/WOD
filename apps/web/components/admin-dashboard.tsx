@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bank, Bell, ClipboardText, Gavel, IdentificationCard, Receipt, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, Bank, Bell, ClipboardText, Gavel, HardDrives, IdentificationCard, Receipt, Storefront, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import { useI18n } from "@/components/locale-root";
 
 const queues = [
   { eyebrow: "SERVICE REQUESTS", titleKey: "admin.dashboard.requests.title", title: "需求管理", descriptionKey: "admin.dashboard.requests.description", description: "查看用户提交的算力需求、指定商家与联系方式，供运营人员线下跟进。", href: "/admin/requests", labelKey: "admin.dashboard.requests.action", label: "查看需求", icon: ClipboardText },
+  { eyebrow: "DEVICE HOSTING", titleKey: "admin.dashboard.onboardings.title", title: "设备托管", descriptionKey: "admin.dashboard.onboardings.description", description: "受理设备托管申请，记录联系、通过或驳回结论，并把处理结果同步给用户。", href: "/admin/onboardings", labelKey: "admin.dashboard.onboardings.action", label: "进入托管队列", icon: HardDrives },
   { eyebrow: "PLATFORM DATA", titleKey: "admin.dashboard.data.title", title: "端口数据", descriptionKey: "admin.dashboard.data.description", description: "统一查看 Web、iOS、Android、管理端及历史来源的用户、订单与充值数据。", href: "/admin/data", labelKey: "admin.dashboard.data.action", label: "查看端口数据", icon: UsersThree },
   { eyebrow: "IDENTITY", titleKey: "admin.dashboard.kyc.title", title: "实名认证", descriptionKey: "admin.dashboard.kyc.description", description: "核验个人或企业主体，结论控制商家准入与提现。", href: "/admin/kyc", labelKey: "admin.dashboard.kyc.action", label: "进入实名队列", icon: IdentificationCard },
   { eyebrow: "MERCHANT ADMISSION", titleKey: "admin.dashboard.suppliers.title", title: "商家入驻审核", descriptionKey: "admin.dashboard.suppliers.description", description: "单独审核商家入驻资料；只有已完成实名认证的申请人才能通过。", href: "/admin/suppliers", labelKey: "admin.dashboard.suppliers.action", label: "进入入驻队列", icon: Storefront },

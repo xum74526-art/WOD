@@ -36,7 +36,7 @@ test("Web BFF never caches or reuses a captcha challenge", async ({ request }) =
   expect(second.key).not.toBe(first.key);
 });
 
-test("Web BFF 健康检查、公开商品与旧模块停用状态", async ({ request }) => {
+test("Web BFF 健康检查与公开商品使用统一后端", async ({ request }) => {
   const health = await request.get("/api/v1/health");
   expect(health.ok()).toBeTruthy();
   await expect(health.json()).resolves.toMatchObject({ data: { mobile_backend: "ok" } });
@@ -50,10 +50,6 @@ test("Web BFF 健康检查、公开商品与旧模块停用状态", async ({ req
     expect(response.ok(), `${path} should be available`).toBeTruthy();
     await expect(response.json()).resolves.toMatchObject({ meta: { source: "canonical-api" } });
   }
-
-  const oldTeams = await request.get("/api/v1/account/teams");
-  expect(oldTeams.status()).toBe(503);
-  await expect(oldTeams.json()).resolves.toMatchObject({ error: { code: "mobile_source_unavailable" } });
 });
 
 test("Web 注册、Cookie 会话、地址与通知全部使用手机端后端", async ({ request }) => {

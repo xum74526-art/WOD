@@ -70,6 +70,7 @@
           <StatusBadge :text="applicationStatusLabel(item.status)" :type="applicationBadgeType(item.status)" />
         </view>
         <text class="history-description">{{ applicationDescription(item.status) }}</text>
+        <text v-if="item.review_note" class="history-review-note">{{ t('hostingReviewNote') }}：{{ item.review_note }}</text>
         <view class="history-meta">
           <text>#{{ item.id }}</text>
           <text v-if="item.created_at">{{ t('submittedAt') }} {{ formatDate(item.created_at) }}</text>
@@ -184,6 +185,7 @@ onShow(() => hostingStore.refresh())
 .history-name { color: var(--text); font-size: 29rpx; font-weight: 680; }
 .history-count { color: var(--text-sub); font-size: 22rpx; margin-left: 12rpx; }
 .history-description { display: block; color: var(--text-sub); font-size: 23rpx; line-height: 1.5; margin-top: 16rpx; }
+.history-review-note { display: block; margin-top: 12rpx; padding: 14rpx 16rpx; border-radius: 12rpx; color: var(--text); background: var(--bg-2); font-size: 22rpx; line-height: 1.5; }
 .history-meta { display: flex; justify-content: space-between; color: var(--text-dim); font-size: 20rpx; margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx solid var(--divider); }
 .empty-history { padding: 44rpx; color: var(--text-sub); text-align: center; font-size: 24rpx; }
 .history-skeleton { height: 176rpx; background: linear-gradient(90deg, var(--card), var(--bg-2), var(--card)); background-size: 200% 100%; animation: skeleton-shift 1.2s ease infinite; }

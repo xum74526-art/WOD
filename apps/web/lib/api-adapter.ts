@@ -504,6 +504,9 @@ function order(value: unknown, supplierView = false) {
     price_unit: "order_total",
     quantity: number(item.quantity, 1),
     purchase_type: text(item.purchase_type, "usage"),
+    coupon_id: item.coupon_id == null ? null : number(item.coupon_id),
+    coupon_discount: number(item.coupon_discount),
+    payable_amount_card_hours: number(item.payable_amount_card_hours, number(item.amount_card_hours, number(item.amount))),
     market_source: text(item.market_source) === "kai" ? "kai" : text(item.market_source) === "wod" ? "wod" : null,
     cycle_days: cycleDays,
     end_at: text(item.end_at) || null,
@@ -967,10 +970,13 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     const intent = requestedIntent === "register" || requestedIntent === "recover" ? requestedIntent : "login";
     const recovering = intent === "recover";
     const termsAccepted = !recovering && request.nextUrl.searchParams.get("terms_accepted") === "1";
+    const inviteCode = intent === "register"
+      ? text(request.nextUrl.searchParams.get("invite_code")).trim().toUpperCase().slice(0, 16)
+      : "";
     const result = await upstream(request, "/api/auth/kai/start", {
       method: "POST",
       auth: false,
-      body: { intent, return_url: `${publicOrigin(request)}${recovering ? "/reset-password" : "/login"}`, client_id: "web", terms_accepted: termsAccepted },
+      body: { intent, return_url: `${publicOrigin(request)}${recovering ? "/reset-password" : "/login"}`, client_id: "web", terms_accepted: termsAccepted, ...(inviteCode ? { invite_code: inviteCode } : {}) },
     });
     if (!result.ok) return upstreamFailure(result);
     const authorizationUrl = text(object(result.body.data).authorization_url);
@@ -1058,6 +1064,7 @@ export async function handleApi(request: NextRequest, segments: string[]) {
         hours: number(body.hours),
         purchase_type: text(body.purchase_type, "usage"),
         expected_unit_price_card_hours: number(body.expected_unit_price_card_hours),
+        coupon_id: body.coupon_id == null ? undefined : number(body.coupon_id),
         client_request_id: text(body.client_request_id, text(request.headers.get("idempotency-key"))).slice(0, 64) || undefined,
       },
     });

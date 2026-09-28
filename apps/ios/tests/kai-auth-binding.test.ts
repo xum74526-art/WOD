@@ -18,6 +18,7 @@ test('authentication requests identify the native client platform', () => {
   assert.match(apiSource, /auth\/register[\s\S]*?client_id: CLIENT_PLATFORM/)
   assert.match(apiSource, /auth\/kai\/start[\s\S]*?client_id: CLIENT_PLATFORM/)
   assert.match(apiSource, /auth\/kai\/start[\s\S]*?terms_accepted: true/)
+  assert.match(apiSource, /intent === 'register'[\s\S]*?invite_code:/)
 })
 
 test('signed-in users explicitly bind Kai identity without replacing their session', () => {
@@ -29,7 +30,8 @@ test('signed-in users explicitly bind Kai identity without replacing their sessi
   assert.match(appSource, /callback\.bindTicket/)
   assert.match(appSource, /user\.bindKaiIdentity\(callback\.bindTicket\)/)
   assert.match(loginSource, /<view class="method-switch"[^>]*>/)
-  assert.match(loginSource, /startKaiAuth\(mode\.value\)/)
+  assert.match(loginSource, /startKaiAuth\(mode\.value, mode\.value === 'register' \? form\.invite_code : ''\)/)
+  assert.match(loginSource, /options\?\.invite_code/)
   assert.match(loginSource, /PENDING_KAI_INTENT_KEY/)
   assert.doesNotMatch(loginSource, /identity_not_bound/)
   assert.doesNotMatch(loginSource, /if \(value === 'register'\) authMethod\.value = 'phone'/)

@@ -824,7 +824,7 @@
       "Body_upload_avatar_api_user_avatar_post": {
         "properties": {
           "avatar": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "Avatar",
             "type": "string"
           }
@@ -838,7 +838,7 @@
       "Body_upload_community_media_api_community_media_upload_post": {
         "properties": {
           "media": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "Media",
             "type": "string"
           }
@@ -854,7 +854,7 @@
           "back": {
             "anyOf": [
               {
-                "contentMediaType": "application/octet-stream",
+                "format": "binary",
                 "type": "string"
               },
               {
@@ -866,7 +866,7 @@
           "front": {
             "anyOf": [
               {
-                "contentMediaType": "application/octet-stream",
+                "format": "binary",
                 "type": "string"
               },
               {
@@ -900,7 +900,7 @@
             "type": "boolean"
           },
           "receipt": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "Receipt",
             "type": "string"
           },
@@ -1334,6 +1334,129 @@
           "resolution"
         ],
         "title": "CommunityReportReviewIn",
+        "type": "object"
+      },
+      "CouponCampaignCreateIn": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "coupon_ttl_days": {
+            "default": 30,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Coupon Ttl Days",
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "max_redemptions": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Max Redemptions",
+            "type": "integer"
+          },
+          "min_amount": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Min Amount"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "required": [
+          "name",
+          "amount",
+          "min_amount",
+          "max_redemptions",
+          "expires_at"
+        ],
+        "title": "CouponCampaignCreateIn",
+        "type": "object"
+      },
+      "CouponCampaignStatusIn": {
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "expected_version"
+        ],
+        "title": "CouponCampaignStatusIn",
         "type": "object"
       },
       "DealActionIn": {
@@ -1819,6 +1942,11 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "invitee_phone_masked": {
+            "default": "",
+            "title": "Invitee Phone Masked",
+            "type": "string"
           },
           "order_id": {
             "anyOf": [
@@ -2438,6 +2566,18 @@
             ],
             "title": "Intent",
             "type": "string"
+          },
+          "invite_code": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Code"
           },
           "return_url": {
             "anyOf": [
@@ -3471,26 +3611,37 @@
       "OnboardingIn": {
         "properties": {
           "contact": {
+            "maxLength": 64,
+            "minLength": 1,
             "title": "Contact",
             "type": "string"
           },
           "device_count": {
             "default": 1,
+            "maximum": 10000.0,
+            "minimum": 1.0,
             "title": "Device Count",
             "type": "integer"
           },
           "device_model": {
+            "maxLength": 128,
+            "minLength": 1,
             "title": "Device Model",
             "type": "string"
           },
           "entity_type": {
             "default": "personal",
+            "enum": [
+              "personal",
+              "company"
+            ],
             "title": "Entity Type",
             "type": "string"
           },
           "location": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -3500,12 +3651,15 @@
             "title": "Location"
           },
           "phone": {
+            "maxLength": 20,
+            "minLength": 5,
             "title": "Phone",
             "type": "string"
           },
           "remark": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -3523,6 +3677,42 @@
         "title": "OnboardingIn",
         "type": "object"
       },
+      "OnboardingReviewIn": {
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "status": {
+            "enum": [
+              "contacted",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "expected_version"
+        ],
+        "title": "OnboardingReviewIn",
+        "type": "object"
+      },
       "OrderCreateIn": {
         "properties": {
           "client_request_id": {
@@ -3537,6 +3727,18 @@
               }
             ],
             "title": "Client Request Id"
+          },
+          "coupon_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Id"
           },
           "cycle_days": {
             "anyOf": [
@@ -4755,6 +4957,8 @@
       "RedeemIn": {
         "properties": {
           "code": {
+            "maxLength": 48,
+            "minLength": 8,
             "title": "Code",
             "type": "string"
           }
@@ -5318,13 +5522,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -6311,6 +6508,202 @@
         ]
       }
     },
+    "/api/admin/coupon-campaigns": {
+      "get": {
+        "operationId": "admin_list_coupon_campaigns_api_admin_coupon_campaigns_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "scheduled",
+                    "disabled",
+                    "expired",
+                    "exhausted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin List Coupon Campaigns",
+        "tags": [
+          "admin-coupon"
+        ]
+      },
+      "post": {
+        "operationId": "admin_create_coupon_campaign_api_admin_coupon_campaigns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponCampaignCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Create Coupon Campaign",
+        "tags": [
+          "admin-coupon"
+        ]
+      }
+    },
+    "/api/admin/coupon-campaigns/{campaign_id}/status": {
+      "post": {
+        "operationId": "admin_update_coupon_campaign_status_api_admin_coupon_campaigns__campaign_id__status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "title": "Campaign Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponCampaignStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Update Coupon Campaign Status",
+        "tags": [
+          "admin-coupon"
+        ]
+      }
+    },
     "/api/admin/notification-broadcasts": {
       "get": {
         "description": "List durable administrator announcement audit records.",
@@ -6465,6 +6858,204 @@
           }
         ],
         "summary": "Revoke Notification Broadcast",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/onboardings": {
+      "get": {
+        "description": "Return the device-hosting review queue to platform administrators.",
+        "operationId": "onboardings_api_admin_onboardings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "web",
+                    "ios",
+                    "android",
+                    "admin",
+                    "legacy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "submitted",
+                    "contacted",
+                    "approved",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "personal",
+                    "company"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Onboardings",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/onboardings/{onboarding_id}/review": {
+      "post": {
+        "description": "Move one hosting request through the explicit administrator workflow.",
+        "operationId": "review_onboarding_api_admin_onboardings__onboarding_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "onboarding_id",
+            "required": true,
+            "schema": {
+              "title": "Onboarding Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Review Onboarding",
         "tags": [
           "admin"
         ]
@@ -10133,6 +10724,11 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "available",
+                    "used",
+                    "expired"
+                  ],
                   "type": "string"
                 },
                 {
@@ -10185,7 +10781,11 @@
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 0.0,
                   "type": "number"
+                },
+                {
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -10201,6 +10801,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 1,
                   "type": "integer"
                 },
                 {
@@ -10208,6 +10809,20 @@
                 }
               ],
               "title": "Product Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "purchase_type",
+            "required": false,
+            "schema": {
+              "default": "usage",
+              "enum": [
+                "usage",
+                "holding"
+              ],
+              "title": "Purchase Type",
+              "type": "string"
             }
           }
         ],

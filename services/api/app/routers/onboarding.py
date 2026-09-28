@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_platform, get_current_user
 from app.db.session import get_db
 from app.models.onboarding import ComputeOnboarding
 from app.models.user import User
 from app.models.verification import Verification
 from app.schemas.onboarding import OnboardingIn, OnboardingOut
+from app.services.auth_session import normalize_platform
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -27,6 +28,7 @@ def submit_onboarding(
     data: OnboardingIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    platform: str = Depends(get_current_platform),
 ):
     if data.entity_type not in _VALID_ENTITY_TYPES:
         raise BizError("主体类型只能是 personal 或 company")
@@ -50,6 +52,8 @@ def submit_onboarding(
         device_count=data.device_count,
         location=data.location,
         remark=data.remark,
+        created_platform=normalize_platform(platform),
+        last_modified_platform=normalize_platform(platform),
     )
     db.add(o)
     db.commit()

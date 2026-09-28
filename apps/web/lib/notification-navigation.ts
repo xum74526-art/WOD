@@ -23,6 +23,7 @@ export function notificationActionPath(value: unknown): string | null {
   if (value === "/pages/settings/index") return "/account/settings";
   if (value === "/pages/revenue/index") return "/account/revenue";
   if (value === "/pages/wallet/index") return "/account/wallet";
+  if (value === "/pages/compute-onboarding/index") return "/account/hosting";
 
   const orderMatch = ORDER_ACTION.exec(value);
   if (orderMatch?.[0] === value) {

@@ -22,19 +22,6 @@ export type NotificationPreferenceResponse = {
   preferences: NotificationPreferences;
   delivery: { in_app_enabled: boolean; system_push_configured: boolean; system_push_provider?: string; system_push_status: "configured" | "pending_configuration" };
 };
-export type Team = {
-  id: number; name: string; owner_user_id: number; created_at: string; updated_at: string; version: number;
-  members: Array<{ user_id: number; display_name: string; email: string | null; role: string; joined_at: string }>;
-};
-export type TeamSnapshot = {
-  teams: Team[];
-  received_invitations: Array<{ id: number; team_id: number; team_name: string; role: string; expires_at: string }>;
-};
-export type ApiCredential = {
-  id: number; name: string; key_prefix: string; scopes: string[]; status: "active" | "revoked";
-  expires_at: string | null; last_used_at: string | null; revoked_at: string | null; created_at: string;
-  secret?: string; shown_once?: boolean;
-};
 export type Dispute = {
   id: number; dispute_no: string; order_id: number; status: string; reason: string; description: string;
   resolution: string | null; resolution_action: "release_to_supplier" | "refund_buyer" | null;
@@ -63,15 +50,6 @@ export function readAllNotifications() { return apiRequest<{ updated_count: numb
 export function deleteNotification(id: number) { return apiRequest<{ id: number; deleted: boolean }>(`/api/v1/notifications/${id}`, { method: "DELETE" }); }
 export function getNotificationPreferences() { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences"); }
 export function updateNotificationPreferences(input: Partial<NotificationPreferences>) { return apiRequest<NotificationPreferenceResponse>("/api/v1/canonical/notifications/preferences", { method: "PUT", body: JSON.stringify(input) }); }
-
-export function listTeams() { return apiRequest<TeamSnapshot>("/api/v1/account/teams"); }
-export function createTeam(name: string) { return apiRequest<Team>("/api/v1/account/teams", { method: "POST", body: JSON.stringify({ name }) }); }
-export function inviteTeamMember(teamId: number, email: string, role: string) { return apiRequest(`/api/v1/account/teams/${teamId}/invitations`, { method: "POST", body: JSON.stringify({ email, role }) }); }
-export function acceptTeamInvitation(id: number) { return apiRequest<{ accepted: boolean }>(`/api/v1/account/teams/invitations/${id}/accept`, { method: "POST" }); }
-
-export function listApiKeys() { return apiRequest<ApiCredential[]>("/api/v1/account/api-keys"); }
-export function createApiKey(input: { name: string; scopes: string[]; expires_in_days: number }) { return apiRequest<ApiCredential>("/api/v1/account/api-keys", { method: "POST", body: JSON.stringify(input) }); }
-export function revokeApiKey(id: number) { return apiRequest<ApiCredential>(`/api/v1/account/api-keys/${id}`, { method: "DELETE" }); }
 
 export function listDisputes() { return apiRequest<Dispute[]>("/api/v1/account/disputes"); }
 export function createDispute(input: { order_id: number; reason: string; description: string }) { return apiRequest<Dispute>("/api/v1/account/disputes", { method: "POST", body: JSON.stringify(input) }); }

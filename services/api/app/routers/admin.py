@@ -18,6 +18,7 @@ from sqlalchemy.orm import Query as SqlAlchemyQuery, Session
 from app.core.deps import require_admin
 from app.core.rate_limit import (
     limit_admin_account_action,
+    limit_admin_onboarding_action,
     limit_notification_broadcast,
     limit_payment_admin,
 )
@@ -27,6 +28,7 @@ from app.models.bank_card import BankCard
 from app.models.community import CommunityReport, Comment, Post
 from app.models.external_identity import ExternalIdentity
 from app.models.order import Order
+from app.models.onboarding import ComputeOnboarding
 from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund, PaymentRefundRequest
 from app.models.product import Product
 from app.models.user import User
@@ -35,6 +37,7 @@ from app.models.withdrawal import WithdrawalOrder
 from app.schemas.community import CommunityReportReviewIn
 from app.schemas.admin_account import AdminUserActionIn
 from app.schemas.notification import NotificationBroadcastCreateIn, NotificationBroadcastRevokeIn
+from app.schemas.onboarding import OnboardingReviewIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
     PaymentRefundRequestReviewIn,
@@ -60,6 +63,7 @@ from app.services.payment_refund_requests import (
     sync_refund_request_for_payment_refund,
 )
 from app.services.notification_broadcast import create_broadcast, list_broadcasts, revoke_broadcast
+from app.services.notification_service import create_notification
 from app.utils.response import BizError, success
 
 
@@ -115,6 +119,150 @@ def _payment_order_out(db: Session, row: PaymentOrder) -> dict:
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
+
+
+def _onboarding_out(row: ComputeOnboarding, owner: User | None) -> dict:
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "username": owner.username if owner else None,
+        "entity_type": row.entity_type,
+        "contact": row.contact,
+        "phone": row.phone,
+        "device_model": row.device_model,
+        "device_count": row.device_count,
+        "location": row.location,
+        "remark": row.remark,
+        "status": row.status,
+        "review_note": row.review_note,
+        "reviewed_by": row.reviewed_by,
+        "reviewed_at": row.reviewed_at,
+        "created_platform": row.created_platform or "legacy",
+        "last_modified_platform": row.last_modified_platform or "legacy",
+        "version": int(row.version or 1),
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
+@router.get("/onboardings")
+def onboardings(
+    platform: AuditPlatform | None = None,
+    keyword: str | None = Query(default=None, max_length=64),
+    status: Literal["submitted", "contacted", "approved", "rejected"] | None = None,
+    entity_type: Literal["personal", "company"] | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return the device-hosting review queue to platform administrators."""
+
+    _page(page, page_size)
+    query = db.query(ComputeOnboarding, User).outerjoin(
+        User, User.id == ComputeOnboarding.user_id
+    )
+    if platform:
+        query = query.filter(ComputeOnboarding.created_platform == platform)
+    if status:
+        query = query.filter(ComputeOnboarding.status == status)
+    if entity_type:
+        query = query.filter(ComputeOnboarding.entity_type == entity_type)
+    normalized = str(keyword or "").strip()
+    if normalized:
+        query = query.filter(or_(
+            ComputeOnboarding.contact.contains(normalized),
+            ComputeOnboarding.phone.contains(normalized),
+            ComputeOnboarding.device_model.contains(normalized),
+            ComputeOnboarding.location.contains(normalized),
+            User.username.contains(normalized),
+        ))
+    total = query.count()
+    rows = query.order_by(
+        ComputeOnboarding.created_at.desc(), ComputeOnboarding.id.desc()
+    ).offset((page - 1) * page_size).limit(page_size).all()
+    return success({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [_onboarding_out(row, owner) for row, owner in rows],
+    })
+
+
+@router.post("/onboardings/{onboarding_id}/review")
+def review_onboarding(
+    onboarding_id: int,
+    data: OnboardingReviewIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Move one hosting request through the explicit administrator workflow."""
+
+    limit_admin_onboarding_action(actor.id)
+    row = db.query(ComputeOnboarding).filter(
+        ComputeOnboarding.id == onboarding_id
+    ).with_for_update().first()
+    if row is None:
+        raise BizError("设备托管申请不存在", status_code=404)
+    current_version = int(row.version or 1)
+    if current_version != data.expected_version:
+        raise BizError("申请状态已更新，请刷新后重试", status_code=409)
+    allowed_transitions = {
+        "submitted": {"contacted", "approved", "rejected"},
+        "contacted": {"approved", "rejected"},
+        "approved": set(),
+        "rejected": set(),
+    }
+    if data.status == row.status:
+        owner = db.query(User).filter(User.id == row.user_id).first()
+        return success(_onboarding_out(row, owner))
+    if data.status not in allowed_transitions.get(row.status, set()):
+        raise BizError("当前状态不能执行该操作", status_code=409)
+
+    row.status = data.status
+    row.review_note = data.note
+    row.reviewed_by = actor.id
+    row.reviewed_at = _utcnow()
+    row.last_modified_platform = "admin"
+    row.version = current_version + 1
+
+    copy = {
+        "contacted": (
+            "设备托管申请已受理",
+            "运营人员已受理您的设备托管申请，请留意后续联系。",
+            "Device hosting request accepted",
+            "An operator has accepted your device hosting request. Please watch for follow-up contact.",
+        ),
+        "approved": (
+            "设备托管申请已通过",
+            "您的设备托管申请已通过审核，请按处理说明完成后续接入。",
+            "Device hosting request approved",
+            "Your device hosting request was approved. Follow the review note for the next onboarding step.",
+        ),
+        "rejected": (
+            "设备托管申请未通过",
+            "您的设备托管申请未通过审核，请查看处理说明后重新提交。",
+            "Device hosting request rejected",
+            "Your device hosting request was rejected. Review the note before submitting again.",
+        ),
+    }[data.status]
+    detail = f"{copy[1]}\n处理说明：{data.note}" if data.note else copy[1]
+    detail_en = f"{copy[3]}\nReview note: {data.note}" if data.note else copy[3]
+    create_notification(
+        db,
+        user_id=row.user_id,
+        title=copy[0],
+        content=detail,
+        title_en=copy[2],
+        content_en=detail_en,
+        notification_type="device",
+        action_url="/pages/compute-onboarding/index",
+        dedupe_key=f"onboarding:{row.id}:{data.status}:v{row.version}",
+    )
+    db.commit()
+    db.refresh(row)
+    owner = db.query(User).filter(User.id == row.user_id).first()
+    return success(_onboarding_out(row, owner))
 
 
 @router.get("/overview")

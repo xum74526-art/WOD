@@ -25,8 +25,12 @@ from app.models.user import User
 from app.models.verification import Verification
 from app.models.wallet import Wallet
 from app.routers.finance import verification_review
-from app.routers.invite import create_invite_relationship, records, summary
-from app.schemas.invite import InviteRelationshipListResponse, InviteSummaryResponse
+from app.routers.invite import commissions, create_invite_relationship, records, summary
+from app.schemas.invite import (
+    InviteCommissionListResponse,
+    InviteRelationshipListResponse,
+    InviteSummaryResponse,
+)
 from app.schemas.withdrawal import FinanceReviewIn
 from app.services.funding_allocation import (
     capture_order_funding,
@@ -233,6 +237,14 @@ class InviteV2Tests(unittest.TestCase):
         parsed_records = InviteRelationshipListResponse.model_validate(records_payload)
         self.assertEqual(parsed_records.data.items[0].status, record.status)
         self.assertEqual(parsed_records.data.items[0].legacy_status, record.status)
+
+        commission_payload = commissions(page=1, page_size=50, user=self.inviter, db=self.db)
+        parsed_commissions = InviteCommissionListResponse.model_validate(commission_payload)
+        self.assertEqual(parsed_commissions.data.items[0].order_id, order.id)
+        self.assertEqual(
+            parsed_commissions.data.items[0].invitee_phone_masked,
+            "138****0001",
+        )
 
         process_invite_order_event(order, self.db, event_at=self.now)
         self.assertEqual(self.db.query(RewardAccrual).filter(
