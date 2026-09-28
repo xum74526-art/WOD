@@ -1,14 +1,6 @@
-import type { OrderStatus, QuoteStatus, RequestStatus } from "@/lib/commerce-api";
+import type { OrderStatus } from "@/lib/commerce-api";
 import { formatFinancialAmount } from "@/lib/financial-format";
 
-export const requestStatusLabel: Record<RequestStatus, string> = {
-  draft: "草稿", reviewing: "审核中", published: "开放报价", negotiating: "报价洽谈", matched: "已匹配",
-  completed: "已完成", closed: "已关闭", expired: "已过期", rejected: "未通过",
-};
-export const quoteStatusLabel: Record<QuoteStatus, string> = {
-  draft: "草稿", submitted: "已提交", shortlisted: "候选", accepted: "已接受", rejected: "未选中",
-  withdrawn: "已撤回", expired: "已过期",
-};
 export const orderStatusLabel: Record<OrderStatus, string> = {
   paid: "待卖方交付", delivering: "待买家验收", disputed: "争议处理中",
   completed: "已完成", running: "服务中（历史订单）", done: "已到期", canceled: "已取消",

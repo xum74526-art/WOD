@@ -186,7 +186,6 @@ test("Web trend separates live quote polling from the heavier market catalogue",
 test("Web market and detail keep inquiry as the safe default while preserving gated direct trade", () => {
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../components/product-detail.tsx", import.meta.url), "utf8");
-  const browser = fs.readFileSync(new URL("../components/market-browser.tsx", import.meta.url), "utf8");
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
   const serverData = fs.readFileSync(new URL("../lib/server/public-page-data.ts", import.meta.url), "utf8");
 
@@ -228,7 +227,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(market, /提交需求后由对应商家人工联系确认方案/);
   assert.doesNotMatch(market, /row\.assurance_(?:label|description)/);
   assert.doesNotMatch(detail, /product\.market_source !== "kai"/);
-  assert.doesNotMatch(`${market}\n${detail}\n${browser}`, /GetDeploying|getdeploying|AutoDL|算力云/i);
+  assert.doesNotMatch(`${market}\n${detail}`, /GetDeploying|getdeploying|AutoDL|算力云/i);
 });
 
 test("Web rebate center separates personal purchases from supplier confirmed sales", () => {

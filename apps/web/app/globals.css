@@ -60,22 +60,6 @@ body {
 }
 .integration-head > button:disabled,
 .integration-action-card > button:disabled { color: var(--text-soft); background: var(--surface-muted); cursor: not-allowed; }
-.provider-state {
-  min-height: 88px;
-  border: 1px solid #ead7b0;
-  border-radius: var(--radius-panel);
-  padding: 18px 20px;
-  color: #9b6614;
-  background: #fffaf0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.provider-state--ready { border-color: #bde6d2; color: var(--positive); background: #f1fbf6; }
-.provider-state > div { display: grid; gap: 3px; }
-.provider-state small { font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
-.provider-state strong { color: var(--text); font-size: 15px; }
-.provider-state span { color: var(--text-muted); font-size: 12px; }
 .integration-balance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .integration-balance-grid article {
   min-height: 145px;
@@ -3555,8 +3539,6 @@ html[data-color-mode="dark"] .trend-mini-line.is-down .trend-mini-stroke { strok
 .inventory-table article small { color: var(--text-soft); font: 8px/1 var(--font-mono); }
 .inventory-table article strong { margin-top: 6px; font-size: 11px; }
 .inventory-table article div > span { margin-top: 4px; color: var(--text-muted); font-size: 9px; }
-.resource-review-dossier > .capacity-block { margin-bottom: 0; }
-
 @media (prefers-color-scheme: dark) {
   .status-chip--published, .status-chip--approved, .status-chip--accepted, .status-chip--completed { color: #65d9af; background: #12352d; }
   .status-chip--negotiating, .status-chip--shortlisted, .status-chip--pending, .status-chip--reviewing, .status-chip--submitted { color: #efc66f; background: #382e1a; }

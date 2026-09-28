@@ -608,8 +608,6 @@ html[data-color-mode="dark"] .ui-language-popover {
 .status-chip--negotiating, .status-chip--shortlisted, .status-chip--pending, .status-chip--reviewing, .status-chip--submitted,
 .status-chip--pending_confirmation, .status-chip--confirmed, .status-chip--delivering, .status-chip--delivered, .status-chip--disputed { color: var(--warning) !important; background: var(--warning-soft) !important; }
 .status-chip--rejected, .status-chip--expired, .status-chip--closed, .status-chip--withdrawn, .status-chip--cancelled { color: var(--destructive) !important; background: var(--destructive-soft) !important; }
-.provider-state { border-radius: 0; color: var(--warning); background: var(--warning-soft); }
-.provider-state--ready { color: var(--success); background: var(--success-soft); }
 .workspace-service-note,
 .security-message,
 .integration-safety-note { border-radius: 0 !important; box-shadow: inset 3px 0 var(--info); color: var(--info); background: var(--info-soft); }
@@ -627,8 +625,7 @@ html[data-color-mode="dark"] .ui-language-popover {
 .lease-renew-panel { border-color: color-mix(in srgb, var(--warning) 45%, var(--border-subtle)) !important; color: var(--warning) !important; background: var(--warning-soft) !important; }
 .sandbox-order-banner--paid,
 .asset-ended { border-color: color-mix(in srgb, var(--success) 45%, var(--border-subtle)) !important; color: var(--success) !important; background: var(--success-soft) !important; }
-.address-card__top b,
-.provider-state--ready { border-color: color-mix(in srgb, var(--success) 45%, var(--border-subtle)) !important; color: var(--success) !important; background: var(--success-soft) !important; }
+.address-card__top b { border-color: color-mix(in srgb, var(--success) 45%, var(--border-subtle)) !important; color: var(--success) !important; background: var(--success-soft) !important; }
 .comment-card header span { color: var(--warning) !important; background: var(--warning-soft) !important; }
 .gpu-primary-metric .is-down { color: var(--destructive) !important; background: var(--destructive-soft) !important; }
 .status-chip--pending_review,

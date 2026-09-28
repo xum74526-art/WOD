@@ -91,11 +91,12 @@ test("legacy payment pages redirect and the Qixiang return page never trusts que
 test("Ping++ runtime code and dependency are removed", () => {
   const packageJson = readFileSync(new URL("../package.json", import.meta.url), "utf8");
   const lock = readFileSync(new URL("../package-lock.json", import.meta.url), "utf8");
-  const integration = readFileSync(new URL("../lib/integration-api.ts", import.meta.url), "utf8");
+  const commerce = readFileSync(new URL("../lib/commerce-api.ts", import.meta.url), "utf8");
+  const mobileBusiness = readFileSync(new URL("../lib/mobile-business-api.ts", import.meta.url), "utf8");
 
   assert.doesNotMatch(packageJson, /pingpp-js/);
   assert.doesNotMatch(lock, /pingpp-js/);
-  assert.doesNotMatch(integration, /PaymentCredential|payments\/intents|\/credential|\/reconcile/);
+  assert.doesNotMatch(`${commerce}\n${mobileBusiness}`, /PaymentCredential|payments\/intents|\/credential|\/reconcile/);
 });
 
 test("supplier withdrawals and account notices use the specific withdrawal and recharge capabilities", () => {

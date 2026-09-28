@@ -3,71 +3,7 @@ import { hourlyOrderBody } from "@/lib/web-business-contract";
 import type { ProductPurchaseType } from "@/lib/product-purchase";
 
 export type PageMeta = { page: number; page_size: number; total: number; total_pages: number };
-export type RequestStatus = "draft" | "reviewing" | "published" | "negotiating" | "matched" | "completed" | "closed" | "expired" | "rejected";
-export type QuoteStatus = "draft" | "submitted" | "shortlisted" | "accepted" | "rejected" | "withdrawn" | "expired";
 export type OrderStatus = "paid" | "delivering" | "disputed" | "completed" | "running" | "done" | "canceled";
-export type ResourceStatus = "draft" | "pending_review" | "approved" | "published" | "rejected" | "archived";
-export type ReservationStatus = "reserved" | "allocated" | "released";
-
-export type Money = { amount: string | null; currency: string; unit: string };
-export type CloudDetails = {
-  min_cpu_cores: number | null;
-  min_ram_gb: number | null;
-  min_disk_gb: number | null;
-  min_download_mbps: number | null;
-  public_ip_required: boolean;
-  container_image: string | null;
-  software_stack: string[];
-  special_requirements: string | null;
-};
-export type BuyRequest = {
-  id?: number;
-  version?: number;
-  request_no: string;
-  request_type: "cloud_compute" | "offline_device";
-  title: string;
-  status: RequestStatus;
-  visibility: "public" | "invited" | "private";
-  gpu_model: string;
-  min_gpu_memory_gb: number | null;
-  gpu_quantity: number;
-  region_codes: string[];
-  delivery_mode: "remote" | "dedicated" | "negotiable";
-  budget: Money;
-  quote_deadline_at: string;
-  expected_start_at: string | null;
-  expected_duration_hours: number | null;
-  requirements: string;
-  published_at: string | null;
-  expires_at: string | null;
-  created_at: string;
-  updated_at: string;
-  cloud_details?: CloudDetails;
-  contact?: { contact_name: string; visible_after: string } | null;
-  events?: Array<{ event_type: string; from_status: string | null; to_status: string | null; created_at: string }>;
-};
-
-export type Quote = {
-  id: number;
-  resource_id: number | null;
-  quote_no: string;
-  buy_request_id: number;
-  status: QuoteStatus;
-  price: { amount: string; currency: string; unit: string };
-  available_quantity: number;
-  delivery_time_hours: number | null;
-  valid_until: string;
-  is_expired: boolean;
-  service_description: string;
-  buyer_note: string | null;
-  submitted_at: string | null;
-  accepted_at: string | null;
-  created_at: string;
-  updated_at: string;
-  version: number;
-  supplier?: { id: number; display_name: string; company_name: string | null };
-  request?: Pick<BuyRequest, "request_no" | "title" | "status" | "gpu_model" | "gpu_quantity" | "quote_deadline_at"> & { id: number };
-};
 
 export type SupplierApplication = {
   id: number;
@@ -217,119 +153,12 @@ export type SshKey = {
   version: number;
 };
 
-export type AgentHardware = {
-  status: "pending" | "verified" | "mismatch" | "stale" | "unavailable";
-  observed_at: string | null;
-  verified_at: string | null;
-  inventory_hash: string | null;
-  stale_after_seconds: number;
-  is_simulated: boolean;
-  inventory: {
-    collected_at?: string;
-    source?: "host" | "docker" | "local_simulator";
-    os_name?: string;
-    os_version?: string;
-    kernel_version?: string;
-    cpu_model?: string;
-    cpu_logical_cores?: number;
-    memory_total_mb?: number;
-    disk_total_gb?: number;
-    disk_available_gb?: number;
-    gpus?: Array<{ index: number; name: string; memory_total_mb: number; uuid?: string; driver_version?: string }>;
-    collection_errors?: string[];
-  };
-  mismatches: Array<{ field: string; declared: unknown; detected: unknown; message: string }>;
-};
-
-export type AgentServices = {
-  status: "pending" | "healthy" | "unhealthy" | "stale" | "unavailable";
-  observed_at: string | null;
-  checks: { ssh?: { reachable: boolean; port: number; error?: string | null } };
-  stale_after_seconds: number;
-  is_simulated: boolean;
-};
-
-export type Resource = {
-  id: number;
-  resource_no: string;
-  name: string;
-  gpu_model: string;
-  gpu_memory_gb: number;
-  memory: string;
-  region: string;
-  cpu_cores: number | null;
-  ram_gb: number | null;
-  disk_gb: number | null;
-  bandwidth_mbps: number | null;
-  description: string;
-  price: { amount: string; currency: string; unit: string };
-  total_quantity: number;
-  reserved_quantity: number;
-  available_quantity: number;
-  status: ResourceStatus;
-  review_note: string | null;
-  reviewed_at: string | null;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string;
-  version: number;
-  server: {
-    id: number;
-    server_no: string;
-    public_host: string;
-    ssh_port: number;
-    ssh_username: string;
-    status: "registered" | "online" | "offline" | "maintenance" | "retired";
-    agent_mode: "local_simulator" | "mtls";
-    agent_version: string | null;
-    agent_device_id?: string | null;
-    agent_platform?: "linux" | "windows" | null;
-    agent_arch?: "amd64" | "arm64" | null;
-    agent_hostname?: string | null;
-    agent_enrolled_at?: string | null;
-    last_seen_at: string | null;
-    hardware?: AgentHardware;
-    services?: AgentServices;
-  } | null;
-  supplier?: { display_name: string; company_name: string | null };
-};
-
-export type ResourceDetail = {
-  resource: Resource;
-  price_versions: Array<{ id: number; version: number; amount: string; currency: string; unit: string; change_note: string | null; created_at: string }>;
-  events: Array<{ id: number; actor_role: string; event_type: string; from_status: ResourceStatus | null; to_status: ResourceStatus; note: string | null; created_at: string }>;
-};
-
-export type InventoryReservation = {
-  id: number;
-  reservation_no: string;
-  product_id: number;
-  resource_no: string;
-  resource_name: string;
-  order_id: number;
-  order_no: string;
-  quantity: number;
-  status: ReservationStatus;
-  release_reason: string | null;
-  reserved_at: string;
-  allocated_at: string | null;
-  released_at: string | null;
-  version: number;
-};
-
 function queryString(values: Record<string, string | number | undefined>) {
   const query = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== "") query.set(key, String(value)); });
   const text = query.toString();
   return text ? `?${text}` : "";
 }
-
-export function listSupplierRequests(filters: { gpu_model?: string; region?: string; sort?: string } = {}) { return apiEnvelopeRequest<(BuyRequest & { id: number })[], PageMeta>(`/api/v1/supplier/buy-requests${queryString(filters)}`); }
-export function getSupplierRequest(id: number) { return apiRequest<{ request: BuyRequest; own_quotes: Quote[] }>(`/api/v1/supplier/buy-requests/${id}`); }
-export function createSupplierQuote(requestId: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/buy-requests/${requestId}/quotes`, { method: "POST", body: JSON.stringify(input) }); }
-export function updateSupplierQuote(id: number, input: Record<string, unknown>) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function submitSupplierQuote(id: number, version: number) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/submit`, { method: "POST", body: JSON.stringify({ version }) }); }
-export function withdrawSupplierQuote(id: number, version: number, reason?: string) { return apiRequest<Quote>(`/api/v1/supplier/quotes/${id}/withdraw`, { method: "POST", body: JSON.stringify({ version, reason: reason || null }) }); }
 
 export function listOrders(scope: "account" | "supplier", status?: string) { return apiEnvelopeRequest<Order[], PageMeta>(`/api/v1/${scope}/orders${queryString({ status })}`); }
 export function getOrder(scope: "account" | "supplier", id: number) { return apiRequest<Order>(`/api/v1/${scope}/orders/${id}`); }
@@ -358,45 +187,6 @@ export function listSshKeys() { return apiEnvelopeRequest<SshKey[], { private_ke
 export function createSshKey(input: { name: string; public_key: string }) { return apiRequest<SshKey>("/api/v1/account/ssh-keys", { method: "POST", body: JSON.stringify(input) }); }
 export function updateSshKey(id: number, input: { version: number; name: string }) { return apiRequest<SshKey>(`/api/v1/account/ssh-keys/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
 export function revokeSshKey(id: number, version: number) { return apiRequest<SshKey>(`/api/v1/account/ssh-keys/${id}?version=${version}`, { method: "DELETE" }); }
-export type AgentDownload = { platform: "linux" | "windows" | "docker"; arch: "amd64" | "arm64" | "multi"; filename: string; url: string; available: boolean; size_bytes: number | null; sha256: string | null };
-export type AgentEnrollment = { server_id: number; server_no: string; enrollment_token: string; expires_at: string; api_base_url: string; linux_install_command: string; windows_install_command: string; docker_install_command: string; downloads: AgentDownload[]; security: { token_single_use: true; device_identity: string; transport: string; mtls_proxy_supported: true } };
-export type SupplierServer = { id: number; server_no: string; product_id: number; product_name: string; resource_status: ResourceStatus; public_host: string; ssh_port: number; ssh_username_prefix: string; status: string; agent_mode: string; agent_version: string | null; agent_device_id: string | null; agent_platform: "linux" | "windows" | null; agent_arch: "amd64" | "arm64" | null; agent_hostname: string | null; agent_capabilities: string[]; agent_enrolled_at: string | null; last_seen_at: string | null; hardware?: AgentHardware; services?: AgentServices; created_at: string; version: number };
-export function listSupplierServers() { return apiEnvelopeRequest<SupplierServer[], { production_agent_auth: string; local_agent_mode: "simulator" }>("/api/v1/supplier/servers"); }
-export function createAgentEnrollment(serverId: number) { return apiRequest<AgentEnrollment>(`/api/v1/supplier/servers/${serverId}/enrollment-token`, { method: "POST", body: JSON.stringify({ expires_in_minutes: 20 }) }); }
-
-export type SupplierWithdrawal = {
-  id: number;
-  withdrawal_no: string;
-  supplier_id: number;
-  amount: string;
-  currency: "CNY";
-  status: "requested" | "approved" | "rejected" | "paid" | "cancelled";
-  payout: { method: "manual_bank_transfer"; beneficiary_name: string; bank_name: string; account_no: string };
-  review_note: string | null;
-  payment_reference: string | null;
-  requested_at: string;
-  reviewed_at: string | null;
-  paid_at: string | null;
-  cancelled_at: string | null;
-  created_at: string;
-  updated_at: string;
-  version: number;
-  supplier?: { display_name: string; email: string; company_name: string | null };
-};
-export type SupplierRevenue = {
-  balances: Array<{ currency: string; available: string; frozen: string }>;
-  summary: { requested: string; paid: string };
-  withdrawals: SupplierWithdrawal[];
-  settlement_mode: "manual_bank_transfer";
-  policy: { commission_rate: string; settlement_hold_hours: number; dispute_holds_settlement: boolean };
-};
-export function getSupplierRevenue() { return apiRequest<SupplierRevenue>("/api/v1/supplier/revenue"); }
-export function createSupplierWithdrawal(input: { amount: string; beneficiary_name: string; bank_name: string; bank_account_no: string }) { return apiRequest<SupplierWithdrawal>("/api/v1/supplier/withdrawals", { method: "POST", headers: { "Idempotency-Key": `supplier-withdrawal-${crypto.randomUUID()}` }, body: JSON.stringify({ ...input, currency: "CNY" }) }); }
-export function cancelSupplierWithdrawal(id: number, version: number) { return apiRequest<SupplierWithdrawal>(`/api/v1/supplier/withdrawals/${id}/cancel`, { method: "POST", body: JSON.stringify({ version }) }); }
-export function listAdminWithdrawals(status?: string) { return apiRequest<SupplierWithdrawal[]>(`/api/v1/admin/withdrawals${queryString({ status })}`); }
-export function approveAdminWithdrawal(id: number, version: number, note?: string) { return apiRequest<SupplierWithdrawal>(`/api/v1/admin/withdrawals/${id}/approve`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
-export function rejectAdminWithdrawal(id: number, version: number, note: string) { return apiRequest<SupplierWithdrawal>(`/api/v1/admin/withdrawals/${id}/reject`, { method: "POST", body: JSON.stringify({ version, note }) }); }
-export function completeAdminWithdrawal(id: number, version: number, paymentReference: string, note?: string) { return apiRequest<SupplierWithdrawal>(`/api/v1/admin/withdrawals/${id}/complete`, { method: "POST", body: JSON.stringify({ version, payment_reference: paymentReference, note: note || null }) }); }
 
 export function listPublicProducts(marketSource?: "kai" | "wod", page = 1, pageSize = 24) {
   return publicApiEnvelopeRequest<PublicProduct[], PageMeta & { count: number; real_data_only: boolean; server_rental_available: boolean; payment_mode: "local_placeholder" | "pingxx" | "mobile_wallet" }>(
@@ -405,18 +195,6 @@ export function listPublicProducts(marketSource?: "kai" | "wod", page = 1, pageS
   );
 }
 export function getPublicProduct(id: number) { return apiEnvelopeRequest<PublicProduct, { real_data_only: boolean; server_rental_available: boolean; payment_mode: "local_placeholder" | "pingxx" }>(`/api/v1/public/products/${id}`); }
-
-export function listSupplierResources(status?: ResourceStatus) { return apiEnvelopeRequest<Resource[], PageMeta>(`/api/v1/supplier/resources${queryString({ status })}`); }
-export function getSupplierResource(id: number) { return apiRequest<ResourceDetail>(`/api/v1/supplier/resources/${id}`); }
-export function createSupplierResource(input: Record<string, unknown>) { return apiRequest<Resource>("/api/v1/supplier/resources", { method: "POST", body: JSON.stringify(input) }); }
-export function updateSupplierResource(id: number, input: Record<string, unknown>) { return apiRequest<Resource>(`/api/v1/supplier/resources/${id}`, { method: "PATCH", body: JSON.stringify(input) }); }
-export function deleteSupplierResource(id: number, version: number) { return apiRequest<{ deleted: boolean }>(`/api/v1/supplier/resources/${id}?version=${version}`, { method: "DELETE" }); }
-export function transitionSupplierResource(id: number, action: "submit-review" | "withdraw-review" | "publish" | "unpublish", version: number, note?: string) { return apiRequest<Resource>(`/api/v1/supplier/resources/${id}/${action}`, { method: "POST", body: JSON.stringify({ version, note: note || null }) }); }
-export function listInventoryReservations(status?: ReservationStatus) { return apiEnvelopeRequest<InventoryReservation[], PageMeta>(`/api/v1/supplier/inventory-reservations${queryString({ status })}`); }
-export function releaseInventoryReservation(id: number, version: number, reason: string) { return apiRequest<InventoryReservation>(`/api/v1/supplier/inventory-reservations/${id}/release`, { method: "POST", body: JSON.stringify({ version, reason }) }); }
-
-export function listAdminResources(filters: { status?: ResourceStatus; search?: string } = {}) { return apiEnvelopeRequest<Resource[], PageMeta>(`/api/v1/admin/resources${queryString(filters)}`); }
-export function reviewResource(id: number, action: "approve" | "reject", version: number, note: string) { return apiRequest<Resource>(`/api/v1/admin/resources/${id}/${action}`, { method: "POST", body: JSON.stringify({ version, note: note || (action === "reject" ? "资源资料不完整" : null) }) }); }
 
 export function listSupplierApplications(filters: { status?: string; search?: string; page?: number; page_size?: number } = {}) { return apiEnvelopeRequest<SupplierApplication[], PageMeta>(`/api/v1/admin/supplier-applications${queryString(filters)}`); }
 export function reviewSupplierApplication(id: number, action: "approve" | "reject", version: number, note: string) { return apiRequest<SupplierApplication>(`/api/v1/admin/supplier-applications/${id}/${action}`, { method: "POST", body: JSON.stringify({ version, note: note || (action === "reject" ? "资料不符合要求" : null) }) }); }
