@@ -27,6 +27,7 @@ backups/
 database/backups/
 .runtime/
 .cache/
+/.tmp/
 
 # Python
 .venv/
