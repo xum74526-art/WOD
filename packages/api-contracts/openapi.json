@@ -824,7 +824,7 @@
       "Body_upload_avatar_api_user_avatar_post": {
         "properties": {
           "avatar": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Avatar",
             "type": "string"
           }
@@ -838,7 +838,7 @@
       "Body_upload_community_media_api_community_media_upload_post": {
         "properties": {
           "media": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Media",
             "type": "string"
           }
@@ -854,7 +854,7 @@
           "back": {
             "anyOf": [
               {
-                "format": "binary",
+                "contentMediaType": "application/octet-stream",
                 "type": "string"
               },
               {
@@ -866,7 +866,7 @@
           "front": {
             "anyOf": [
               {
-                "format": "binary",
+                "contentMediaType": "application/octet-stream",
                 "type": "string"
               },
               {
@@ -900,7 +900,7 @@
             "type": "boolean"
           },
           "receipt": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Receipt",
             "type": "string"
           },
@@ -5522,6 +5522,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
