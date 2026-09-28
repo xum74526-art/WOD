@@ -150,10 +150,9 @@ npm --prefix apps/android run dev:h5
 npm run check:all
 npm run audit:deps
 git diff --check
-node --test static-review/site.test.mjs
 ```
 
-`check:all` 会运行 API 与 Collector 编译/单元测试、OpenAPI 一致性、Web 测试/类型检查/生产构建、iOS/Android 单元测试、i18n 检查、类型检查、App 资源构建和客户端边界检查。依赖漏洞审计由 `audit:deps` 单独执行。
+`check:all` 会运行 API 与 Collector 编译/单元测试、OpenAPI 一致性、Web 测试/类型检查/生产构建、静态审核页测试、iOS/Android 单元测试、i18n 检查、类型检查、App 资源构建和客户端边界检查。CI 还会在隔离数据库上运行完整 Web 浏览器 E2E。依赖漏洞审计由 `audit:deps` 单独执行。
 
 只有 FastAPI router 或 schema 发生变化时才重新导出契约：
 

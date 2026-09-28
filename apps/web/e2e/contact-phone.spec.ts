@@ -2,6 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const contactName = "联系我们：+86 4001082026";
 
+test.beforeEach(async ({ context }) => {
+  await context.addCookies([{ name: "kai.locale", value: "zh-Hans", domain: "127.0.0.1", path: "/" }]);
+});
+
 async function mockApis(page: Page) {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,8 +30,46 @@ jobs:
       - run: python packages/api-contracts/export_openapi.py
       - run: git diff --exit-code -- packages/api-contracts/openapi.json
 
+  collector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/collector/requirements.txt
+      - run: python -m pip install -r services/collector/requirements.txt pip-audit==2.10.1
+      - run: python -m pip_audit -r services/collector/requirements.txt
+      - run: python -m compileall -q services/collector/collector
+      - run: cd services/collector && python -m unittest discover -s tests -p 'test_*.py'
+
+  architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node packages/api-contracts/check-mobile-api.mjs
+      - run: node packages/api-contracts/check-client-boundaries.mjs
+      - run: node packages/api-contracts/check-client-experience-parity.mjs
+
+  static-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test static-review/site.test.mjs
+
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,15 +80,49 @@ jobs:
       # npm 11 uses the supported bulk advisory endpoint, without retired quick fallback.
       - run: npm install --global npm@11.9.0 --no-audit --no-fund
       - run: npm ci --prefix apps/web --no-audit
-      - run: npm --prefix apps/web audit --audit-level=high
+      - run: npm --prefix apps/web audit --audit-level=high --registry=https://registry.npmjs.org
       - run: npm run check:web
       - run: npm --prefix apps/web test
       - run: npm run build:web
         env:
           API_ORIGIN: https://wod.kai.com
 
+  web-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: python -m pip install -r services/api/requirements.txt
+      - run: npm ci --prefix apps/web --no-audit
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run e2e
+        working-directory: apps/web
+        env:
+          API_PYTHON: python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-e2e-failure-${{ github.run_id }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   ios:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,7 +132,7 @@ jobs:
           cache-dependency-path: apps/ios/package-lock.json
       - run: npm install --global npm@11.9.0 --no-audit --no-fund
       - run: npm ci --prefix apps/ios --no-audit
-      - run: npm --prefix apps/ios audit --audit-level=high
+      - run: npm --prefix apps/ios audit --audit-level=high --registry=https://registry.npmjs.org
       - run: npm run check:ios
       - run: npm run test:ios
       - run: npm --prefix apps/ios run test:i18n
@@ -63,6 +140,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,11 +150,36 @@ jobs:
           cache-dependency-path: apps/android/package-lock.json
       - run: npm install --global npm@11.9.0 --no-audit --no-fund
       - run: npm ci --prefix apps/android --no-audit
-      - run: npm --prefix apps/android audit --audit-level=high
+      - run: npm --prefix apps/android audit --audit-level=high --registry=https://registry.npmjs.org
       - run: npm run check:android
       - run: npm run test:android
       - run: npm --prefix apps/android run test:i18n
       - run: npm run build:android:app
-      - run: node packages/api-contracts/check-mobile-api.mjs
-      - run: node packages/api-contracts/check-client-boundaries.mjs
-      - run: node packages/api-contracts/check-client-experience-parity.mjs
+
+  required-gate:
+    name: Required gate
+    if: ${{ always() }}
+    needs: [api, collector, architecture, static-review, web, web-e2e, ios, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI area to pass
+        env:
+          API_RESULT: ${{ needs.api.result }}
+          COLLECTOR_RESULT: ${{ needs.collector.result }}
+          ARCHITECTURE_RESULT: ${{ needs.architecture.result }}
+          STATIC_REVIEW_RESULT: ${{ needs['static-review'].result }}
+          WEB_RESULT: ${{ needs.web.result }}
+          WEB_E2E_RESULT: ${{ needs['web-e2e'].result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+        run: |
+          printf 'api=%s collector=%s architecture=%s static-review=%s web=%s web-e2e=%s ios=%s android=%s\n' \
+            "$API_RESULT" "$COLLECTOR_RESULT" "$ARCHITECTURE_RESULT" "$STATIC_REVIEW_RESULT" \
+            "$WEB_RESULT" "$WEB_E2E_RESULT" "$IOS_RESULT" "$ANDROID_RESULT"
+          for result in \
+            "$API_RESULT" "$COLLECTOR_RESULT" "$ARCHITECTURE_RESULT" "$STATIC_REVIEW_RESULT" \
+            "$WEB_RESULT" "$WEB_E2E_RESULT" "$IOS_RESULT" "$ANDROID_RESULT"
+          do
+            test "$result" = "success" || exit 1
+          done

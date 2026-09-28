@@ -107,7 +107,7 @@ test("新增的个人中心功能全部通过 BFF 使用统一业务接口", asy
   for (const path of paths) {
     const response = await request.get(path);
     expect(response.ok(), `${path} should be available`).toBeTruthy();
-    await expect(response.json()).resolves.toMatchObject({ meta: { source: "mobile-api" } });
+    await expect(response.json()).resolves.toMatchObject({ meta: { source: "canonical-api" } });
   }
 
   const wallet = await request.get("/api/v1/account/wallet");
@@ -140,7 +140,7 @@ test("新增的个人中心功能全部通过 BFF 使用统一业务接口", asy
   expect(photos.ok()).toBeTruthy();
   await expect(photos.json()).resolves.toMatchObject({
     data: { front_photo_uploaded: true, back_photo_uploaded: true },
-    meta: { source: "mobile-api" },
+    meta: { source: "canonical-api" },
   });
 });
 
@@ -158,7 +158,8 @@ test("账户设置、通知偏好、社区、客服和求购使用统一后端�
   const post = await request.post("/api/v1/canonical/community/posts", { data: { content: "Web 与 App 社区联调", topic: "E2E" } });
   expect(post.ok()).toBeTruthy();
   const postId = ((await post.json()).data as { id: number }).id;
-  expect((await request.post(`/api/v1/canonical/community/posts/${postId}/like`)).ok()).toBeTruthy();
+  const like = await request.post(`/api/v1/canonical/community/posts/${postId}/like`);
+  expect(like.ok(), `community like failed (${like.status()}): ${await like.text()}`).toBeTruthy();
   expect((await request.post(`/api/v1/canonical/community/posts/${postId}/comments`, { data: { content: "联调评论" } })).ok()).toBeTruthy();
 
   const support = await request.post("/api/v1/canonical/chat", {
@@ -196,10 +197,10 @@ test("网站根据持久化语言 Cookie 输出中英文页面", async ({ reques
   expect(englishHtml).toContain("GPU servers");
   expect(englishHtml).toContain("Compute Market");
 
-  const chinese = await request.get("/", { headers: { Cookie: "kai.locale=zh-CN" } });
+  const chinese = await request.get("/", { headers: { Cookie: "kai.locale=zh-Hans" } });
   expect(chinese.ok()).toBeTruthy();
   const chineseHtml = await chinese.text();
-  expect(chineseHtml).toContain('lang="zh-CN"');
+  expect(chineseHtml).toContain('lang="zh-Hans"');
   expect(chineseHtml).toContain("GPU 服务器");
   expect(chineseHtml).toContain("算力市场");
 });

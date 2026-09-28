@@ -43,6 +43,17 @@ const rules = [
       ['DATABASE_URL', 'client-side database configuration'],
     ],
   },
+  {
+    files: filesUnder('services/collector/collector', ['.py']),
+    patterns: [
+      ['DATABASE_URL', 'Collector database configuration'],
+      ['sqlalchemy', 'Collector database client'],
+      ['psycopg', 'Collector database client'],
+      ['asyncpg', 'Collector database client'],
+      ['sqlite3', 'Collector database client'],
+      ['pymongo', 'Collector database client'],
+    ],
+  },
 ]
 
 const violations = []
@@ -61,4 +72,4 @@ if (violations.length) {
   process.exit(1)
 }
 
-console.log('Client boundary check passed: Web, iOS and Android use the canonical cloud API boundary.')
+console.log('Boundary check passed: Collector, Web, iOS and Android use the canonical cloud API boundary.')

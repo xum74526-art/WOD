@@ -9,7 +9,7 @@
 - Web 以 HttpOnly Cookie + `/api/v1/canonical/*` BFF 访问云端 API。
 - 原生 App 只接受以 `/api` 结尾的 HTTPS 地址，默认为 `https://wod.kai.com/api`。
 - FastAPI OpenAPI 是唯一 HTTP 契约，CI 会拒绝过期快照、旧客户端路由和客户端数据库配置。
-- API 单元测试、Web 生产构建、H5/App 生产构建和三套依赖安全审计全部进入 CI。
+- API 与 Collector 单元测试、Web 生产构建与浏览器 E2E、静态审核页测试、H5/App 生产构建和全部依赖安全审计均进入 CI。
 - Python JWT 已从含无修复 ECDSA 问题的 `python-jose` 迁移到 PyJWT。
 
 ## 每次合并前的自动门禁
@@ -26,13 +26,18 @@ git diff --check
 |---|---|
 | API | 编译、单元测试和 OpenAPI 快照通过 |
 | Collector | 编译、适配器/内部接入契约测试通过，源码不包含数据库配置 |
-| Web | 单元测试、TypeScript 检查和 production build 通过 |
+| Web | 单元测试、TypeScript 检查、production build 和隔离数据库浏览器 E2E 通过 |
+| 静态审核页 | 本地资源、无外部网络、备案与客服等固定审核信息测试通过 |
 | Mobile | 单元测试、TypeScript 检查及 API 边界检查通过 |
 | 移动端构建 | CI 的 H5 和 App production build 通过 |
-| 依赖安全 | Python、Web、Mobile 没有命令报告的已知漏洞 |
+| 依赖安全 | API、Collector、Web、Mobile 没有命令报告的已知漏洞 |
 | Git | 没有意外构建产物、密钥或未解释的兼容代码 |
 
 检查失败必须修复根因；不能通过跳过断言、降低审计级别或提交生成目录获得“通过”。
+
+GitHub 的分支保护或仓库规则集应把 CI 的 `Required gate` 设为必需检查。该汇总任务只有在
+API、Collector、架构边界、静态审核页、Web、浏览器 E2E、iOS 与 Android 全部成功时才会通过；
+这样后续新增或重排内部任务时，分支保护只需保持一个稳定的必需检查名称。
 
 ## 外部上线条件
 

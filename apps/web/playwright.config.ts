@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -19,6 +20,8 @@ const e2eStateDir = safeInheritedStateDir
 process.env.ZTW_PLAYWRIGHT_STATE_DIR = e2eStateDir;
 const e2eDatabasePath = resolve(e2eStateDir, "api.sqlite3").replaceAll("\\", "/");
 const e2eUploadRoot = resolve(e2eStateDir, "uploads");
+const e2eSessionSecret = createHash("sha256").update("ztw-playwright-e2e-session").digest("hex");
+const e2eSensitiveDataKey = `${createHash("sha256").update("ztw-playwright-e2e-sensitive-storage").digest("base64url")}=`;
 mkdirSync(e2eStateDir, { recursive: true });
 const python = process.env.API_PYTHON ?? resolve(
   backendDir,
@@ -60,6 +63,8 @@ export default defineConfig({
         KAI_AUTH_CLIENT_ID: "",
         KAI_AUTH_CLIENT_SECRET: "",
         KAI_AUTH_CALLBACK_URL: "",
+        SECRET_KEY: e2eSessionSecret,
+        SENSITIVE_DATA_KEY: e2eSensitiveDataKey,
         DATABASE_URL: `sqlite:///${e2eDatabasePath}`,
         UPLOAD_ROOT: e2eUploadRoot,
         ZTW_PLAYWRIGHT_E2E: "1",

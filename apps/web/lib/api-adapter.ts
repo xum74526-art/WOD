@@ -1280,8 +1280,9 @@ export async function handleApi(request: NextRequest, segments: string[]) {
     }
     if (request.method === "GET" && canonicalPath === "market/prices/latest") return publicMarketLatest(request);
     const publicMarketRead = request.method === "GET" && /^(?:market\/(?:models|ranking|sources\/status|prices\/(?:candles|history))|products\/quote\/regional)$/.test(canonicalPath);
+    const mutationBody = isMutation(request.method) && Object.keys(body).length > 0 ? body : undefined;
     const result = await upstream(request, `/api/${canonicalPath}`, {
-      body: isMutation(request.method) ? body : undefined,
+      body: mutationBody,
       query: request.nextUrl.searchParams,
       ...(publicMarketRead ? {
         auth: false,

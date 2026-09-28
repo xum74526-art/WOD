@@ -43,5 +43,6 @@ done
 node "$repo_root/packages/api-contracts/check-mobile-api.mjs"
 node "$repo_root/packages/api-contracts/check-client-boundaries.mjs"
 node "$repo_root/packages/api-contracts/check-client-experience-parity.mjs"
+node --test "$repo_root/static-review/site.test.mjs"
 
 echo "All available project checks passed."

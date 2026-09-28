@@ -11,6 +11,7 @@
     "check:contracts": "services/api/.venv/bin/python packages/api-contracts/check_openapi.py && node packages/api-contracts/check-mobile-api.mjs && node packages/api-contracts/check-client-boundaries.mjs && node packages/api-contracts/check-client-experience-parity.mjs",
     "check:experience-parity": "node packages/api-contracts/check-client-experience-parity.mjs",
     "check:web": "npm --prefix apps/web run type-check",
+    "test:web:e2e": "npm --prefix apps/web run e2e",
     "build:web": "npm --prefix apps/web run build",
     "check:ios": "npm --prefix apps/ios run type-check",
     "test:ios": "npm --prefix apps/ios test",
@@ -21,6 +22,7 @@
     "check:mobile": "npm run check:ios && npm run check:android",
     "test:mobile": "npm run test:ios && npm run test:android",
     "build:mobile:app": "npm run build:ios:app && npm run build:android:app",
+    "test:static-review": "node --test static-review/site.test.mjs",
     "check:all": "./tooling/check-all.sh",
     "audit:deps": "./tooling/audit-dependencies.sh"
   },

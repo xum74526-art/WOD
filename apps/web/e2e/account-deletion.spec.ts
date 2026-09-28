@@ -5,6 +5,10 @@ const receiptKey = "wod.account-deletion.receipt.v1";
 const ticket = "mock-deletion-scoped-receipt-only-not-a-real-ticket";
 const expires = () => new Date(Date.now() + 600_000).toISOString();
 
+test.beforeEach(async ({ context }) => {
+  await context.addCookies([{ name: "kai.locale", value: "zh-Hans", domain: "127.0.0.1", path: "/" }]);
+});
+
 async function mockAccount(page: Page, guest = false, handler?: (path: string, body: Record<string, unknown>) => Promise<{ data?: unknown; status?: number; abort?: boolean } | undefined>) {
   // Every API request is intercepted. This suite never submits to a real API,
   // reads a real account, or depends on a business database.
@@ -16,7 +20,7 @@ async function mockAccount(page: Page, guest = false, handler?: (path: string, b
     if (!response && url.pathname === "/api/v1/auth/me") response = guest
       ? { status: 401 }
       : { data: { user: { id: 1, display_name: "Mock KAI星算 account", email: null, email_verified: false, role: "personal" } } };
-    if (!response && url.pathname === `${prefix}/eligibility`) response = guest ? { status: 401 } : { data: { eligible: true, blockers: [], automatic_actions: ["关闭未成交需求并撤回未成交报价"] } };
+    if (!response && url.pathname === `${prefix}/eligibility`) response = guest ? { status: 401 } : { data: { eligible: true, blockers: [], automatic_actions: ["关闭未成交需求并撤回未成交报价"], verification_methods: ["password"] } };
     if (!response && url.pathname === `${prefix}/verify`) response = { data: { ticket, expires_at: expires() } };
     if (response?.abort) { await route.abort("connectionfailed"); return; }
     const status = response?.status || 200;
@@ -34,6 +38,14 @@ async function reachFinalConfirmation(page: Page) {
   await button.click();
   await expect(page.getByRole("heading", { name: "最后确认" })).toBeVisible();
   expect(await page.evaluate((key) => localStorage.getItem(key), receiptKey)).toBeNull();
+}
+
+async function submitFinalConfirmation(page: Page) {
+  const button = page.getByRole("button", { name: "确认注销账号", exact: true });
+  await expect(button).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await expect(button).toBeEnabled();
+  await button.click();
 }
 
 test("public deletion entry works without an installed app or authenticated session", async ({ page }) => {
@@ -74,7 +86,7 @@ test("timeout preserves receipt, only checks status after reload, and shows succ
     }
   });
   await reachFinalConfirmation(page);
-  await page.getByRole("button", { name: "确认注销账号", exact: true }).click();
+  await submitFinalConfirmation(page);
   await expect(page.getByText("注销正在处理中，正常登录已停用。只有服务器确认完成后，才会显示注销成功。")).toBeVisible();
   await expect(page.getByRole("heading", { name: "账号已注销", exact: true })).toHaveCount(0);
   expect(await page.evaluate((key) => localStorage.getItem(key), receiptKey)).not.toContain("password");
@@ -96,7 +108,7 @@ test("server blockers after final confirmation do not look like successful delet
     }
   });
   await reachFinalConfirmation(page);
-  await page.getByRole("button", { name: "确认注销账号", exact: true }).click();
+  await submitFinalConfirmation(page);
   await expect(page.getByText("有未结束的撮合合作 (2)")).toBeVisible();
   await expect(page.getByRole("heading", { name: "账号已注销", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "重新检查条件" }).click();
@@ -128,7 +140,7 @@ test("verified after timeout retains its receipt and requires explicit final con
     if (path === `${prefix}/status`) return { data: { status: "verified", blockers: [], completed_at: null } };
   });
   await reachFinalConfirmation(page);
-  await page.getByRole("button", { name: "确认注销账号", exact: true }).click();
+  await submitFinalConfirmation(page);
   await expect(page.getByRole("button", { name: "使用原验证再次确认" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "使用原验证再次确认" })).toBeVisible();
