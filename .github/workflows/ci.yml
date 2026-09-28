@@ -53,6 +53,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: apps/android/package-lock.json
+      - run: npm ci --prefix apps/android --ignore-scripts --no-audit
       - run: node packages/api-contracts/check-mobile-api.mjs
       - run: node packages/api-contracts/check-client-boundaries.mjs
       - run: node packages/api-contracts/check-client-experience-parity.mjs
