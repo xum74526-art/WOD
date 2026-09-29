@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "下載KAI星算 Android App，或查看 iOS 與 Android 應用商店發佈狀態。",
 };
 
-const androidVersion = "1.2.3";
+const androidVersion = "1.2.5";
 const configuredAndroidApkUrl = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_URL?.trim() || "";
 const configuredAndroidApkSize = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_SIZE?.trim() || "";
 const configuredAndroidApkSha256 = process.env.NEXT_PUBLIC_KAI_ANDROID_APK_SHA256?.trim().toUpperCase() || "";

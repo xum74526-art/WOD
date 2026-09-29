@@ -7,7 +7,7 @@ test("official Android download stays closed until the new KAI星算 APK metadat
   const header = fs.readFileSync(new URL("../components/site-header.tsx", import.meta.url), "utf8");
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
 
-  assert.match(page, /const androidVersion = "1\.2\.3"/);
+  assert.match(page, /const androidVersion = "1\.2\.5"/);
   assert.match(page, /configuredAndroidApkUrl/);
   assert.match(page, /\/download\\\/suanlixingtu\\\.apk/);
   assert.match(page, /NEXT_PUBLIC_KAI_ANDROID_APK_SIZE\?\.trim\(\) \|\| ""/);
