@@ -155,7 +155,7 @@ def _freeze_refund_card_hours(
         raise BizError("钱包不存在", status_code=404)
     if _refundable_recharge_balance(wallet, db) < amount:
         raise BizError(
-            "无法可靠保留等额可退充值卡时，需转人工核对后处理",
+            "无法可靠保留等额可退充值余额，需转人工核对后处理",
             status_code=409,
         )
     wallet.balance = (Decimal(wallet.balance) - amount).quantize(Decimal("0.000001"))
@@ -211,7 +211,7 @@ def _settle_refund_hold(
         event_key=f"payment-refund:{refund.id}:settled",
         remark=(
             f"七相支付人民币 {Decimal(refund.amount_cny):.2f} 元原路退款，"
-            f"扣减 {amount} 卡时"
+            f"扣减 {amount} 元账户余额"
         ),
     ))
 

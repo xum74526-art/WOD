@@ -52,7 +52,11 @@ test('mobile English market copy uses buyer-friendly natural language', () => {
   assert.match(i18n, /buyUsage: 'Submit Request'/)
   assert.match(i18n, /marketOfferSource: 'Pricing Source'/)
   assert.match(i18n, /sevenDayChangeValue: '7-Day Change \{value\}%'/)
-  assert.match(i18n, /sevenDayPriceRangeValue: '7-Day Price Range \{low\}-\{high\} CH'/)
+  assert.match(i18n, /sevenDayPriceRangeValue: '7-Day Price Range \{low\}–\{high\}'/)
+  assert.match(i18n, /sevenDayPriceRangePerGpuHourValue: '7-Day Price Range \{low\}–\{high\}\/GPU-hour'/)
+  assert.doesNotMatch(i18n, /sevenDayPriceRangeCnyValue/)
+  assert.match(runtimeRegionViews[1], /sevenDayPriceRangePerGpuHourValue/)
+  assert.match(runtimeRegionViews[1], /formatCnyCurrency\(range\.low\)/)
   assert.doesNotMatch(`${i18n}\n${generated}`, /Buy Usage|Offer source|7d Change|7d Range|7d range/)
   assert.match(supplierSettings, /localizeRegionName\(info\.region, i18n\.lang\)/)
   for (const source of runtimeRegionViews) {

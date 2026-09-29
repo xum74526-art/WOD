@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  cardHoursToDisplayCurrency,
+  displayCurrencyCode,
+  displayCurrencyToCardHours,
   fmtCH,
   fmtCHr,
   fmtCardHours,
@@ -10,6 +13,10 @@ import {
   formatMoney,
   formatNumber,
   formatNumberInput,
+  formatCardHourCurrency,
+  formatCnyCurrency,
+  normalizeDisplayInputToCny,
+  setDisplayCurrencyConfig,
   setFormatLanguage,
 } from '../src/utils/format.ts'
 
@@ -47,23 +54,59 @@ test('formatNumber safely normalizes non-finite API values', () => {
   assert.equal(formatNumber(Number.POSITIVE_INFINITY), '0')
 })
 
-test('card-hour accounting values always display exactly three decimals', () => {
+test('account money keeps CNY as its ledger base while display rates vary by currency', () => {
+  setDisplayCurrencyConfig({ card_hour_cny_rate: 1.002, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
+  setFormatLanguage('zh-Hans')
   assert.equal(fmtCardHours('0.009980'), '0.010')
   assert.equal(fmtCardHours(12), '12.000')
+  setFormatLanguage('zh-Hant')
 })
 
-test('card-hour units follow an in-page language switch without storage reload', () => {
+test('legacy CNY formatters follow an in-page currency switch without storage reload', () => {
+  setDisplayCurrencyConfig({ card_hour_cny_rate: 1, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
   setFormatLanguage('zh-Hans')
-  assert.equal(fmtCH(1.002), '1.000卡时')
-  assert.equal(fmtCHr(1.002), '1.000卡时/h')
+  assert.equal(fmtCH(1.002), '¥1.002')
+  assert.equal(fmtCHr(1.002), '¥1.002/h')
 
   setFormatLanguage('zh-Hant')
-  assert.equal(fmtCH(1.002), '1.000卡時')
-  assert.equal(fmtCHr(1.002), '1.000卡時/h')
+  assert.equal(fmtCH(1.002), 'HK$1.082')
+  assert.equal(fmtCHr(1.002), 'HK$1.082/h')
 
   setFormatLanguage('en')
-  assert.equal(fmtCH(1.002), '1.000 CH')
-  assert.equal(fmtCHr(1.002), '1.000 CH/h')
+  assert.equal(fmtCH(1.002), 'US$0.140')
+  assert.equal(fmtCHr(1.002), 'US$0.140/h')
 
+  setFormatLanguage('zh-Hant')
+})
+
+test('display currency follows language and reverses safely to the ledger unit', () => {
+  setDisplayCurrencyConfig({
+    card_hour_cny_rate: 1.002,
+    rates: { CNY: 1, HKD: 1.08, USD: 0.14 },
+  })
+
+  setFormatLanguage('zh-Hans')
+  assert.equal(displayCurrencyCode(), 'CNY')
+  assert.equal(formatCardHourCurrency(1), '¥1.000')
+
+  setFormatLanguage('zh-Hant')
+  assert.equal(displayCurrencyCode(), 'HKD')
+  assert.equal(formatCardHourCurrency(1), 'HK$1.080')
+
+  setFormatLanguage('en')
+  assert.equal(displayCurrencyCode(), 'USD')
+  assert.equal(formatCnyCurrency(10), 'US$1.400')
+  assert.equal(cardHoursToDisplayCurrency(10), 1.4000000000000001)
+  assert.ok(Math.abs(displayCurrencyToCardHours(1.4) - 10) < 1e-9)
+
+  setFormatLanguage('zh-Hant')
+})
+
+test('three-decimal display input preserves legal CNY payment boundaries', () => {
+  setDisplayCurrencyConfig({ rates: { CNY: 1, HKD: 1.169032900251, USD: 0.149020326907 } })
+  setFormatLanguage('en')
+  assert.equal(normalizeDisplayInputToCny('1.490', { fractionDigits: 2, minimum: 10 }), 10)
+  assert.equal(normalizeDisplayInputToCny('1.490', { fractionDigits: 3, minimum: 10 }), 10)
+  assert.equal(normalizeDisplayInputToCny('1.489', { fractionDigits: 3, minimum: 10 }), 9.992)
   setFormatLanguage('zh-Hant')
 })

@@ -2,12 +2,12 @@
   <view class="quote-form-fields">
     <view class="field two-col">
       <view class="half">
-        <text class="field-label">{{ t('proposalUnitPrice') }}</text>
-        <input :value="modelValue.unitPrice" type="digit" class="field-input" :placeholder="t('proposalUnitPricePlaceholder')" @input="update('unitPrice', inputValue($event))" />
+        <text class="field-label">{{ t('proposalUnitPrice') }}（{{ currencyCode }}）</text>
+        <input :value="modelValue.unitPrice" type="digit" class="field-input" placeholder="0.000" @input="update('unitPrice', inputValue($event))" />
       </view>
       <view class="half">
-        <text class="field-label">{{ t('proposalTotalPrice') }}</text>
-        <input :value="modelValue.totalPrice" type="digit" class="field-input" :placeholder="t('proposalTotalPricePlaceholder')" @input="update('totalPrice', inputValue($event))" />
+        <text class="field-label">{{ t('proposalTotalPrice') }}（{{ currencyCode }}）</text>
+        <input :value="modelValue.totalPrice" type="digit" class="field-input" placeholder="0.000" @input="update('totalPrice', inputValue($event))" />
       </view>
     </view>
     <view class="field two-col">
@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18nStore } from '@/store/i18n'
+import { displayCurrencyCode } from '@/utils/format'
 
 export interface MatchmakingQuoteFormValue {
   unitPrice: string
@@ -57,6 +58,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18nStore()
+const currencyCode = computed(() => displayCurrencyCode())
 const valid = computed(() => Number(props.modelValue.totalPrice) > 0
   && Number(props.modelValue.deliveryHours) > 0
   && Number(props.modelValue.validityHours) > 0)

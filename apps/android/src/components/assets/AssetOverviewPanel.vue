@@ -16,21 +16,20 @@
       <view class="asset-panel__hero">
         <text class="asset-panel__eyebrow">{{ t('assetTotalValue') }}</text>
         <view class="asset-panel__amount">
-          <text class="asset-panel__amount-value">{{ assetAvailable && walletAvailable ? fmtCardHours(totalAsset) : '--' }}</text>
-          <text class="asset-panel__amount-unit">{{ t('cardHour') }}</text>
+          <text class="asset-panel__amount-value">{{ assetAvailable && walletAvailable ? formatCardHourCurrency(totalAsset) : '--' }}</text>
         </view>
         <text class="asset-panel__hero-note">{{ updatedLabel }}</text>
         <view class="asset-panel__metrics">
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value">{{ walletAvailable ? fmtCardHours(walletBalance) : '--' }}</text>
+            <text class="asset-panel__metric-value">{{ walletAvailable ? formatCardHourCurrency(walletBalance) : '--' }}</text>
             <text class="asset-panel__metric-label">{{ t('walletBalance') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ assetAvailable ? `${todayRevenue > 0 ? '+' : ''}${fmtCardHours(todayRevenue)}` : '--' }}</text>
+            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ assetAvailable ? `${todayRevenue > 0 ? '+' : ''}${formatCardHourCurrency(todayRevenue)}` : '--' }}</text>
             <text class="asset-panel__metric-label">{{ t('todayRealizedEarnings') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value positive">{{ walletAvailable ? fmtCardHours(totalIncome) : '--' }}</text>
+            <text class="asset-panel__metric-value positive">{{ walletAvailable ? formatCardHourCurrency(totalIncome) : '--' }}</text>
             <text class="asset-panel__metric-label">{{ t('totalRealizedEarnings') }}</text>
           </view>
         </view>
@@ -44,15 +43,15 @@
         <view class="asset-panel__summary">
           <view class="asset-panel__summary-item">
             <text class="asset-panel__summary-label">{{ t('computeAssets') }}</text>
-            <text class="asset-panel__summary-value">{{ assetAvailable ? `${fmtCardHours(summary?.total_value)} ${t('cardHour')}` : '--' }}</text>
+            <text class="asset-panel__summary-value">{{ assetAvailable ? formatCardHourCurrency(summary?.total_value) : '--' }}</text>
           </view>
           <view class="asset-panel__summary-item">
             <text class="asset-panel__summary-label">{{ t('walletBalance') }}</text>
-            <text class="asset-panel__summary-value">{{ walletAvailable ? `${fmtCardHours(walletBalance)} ${t('cardHour')}` : '--' }}</text>
+            <text class="asset-panel__summary-value">{{ walletAvailable ? formatCardHourCurrency(walletBalance) : '--' }}</text>
           </view>
           <view class="asset-panel__summary-item">
             <text class="asset-panel__summary-label">{{ t('pendingUsageRebate') }}</text>
-            <text class="asset-panel__summary-value">{{ assetAvailable ? `${fmtCardHours(summary?.pending_revenue)} ${t('cardHour')}` : '--' }}</text>
+            <text class="asset-panel__summary-value">{{ assetAvailable ? formatCardHourCurrency(summary?.pending_revenue) : '--' }}</text>
           </view>
           <view class="asset-panel__summary-item">
             <text class="asset-panel__summary-label">{{ t('activeResources') }}</text>
@@ -109,7 +108,7 @@ import { computed } from 'vue'
 import type { AssetItem, AssetSummary } from '@/api/asset'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCardHours } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const props = defineProps<{
@@ -147,6 +146,6 @@ function assetEarnings(asset: AssetItem): number {
 
 function signedAssetEarnings(asset: AssetItem): string {
   const value = assetEarnings(asset)
-  return `${value > 0 ? '+' : ''}${fmtCardHours(value)}`
+  return `${value > 0 ? '+' : ''}${formatCardHourCurrency(value)}`
 }
 </script>

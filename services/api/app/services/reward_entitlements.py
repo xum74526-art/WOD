@@ -157,11 +157,11 @@ def _next_tier_hint(total: Decimal, tiers: tuple[tuple[Decimal | None, int], ...
     for threshold, rate in tiers:
         if threshold is not None and total <= threshold:
             next_rate = next(candidate for _, candidate in tiers if candidate > rate)
-            # Tier upper bounds are inclusive, so one cent of a card-hour is
-            # required when the running total sits exactly on the boundary.
+            # Tier upper bounds are inclusive, so one cent is required when
+            # the CNY running total sits exactly on the boundary.
             remaining = reward_money(max(Decimal("0.01"), threshold - total + Decimal("0.01")))
             remaining_text = format(remaining, "f").rstrip("0").rstrip(".")
-            return f"再{noun} {remaining_text} 卡时可升至 {next_rate // 100}% 返佣"
+            return f"再{noun} ¥{remaining_text} 可升至 {next_rate // 100}% 返佣"
     return f"已达最高返佣等级 {tiers[-1][1] // 100}%"
 
 

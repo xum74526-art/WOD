@@ -6,7 +6,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
-INVITE_CODE_PREFIX = "ZTW"
+# New invite codes use the current public brand.  Existing WOD/ZTW codes stay
+# valid because registration resolves the complete stored code and never
+# rejects a code by prefix.
+INVITE_CODE_PREFIX = "KAI"
 
 
 class InviteCode(Base):
@@ -31,7 +34,7 @@ class InviteRecord(Base):
     invitee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 被邀请人
     invitee_phone: Mapped[str] = mapped_column(String(16))  # 脱敏手机号
     status: Mapped[str] = mapped_column(String(16), default="registered")  # registered/ordered/rewarded
-    reward_amount: Mapped[float] = mapped_column(default=0)  # 邀请人获得的卡时奖励
+    reward_amount: Mapped[float] = mapped_column(default=0)  # 邀请人获得的站内奖励余额
     created_platform: Mapped[str] = mapped_column(
         String(16), default="legacy", server_default="legacy", index=True
     )

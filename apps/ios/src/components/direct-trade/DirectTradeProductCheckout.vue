@@ -6,14 +6,14 @@
     <ConfirmSheet
       :visible="showConfirm"
       :title="t(purchaseType === 'holding' ? 'confirmHoldingPurchase' : 'confirmUsagePurchase')"
-      :desc="`${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${fmtCardHours(totalCardHours)} ${t('cardHour')}`"
+      :desc="`${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${formatCardHourCurrency(totalCardHours)}`"
       :confirmText="t('k_936de2c4')"
       @cancel="cancelConfirm"
       @confirm="submitOrder"
     >
       <view class="confirm-fee">
         <text>{{ t('k_99b6bb88') }}</text>
-        <text class="confirm-value">{{ fmtCardHours(totalCardHours) }} {{ t('cardHour') }}</text>
+        <text class="confirm-value">{{ formatCardHourCurrency(totalCardHours) }}</text>
       </view>
       <view v-if="purchaseType === 'usage'" class="coupon-field">
         <text>{{ t('couponSelect') }}</text>
@@ -24,15 +24,15 @@
       </view>
       <view v-if="selectedCoupon" class="confirm-fee rebate-row">
         <text>{{ t('couponDiscount') }}</text>
-        <text class="coupon-discount">-{{ fmtCardHours(couponDiscount) }} {{ t('cardHour') }}</text>
+        <text class="coupon-discount">-{{ formatCardHourCurrency(couponDiscount) }}</text>
       </view>
       <view v-if="selectedCoupon" class="confirm-fee rebate-row payable-row">
         <text>{{ t('couponPayable') }}</text>
-        <text class="confirm-value">{{ fmtCardHours(payableCardHours) }} {{ t('cardHour') }}</text>
+        <text class="confirm-value">{{ formatCardHourCurrency(payableCardHours) }}</text>
       </view>
       <view v-if="purchaseType === 'usage'" class="confirm-fee rebate-row">
         <text>{{ t('estimatedExpiryRebate') }}</text>
-        <text class="confirm-value">{{ fmtCardHours(estimatedRebate || 0) }} {{ t('cardHour') }}<template v-if="estimatedRebateRate"> · {{ estimatedRebateRate }}%</template></text>
+        <text class="confirm-value">{{ formatCardHourCurrency(estimatedRebate || 0) }}<template v-if="estimatedRebateRate"> · {{ estimatedRebateRate }}%</template></text>
       </view>
       <text v-if="purchaseType === 'usage'" class="confirm-note">{{ t('rebateEstimateCheckoutNotice') }}</text>
       <text v-else class="confirm-note">{{ t('holdingRisk') }}</text>
@@ -48,7 +48,7 @@ import { getAvailableCoupons, type CouponItem } from '@/api/coupon'
 import type { Product } from '@/api/gpu'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import { directTradeCardHoursPerGpuHour } from '@/utils/direct-trade'
-import { fmtCardHours } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
@@ -79,7 +79,7 @@ const couponOptions = computed(() => [
   { id: undefined, label: t('couponDoNotUse') },
   ...coupons.value.map((coupon) => ({
     id: coupon.id,
-    label: `${tr(coupon.name)} · -${fmtCardHours(Math.min(coupon.amount, totalCardHours.value))} ${t('cardHour')}`,
+    label: `${tr(coupon.name)} · -${formatCardHourCurrency(Math.min(coupon.amount, totalCardHours.value))}`,
   })),
 ])
 const selectedCoupon = computed(() => coupons.value.find((coupon) => coupon.id === selectedCouponId.value))

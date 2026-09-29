@@ -125,7 +125,7 @@ class MaPayPaymentTests(unittest.TestCase):
             "trade_no": "MAPAY-TEST-0001",
             "out_trade_no": order.order_no,
             "type": "alipay",
-            "name": "KAI星算钱包卡时充值",
+            "name": "KAI星算钱包充值",
             "money": money,
             "trade_status": "TRADE_SUCCESS",
             "param": order.order_no,
@@ -171,6 +171,7 @@ class MaPayPaymentTests(unittest.TestCase):
             payment_type="alipay",
         )
         self.assertEqual(output["amount_cny"], 10.0)
+        self.assertRegex(output["order_no"], r"^KAIR\d{14}[A-F0-9]{8}$")
 
     def test_only_configured_payment_types_are_public_and_accepted(self):
         settings.MAPAY_PAYMENT_TYPES = " wxpay,wxpay,unknown "
@@ -239,7 +240,7 @@ class MaPayPaymentTests(unittest.TestCase):
             payment_type="alipay",
         )
         self.assertEqual(output["amount_cny"], 0.01)
-        self.assertEqual(output["card_hours"], 0.00998)
+        self.assertEqual(output["card_hours"], 0.01)
         token = output["checkout_url"].rsplit("/", 1)[-1]
         page = checkout_html(self.db, token)
         self.assertIn("/api/pay/submit", page)
@@ -251,7 +252,7 @@ class MaPayPaymentTests(unittest.TestCase):
             for key, value in re.findall(r'name="([^"]+)" value="([^"]*)"', page)
         }
         self.assertEqual(hidden_fields["type"], "alipay")
-        self.assertEqual(hidden_fields["name"], "KAI星算钱包卡时充值")
+        self.assertEqual(hidden_fields["name"], "KAI星算钱包充值")
         merchant_public = self.merchant_private.public_key()
         merchant_public.verify(
             base64.b64decode(hidden_fields.pop("sign"), validate=True),
@@ -268,13 +269,13 @@ class MaPayPaymentTests(unittest.TestCase):
 
         self.db.refresh(self.wallet)
         self.db.refresh(order)
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
         self.assertEqual(order.status, "paid")
         self.assertIsNotNone(order.credited_at)
         self.assertIn("<title>KAI星算</title>", checkout_html(self.db, token))
         credits = self.db.query(Ledger).filter(Ledger.ref_payment_order_id == order.id).all()
         self.assertEqual(len(credits), 1)
-        self.assertEqual(credits[0].amount, Decimal("0.009980"))
+        self.assertEqual(credits[0].amount, Decimal("0.010000"))
 
     def test_callback_is_rejected_before_verification_when_legacy_gate_is_off(self):
         output = create_recharge_order(
@@ -462,7 +463,7 @@ class MaPayPaymentTests(unittest.TestCase):
         self.db.refresh(self.wallet)
         self.assertEqual(order.status, "paid")
         self.assertLessEqual(order.paid_at, order.expires_at)
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
         self.assertEqual(self.db.query(Ledger).count(), 1)
 
     def test_payment_completed_after_deadline_requires_review_and_never_credits(self):
@@ -569,7 +570,7 @@ class MaPayPaymentTests(unittest.TestCase):
         self.db.refresh(order)
         self.db.refresh(self.wallet)
         self.assertEqual(order.status, "paid")
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
 
     def test_query_success_without_paid_time_after_deadline_requires_review(self):
         output = create_recharge_order(
@@ -622,10 +623,10 @@ class MaPayPaymentTests(unittest.TestCase):
         self.assertEqual(first["status"], "paid")
         self.assertEqual(second["status"], "paid")
         self.db.refresh(self.wallet)
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
         credits = self.db.query(Ledger).filter_by(ref_payment_order_id=order.id).all()
         self.assertEqual(len(credits), 1)
-        self.assertEqual(credits[0].amount, Decimal("0.009980"))
+        self.assertEqual(credits[0].amount, Decimal("0.010000"))
 
     def test_precision_migration_repairs_legacy_cny_credit_once(self):
         from init_db import _migrate_payment_precision_and_pending_deadlines
@@ -640,6 +641,10 @@ class MaPayPaymentTests(unittest.TestCase):
         order.status = "paid"
         order.paid_at = utc_now()
         order.credited_at = utc_now()
+        # Explicitly model a historical pre-direct-money order. New orders are
+        # nominal CNY, while this one still needs the one-time precision repair.
+        order.card_hours = Decimal("0.009980")
+        order.card_hour_rate = Decimal("1.002000")
         self.wallet.balance = Decimal("10.010000")
         self.db.add(Ledger(
             user_id=self.user.id,

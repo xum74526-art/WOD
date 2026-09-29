@@ -3,6 +3,14 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { financialDecimal, formatFinancialAmount } from "../lib/financial-format.ts";
+import {
+  convertCardHoursToDisplay,
+  convertDisplayToCardHours,
+  displayCurrencyForLocale,
+  formatCardHoursForLocale,
+  formatCnyForLocale,
+  normalizeDisplayInputToCny,
+} from "../lib/display-currency.ts";
 import { localizeSupplierName } from "../lib/market-localization.ts";
 
 test("financial values use exactly three decimal places", () => {
@@ -12,6 +20,33 @@ test("financial values use exactly three decimal places", () => {
   assert.equal(formatFinancialAmount(1234.5678, "en-US"), "1,234.568");
   assert.equal(formatFinancialAmount(Number.NaN, "en-US"), "0.000");
   assert.equal(financialDecimal(19.898521), "19.899");
+});
+
+test("language selects a currency and applies the dated display exchange rate", () => {
+  const config = {
+    base_currency: "CNY" as const,
+    settlement_currency: "CNY" as const,
+    fraction_digits: 3 as const,
+    card_hour_cny_rate: 1,
+    rates: { CNY: 1, HKD: 1.08, USD: 0.14 },
+    rate_mode: "daily_reference" as const,
+    rate_source: "TEST",
+    rate_date: "2026-09-28",
+    rates_stale: false,
+    conversion_scope: "display_only" as const,
+  };
+
+  assert.equal(displayCurrencyForLocale("zh-Hans"), "CNY");
+  assert.equal(displayCurrencyForLocale("zh-Hant"), "HKD");
+  assert.equal(displayCurrencyForLocale("en"), "USD");
+  assert.equal(formatCardHoursForLocale(1, "zh-Hans", config), "¥1.000");
+  assert.equal(formatCardHoursForLocale(1, "zh-Hant", config), "HK$1.080");
+  assert.equal(formatCardHoursForLocale(1, "en", config), "US$0.140");
+  assert.equal(formatCnyForLocale(10, "en", config), "US$1.400");
+  assert.equal(formatCnyForLocale(100, "zh-Hant", config), "HK$108.000");
+  assert.equal(formatCnyForLocale(100, "en", config), "US$14.000");
+  assert.equal(convertCardHoursToDisplay(10, "zh-Hans", config), 10);
+  assert.ok(Math.abs(convertDisplayToCardHours(1.4, "en", config) - 10) < 1e-9);
 });
 
 test("Web, Android and iOS share the three-decimal display contract", () => {
@@ -31,6 +66,24 @@ test("Web, Android and iOS share the three-decimal display contract", () => {
   }
 });
 
+test("three-decimal display input preserves legal CNY payment boundaries", () => {
+  const config = {
+    base_currency: "CNY" as const,
+    settlement_currency: "CNY" as const,
+    fraction_digits: 3 as const,
+    card_hour_cny_rate: 1,
+    rates: { CNY: 1, HKD: 1.169032900251, USD: 0.149020326907 },
+    rate_mode: "daily_reference" as const,
+    rate_source: "TEST",
+    rate_date: "2026-09-29",
+    rates_stale: false,
+    conversion_scope: "display_only" as const,
+  };
+  assert.equal(normalizeDisplayInputToCny("1.490", "en", config, { fractionDigits: 2, minimum: 10 }), 10);
+  assert.equal(normalizeDisplayInputToCny("1.490", "en", config, { fractionDigits: 3, minimum: 10 }), 10);
+  assert.equal(normalizeDisplayInputToCny("1.489", "en", config, { fractionDigits: 3, minimum: 10 }), 9.992);
+});
+
 test("English market copy does not render Chinese backend assurance fields", () => {
   const market = fs.readFileSync(new URL("../components/merchant-resource-market.tsx", import.meta.url), "utf8");
   const locale = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
@@ -38,7 +91,7 @@ test("English market copy does not render Chinese backend assurance fields", () 
   assert.doesNotMatch(market, /row\.assurance_(?:label|description)/);
   assert.match(market, /t\("market\.assurance\.kai"/);
   assert.match(market, /t\("market\.assurance\.merchantDirect"/);
-  assert.match(market, /formatFinancialAmount\(row\.unit_price_ch/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
   assert.match(locale, /"market\.buy": "Buy Now"/);
   assert.match(locale, /"market\.hourly": "Hourly price"/);
   assert.equal(localizeSupplierName("KAI 自营", "en"), "KAI Self-operated");

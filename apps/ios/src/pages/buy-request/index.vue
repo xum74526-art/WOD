@@ -346,7 +346,7 @@ import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
 import { useCommerceStore } from '@/store/commerce'
 import { localizeRegionName, normalizeInquiryRegionRequirement } from '@/utils/region-name'
-import { formatQuoteAmount } from '@/utils/quote-currency'
+import { displayInputToQuoteAmount, formatQuoteAmount, quoteAmountToDisplayInput } from '@/utils/quote-currency'
 import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
 import { normalizeBuyRequestContactPhone } from '@/utils/buy-request-contact'
 import { buyRequestAdditionalRequirements } from '@/utils/buy-request-requirements'
@@ -569,13 +569,13 @@ function buildTimeline(value: BuyRequestDetail | null) {
 }
 
 function quotePayload(): BuyRequestQuotePayload | null {
-  const totalPrice = Number(quoteForm.value.totalPrice)
-  const unitPrice = Number(quoteForm.value.unitPrice)
   const deliveryHours = Number(quoteForm.value.deliveryHours)
   const validityHours = Number(quoteForm.value.validityHours)
-  if (!(totalPrice > 0) || !(deliveryHours > 0) || !(validityHours > 0)) return null
   const editedQuote = editingQuoteId.value == null ? null : detail.value?.quotes.find(item => item.id === editingQuoteId.value)
-  const currency = editedQuote ? latestQuoteRevision(editedQuote).currency : detail.value?.request.currency
+  const currency = (editedQuote ? latestQuoteRevision(editedQuote).currency : detail.value?.request.currency) || 'CNY'
+  const totalPrice = displayInputToQuoteAmount(quoteForm.value.totalPrice, currency)
+  const unitPrice = displayInputToQuoteAmount(quoteForm.value.unitPrice, currency)
+  if (!(totalPrice > 0) || !(deliveryHours > 0) || !(validityHours > 0)) return null
   return {
     unit_price: unitPrice > 0 ? unitPrice : undefined,
     total_price: totalPrice,
@@ -795,9 +795,10 @@ function beginQuoteEdit(quote: BuyRequestQuote, role: 'buyer' | 'seller') {
   const validityHours = expiresAt ? Math.max(1, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 3600000)) : 24
   editingQuoteId.value = quote.id
   quoteFormRole.value = role
+  const currency = latest.currency || quote.currency || detail.value?.request.currency || 'CNY'
   quoteForm.value = {
-    unitPrice: latest.unit_price == null ? '' : String(latest.unit_price),
-    totalPrice: String(latest.total_price),
+    unitPrice: latest.unit_price == null ? '' : quoteAmountToDisplayInput(latest.unit_price, currency),
+    totalPrice: quoteAmountToDisplayInput(latest.total_price, currency),
     deliveryHours: String(deliveryHours),
     validityHours: String(validityHours),
     message: latest.message || '',

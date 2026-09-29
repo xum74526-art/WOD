@@ -24,7 +24,7 @@
       <view v-for="d in stats?.device_stats" :key="d.name" class="card urow">
         <view class="ul">
           <text class="un">{{ localizeProductName(d.name, i18n.lang) }}</text>
-          <text class="ug">{{ d.gpu_model }} · {{ t('{count} 个订单', { count: d.order_count }) }} · {{ fmtCH(d.price) }}/h</text>
+          <text class="ug">{{ d.gpu_model }} · {{ t('{count} 个订单', { count: d.order_count }) }} · {{ formatCardHourCurrency(d.price) }}/h</text>
         </view>
         <view class="ur">
           <view class="bar-bg"><view class="bar-fill" :style="{ width: utilizationWidth(d.utilization) }"></view></view>
@@ -59,7 +59,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import Chart from '@/components/Chart.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { fmtCH, formatNumber } from '@/utils/format'
+import { formatCardHourCurrency, formatNumber } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
 

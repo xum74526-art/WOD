@@ -61,7 +61,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { fmtCardHours, formatDeadline, toCardHours } from '@/utils/format'
+import { formatCardHourCurrency, formatDeadline, toCardHours } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { localizeProductName } from '@/utils/localize-content'
 import { isValidSshInfo } from '@/utils/ssh-info'
@@ -110,7 +110,7 @@ function canDeliver(order: SupplierOrderItem) {
 
 function orderAmountText(order: SupplierOrderItem) {
   const value = order.amount_card_hours ?? toCardHours(order.amount)
-  return `${fmtCardHours(value)} ${t('cardHour')}`
+  return formatCardHourCurrency(value)
 }
 
 function deadlineText(order: SupplierOrderItem) {

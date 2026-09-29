@@ -6,13 +6,13 @@
       <view class="card hero">
         <view class="hero-main">
           <text class="hl">{{ t('k_52878214') }}</text>
-          <text class="hv up">{{ fmtCH(wallet?.today_revenue) }}</text>
+          <text class="hv up">{{ formatCardHourCurrency(wallet?.today_revenue) }}</text>
         </view>
         <view class="hero-grid">
-          <view class="hg-item"><text class="hg-l">{{ t('k_d00a676b') }}</text><text class="hg-v">{{ fmtCH(wallet?.total_revenue) }}</text></view>
-          <view class="hg-item"><text class="hg-l">{{ t('k_c4e8bacf') }}</text><text class="hg-v">{{ fmtCH(wallet?.pending_amount) }}</text></view>
-          <view class="hg-item"><text class="hg-l">{{ t('k_f7e76123') }}</text><text class="hg-v up">{{ fmtCH(wallet?.available) }}</text></view>
-          <view class="hg-item"><text class="hg-l">{{ t('k_70dbe1ce') }}</text><text class="hg-v">{{ fmtCH(wallet?.withdrawn) }}</text></view>
+          <view class="hg-item"><text class="hg-l">{{ t('k_d00a676b') }}</text><text class="hg-v">{{ formatCardHourCurrency(wallet?.total_revenue) }}</text></view>
+          <view class="hg-item"><text class="hg-l">{{ t('k_c4e8bacf') }}</text><text class="hg-v">{{ formatCardHourCurrency(wallet?.pending_amount) }}</text></view>
+          <view class="hg-item"><text class="hg-l">{{ t('k_f7e76123') }}</text><text class="hg-v up">{{ formatCardHourCurrency(wallet?.available) }}</text></view>
+          <view class="hg-item"><text class="hg-l">{{ t('k_70dbe1ce') }}</text><text class="hg-v">{{ formatCardHourCurrency(wallet?.withdrawn) }}</text></view>
         </view>
       </view>
 
@@ -43,8 +43,8 @@
           </view>
         </view>
         <view class="rr">
-          <text class="rv" :class="{ up: r.settlement_status === 'settled' }">{{ r.settlement_status === 'settled' ? '+' + fmtCH(r.net_income) : r.settlement_status === 'historical_unreconciled' ? t('待财务核账') : t('pendingSettlement') }}</text>
-          <text class="rs">{{ t('订单') }} {{ fmtCH(r.amount) }} · {{ t('服务费') }} {{ r.settlement_status === 'settled' ? fmtCH(r.service_fee) : '—' }}</text>
+          <text class="rv" :class="{ up: r.settlement_status === 'settled' }">{{ r.settlement_status === 'settled' ? '+' + formatCardHourCurrency(r.net_income) : r.settlement_status === 'historical_unreconciled' ? t('待财务核账') : t('pendingSettlement') }}</text>
+          <text class="rs">{{ t('订单') }} {{ formatCardHourCurrency(r.amount) }} · {{ t('服务费') }} {{ r.settlement_status === 'settled' ? formatCardHourCurrency(r.service_fee) : '—' }}</text>
         </view>
       </view>
     </view>
@@ -56,7 +56,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getSupplierWallet, getRevenueDetail } from '@/api/supplier'
-import { fmtCH, formatDate } from '@/utils/format'
+import { formatCardHourCurrency, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'

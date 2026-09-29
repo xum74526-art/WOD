@@ -137,25 +137,48 @@ test("community share copy matches the app and includes the source", () => {
 });
 
 test("platform-owned community copy uses the selected language without rewriting user posts", () => {
+  const currencyConfig = {
+    base_currency: "CNY" as const,
+    settlement_currency: "CNY" as const,
+    fraction_digits: 3 as const,
+    card_hour_cny_rate: 1,
+    rates: { CNY: 1, HKD: 1.08, USD: 0.14 },
+    rate_mode: "daily_reference" as const,
+    rate_source: "TEST",
+    rate_date: "2026-09-28",
+    rates_stale: false,
+    conversion_scope: "display_only" as const,
+  };
   const internal = {
-    content: "RTX4090 今日算力观察\n\n北美当前参考价为 5.04 卡时/h。",
-    content_en: "RTX4090 Daily Compute Snapshot\n\nThe current reference price in 北美 is 5.04 CH/h. KAI星算 market data.",
+    content: "RTX4090 今日算力观察\n\n北美当前参考价为 ¥5.04/GPU小时。",
+    content_en: "RTX4090 Daily Compute Snapshot\n\nThe current reference price in 北美 is CNY ¥5.04 per GPU-hour. KAI星算 market data.",
     topic: "算力行情",
     topic_en: "Compute Market",
     origin: "internal",
     source_key: "wod-market",
   };
   assert.equal(
-    communityPostContent(internal, "en"),
-    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. KAI Star Market data.",
+    communityPostContent(internal, "en", currencyConfig),
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is US$0.706/GPU-hour. KAI Star Market data.",
+  );
+  assert.equal(
+    communityPostContent(internal, "zh-Hans", currencyConfig),
+    "RTX4090 今日算力观察\n\n北美当前参考价为 ¥5.040/GPU小时。",
+  );
+  assert.equal(
+    communityPostContent(internal, "zh-Hant", currencyConfig),
+    "RTX4090 今日算力觀察\n\n北美當前參考價為 HK$5.443/GPU小時。",
   );
   assert.equal(communityPostTopic(internal, "en"), "Compute Market");
   assert.equal(
-    communityShareText({ ...internal, source_url: "https://example.com/source" }, "en"),
-    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is 5.04 CH/h. KAI Star \nhttps://example.com/source",
+    communityShareText({ ...internal, source_url: "https://example.com/source" }, "en", currencyConfig),
+    "RTX4090 Daily Compute Snapshot\n\nThe current reference price in North America is US$0.706/GPU-hour. K\nhttps://example.com/source",
   );
 
   const userPost = { content: "北美用戶原文", origin: "user", source_key: null };
   assert.equal(communityPostContent(userPost, "en"), "北美用戶原文");
   assert.equal(communityPostContent(userPost, "zh-Hant"), "北美用戶原文");
+
+  const legacy = { ...internal, content: "北美参考价为 5.04 卡时/h。", content_en: "North America is 5.04 CH/h." };
+  assert.equal(communityPostContent(legacy, "en", currencyConfig), "North America is US$0.707/GPU-hour.");
 });

@@ -43,9 +43,9 @@ test('supplier API exposes only the required create and update resource writes',
   assert.match(supplierApi, /interface SupplierDeviceItem[\s\S]*version:\s*number/)
 })
 
-test('seller resource list is writable and displays the backend card-hour unit directly', () => {
+test('seller resource list is writable and displays backend ledger prices in local currency', () => {
   assert.doesNotMatch(devicePage, /mobileMerchantReadOnly(?:Title|Hint)|read-only-note/)
-  assert.match(devicePage, /fmtCardHours\s*\(/)
+  assert.match(devicePage, /formatCardHourCurrency\s*\(/)
   assert.doesNotMatch(devicePage, /fmtCH\s*\(\s*d\.price\s*\)/)
   assert.match(devicePage, /createSupplierDevice|pages\/supplier\/product-create/)
   assert.match(devicePage, /updateSupplierDevice/)
@@ -59,10 +59,10 @@ test('seller mode exposes a clearly labelled compute-resource management entry',
   assert.match(profilePage, /t\('merchantResourceManagement'\)/)
 })
 
-test('resource creation submits card hours without applying the RMB conversion helper', () => {
+test('resource creation accepts local currency and converts it back to the backend ledger unit', () => {
   const createPage = source('../src/pages/supplier/product-create.vue')
   assert.match(createPage, /createSupplierDevice/)
-  assert.doesNotMatch(createPage, /fromCardHours/)
+  assert.match(createPage, /displayCurrencyToCardHours\(form\.price\)/)
   assert.match(createPage, /slice\(0, 3\)/)
   assert.match(createPage, /if \(submitting\.value\) return/)
   assert.match(createPage, /if \(!listed\) submitting\.value = false/)
@@ -74,8 +74,9 @@ test('resource creation submits card hours without applying the RMB conversion h
   assert.match(supplierApi, /interface SupplierDeviceCreateInput[\s\S]*client_request_id:\s*string/)
 })
 
-test('resource editing preserves three-decimal prices and submits only changed fields', () => {
-  assert.match(devicePage, /formatAmount\(device\.price, false\)/)
+test('resource editing preserves three-decimal localized prices and submits only changed fields', () => {
+  assert.match(devicePage, /formatNumberInput\(cardHoursToDisplayCurrency\(device\.price\)\)/)
+  assert.match(devicePage, /displayCurrencyToCardHours\(editForm\.price\)/)
   assert.match(devicePage, /slice\(0, 3\)/)
   assert.match(devicePage, /const changes:\s*SupplierDeviceUpdateInput = \{\}/)
   assert.match(devicePage, /if \(stock !== editTarget\.value\.stock\) changes\.stock = stock/)

@@ -33,7 +33,7 @@ function amount(value: unknown) { return formatFinancialAmount(value as number |
 function date(value?: string | null) { return value ? new Date(value).toLocaleDateString("zh-CN") : "—"; }
 
 function RevenueWorkspace() {
-  const { locale, t } = useI18n();
+  const { locale, t, displayCurrency, formatLedgerMoney } = useI18n();
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [rebate, setRebate] = useState<RebateSummary | null>(null);
   const [points, setPoints] = useState<RevenuePoint[]>([]);
@@ -45,33 +45,33 @@ function RevenueWorkspace() {
   const personalEntitled = Number(rebate?.month_entitled ?? 0);
   const personalCapUsed = Number(rebate?.cap_used ?? 0);
   const personalCapRemaining = Number(rebate?.cap_remaining ?? 0);
-  const tierHint = localizeRebateHint(rebate?.next_tier_hint, locale)
+  const tierHint = localizeRebateHint(rebate?.next_tier_hint, locale, formatLedgerMoney)
     || t("rebate.personal.noHint", "当前没有新的等级提示。");
   const rewardMode = rebate?.reward_mode === "live"
-    ? t("rebate.mode.live", "正式卡时")
+    ? t("rebate.mode.live", "正式余额")
     : rebate?.reward_mode === "test_card_hours"
-      ? t("rebate.mode.cardHours", "站内卡时")
+      ? t("rebate.mode.cardHours", "站内奖励余额")
       : t("rebate.mode.disabled", "未开启");
   if (!summary && !error) return <div className="workspace-skeleton" />;
   return <>
     {error && <div className="commerce-error">{error}</div>}
     <div className="mobile-data-spine">
-      <article><small>{t("earnings.realizedToday", "今日已实现收益")}</small><strong>{amount(summary?.today)}</strong><span>卡时</span></article>
-      <article><small>{t("earnings.realizedTotal", "累计已实现收益")}</small><strong>{amount(summary?.total)}</strong><span>卡时</span></article>
-      <article><small>{t("earnings.pendingRebate", "待结算购买返佣")}</small><strong>{amount(summary?.pending_rebate)}</strong><span>卡时</span></article>
-      <article><small>{t("earnings.unrealizedHoldingPnl", "持有未实现盈亏")}</small><strong>{amount(summary?.holding_unrealized_pnl)}</strong><span>{amount(summary?.holding_unrealized_pnl_rate)}%</span></article>
+      <article><small>{t("earnings.realizedToday", "今日已实现收益")}</small><strong>{formatLedgerMoney(summary?.today)}</strong><span>{displayCurrency}</span></article>
+      <article><small>{t("earnings.realizedTotal", "累计已实现收益")}</small><strong>{formatLedgerMoney(summary?.total)}</strong><span>{displayCurrency}</span></article>
+      <article><small>{t("earnings.pendingRebate", "待结算购买返佣")}</small><strong>{formatLedgerMoney(summary?.pending_rebate)}</strong><span>{displayCurrency}</span></article>
+      <article><small>{t("earnings.unrealizedHoldingPnl", "持有未实现盈亏")}</small><strong>{formatLedgerMoney(summary?.holding_unrealized_pnl)}</strong><span>{displayCurrency} · {amount(summary?.holding_unrealized_pnl_rate)}%</span></article>
     </div>
     <div className="mobile-service-columns">
-      <section className="mobile-trend-panel"><header><div><small>30 DAY AUDITED EARNINGS</small><h2>{t("earnings.trend", "已实现收益走势")}</h2></div><TrendUp size={21}/></header>{points.length ? <div className="mobile-mini-bars" aria-label="近 30 天已实现收益图">{points.map((point, index) => <span title={`${point.date}: ${amount(point.amount)}`} key={`${point.date}-${index}`}><i className={Number(point.amount || 0) < 0 ? "negative" : ""} style={{ height: `${Math.max(4, Math.abs(Number(point.amount || 0)) / max * 100)}%` }}/><small>{point.date.slice(5)}</small></span>)}</div> : <div className="mobile-inline-empty">暂无已实现收益曲线</div>}</section>
-      <section className="mobile-rebate-panel"><header><Gift size={20}/><div><small>PERSONAL PURCHASE REBATE</small><h2>{t("rebate.personal.title", "个人购买返佣")}</h2></div></header><strong>{amount(rebate?.pending_rebate)}</strong><span>{t("rebate.personal.pending", "待到期结算（卡时）")}</span><p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买卡时总额计算，资产服务期结束后返佣入账。")}</p><footer>{tierHint}<br/>{t("rebate.personal.capProgress", "本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时 · {mode}", { entitled: amount(personalEntitled), used: amount(personalCapUsed), remaining: amount(personalCapRemaining), cap: amount(personalCap), mode: rewardMode })}</footer></section>
+      <section className="mobile-trend-panel"><header><div><small>30 DAY AUDITED EARNINGS</small><h2>{t("earnings.trend", "已实现收益走势")}</h2></div><TrendUp size={21}/></header>{points.length ? <div className="mobile-mini-bars" aria-label="近 30 天已实现收益图">{points.map((point, index) => <span title={`${point.date}: ${formatLedgerMoney(point.amount)}`} key={`${point.date}-${index}`}><i className={Number(point.amount || 0) < 0 ? "negative" : ""} style={{ height: `${Math.max(4, Math.abs(Number(point.amount || 0)) / max * 100)}%` }}/><small>{point.date.slice(5)}</small></span>)}</div> : <div className="mobile-inline-empty">暂无已实现收益曲线</div>}</section>
+      <section className="mobile-rebate-panel"><header><Gift size={20}/><div><small>PERSONAL PURCHASE REBATE</small><h2>{t("rebate.personal.title", "个人购买返佣")}</h2></div></header><strong>{formatLedgerMoney(rebate?.pending_rebate)}</strong><span>{t("rebate.personal.pending", "待到期结算")}</span><p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买金额计算，资产服务期结束后返佣入账。")}</p><footer>{tierHint}<br/>{t("rebate.personal.capProgress", "本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} · {mode}", { entitled: formatLedgerMoney(personalEntitled), used: formatLedgerMoney(personalCapUsed), remaining: formatLedgerMoney(personalCapRemaining), cap: formatLedgerMoney(personalCap), mode: rewardMode })}</footer></section>
     </div>
-    <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>AUDITED EARNINGS LEDGER</small><h2>{t("earnings.records", "已实现收益记录")}</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.record_key || `${row.source_type}:${row.id}`}><span><strong>{Number(row.amount || 0) > 0 ? "+" : ""}{amount(row.amount)} 卡时</strong><small>{row.source_type === "holding_sale" ? t("earnings.holdingSale", "持有资产出售盈亏") : t("earnings.purchaseRebate", "购买到期返佣")} · 资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无已实现收益记录</div>}</section>
-        {Number(summary?.historical_test_total || 0) > 0 && <div className="workspace-service-note">历史模拟收益 {amount(summary?.historical_test_total)} 卡时仅保留作审计，不计入余额或当前收益。</div>}
+    <section className="mobile-record-panel"><header><Receipt size={19}/><div><small>AUDITED EARNINGS LEDGER</small><h2>{t("earnings.records", "已实现收益记录")}</h2></div><b>{records.length}</b></header>{records.length ? records.map((row) => <article key={row.record_key || `${row.source_type}:${row.id}`}><span><strong>{Number(row.amount || 0) > 0 ? "+" : ""}{formatLedgerMoney(row.amount)}</strong><small>{row.source_type === "holding_sale" ? t("earnings.holdingSale", "持有资产出售盈亏") : t("earnings.purchaseRebate", "购买到期返佣")} · 资产 #{row.asset_id || "—"}</small></span><time>{date(row.date || row.created_at)}</time></article>) : <div className="mobile-inline-empty">暂无已实现收益记录</div>}</section>
+        {Number(summary?.historical_test_total || 0) > 0 && <div className="workspace-service-note">历史模拟收益 {formatLedgerMoney(summary?.historical_test_total)} 仅保留作审计，不计入余额或当前收益。</div>}
   </>;
 }
 
 function CouponWorkspace() {
-  const { locale } = useI18n();
+  const { locale, formatLedgerMoney } = useI18n();
   const en = locale === "en";
   const label = (zh: string, english: string) => en ? english : zh;
   const [rows, setRows] = useState<Coupon[]>([]); const [status, setStatus] = useState(""); const [code, setCode] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
@@ -79,7 +79,7 @@ function CouponWorkspace() {
   useEffect(() => { void load(); }, [load]);
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { await redeemCoupon(code.trim()); setCode(""); await load(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(false); } }
   const stateLabel = (value: Coupon["status"]) => ({ available: label("可使用", "Available"), used: label("已使用", "Used"), expired: label("已过期", "Expired") }[value]);
-  return <>{error && <div className="commerce-error">{error}</div>}<div className="mobile-ops-toolbar"><nav>{[["", label("全部", "All")], ["available", label("可使用", "Available")], ["used", label("已使用", "Used")], ["expired", label("已过期", "Expired")]].map(([value, text]) => <button className={status === value ? "active" : ""} onClick={() => setStatus(value)} key={value}>{text}</button>)}</nav><form className="mobile-code-form" onSubmit={submit}><input placeholder={label("输入兑换码", "Enter redemption code")} value={code} onChange={(event) => setCode(event.target.value)} required minLength={8} maxLength={48}/><button disabled={busy}><Plus size={15}/>{busy ? label("兑换中", "Redeeming") : label("兑换", "Redeem")}</button></form></div><div className="mobile-coupon-grid">{rows.length ? rows.map((coupon) => <article className={`coupon-${coupon.status}`} key={coupon.id}><header><Ticket size={22}/><span>{stateLabel(coupon.status)}</span></header><strong>{amount(coupon.amount)}<small>{en ? "CH" : "卡时"}</small></strong><h2>{coupon.name}</h2><p>{label(`满 ${amount(coupon.min_amount)} 卡时可用`, `Valid on orders of ${amount(coupon.min_amount)} CH or more`)}</p><footer>{coupon.product_id ? label(`限定商品 #${coupon.product_id}`, `Product #${coupon.product_id} only`) + " · " : ""}{label("有效期至", "Valid until")} {date(coupon.expires_at)}</footer></article>) : <div className="mobile-empty-state"><Ticket size={30}/><strong>{label("当前分类没有优惠券", "No coupons in this category")}</strong><span>{label("可在上方输入平台发放的兑换码。", "Enter a platform-issued code above.")}</span></div>}</div></>;
+  return <>{error && <div className="commerce-error">{error}</div>}<div className="mobile-ops-toolbar"><nav>{[["", label("全部", "All")], ["available", label("可使用", "Available")], ["used", label("已使用", "Used")], ["expired", label("已过期", "Expired")]].map(([value, text]) => <button className={status === value ? "active" : ""} onClick={() => setStatus(value)} key={value}>{text}</button>)}</nav><form className="mobile-code-form" onSubmit={submit}><input placeholder={label("输入兑换码", "Enter redemption code")} value={code} onChange={(event) => setCode(event.target.value)} required minLength={8} maxLength={48}/><button disabled={busy}><Plus size={15}/>{busy ? label("兑换中", "Redeeming") : label("兑换", "Redeem")}</button></form></div><div className="mobile-coupon-grid">{rows.length ? rows.map((coupon) => <article className={`coupon-${coupon.status}`} key={coupon.id}><header><Ticket size={22}/><span>{stateLabel(coupon.status)}</span></header><strong>{formatLedgerMoney(coupon.amount)}</strong><h2>{coupon.name}</h2><p>{label(`满 ${formatLedgerMoney(coupon.min_amount)} 可用`, `Valid on orders of ${formatLedgerMoney(coupon.min_amount)} or more`)}</p><footer>{coupon.product_id ? label(`限定商品 #${coupon.product_id}`, `Product #${coupon.product_id} only`) + " · " : ""}{label("有效期至", "Valid until")} {date(coupon.expires_at)}</footer></article>) : <div className="mobile-empty-state"><Ticket size={30}/><strong>{label("当前分类没有优惠券", "No coupons in this category")}</strong><span>{label("可在上方输入平台发放的兑换码。", "Enter a platform-issued code above.")}</span></div>}</div></>;
 }
 
 function BankCardWorkspace() {

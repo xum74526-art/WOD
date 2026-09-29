@@ -30,9 +30,9 @@ test("legacy community brand values are renamed for display without changing bac
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 
   const feed = fs.readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
-  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key, locale\)/);
-  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key, locale\)/);
-  assert.match(feed, /communityPostContent\(row, locale\)/);
+  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key, locale, displayCurrencyConfig\)/);
+  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key, locale, displayCurrencyConfig\)/);
+  assert.match(feed, /communityPostContent\(row, locale, displayCurrencyConfig\)/);
 });
 
 test("all live market requests force KAI Pricing as the only source", () => {
@@ -376,7 +376,7 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(market, /提交需求后由对应商家人工联系确认方案/);
   assert.match(market, /market\.inquiry/);
   assert.match(market, /market\.submitRequest/);
-  assert.match(market, /formatFinancialAmount\(row\.unit_price_ch/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(detail, /beginInquiry/);
   assert.match(detail, /\/account\/requests/);
@@ -458,13 +458,13 @@ test("Web exposes real merchant operations and keeps admission separate from ide
   assert.doesNotMatch(`${shell}\n${adminDashboard}`, /FINANCE ADMIN|独立财务管理员|财务管理员白名单/);
 });
 
-test("Web market chart and pulse consistently render KAI prices in card hours", () => {
+test("Web market chart and pulse consistently render KAI prices in the language currency", () => {
   const chart = fs.readFileSync(new URL("../components/gpu-candlestick-chart.tsx", import.meta.url), "utf8");
   const pulse = fs.readFileSync(new URL("../components/market-pulse-rail.tsx", import.meta.url), "utf8");
 
   for (const source of [chart, pulse]) {
     assert.match(source, /median_price_card_hours/);
-    assert.match(source, /卡时 \/ GPU·小时/);
+    assert.match(source, /formatLedgerMoney/);
     assert.doesNotMatch(source, /median_price_cny/);
     assert.doesNotMatch(source, /CNY \/ GPU·h/);
   }
@@ -472,13 +472,15 @@ test("Web market chart and pulse consistently render KAI prices in card hours", 
   assert.doesNotMatch(chart, /close_price_cny/);
 });
 
-test("seller resource workspace uses the backend card-hour price contract", () => {
+test("seller resource workspace preserves the backend ledger contract while showing local currency", () => {
   const resource = fs.readFileSync(new URL("../components/resource-workspace.tsx", import.meta.url), "utf8");
   const supplierApi = fs.readFileSync(new URL("../lib/supplier-api.ts", import.meta.url), "utf8");
 
-  assert.match(resource, /每 GPU 小时价格（卡时）/);
-  assert.match(resource, /formatFinancialAmount\(selected\.price\).*卡时 \/ GPU·小时/);
-  assert.doesNotMatch(resource, /每 GPU 小时价格（CNY）|formatFinancialAmount\(selected\.price\).*CNY/);
+  assert.match(resource, /KAI-P-\$\{item\.id\}/);
+  assert.doesNotMatch(resource, /WOD-P-\$\{item\.id\}/);
+  assert.match(resource, /每 GPU 小时价格（\{displayCurrency\}）/);
+  assert.match(resource, /formatLedgerMoney\(selected\.price\).*GPU·小时/);
+  assert.match(resource, /convertDisplayToCardHours\(form\.price, locale, displayCurrencyConfig\)/);
   assert.match(supplierApi, /MobileSupplierDevice[\s\S]*version: number/);
   assert.match(supplierApi, /expected_version: expectedVersion/);
   assert.match(resource, /updateMobileSupplierDevice\(selected\.id, selected\.version, changes\)/);
@@ -549,7 +551,7 @@ test("Web matchmaking selection requests platform coordination without creating 
   assert.match(workspace, /region: normalizeInquiryRegionRequirement\(initialPrefill\?\.region\)/);
   assert.match(workspace, /product_id: initialPrefill\?\.product_id/);
   assert.match(workspace, /supplier_id: initialPrefill\?\.supplier_id/);
-  assert.match(workspace, /提交不会扣除卡时，也不会自动生成订单/);
+  assert.match(workspace, /提交不会扣除余额，也不会自动生成订单/);
   assert.match(workspace, /请等待工作人员联系确认/);
   assert.match(workspace, /selectMobileBuyQuote/);
   assert.match(workspace, /const snapshot = quoteSelectionSnapshot\(item\)/);

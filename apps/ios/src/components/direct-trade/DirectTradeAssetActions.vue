@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { sellAsset, type AssetItem } from '@/api/asset'
-import { fmtCH } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { navigateBack, navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 
@@ -34,7 +34,7 @@ function sell() {
   const sellPrice = props.asset.current_price ?? 0
   uni.showModal({
     title: t('确认出售'),
-    content: `${t('k_87165f6a')}: ${fmtCH(sellPrice)}\n${t('k_a8401d10')}: ${pnl >= 0 ? '+' : ''}${fmtCH(pnl)}\n\n${t('确认按当前市价出售？')}`,
+    content: `${t('k_87165f6a')}: ${formatCardHourCurrency(sellPrice)}\n${t('k_a8401d10')}: ${pnl >= 0 ? '+' : ''}${formatCardHourCurrency(pnl)}\n\n${t('确认按当前市价出售？')}`,
     confirmText: t('确认出售'),
     success: async result => {
       if (!result.confirm) return
@@ -43,7 +43,7 @@ function sell() {
         const response = await sellAsset(props.asset.id, props.asset.current_unit_price!, requestId())
         pendingRequestId.value = ''
         pendingSignature.value = ''
-        uni.showToast({ title: `${t('出售成功')} ${t(response.pnl >= 0 ? '盈利' : '亏损')}${fmtCH(response.pnl)}`, icon: 'none' })
+        uni.showToast({ title: `${t('出售成功')} ${t(response.pnl >= 0 ? '盈利' : '亏损')}${formatCardHourCurrency(response.pnl)}`, icon: 'none' })
         setTimeout(() => navigateBack(), 1000)
       } finally {
         submitting.value = false

@@ -25,7 +25,7 @@ from app.services.holding_trade import holding_asset_quote
 from app.services.reward_program import PROGRAM_CONSUMER
 
 
-MONEY_QUANTUM = Decimal("0.01")
+MONEY_QUANTUM = Decimal("0.001")
 
 
 def _money(value: object) -> Decimal:

@@ -25,8 +25,8 @@ FAQ_ANSWERS = (
     ),
     FaqAnswer(
         topic="purchase",
-        zh="页面明确标记“可购买”的当前 KAI 报价可按整数 GPU 小时下单，并可选择购买使用或购买持有。系统按 KAI 的人民币/GPU 小时报价和页面公示汇率换算、冻结站内卡时，随后进入“待平台人工交付 SSH”。确认交付后才生成对应资产；页面标记“仅供行情参考”的资源不能下单。",
-        en="A current KAI quote explicitly marked Purchasable can be ordered for an integer number of GPU-hours in either Usage or Holding mode. The server converts KAI's CNY/GPU-hour quote to wallet card-hours at the displayed rate, freezes that amount, and then waits for manual SSH delivery. The matching asset is created only after delivery confirmation. Reference-only listings cannot be ordered.",
+        zh="页面明确标记“可购买”的当前 KAI 报价可按整数 GPU 小时下单，并可选择购买使用或购买持有。订单和账户余额统一以人民币记账结算，系统冻结相应余额后进入“待平台人工交付 SSH”；繁体中文和英文界面仅按每日参考汇率换算显示港币或美元。确认交付后才生成对应资产；页面标记“仅供行情参考”的资源不能下单。",
+        en="A current KAI quote explicitly marked Purchasable can be ordered for an integer number of GPU-hours in either Usage or Holding mode. Orders and wallet balances are recorded and settled in CNY. The server freezes the corresponding balance before manual SSH delivery; HKD or USD shown by other language settings is display-only and uses the daily reference rate. The matching asset is created only after delivery confirmation. Reference-only listings cannot be ordered.",
         keywords_zh=("购买", "下单", "订单", "取消", "ssh", "交付", "数量", "周期", "库存"),
         keywords_en=("buy", "purchase", "order", "cancel", "ssh", "delivery", "quantity", "term", "stock"),
     ),
@@ -53,8 +53,8 @@ FAQ_ANSWERS = (
     ),
     FaqAnswer(
         topic="payment",
-        zh="充值渠道是否可用以充值页面和服务端实时状态为准。支付完成后仍以服务端验签回调或主动查单结果入账，页面跳转本身不代表充值成功。算力订单使用站内卡时结算，不会要求向个人银行卡、微信或支付宝转账。",
-        en="Recharge availability follows the live status shown on the recharge page. A recharge is credited only after a server-verified callback or provider query; returning from checkout does not itself prove payment. Compute orders settle in wallet card-hours and never ask you to transfer money to a personal bank card, WeChat, or Alipay account.",
+        zh="充值渠道是否可用以充值页面和服务端实时状态为准。支付完成后仍以服务端验签回调或主动查单结果入账，页面跳转本身不代表充值成功。算力订单和账户余额统一以人民币记账结算；繁体中文和英文界面的港币、美元金额仅为每日参考汇率换算展示。平台不会要求向个人银行卡、微信或支付宝转账。",
+        en="Recharge availability follows the live status shown on the recharge page. A recharge is credited only after a server-verified callback or provider query; returning from checkout does not itself prove payment. Compute orders and wallet balances are recorded and settled in CNY. HKD or USD amounts shown by other language settings are display-only conversions using the daily reference rate. The platform never asks you to transfer money to a personal bank card, WeChat, or Alipay account.",
         keywords_zh=("支付", "充值", "退款", "扣款", "付款", "冻结", "余额", "卡时"),
         keywords_en=("payment", "pay", "recharge", "top up", "refund", "debit", "frozen", "balance", "ch"),
     ),
@@ -77,20 +77,20 @@ FAQ_ANSWERS = (
 
 MATCHMAKING_FAQ_COPY = {
     "purchase": {
-        "zh": "当前版本不在 App 内直接下单、扣卡时或收款。您可以在资源详情提交需求，由已认证商家在需求市场报价；选定合适方案后仅提交合作意向，由平台工作人员继续协调交付。双方联系方式和 SSH 等敏感信息不会在报价阶段公开。",
-        "en": "This version does not place paid orders, debit CH, or collect payment in the app. Submit a requirement from a resource page and verified sellers can quote in the request market. Choosing a suitable proposal records a cooperation intention for platform coordination only; contact details and SSH credentials remain private during quoting.",
+        "zh": "当前版本不在 App 内直接下单、扣减账户余额或收款。您可以在资源详情提交需求，由已认证商家在需求市场报价；选定合适方案后仅提交合作意向，由平台工作人员继续协调交付。双方联系方式和 SSH 等敏感信息不会在报价阶段公开。",
+        "en": "This version does not place paid orders, debit the wallet balance, or collect payment in the app. Submit a requirement from a resource page and verified sellers can quote in the request market. Choosing a suitable proposal records a cooperation intention for platform coordination only; contact details and SSH credentials remain private during quoting.",
     },
     "compute": {
         "zh": "算力行情继续展示 KAI Pricing 的人民币/GPU 小时报价、曲线、GPU 型号、显存和地区样本。报价样本用于行情与询价参考，不代表实时库存或成交价；KAI 自营和商家资源会明确区分，当前均通过“提交需求”进入撮合流程。",
         "en": "The compute market continues to show KAI Pricing observations, charts, GPU models, memory variants, and regions in CNY/GPU-hour. Observations are references for market information and inquiries, not live inventory or a transaction price. KAI-operated and seller resources are identified separately and currently use the Submit Requirement flow.",
     },
     "payment": {
-        "zh": "当前撮合版本未开放 App 内充值、支付、扣卡时或退款入口，也不会要求您向个人银行卡、微信或支付宝转账。资源报价与合作意向不等于已付款或已成交，后续安排以平台工作人员核验和确认的方案为准。",
-        "en": "The current matchmaking version does not offer in-app recharge, payment, CH debit, or refund actions and will never ask you to transfer money to a personal bank card, WeChat, or Alipay account. A quote or cooperation intention is not proof of payment or a completed transaction; follow only arrangements verified by platform staff.",
+        "zh": "当前撮合版本未开放 App 内充值、支付、余额扣减或退款入口，也不会要求您向个人银行卡、微信或支付宝转账。资源报价与合作意向不等于已付款或已成交，后续安排以平台工作人员核验和确认的方案为准。",
+        "en": "The current matchmaking version does not offer in-app recharge, payment, wallet debit, or refund actions and will never ask you to transfer money to a personal bank card, WeChat, or Alipay account. A quote or cooperation intention is not proof of payment or a completed transaction; follow only arrangements verified by platform staff.",
     },
     "withdrawal": {
-        "zh": "当前撮合版本未开放提现申请和银行卡登记入口。历史钱包与流水仍可查看，但赠送卡时及邀请奖励仅用于平台内符合条件的消费，不可提现。后续资质和资金通道完备后，相关能力将由独立服务开关启用。",
-        "en": "The current matchmaking version does not accept withdrawal requests or new bank-card registrations. Historical wallet records remain readable, while promotional CH and invitation rewards are for eligible in-platform use only and are not withdrawable. These capabilities can be enabled separately after the required qualifications and payment rails are ready.",
+        "zh": "当前撮合版本未开放提现申请和银行卡登记入口。历史钱包与流水仍可查看，但赠送余额及邀请奖励仅用于平台内符合条件的消费，不可提现。后续资质和资金通道完备后，相关能力将由独立服务开关启用。",
+        "en": "The current matchmaking version does not accept withdrawal requests or new bank-card registrations. Historical wallet records remain readable, while promotional balance and invitation rewards are for eligible in-platform use only and are not withdrawable. These capabilities can be enabled separately after the required qualifications and payment rails are ready.",
     },
 }
 
@@ -101,8 +101,8 @@ HISTORY_ONLY_FAQ_COPY = {
         "en": "Requirement matching and in-app transactions are currently unavailable. Market data, charts, and historical records remain readable; follow the live status shown on each page.",
     },
     "payment": {
-        "zh": "当前未开放充值、支付、扣卡时或退款入口，历史充值订单和钱包流水仍可查看。",
-        "en": "Recharge, payment, CH debit, and refund actions are currently unavailable. Historical recharge orders and wallet ledger records remain readable.",
+        "zh": "当前未开放充值、支付、余额扣减或退款入口，历史充值订单和钱包流水仍可查看。",
+        "en": "Recharge, payment, wallet debit, and refund actions are currently unavailable. Historical recharge orders and wallet ledger records remain readable.",
     },
     "withdrawal": {
         "zh": "当前未开放提现申请，历史提现记录仍可查看。",

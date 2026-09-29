@@ -17,6 +17,7 @@ const amount = (value: unknown) => {
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("zh-CN") : "—");
 
 function SupplierRevenue() {
+  const { displayCurrency, formatLedgerMoney } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const withdrawalEntryEnabled = capabilities.direct_trade_enabled === true && capabilities.withdraw_enabled === true;
   const [wallet, setWallet] = useState<SupplierWallet | null>(null);
@@ -42,23 +43,23 @@ function SupplierRevenue() {
       <div className="mobile-data-spine supplier-spine">
         <article>
           <small>今日收益</small>
-          <strong>{amount(wallet?.today_revenue)}</strong>
-          <span>卡时</span>
+          <strong>{formatLedgerMoney(wallet?.today_revenue)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>可提现</small>
-          <strong>{amount(wallet?.available)}</strong>
-          <span>卡时</span>
+          <strong>{formatLedgerMoney(wallet?.available)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>待结算</small>
-          <strong>{amount(wallet?.pending_amount)}</strong>
-          <span>卡时</span>
+          <strong>{formatLedgerMoney(wallet?.pending_amount)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>累计已提现</small>
-          <strong>{amount(wallet?.withdrawn)}</strong>
-          <span>卡时</span>
+          <strong>{formatLedgerMoney(wallet?.withdrawn)}</strong>
+          <span>{displayCurrency}</span>
         </article>
       </div>
       <section className="mobile-record-panel supplier-revenue-ledger">
@@ -83,9 +84,9 @@ function SupplierRevenue() {
                 </small>
               </span>
               <span>
-                <strong>{row.status === "completed" ? `+${amount(row.net_income)}` : "待结算"}</strong>
+                <strong>{row.status === "completed" ? `+${formatLedgerMoney(row.net_income)}` : "待结算"}</strong>
                 <small>
-                  订单 {amount(row.amount)} · 服务费 {amount(row.service_fee)}
+                  订单 {formatLedgerMoney(row.amount)} · 服务费 {formatLedgerMoney(row.service_fee)}
                 </small>
               </span>
               <time>{date(row.created_at)}</time>
@@ -203,7 +204,7 @@ function SupplierAnalytics() {
 }
 
 function SupplierRebates() {
-  const { locale, t } = useI18n();
+  const { locale, displayCurrency, formatLedgerMoney, t } = useI18n();
   const [personal, setPersonal] = useState<RebateSummary | null>(null);
   const [supplier, setSupplier] = useState<SupplierRebate | null>(null);
   const [error, setError] = useState("");
@@ -217,9 +218,9 @@ function SupplierRebates() {
   }, []);
   const personalTiers = personal?.tiers ?? [];
   const supplierTiers = supplier?.tiers ?? [];
-  const personalHint = localizeRebateHint(personal?.next_tier_hint, locale)
+  const personalHint = localizeRebateHint(personal?.next_tier_hint, locale, formatLedgerMoney)
     || t("rebate.personal.noHint", "当前没有新的等级提示。");
-  const supplierHint = localizeRebateHint(supplier?.next_tier_hint, locale)
+  const supplierHint = localizeRebateHint(supplier?.next_tier_hint, locale, formatLedgerMoney)
     || t("rebate.supplier.noHint", "当前没有新的等级提示。");
   const personalCap = Number(personal?.monthly_cap ?? 0);
   const supplierCap = Number(supplier?.monthly_cap ?? 0);
@@ -236,23 +237,23 @@ function SupplierRebates() {
       <div className="mobile-data-spine">
         <article>
           <small>{t("rebate.personal.monthSpent", "本月个人购买")}</small>
-          <strong>{amount(personal?.month_spent)}</strong>
-          <span>{t("rebate.unit.cardHours", "卡时")}</span>
+          <strong>{formatLedgerMoney(personal?.month_spent)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>{t("rebate.personal.monthRebated", "本月个人购买返佣")}</small>
-          <strong>{amount(personal?.month_rebated)}</strong>
-          <span>{t("rebate.unit.cardHours", "卡时")}</span>
+          <strong>{formatLedgerMoney(personal?.month_rebated)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>{t("rebate.supplier.monthSales", "本月已确认销售")}</small>
-          <strong>{amount(supplier?.month_sales)}</strong>
-          <span>{t("rebate.unit.cardHours", "卡时")}</span>
+          <strong>{formatLedgerMoney(supplier?.month_sales)}</strong>
+          <span>{displayCurrency}</span>
         </article>
         <article>
           <small>{t("rebate.supplier.monthRebated", "本月商家销售返佣")}</small>
-          <strong>{amount(supplier?.month_rebated)}</strong>
-          <span>{t("rebate.unit.cardHours", "卡时")}</span>
+          <strong>{formatLedgerMoney(supplier?.month_rebated)}</strong>
+          <span>{displayCurrency}</span>
         </article>
       </div>
       <div className="mobile-service-columns rebate-program-columns">
@@ -266,8 +267,8 @@ function SupplierRebates() {
           </header>
           <strong>{amount(personal?.current_rate)}%</strong>
           <span>{t("rebate.personal.currentTierLabel", "当前个人购买等级")}</span>
-          <p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买卡时总额计算，资产服务期结束后返佣入账。")}</p>
-          <footer>{personalHint}<br/>{t("rebate.personal.summary", "待到期 {pending} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时", { pending: amount(personal?.pending_rebate), entitled: amount(personalEntitled), used: amount(personalCapUsed), remaining: amount(personalCapRemaining), cap: amount(personalCap) })}</footer>
+          <p>{t("rebate.personal.mechanism", "仅统计已确认交付的使用模式订单；等级按本月个人购买金额计算，资产服务期结束后返佣入账。")}</p>
+          <footer>{personalHint}<br/>{t("rebate.personal.summary", "待到期 {pending} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap}", { pending: formatLedgerMoney(personal?.pending_rebate), entitled: formatLedgerMoney(personalEntitled), used: formatLedgerMoney(personalCapUsed), remaining: formatLedgerMoney(personalCapRemaining), cap: formatLedgerMoney(personalCap) })}</footer>
         </section>
         <section className="mobile-rebate-panel rebate-program-card">
           <header>
@@ -279,18 +280,18 @@ function SupplierRebates() {
           </header>
           <strong>{amount(supplier?.current_rate)}%</strong>
           <span>{t("rebate.supplier.currentTierLabel", "当前商家销售等级")}</span>
-          <p>{t("rebate.supplier.mechanism", "返佣基数为本月已确认销售卡时总额，不是平台服务费；按销售总额乘当前等级比例计算。")}</p>
-          <footer>{supplierHint}<br/>{t("rebate.supplier.summary", "预计返佣 {estimated} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap} 卡时", { estimated: amount(supplier?.est_total_rebate), entitled: amount(supplierEntitled), used: amount(supplierCapUsed), remaining: amount(supplierCapRemaining), cap: amount(supplierCap) })}</footer>
+          <p>{t("rebate.supplier.mechanism", "返佣基数为本月已确认销售金额，不是平台服务费；按销售总额乘当前等级比例计算。")}</p>
+          <footer>{supplierHint}<br/>{t("rebate.supplier.summary", "预计返佣 {estimated} · 本月应计 {entitled} · 已用额度 {used} · 剩余额度 {remaining} · 月度上限 {cap}", { estimated: formatLedgerMoney(supplier?.est_total_rebate), entitled: formatLedgerMoney(supplierEntitled), used: formatLedgerMoney(supplierCapUsed), remaining: formatLedgerMoney(supplierCapRemaining), cap: formatLedgerMoney(supplierCap) })}</footer>
         </section>
       </div>
       <div className="mobile-service-columns rebate-tier-columns">
         <section className="supplier-tier-panel">
           <header><Gift size={20}/><div><small>PERSONAL TIERS</small><h2>{t("rebate.personal.tiers", "个人购买等级")}</h2></div></header>
-          {personalTiers.map((tier, index) => <article className={Number(personal?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(personalTiers, index, locale)} {t("rebate.unit.cardHours", "卡时")}</span>{Number(personal?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
+          {personalTiers.map((tier, index) => <article className={Number(personal?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(personalTiers, index, locale, formatLedgerMoney)}</span>{Number(personal?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
         </section>
         <section className="supplier-tier-panel">
           <header><TrendUp size={20}/><div><small>SUPPLIER TIERS</small><h2>{t("rebate.supplier.tiers", "商家销售等级")}</h2></div></header>
-          {supplierTiers.map((tier, index) => <article className={Number(supplier?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(supplierTiers, index, locale)} {t("rebate.unit.cardHours", "卡时")}</span>{Number(supplier?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
+          {supplierTiers.map((tier, index) => <article className={Number(supplier?.current_rate) === Number(tier.rate) ? "active" : ""} key={`${tier.rate}-${index}`}><strong>{tier.rate}%</strong><span>{rebateTierRange(supplierTiers, index, locale, formatLedgerMoney)}</span>{Number(supplier?.current_rate) === Number(tier.rate) && <b>{t("rebate.current", "当前")}</b>}</article>)}
         </section>
       </div>
     </>

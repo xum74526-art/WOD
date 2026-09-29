@@ -1,6 +1,6 @@
 {
   "name": "kai-ios",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "KAI iOS client",
   "scripts": {
     "dev:h5": "uni",

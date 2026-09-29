@@ -1,5 +1,20 @@
 import { request } from './request'
 
+export type DisplayCurrencyCode = 'CNY' | 'HKD' | 'USD'
+
+export interface DisplayCurrencyConfig {
+  base_currency: 'CNY'
+  settlement_currency: 'CNY'
+  fraction_digits: 3
+  card_hour_cny_rate: number
+  rates: Record<DisplayCurrencyCode, number>
+  rate_mode: 'daily_reference'
+  rate_source: string
+  rate_date: string | null
+  rates_stale: boolean
+  conversion_scope: 'display_only'
+}
+
 /**
  * Public, non-secret runtime capabilities returned by the business API.
  * The client treats missing or malformed fields as disabled.
@@ -13,6 +28,7 @@ export interface PlatformCapabilities {
   recharge_enabled: boolean
   withdraw_enabled: boolean
   history_read_enabled: boolean
+  display_currency: DisplayCurrencyConfig
 }
 
 export type MobilePlatform = 'android' | 'ios'

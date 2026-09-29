@@ -136,9 +136,11 @@ test("hour purchases estimate expiry rebates from the authenticated personal tie
   assert.deepEqual(estimateProductExpiryRebate(9, "usage", policy), { amount: 0, ratePercent: 0 });
   assert.deepEqual(estimateProductExpiryRebate(100, "usage", { ...policy, rewards_enabled: false }), { amount: 0, ratePercent: 0 });
   assert.deepEqual(estimateProductExpiryRebate(100, "usage", { ...policy, cap_remaining: Number.NaN }), { amount: 0, ratePercent: 0 });
-  assert.equal(localizeRebateHint("再消费 100 卡时可升至 5% 返佣", "en"), "Spend 100 more card hours to reach the 5% personal purchase rebate tier.");
-  assert.equal(localizeRebateHint("再购买 10,000.01 卡时可升至 5% 返佣", "en"), "Spend 10,000.01 more card hours to reach the 5% personal purchase rebate tier.");
-  assert.equal(localizeRebateHint("再销售 200 卡时可升至 8% 返佣", "en"), "Confirm 200 more card hours in sales to reach the 8% supplier sales rebate tier.");
+  const money = (value: number) => `US$${value.toFixed(3)}`;
+  assert.equal(localizeRebateHint("再消费 ¥100 可升至 5% 返佣", "en", money), "Spend US$100.000 more to reach the 5% personal purchase rebate tier.");
+  assert.equal(localizeRebateHint("再购买 ¥10,000.01 可升至 5% 返佣", "en", money), "Spend US$10000.010 more to reach the 5% personal purchase rebate tier.");
+  assert.equal(localizeRebateHint("再销售 ¥200 可升至 8% 返佣", "en", money), "Confirm US$200.000 more in sales to reach the 8% supplier sales rebate tier.");
+  assert.equal(localizeRebateHint("再消费 100 卡时可升至 5% 返佣", "en", money), "Spend US$100.200 more to reach the 5% personal purchase rebate tier.");
 });
 
 test("Web trend separates live quote polling from the heavier market catalogue", () => {
@@ -177,7 +179,8 @@ test("Web trend separates live quote polling from the heavier market catalogue",
   assert.doesNotMatch(panel, /MARKET_AUTO_REFRESH_MS/);
   assert.match(panel, /getMobileRegionalQuotes\(model\)/);
   assert.match(panel, /区域价差/);
-  assert.match(panel, /card_hour_rmb_rate/);
+  assert.doesNotMatch(panel, /median_price_cny[^\n]*card_hour_rmb_rate/);
+  assert.match(panel, /regionalMoney\(region\.median_price_cny, formatPrice\)/);
   assert.match(api, /canonicalApiPath\(`\/products\/quote\/regional\?\$\{query\.toString\(\)\}`\)/);
   assert.match(adapter, /products\\\/quote\\\/regional/);
   assert.doesNotMatch(panel, /GetDeploying|getdeploying/i);
@@ -192,7 +195,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(market, /imageUrl=\{row\.image_url\}/);
   assert.match(market, /t\("market\.inquiry", "询价"\)/);
   assert.match(market, /t\("market\.submitRequest", "提交需求"\)/);
-  assert.match(market, /formatFinancialAmount\(row\.unit_price_ch/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(market, /directTradeEnabled \? row\.purchasable \?/);
   assert.doesNotMatch(market, /href: "\/(supplier|admin)\/resources"/);
@@ -206,7 +209,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.doesNotMatch(detail, /region: product\.region \|\| ""/);
   assert.match(detail, /new URLSearchParams\(/);
   assert.match(detail, /\/account\/requests\?\$\{params\.toString\(\)\}/);
-  assert.match(detail, /formatFinancialAmount\(product\.unit_price_ch/);
+  assert.match(detail, /walletMoney\(product\.unit_price_ch\)/);
   assert.match(detail, /提交需求/);
   assert.match(detail, /holdingTradeEnabled = capabilities\.holding_trade_enabled === true/);
   assert.match(detail, /purchaseType === "holding" && holdingModeAvailable/);
@@ -247,10 +250,10 @@ test("Web rebate center separates personal purchases from supplier confirmed sal
   assert.match(supplier, /personal\?\.monthly_cap \?\? 0/);
   assert.match(supplier, /supplier\?\.monthly_cap \?\? 0/);
   assert.doesNotMatch(supplier, /PERSONAL_REBATE_TIERS|SUPPLIER_REBATE_TIERS|20_000|50_000/);
-  assert.match(supplier, /返佣基数为本月已确认销售卡时总额，不是平台服务费/);
+  assert.match(supplier, /返佣基数为本月已确认销售金额，不是平台服务费/);
   assert.doesNotMatch(supplier, /data\?\.service_fee_rate/);
   assert.match(account, /个人购买返佣/);
-  assert.match(account, /本月应计 \{entitled\} · 已用额度 \{used\} · 剩余额度 \{remaining\} · 月度上限 \{cap\} 卡时/);
+  assert.match(account, /本月应计 \{entitled\} · 已用额度 \{used\} · 剩余额度 \{remaining\} · 月度上限 \{cap\}/);
   assert.match(locale, /"rebate\.personal\.title": "Personal Purchase Rebate"/);
   assert.match(locale, /"rebate\.supplier\.title": "Supplier Sales Rebate"/);
   assert.match(locale, /not the platform service fee/);

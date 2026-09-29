@@ -19,7 +19,6 @@ import {
 } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import type { AuditPlatform } from "@/lib/mobile-finance-api";
-import { formatFinancialAmount } from "@/lib/financial-format";
 import { useI18n } from "@/components/locale-root";
 
 type View = "users" | "orders" | "recharges";
@@ -42,7 +41,7 @@ function actionDescription(action: AdminUserActionKind) {
 }
 
 export function AdminPlatformAuditWorkspace() {
-  const { t } = useI18n();
+  const { t, formatCnyMoney, formatLedgerMoney } = useI18n();
   const [platform, setPlatform] = useState<AuditPlatform | "">("");
   const [view, setView] = useState<View>("users");
   const [search, setSearch] = useState("");
@@ -154,7 +153,7 @@ export function AdminPlatformAuditWorkspace() {
     </article>) : <div className="commerce-empty"><Users size={25}/><strong>没有符合条件的用户</strong></div>}
       {userTotal > 20 && <nav className="admin-account-pagination" aria-label="用户列表分页"><button type="button" disabled={loading || userPage <= 1} onClick={() => setUserPage((page) => Math.max(1, page - 1))}>上一页</button><span>{t("admin.platform.userPageSummary", "第 {page} / {pages} 页 · 共 {total} 个账号", { page: userPage, pages: Math.ceil(userTotal / 20), total: userTotal })}</span><button type="button" disabled={loading || userPage >= Math.ceil(userTotal / 20)} onClick={() => setUserPage((page) => page + 1)}>下一页</button></nav>}
     </div>}
-    {view === "orders" && <div className="admin-settlement-list">{orders.length ? orders.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2 data-i18n-skip={Boolean(row.product.name || row.product.gpu_model) || undefined}>{row.product.name || row.product.gpu_model || t("admin.platform.productFallback", "商品 #{id}", { id: row.product.id })}</h2><span data-i18n-skip>{row.user.username || `USER #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>{formatFinancialAmount(row.amount_card_hours)} 卡时</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{row.quantity} 台 · {row.purchase_hours ? `${row.purchase_hours} 小时` : row.cycle_days ? t("admin.platform.historicDays", "{days} 天（历史）", { days: row.cycle_days }) : "时长未记录"}</p></article>) : <div className="commerce-empty"><Receipt size={25}/><strong>没有符合条件的订单</strong></div>}</div>}
-    {view === "recharges" && <div className="admin-settlement-list">{recharges.length ? recharges.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2>{row.provider} / {row.channel}</h2><span>{row.user.username || `用户 #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>¥ {formatFinancialAmount(row.amount_cny)}</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{formatFinancialAmount(row.card_hours)} 卡时 · 汇率 {formatFinancialAmount(row.card_hour_rate)}</p></article>) : <div className="commerce-empty"><Wallet size={25}/><strong>没有符合条件的充值订单</strong></div>}</div>}
+    {view === "orders" && <div className="admin-settlement-list">{orders.length ? orders.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2 data-i18n-skip={Boolean(row.product.name || row.product.gpu_model) || undefined}>{row.product.name || row.product.gpu_model || t("admin.platform.productFallback", "商品 #{id}", { id: row.product.id })}</h2><span data-i18n-skip>{row.user.username || `USER #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>{formatLedgerMoney(row.amount_card_hours)}</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>{row.quantity} 台 · {row.purchase_hours ? `${row.purchase_hours} 小时` : row.cycle_days ? t("admin.platform.historicDays", "{days} 天（历史）", { days: row.cycle_days }) : "时长未记录"}</p></article>) : <div className="commerce-empty"><Receipt size={25}/><strong>没有符合条件的订单</strong></div>}</div>}
+    {view === "recharges" && <div className="admin-settlement-list">{recharges.length ? recharges.map((row) => <article key={row.id}><header><div><small>{row.order_no} · 创建 {platformLabel(row.created_platform)} · 修改 {platformLabel(row.last_modified_platform)}</small><h2>{row.provider} / {row.channel}</h2><span>{row.user.username || `用户 #${row.user.id}`} · {formatDate(row.created_at)}</span></div><strong>{formatCnyMoney(row.amount_cny)}</strong><b className="status-chip status-chip--pending_review">{row.status}</b></header><p>支付成功后等额计入账户余额</p></article>) : <div className="commerce-empty"><Wallet size={25}/><strong>没有符合条件的充值订单</strong></div>}</div>}
   </section>;
 }

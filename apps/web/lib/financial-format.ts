@@ -8,7 +8,7 @@ function finiteFinancialValue(value: FinancialValue): number {
 }
 
 /**
- * Canonical user-facing precision for CNY, card hours, exchange rates and
+ * Canonical user-facing precision for CNY amounts, exchange rates and
  * product prices. Calculations keep their original precision; only the value
  * shown to users is rounded to exactly three decimal places.
  */

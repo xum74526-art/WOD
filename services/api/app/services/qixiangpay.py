@@ -231,7 +231,7 @@ def public_config() -> dict:
         "pid_configured": bool(str(settings.QIXIANGPAY_PID or "").strip()),
         "key_configured": bool(settings.QIXIANGPAY_KEY),
         "sign_version": "MD5",
-        "card_hour_rmb_rate": float(settings.CARD_HOUR_RMB_RATE),
+        "card_hour_rmb_rate": 1.0,
         "min_amount_cny": float(settings.QIXIANGPAY_MIN_AMOUNT_CNY),
         "max_amount_cny": float(settings.QIXIANGPAY_MAX_AMOUNT_CNY),
         "daily_limit_cny": float(settings.PAYMENT_DAILY_RECHARGE_LIMIT_CNY),
@@ -452,9 +452,7 @@ def create_recharge_order(
     amount = Decimal(str(amount_cny)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if amount < minimum or amount > maximum:
         raise BizError(f"充值金额须在 {minimum:.2f} 至 {maximum:.2f} 元之间")
-    rate = Decimal(str(settings.CARD_HOUR_RMB_RATE)).quantize(Decimal("0.000001"))
-    if rate <= 0:
-        raise BizError("卡时兑换率配置无效", status_code=503)
+    rate = Decimal("1.000000")
 
     normalized_request_id = str(client_request_id or "").strip() or None
     if normalized_request_id and not re.fullmatch(
@@ -554,9 +552,7 @@ def create_recharge_order(
             channel=channel,
             status="pending",
             amount_cny=amount,
-            card_hours=(amount / rate).quantize(
-                Decimal("0.000001"), rounding=ROUND_HALF_UP
-            ),
+            card_hours=amount.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
             card_hour_rate=rate,
             checkout_token_hash=hashlib.sha256(token.encode()).hexdigest(),
             created_platform=platform,
@@ -950,7 +946,7 @@ def _checkout_redirect_url_locked(db: Session, token: str, *, client_ip: str | N
         "out_trade_no": order.order_no,
         "notify_url": settings.QIXIANGPAY_NOTIFY_URL,
         "return_url": settings.QIXIANGPAY_RETURN_URL,
-        "name": "KAI钱包卡时充值",
+        "name": "KAI星算钱包充值",
         "money": f"{order.amount_cny:.2f}",
         "clientip": _client_ip(client_ip),
         "device": str(settings.QIXIANGPAY_DEVICE).strip().lower(),
@@ -1259,7 +1255,7 @@ def credit_verified_payment(
     user_id = order.user_id
     payment_order_id = order.id
     amount_cny = Decimal(order.amount_cny).quantize(Decimal("0.01"))
-    card_hours = Decimal(order.card_hours).quantize(Decimal("0.000001"))
+    account_amount = amount_cny.quantize(Decimal("0.000001"))
     claimed = db.query(PaymentOrder).filter(
         PaymentOrder.id == order.id,
         PaymentOrder.credited_at.is_(None),
@@ -1273,6 +1269,8 @@ def credit_verified_payment(
     ).update(
         {
             PaymentOrder.provider_trade_no: trade_no,
+            PaymentOrder.card_hours: account_amount,
+            PaymentOrder.card_hour_rate: Decimal("1.000000"),
             PaymentOrder.provider_status: SUCCESS_STATUS,
             PaymentOrder.status: "paid",
             PaymentOrder.checkout_started_at: None,
@@ -1305,24 +1303,24 @@ def credit_verified_payment(
     if not wallet:
         db.rollback()
         raise BizError("钱包不存在", status_code=404)
-    wallet.balance = (Decimal(wallet.balance) + card_hours).quantize(Decimal("0.000001"))
+    wallet.balance = (Decimal(wallet.balance) + account_amount).quantize(Decimal("0.000001"))
     db.add(Ledger(
         user_id=user_id,
         wallet_id=wallet.id,
         type="recharge",
         direction="in",
-        amount=card_hours,
+        amount=account_amount,
         balance_after=wallet.balance,
         ref_payment_order_id=payment_order_id,
-        remark=f"七相支付人民币 {amount_cny:.2f} 元兑换 {card_hours} 卡时",
+        remark=f"七相支付人民币 {amount_cny:.2f} 元充值到账户金额",
     ))
     create_notification(
         db,
         user_id=user_id,
         title="钱包充值到账",
-        content=f"人民币 {amount_cny:.2f} 元支付成功，已兑换 {card_hours} 卡时。",
+        content=f"人民币 {amount_cny:.2f} 元支付成功，账户已入账同等金额。",
         title_en="Wallet recharge received",
-        content_en=f"CNY {amount_cny:.2f} was paid and converted to {card_hours} CH.",
+        content_en=f"CNY {amount_cny:.2f} was paid and credited directly to the account balance.",
         notification_type="wallet",
         action_url="/pages/wallet/index",
         dedupe_key=f"payment:{payment_order_id}:credited",
@@ -1342,7 +1340,8 @@ def credit_verified_payment(
         detail={
             "provider": PROVIDER,
             "amount_cny": f"{amount_cny:.2f}",
-            "card_hours": str(card_hours),
+            "account_amount": str(account_amount),
+            "card_hours": str(account_amount),  # legacy audit alias
             "review_note": review_note if actor_user_id else None,
         },
     )

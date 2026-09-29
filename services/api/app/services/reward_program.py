@@ -1,6 +1,6 @@
 """Reward-program mode, startup safety and ledger naming.
 
-The in-app reward mode credits nonwithdrawable card-hours only. It is deliberately
+The in-app reward mode credits nonwithdrawable CNY account balance only. It is deliberately
 separate from the future live settlement switch so historical synthetic
 reward rows never become spendable merely because the in-app program is enabled.
 """

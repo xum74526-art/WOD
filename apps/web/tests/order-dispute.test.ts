@@ -36,7 +36,7 @@ test("Web admin resolves disputes through the canonical order ledger", () => {
   assert.match(workspace, /load\(page \+ 1, true\)/);
   assert.match(workspace, /mergeOrders\(current, result\.items\)/);
   assert.match(workspace, /resolveAdminOrderDispute\(selected\.id, \{ action, note \}\)/);
-  assert.match(workspace, /退回买家冻结卡时/);
+  assert.match(workspace, /退回买家冻结金额/);
   assert.match(workspace, /放行订单资金并继续商家结算/);
   assert.match(workspace, /selected\.ssh_info_present/);
   assert.match(workspace, /selected\?\.ssh_fingerprint/);

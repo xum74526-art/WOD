@@ -12,12 +12,12 @@
       <view class="card hero">
         <view class="hero-row">
           <view class="hero-main">
-            <text class="hero-label">{{ t('今日收入（卡时）') }}</text>
-            <text class="hero-val up">{{ fmtCHn(dash?.today_revenue) }}</text>
+            <text class="hero-label">{{ t('今日收入') }}</text>
+            <text class="hero-val up">{{ formatCardHourCurrency(dash?.today_revenue) }}</text>
           </view>
           <view class="hero-side">
             <text class="hs-label">{{ t('累计收入') }}</text>
-            <text class="hs-val">{{ fmtCH(dash?.total_revenue) }}</text>
+            <text class="hs-val">{{ formatCardHourCurrency(dash?.total_revenue) }}</text>
           </view>
         </view>
         <view class="hero-grid">
@@ -36,20 +36,20 @@
         </view>
         <view class="rb-row">
           <view class="rb-item">
-            <text class="rb-v up">{{ fmtCHn(rebate.month_rebated) }}</text>
-            <text class="rb-l">{{ t('本月已返（卡时）') }}</text>
+            <text class="rb-v up">{{ formatCardHourCurrency(rebate.month_rebated) }}</text>
+            <text class="rb-l">{{ t('本月已返') }}</text>
           </view>
           <view class="rb-item">
             <text class="rb-v">{{ formatNumber(rebate.current_rate) }}%</text>
             <text class="rb-l">{{ t('当前返还比例') }}</text>
           </view>
           <view class="rb-item">
-            <text class="rb-v">{{ fmtCHn(rebate.month_sales) }}</text>
+            <text class="rb-v">{{ formatCardHourCurrency(rebate.month_sales) }}</text>
             <text class="rb-l">{{ t('本月销售额') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
-        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatNumber(rebate.monthly_cap) }) }}</text>
+        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatCardHourCurrency(rebate.monthly_cap) }) }}</text>
       </view>
 
       <!-- 5模块入口 -->
@@ -62,7 +62,7 @@
         <view class="mod-item" @tap="go('/pages/supplier/revenue')">
           <view class="mod-icon"><AppIcon name="wallet" :size="48" /></view>
           <text class="mod-text">{{ t('收益结算') }}</text>
-          <text class="mod-sub">{{ fmtCH(dash?.total_revenue) }}</text>
+          <text class="mod-sub">{{ formatCardHourCurrency(dash?.total_revenue) }}</text>
         </view>
         <view class="mod-item" @tap="go('/pages/supplier/orders')">
           <view class="mod-icon"><AppIcon name="order" :size="48" /></view>
@@ -106,7 +106,7 @@
           </view>
             <text class="dg">{{ d.gpu_model }} · {{ localizeRegionName(d.region, i18n.lang) }} · {{ t('可租 {count}', { count: d.stock }) }}</text>
         </view>
-        <view class="dr"><text class="dv up">{{ fmtCH(d.price) }}/h</text></view>
+        <view class="dr"><text class="dv up">{{ formatCardHourCurrency(d.price) }}/h</text></view>
       </view>
     </view>
   </view>
@@ -117,7 +117,7 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getDashboard, getSupplierRebate, type SupplierRebate } from '@/api/supplier'
 import { useUserStore } from '@/store/user'
-import { formatNumber, fmtCH, fmtCHr, fmtCHn, toCardHours } from '@/utils/format'
+import { formatCardHourCurrency, formatNumber } from '@/utils/format'
 import { navigateTo as go } from '@/utils/nav'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'

@@ -17,7 +17,6 @@
         <text class="asset-panel__eyebrow">{{ t('merchantAvailableBalance') }}</text>
         <view class="asset-panel__amount">
           <text class="asset-panel__amount-value">{{ availableText }}</text>
-          <text class="asset-panel__amount-unit">{{ t('cardHour') }}</text>
         </view>
         <text class="asset-panel__hero-note">{{ t('merchantAssetOverviewSummary') }}</text>
         <view class="asset-panel__metrics">
@@ -105,7 +104,7 @@ import { computed } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useHostingStore } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCHn } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 defineEmits<{ (event: 'navigate', url: string): void }>()
@@ -117,8 +116,8 @@ const { t } = i18n
 const listedCount = computed(() => hostingStore.supplierDevices.filter((device) => device.list_status === 'on').length)
 const delistedCount = computed(() => hostingStore.supplierDevices.filter((device) => device.list_status !== 'on').length)
 const totalStock = computed(() => hostingStore.supplierDevices.reduce((sum, device) => sum + Math.max(Number(device.stock) || 0, 0), 0))
-const availableText = computed(() => hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.available) : '--')
-const todayRevenueText = computed(() => hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.today_revenue) : '--')
-const totalRevenueText = computed(() => hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.total_revenue) : '--')
-const pendingText = computed(() => hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.pending_amount) : '--')
+const availableText = computed(() => hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.available) : '--')
+const todayRevenueText = computed(() => hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.today_revenue) : '--')
+const totalRevenueText = computed(() => hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.total_revenue) : '--')
+const pendingText = computed(() => hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.pending_amount) : '--')
 </script>

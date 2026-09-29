@@ -96,7 +96,7 @@ class HoldingTradeTests(unittest.TestCase):
             quantity=2,
             hours=10,
             purchase_type="holding",
-            expected_unit_price_card_hours=Decimal("0.1"),
+            expected_unit_price_card_hours=Decimal("0.1002"),
             client_request_id="holding-buy-request-0001",
         ), self.user, self.db)
         return response["data"], self.db.query(Asset).filter(Asset.order_id == response["data"]["id"]).one()
@@ -116,7 +116,7 @@ class HoldingTradeTests(unittest.TestCase):
         self.assertEqual(asset.purchase_type, "holding")
         self.assertIsNone(asset.end_at)
         self.assertEqual(allocation.status, "captured")
-        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("98.000000"))
+        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("97.996000"))
         self.assertEqual(Decimal(str(self.wallet.frozen)), Decimal("0.000000"))
         self.assertEqual(Decimal(str(self.wallet.promotional_balance)), Decimal("0.000000"))
         self.assertEqual(self.product.stock, 3)
@@ -130,14 +130,14 @@ class HoldingTradeTests(unittest.TestCase):
 
         quote = asset_detail(asset.id, self.user, self.db)["data"]
         self.assertTrue(quote["can_sell"])
-        self.assertEqual(quote["current_unit_price"], 0.2)
-        self.assertEqual(quote["current_price"], 4.0)
-        self.assertEqual(quote["pnl"], 2.0)
-        self.assertEqual(my_assets(None, self.user, self.db)["data"]["total_value"], 4.0)
+        self.assertEqual(quote["current_unit_price"], 0.2004)
+        self.assertEqual(quote["current_price"], 4.008)
+        self.assertEqual(quote["pnl"], 2.004)
+        self.assertEqual(my_assets(None, self.user, self.db)["data"]["total_value"], 4.008)
 
         request = AssetSellIn(
             client_request_id="holding-sell-request-0001",
-            expected_unit_price_card_hours=Decimal("0.2"),
+            expected_unit_price_card_hours=Decimal("0.2004"),
         )
         first = sell_asset(asset.id, request, self.user, self.db)["data"]
         second = sell_asset(asset.id, request, self.user, self.db)["data"]
@@ -145,10 +145,10 @@ class HoldingTradeTests(unittest.TestCase):
         self.db.refresh(self.product)
         self.db.refresh(asset)
 
-        self.assertEqual(first["sell_price"], 4.0)
-        self.assertEqual(second["sell_price"], 4.0)
+        self.assertEqual(first["sell_price"], 4.008)
+        self.assertEqual(second["sell_price"], 4.008)
         self.assertEqual(asset.status, "sold")
-        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("102.000000"))
+        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("102.004000"))
         self.assertEqual(Decimal(str(self.wallet.promotional_balance)), Decimal("2.000000"))
         self.assertEqual(Decimal(str(self.wallet.withdrawable_balance)), Decimal("0.000000"))
         self.assertEqual(self.product.stock, 5)
@@ -169,7 +169,7 @@ class HoldingTradeTests(unittest.TestCase):
         self.db.refresh(asset)
         self.db.refresh(self.wallet)
         self.assertEqual(asset.status, "active")
-        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("98.000000"))
+        self.assertEqual(Decimal(str(self.wallet.balance)), Decimal("97.996000"))
 
     def test_stale_quote_blocks_sale(self):
         _, asset = self._buy()
@@ -182,7 +182,7 @@ class HoldingTradeTests(unittest.TestCase):
         with self.assertRaises(BizError):
             sell_asset(asset.id, AssetSellIn(
                 client_request_id="holding-sell-request-0003",
-                expected_unit_price_card_hours=Decimal("0.1"),
+                expected_unit_price_card_hours=Decimal("0.1002"),
             ), self.user, self.db)
 
     def test_feature_switch_blocks_new_holding_without_mutation(self):

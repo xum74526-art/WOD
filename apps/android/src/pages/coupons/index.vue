@@ -38,10 +38,9 @@
         <view v-for="coupon in list" :key="coupon.id" class="card coupon-row">
           <view class="coupon-value">
             <view class="amount-line">
-              <text class="coupon-amount">{{ fmtCardHours(coupon.amount) }}</text>
-              <text class="coupon-unit">{{ t('cardHour') }}</text>
+              <text class="coupon-amount">{{ formatCardHourCurrency(coupon.amount) }}</text>
             </view>
-            <text class="coupon-min">{{ t('couponMinimum', { amount: fmtCardHours(coupon.min_amount) }) }}</text>
+            <text class="coupon-min">{{ t('couponMinimum', { amount: formatCardHourCurrency(coupon.min_amount) }) }}</text>
           </view>
           <view class="coupon-copy">
             <view class="coupon-heading">
@@ -60,7 +59,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getCoupons, redeemCoupon, type CouponItem, type CouponStatus } from '@/api/coupon'
-import { formatDate, fmtCardHours } from '@/utils/format'
+import { formatDate, formatCardHourCurrency } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import EmptyState from '@/components/EmptyState.vue'

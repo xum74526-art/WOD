@@ -258,16 +258,16 @@ def _sync_revenue_notifications(db: Session, today: date) -> int:
         func.coalesce(func.sum(Revenue.amount), 0),
     ).filter(Revenue.date == today).group_by(Revenue.user_id).all()
     for user_id, total in totals:
-        amount = Decimal(str(total)).quantize(Decimal("0.01"))
+        amount = Decimal(str(total)).quantize(Decimal("0.001"))
         if amount <= 0:
             continue
         item = create_notification(
             db,
             user_id=user_id,
             title="今日收益已更新",
-            content=f"今日已记录 {amount} 卡时收益，可在收益中心查看明细。",
+            content=f"今日已记录人民币 ¥{amount} 收益，可在收益中心查看明细。",
             title_en="Today's revenue updated",
-            content_en=f"{amount} card-hours of revenue have been recorded today. View details in Revenue Center.",
+            content_en=f"CNY ¥{amount} of revenue has been recorded today. View details in Revenue Center.",
             notification_type="revenue",
             action_url="/pages/revenue/index",
             dedupe_key=f"revenue:{today.isoformat()}:summary",

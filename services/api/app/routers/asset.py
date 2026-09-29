@@ -95,15 +95,15 @@ def my_assets(
     )
     rate = round(float(today_total) / total_value * 100, 2) if settings.REVENUE_SETTLEMENT_ENABLED and total_value > 0 else 0
     return success({
-        "total_value": round(total_value, 2),
-        "wallet_balance": round(wallet_balance, 2),
+        "total_value": round(total_value, 3),
+        "wallet_balance": round(wallet_balance, 3),
         # Compatibility name retained for existing clients. The value is the
         # user's real pending purchase rebate, never simulated daily revenue.
-        "pending_revenue": round(float(consumer_reward["pending_rebate"]), 2),
+        "pending_revenue": round(float(consumer_reward["pending_rebate"]), 3),
         "revenue_rate": rate,
         "audited_earnings_enabled": True,
         "revenue_settlement_enabled": settings.REVENUE_SETTLEMENT_ENABLED,
-        "historical_test_revenue": round(sum(float(item.get("historical_test_revenue", 0)) for item in out_items), 2),
+        "historical_test_revenue": round(sum(float(item.get("historical_test_revenue", 0)) for item in out_items), 3),
         "items": out_items,
     })
 

@@ -737,7 +737,7 @@ def create_request(
     if not model:
         raise BizError("请输入 GPU 型号")
     if data.request_type == "online" and not data.gpu_hours:
-        raise BizError("请输入总卡时")
+        raise BizError("请输入总报价金额")
     user_id = int(user.id)
     contact = (data.contact or user.username or "").strip()
     phone = _normalize_contact_phone(data.phone) or _normalize_contact_phone(user.phone)

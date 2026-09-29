@@ -3,8 +3,8 @@ import { useI18nStore } from '@/store/i18n'
 import { openExternalLink } from '@/utils/external-link'
 import { isNewerRelease, isValidRelease, normalizeVersionCode } from '@/utils/app-update-policy'
 
-export const APP_FALLBACK_VERSION_NAME = '1.2.3'
-export const APP_FALLBACK_VERSION_CODE = 127
+export const APP_FALLBACK_VERSION_NAME = '1.2.4'
+export const APP_FALLBACK_VERSION_CODE = 128
 
 const DISMISSAL_KEY = 'ztw_app_update_dismissal'
 const DISMISSAL_DURATION_MS = 24 * 60 * 60 * 1000

@@ -1,6 +1,6 @@
 <template>
   <text class="amount" :class="[sizeClass, trendClass]">
-    <text class="prefix" v-if="prefix">{{ t(prefix) }}</text>
+    <text class="prefix" v-if="resolvedPrefix">{{ resolvedPrefix }}</text>
     <text class="int">{{ intPart }}</text>
     <text class="dec" v-if="decPart">.{{ decPart }}</text>
   </text>
@@ -9,28 +9,36 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18nStore } from '@/store/i18n'
-import { formatNumber } from '@/utils/format'
+import { cardHoursToDisplayCurrency, cnyToDisplayCurrency, displayCurrencySymbol, formatNumber } from '@/utils/format'
 
 const i18n = useI18nStore()
 const { t } = i18n
 const props = withDefaults(defineProps<{
   value: number | string
   prefix?: string
+  currency?: 'plain' | 'ledger' | 'cny'
   size?: 'sm' | 'md' | 'lg' | 'xl'
   trend?: 'up' | 'down' | 'none'
 }>(), {
   prefix: '',
+  currency: 'plain',
   size: 'md',
   trend: 'none',
 })
 
 const str = computed(() => {
-  return formatNumber(props.value, {
+  const value = props.currency === 'ledger'
+    ? cardHoursToDisplayCurrency(props.value)
+    : props.currency === 'cny'
+      ? cnyToDisplayCurrency(props.value)
+      : props.value
+  return formatNumber(value, {
     locale: i18n.locale,
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   })
 })
+const resolvedPrefix = computed(() => props.currency === 'plain' ? t(props.prefix) : displayCurrencySymbol())
 const parts = computed(() => str.value.split('.'))
 const intPart = computed(() => parts.value[0])
 const decPart = computed(() => parts.value[1])

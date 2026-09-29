@@ -7,6 +7,7 @@ export type Address = {
 };
 export type Notice = {
   id: number; category: string; title: string; body: string; title_en: string | null; body_en: string | null; action_path: string | null;
+  template_key: string | null; amount_cny: string | null;
   is_read: boolean; read_at: string | null; expires_at: string | null; created_at: string;
 };
 export type MajorAnnouncement = {

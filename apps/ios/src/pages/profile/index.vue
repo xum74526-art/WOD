@@ -25,17 +25,17 @@
       <view class="top-row" v-if="role === 'personal'">
         <view class="card summary pressable" @tap="goAssets">
           <text class="sum-label">{{ t("totalAssets") }}</text>
-          <AmountText :value="toCardHours(totalAsset)" size="lg" />
+          <AmountText :value="totalAsset" currency="ledger" size="lg" />
           <view class="sum-mini">
             <text class="sm-l">{{ t("wallet") }}</text>
-            <text class="sm-v">{{ fmtCH(wallet?.balance) }}</text>
+            <text class="sm-v">{{ formatCardHourCurrency(wallet?.balance) }}</text>
           </view>
         </view>
         <view class="card invite-card pressable" @tap="goInvite">
           <view class="iv-icons"><AppIcon name="coin" :size="36" /><AppIcon name="friends" :size="36" /></view>
           <text class="iv-label">{{ t("inviteFriends") }}</text>
           <text class="iv-val">{{ invite?.invited_count || 0 }} {{ t('people') }}</text>
-          <text v-if="invite?.rewards_enabled" class="iv-reward">{{ t('reward') }} {{ fmtCH(invite?.total_reward || 0) }}</text>
+          <text v-if="invite?.rewards_enabled" class="iv-reward">{{ t('reward') }} {{ formatCardHourCurrency(invite?.total_reward || 0) }}</text>
           <text v-else class="iv-reward muted">{{ t('rewardsUnavailableShort') }}</text>
         </view>
       </view>
@@ -44,14 +44,14 @@
       <view class="top-row" v-else>
         <view class="card summary pressable" @tap="go('/pages/supplier/revenue')">
           <text class="sum-label">{{ t('k_815f90b8') }}</text>
-          <AmountText :value="toCardHours(supplierWallet?.total_revenue ?? 0)" size="lg" />
+          <AmountText :value="supplierWallet?.total_revenue ?? 0" currency="ledger" size="lg" />
           <view class="sum-mini">
             <text class="sm-l">{{ t('k_f7e76123') }}</text>
-            <text class="sm-v up">{{ fmtCH(supplierWallet?.available) }}</text>
+            <text class="sm-v up">{{ formatCardHourCurrency(supplierWallet?.available) }}</text>
           </view>
           <view class="sum-mini" style="margin-top: 8rpx;">
             <text class="sm-l">{{ t('today') }}</text>
-            <text class="sm-v">{{ fmtCH(supplierWallet?.today_revenue) }}</text>
+            <text class="sm-v">{{ formatCardHourCurrency(supplierWallet?.today_revenue) }}</text>
           </view>
         </view>
         <view class="card invite-card pressable" @tap="go('/pages/supplier/devices')">
@@ -62,7 +62,7 @@
         </view>
       </view>
 
-      <!-- 商家销售返佣：按已确认销售卡时累计，和购买返佣独立。 -->
+      <!-- 商家销售返佣：按已确认销售金额累计，和购买返佣独立。 -->
       <view v-if="role === 'supplier' && supplierRebate" class="card rebate-card pressable" @tap="go('/pages/supplier/rebate')">
         <view class="rb-title-row">
           <text class="rb-title">{{ t('supplierSalesRebateTitle') }}</text>
@@ -70,7 +70,7 @@
         </view>
         <view class="rb-row">
           <view class="rb-item">
-            <text class="rb-v up">{{ fmtCHn(supplierRebate.month_rebated) }}</text>
+            <text class="rb-v up">{{ formatCardHourCurrency(supplierRebate.month_rebated) }}</text>
             <text class="rb-l">{{ t('k_25a91550') }}</text>
           </view>
           <view class="rb-item">
@@ -78,12 +78,12 @@
             <text class="rb-l">{{ t('k_cfc752a6') }}</text>
           </view>
           <view class="rb-item">
-            <text class="rb-v">{{ fmtCHn(supplierRebate.month_sales) }}</text>
+            <text class="rb-v">{{ formatCardHourCurrency(supplierRebate.month_sales) }}</text>
             <text class="rb-l">{{ t('k_e1e32957') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(supplierRebate.next_tier_hint) }}</text>
-        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatNumber(supplierRebate.monthly_cap) }) }}</text>
+        <text class="rb-explain">{{ t('supplierSalesRebateCardHint', { cap: formatCardHourCurrency(supplierRebate.monthly_cap) }) }}</text>
       </view>
 
       <!-- 个人购买返佣：商家作为买家时同样适用。 -->
@@ -94,7 +94,7 @@
         </view>
         <view class="rb-row">
           <view class="rb-item">
-            <text class="rb-v">{{ fmtCHn(rebate.month_rebated) }}</text>
+            <text class="rb-v">{{ formatCardHourCurrency(rebate.month_rebated) }}</text>
             <text class="rb-l">{{ t('k_25a91550') }}</text>
           </view>
           <view class="rb-item">
@@ -102,12 +102,12 @@
             <text class="rb-l">{{ t('k_5bfd670e') }}</text>
           </view>
           <view class="rb-item">
-            <text class="rb-v">{{ fmtCHn(rebate.pending_rebate) }}</text>
+            <text class="rb-v">{{ formatCardHourCurrency(rebate.pending_rebate) }}</text>
             <text class="rb-l">{{ t('k_ec4f52f4') }}</text>
           </view>
         </view>
         <text class="rb-hint">{{ tr(rebate.next_tier_hint) }}</text>
-        <text class="rb-explain">{{ t('personalPurchaseRebateCardHint', { cap: formatNumber(rebate.monthly_cap) }) }}</text>
+        <text class="rb-explain">{{ t('personalPurchaseRebateCardHint', { cap: formatCardHourCurrency(rebate.monthly_cap) }) }}</text>
       </view>
 
       <view v-for="group in widgetGroups" :key="group.key" class="card widget-card">
@@ -132,7 +132,7 @@ import { getWallet, type WalletInfo } from '@/api/wallet'
 import { getInviteSummary, type InviteSummary } from '@/api/invite'
 import { getDashboard, getSupplierWallet, getSupplierRebate, type SupplierRebate } from '@/api/supplier'
 import { getRebateSummary, type RebateSummary } from '@/api/user'
-import { formatMoneyShort, formatNumber, fmtCH, fmtCHr, fmtCHn, toCardHours } from '@/utils/format'
+import { formatCardHourCurrency, formatNumber } from '@/utils/format'
 import { navigateTo as nav, switchTab } from '@/utils/nav'
 import AmountText from '@/components/AmountText.vue'
 import AppIcon from '@/components/AppIcon.vue'

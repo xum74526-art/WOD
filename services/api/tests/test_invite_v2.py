@@ -126,7 +126,7 @@ class InviteV2Tests(unittest.TestCase):
         for name, value in self.original_sensitive_settings.items():
             setattr(settings, name, value)
 
-    def test_summary_generates_ztw_code_for_account_without_invite_code(self):
+    def test_summary_generates_kai_code_for_account_without_invite_code(self):
         user = User(
             username="new-inviter",
             phone="13910000002",
@@ -138,7 +138,7 @@ class InviteV2Tests(unittest.TestCase):
 
         result = summary(user, self.db)["data"]
 
-        self.assertRegex(result["code"], r"^ZTW[A-Z0-9]{6}$")
+        self.assertRegex(result["code"], r"^KAI[A-Z0-9]{6}$")
         self.assertEqual(
             self.db.query(InviteCode).filter(InviteCode.user_id == user.id).one().code,
             result["code"],

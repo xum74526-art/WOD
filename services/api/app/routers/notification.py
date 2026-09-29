@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import re
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
@@ -25,9 +27,31 @@ from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/notifications", tags=["notification"])
 
+_DAILY_REVENUE_AMOUNT_RE = re.compile(
+    r"今日已记录\s*(?:人民币\s*)?¥?\s*([0-9]+(?:\.[0-9]+)?)\s*(卡时)?收益"
+)
+_LEGACY_CARD_HOUR_CNY_RATE = Decimal("1.002")
+
 
 def _serialize_notification(notification: Notification) -> dict:
-    return NotificationOut.model_validate(notification).model_dump()
+    payload = NotificationOut.model_validate(notification).model_dump()
+    if (
+        notification.type == "revenue"
+        and str(notification.dedupe_key or "").startswith("revenue:")
+    ):
+        match = _DAILY_REVENUE_AMOUNT_RE.search(notification.content or "")
+        if match:
+            try:
+                amount = Decimal(match.group(1))
+                if match.group(2):
+                    amount *= _LEGACY_CARD_HOUR_CNY_RATE
+                amount = amount.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+            except InvalidOperation:
+                amount = None
+            if amount is not None:
+                payload["template_key"] = "daily_revenue_recorded"
+                payload["amount_cny"] = format(amount, "f")
+    return payload
 
 
 def _utcnow() -> datetime:

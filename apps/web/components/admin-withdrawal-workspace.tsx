@@ -22,10 +22,12 @@ import {
   type PaymentInstructions,
 } from "@/lib/mobile-finance-api";
 import { canViewPayoutReceipt, PAYOUT_RECEIPT_ACCEPT, PAYOUT_RECEIPT_HELP_TEXT } from "@/lib/payout-receipt";
+import { useI18n } from "@/components/locale-root";
 
 const labels: Record<string, string> = { reviewing: "待审核", manual_payment_pending: "待打款", paid: "已打款", rejected: "已驳回", failed: "打款失败", canceled: "已取消" };
 
 export function AdminWithdrawalWorkspace() {
+  const { formatLedgerMoney } = useI18n();
   const [rows, setRows] = useState<FinanceWithdrawal[]>([]);
   const [status, setStatus] = useState("reviewing");
   const [platform, setPlatform] = useState<AuditPlatform | "">("");
@@ -187,7 +189,7 @@ export function AdminWithdrawalWorkspace() {
           <div><dt>收款人</dt><dd data-i18n-skip>{row.bank_card.holder}</dd></div>
           <div><dt>开户银行</dt><dd data-i18n-skip>{row.bank_card.bank_name}</dd></div>
           <div><dt>银行卡</dt><dd>尾号 {row.bank_card.card_last4 || row.bank_card.card_number.slice(-4)}</dd></div>
-          <div><dt>卡时 / 汇率</dt><dd>{formatFinancialAmount(row.amount_card_hours)} / {formatFinancialAmount(row.locked_rate_cny)}</dd></div>
+          <div><dt>申请提现金额</dt><dd>{formatLedgerMoney(row.amount_card_hours)}</dd></div>
         </dl></div>
         {row.review_note && <p data-i18n-skip>{row.review_note}</p>}
         {row.failure_reason && <p data-i18n-skip>{row.failure_reason}</p>}

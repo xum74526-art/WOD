@@ -10,7 +10,7 @@ import { useI18n } from "@/components/locale-root";
 import { localizeMarketProductName, localizeMarketRegion, localizeSupplierName } from "@/lib/market-localization";
 import { ProductImage } from "@/components/product-image";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
-import { formatFinancialAmount } from "@/lib/financial-format";
+import { formatCardHoursForLocale } from "@/lib/display-currency";
 
 type ViewerRole = AuthUser["role"] | "guest" | "loading";
 type MarketSource = "kai" | "wod";
@@ -163,7 +163,7 @@ export function MerchantResourceMarket({ limit, initialRows = null }: { limit?: 
         <div className="merchant-resource-gpu"><strong>{row.gpu_model}</strong><span>{row.gpu_memory_gb}GB</span></div>
         <dl><div><dt><MapPin size={13}/>{t("market.region", "区域")}</dt><dd>{localizeMarketRegion(row.region, locale)}</dd></div><div><dt><HardDrives size={13}/>{t("market.stock", "可用库存")}</dt><dd>{row.available_quantity} {t("market.units", "台")}</dd></div><div><dt><TerminalWindow size={13}/>{t("market.fulfillment", "履约方式")}</dt><dd>{fulfillmentLabel}</dd></div></dl>
         <div className="merchant-resource-assurance"><ShieldCheck size={16}/><span><strong>{assuranceLabel}</strong><small>{resourceClaimLabel} · {directTradeEnabled ? assuranceDescription : kaiSelfOperated ? t("market.kai.assurance", "提交需求后由平台人工联系确认方案。") : t("market.merchant.assurance", "提交需求后由对应商家人工联系确认方案。")}</small></span></div>
-        <footer><div><small>{directTradeEnabled ? t("market.hourly", "每小时价格") : t("market.servicePrice", "服务价格")}</small><strong>{directTradeEnabled ? `${formatFinancialAmount(row.unit_price_ch, locale === "en" ? "en-US" : "zh-CN")} ${locale === "en" ? "CH / GPU·hour" : "卡时 / GPU·小时"}` : inquiryAvailable ? t("market.inquiry", "询价") : "—"}</strong></div><Link href={`/market/products/${row.id}`}>{directTradeEnabled ? row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情") : inquiryAvailable ? t("market.submitRequest", "提交需求") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
+        <footer><div><small>{directTradeEnabled ? t("market.hourly", "每小时价格") : t("market.servicePrice", "服务价格")}</small><strong>{directTradeEnabled ? `${formatCardHoursForLocale(row.unit_price_ch, locale, capabilities.display_currency)} / ${locale === "en" ? "GPU·hour" : "GPU·小时"}` : inquiryAvailable ? t("market.inquiry", "询价") : "—"}</strong></div><Link href={`/market/products/${row.id}`}>{directTradeEnabled ? row.purchasable ? t("market.buy", "立即购买") : t("market.details", "查看详情") : inquiryAvailable ? t("market.submitRequest", "提交需求") : t("market.details", "查看详情")} <ArrowRight size={15}/></Link></footer>
       </article>;
     })}</div>}
     {displayRows.length > 0 && typeof limit !== "number" && <div className="merchant-market__pagination" aria-live="polite">

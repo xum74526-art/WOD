@@ -28,8 +28,8 @@
             <view class="pt"><text class="pn">{{ localizeProductName(p.name, i18n.lang) }}</text><text class="pmem">{{ p.memory }}</text></view>
             <view class="pbot">
               <template v-if="commerce.directTradeEnabled">
-                <text class="pp">{{ formatAmount(directTradeCardHoursPerGpuHour(p)) }}</text>
-                <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
+                <text class="pp">{{ formatCardHourCurrency(directTradeCardHoursPerGpuHour(p)) }}</text>
+                <text class="pu">{{ t('perGpuHour') }}</text>
               </template>
               <text v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false" class="pp">{{ t('inquiry') }}</text>
               <text v-else class="pp unavailable">{{ t('dataUnavailable') }}</text>
@@ -56,7 +56,7 @@ import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { navigateTo as nav } from '@/utils/nav'
-import { formatAmount, formatNumber } from '@/utils/format'
+import { formatCardHourCurrency, formatNumber } from '@/utils/format'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
 import { localizePersonName, localizeProductName } from '@/utils/localize-content'

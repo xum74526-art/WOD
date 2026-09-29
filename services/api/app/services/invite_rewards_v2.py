@@ -308,7 +308,7 @@ def _create_commission(
     if record.qualification_status != STATUS_QUALIFIED or record.qualified_at is None:
         return None
     if _as_utc(record.qualified_at) > _as_utc(event_at):
-        # A later identity approval may grant the fixed 58 CH, but never
+        # A later identity approval may grant the fixed CNY reward, but never
         # retrospectively commissions an already-confirmed consumption event.
         return None
     key = f"reward:{PROGRAM_INVITE_COMMISSION}:{source_type}:{source_id}"

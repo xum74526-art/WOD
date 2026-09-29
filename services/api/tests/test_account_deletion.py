@@ -253,7 +253,10 @@ class AccountDeletionTests(unittest.TestCase):
     def test_symlink_below_upload_root_is_rejected(self):
         relative = f"community/{self.user.id}/" + "a" * 32 + ".png"
         with tempfile.TemporaryDirectory(prefix="wod-deletion-escape-") as escaped:
-            (self.root / "community").symlink_to(Path(escaped), target_is_directory=True)
+            try:
+                (self.root / "community").symlink_to(Path(escaped), target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symlink creation is unavailable on this host: {exc}")
             with self.assertRaisesRegex(ValueError, "symlink_cleanup_path"):
                 service._owned_path(self.root, relative, self.user.id)
 

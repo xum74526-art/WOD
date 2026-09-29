@@ -174,7 +174,7 @@ test('invite page shows both mechanisms, visible compliance rules, and server-ow
     'inviteExcludedSpendRule',
     'inviteAntiAbuseRule',
     'inviteRewardRestriction',
-    'fmtCardHours',
+    'formatCardHourCurrency',
     'copyInviteLink',
     'loadMoreRecords',
     'inviteCommissionFriendSource',

@@ -1,7 +1,45 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getPlatformCapabilities, type PlatformCapabilities } from '@/api/platform'
+import { getPlatformCapabilities, type DisplayCurrencyConfig, type PlatformCapabilities } from '@/api/platform'
 import { parseDirectTradeBuildGate, resolveDirectTradeEnabled } from '@/utils/commerce-mode'
+import { setDisplayCurrencyConfig } from '@/utils/format'
+
+const DEFAULT_DISPLAY_CURRENCY = Object.freeze({
+  base_currency: 'CNY' as const,
+  settlement_currency: 'CNY' as const,
+  fraction_digits: 3 as const,
+  card_hour_cny_rate: 1,
+  rates: Object.freeze({ CNY: 1, HKD: 1.169032900251, USD: 0.149020326907 }),
+  rate_mode: 'daily_reference' as const,
+  rate_source: 'ECB_BOOTSTRAP',
+  rate_date: '2026-09-28',
+  rates_stale: true,
+  conversion_scope: 'display_only' as const,
+})
+
+function normalizeDisplayCurrency(value?: Partial<DisplayCurrencyConfig> | null): DisplayCurrencyConfig {
+  if (value?.rate_mode !== 'daily_reference') return DEFAULT_DISPLAY_CURRENCY
+  const positiveRate = (candidate: unknown, fallback: number) => {
+    const parsed = Number(candidate)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
+  return {
+    base_currency: 'CNY',
+    settlement_currency: 'CNY',
+    fraction_digits: 3,
+    card_hour_cny_rate: 1,
+    rates: {
+      CNY: 1,
+      HKD: positiveRate(value.rates?.HKD, DEFAULT_DISPLAY_CURRENCY.rates.HKD),
+      USD: positiveRate(value.rates?.USD, DEFAULT_DISPLAY_CURRENCY.rates.USD),
+    },
+    rate_mode: 'daily_reference',
+    rate_source: typeof value.rate_source === 'string' ? value.rate_source.slice(0, 32) : 'UNKNOWN',
+    rate_date: typeof value.rate_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.rate_date) ? value.rate_date : null,
+    rates_stale: value.rates_stale !== false,
+    conversion_scope: 'display_only',
+  }
+}
 
 const FAIL_CLOSED_CAPABILITIES: PlatformCapabilities = Object.freeze({
   commerce_mode: 'unavailable',
@@ -12,6 +50,7 @@ const FAIL_CLOSED_CAPABILITIES: PlatformCapabilities = Object.freeze({
   recharge_enabled: false,
   withdraw_enabled: false,
   history_read_enabled: false,
+  display_currency: DEFAULT_DISPLAY_CURRENCY,
 })
 const CAPABILITY_REFRESH_INTERVAL_MS = 60_000
 
@@ -45,6 +84,7 @@ export const useCommerceStore = defineStore('commerce', () => {
 
   function failClosed(reason = ''): PlatformCapabilities {
     capabilities.value = FAIL_CLOSED_CAPABILITIES
+    setDisplayCurrencyConfig(DEFAULT_DISPLAY_CURRENCY)
     available.value = false
     error.value = reason
     return capabilities.value
@@ -68,7 +108,9 @@ export const useCommerceStore = defineStore('commerce', () => {
           recharge_enabled: next?.recharge_enabled === true,
           withdraw_enabled: next?.withdraw_enabled === true,
           history_read_enabled: next?.history_read_enabled === true,
+          display_currency: normalizeDisplayCurrency(next?.display_currency),
         }
+        setDisplayCurrencyConfig(capabilities.value.display_currency)
         available.value = true
         error.value = ''
         return capabilities.value

@@ -18,15 +18,15 @@
 
       <view class="hero">
         <text class="hero-label">{{ t('totalAssets') }}</text>
-        <text class="hero-val">{{ fmtCardHours(totalAsset) }}</text>
+        <text class="hero-val">{{ formatCardHourCurrency(totalAsset) }}</text>
         <view class="hero-row">
           <view class="hero-sub">
             <text class="sub-label">{{ t('todayRealizedEarnings') }}</text>
-            <text class="sub-val" :class="amountTone(rev?.today)">{{ signedCardHours(rev?.today) }} {{ t('cardHour') }}</text>
+            <text class="sub-val" :class="amountTone(rev?.today)">{{ signedCardHours(rev?.today) }}</text>
           </view>
           <view class="hero-sub">
             <text class="sub-label">{{ t('totalRealizedEarnings') }}</text>
-            <text class="sub-val" :class="amountTone(rev?.total)">{{ signedCardHours(rev?.total, false) }} {{ t('cardHour') }}</text>
+            <text class="sub-val" :class="amountTone(rev?.total)">{{ signedCardHours(rev?.total, false) }}</text>
           </view>
         </view>
       </view>
@@ -43,7 +43,7 @@
       <scroll-view scroll-x class="price-bar" :show-scrollbar="false">
         <view class="pb-item pressable" v-for="p in hot" :key="p.id" @tap="go('/pages/product/detail?id=' + p.id)">
           <text class="pb-name">{{ p.gpu_model }}</text>
-          <text class="pb-price">{{ productCardHourPrice(p) }} {{ t('cardHourPerGpuHour') }}</text>
+          <text class="pb-price">{{ productCardHourPrice(p) }} {{ t('perGpuHour') }}</text>
           <text class="pb-change" :class="changeTone(modelChange(p))">{{ modelChangeText(p) }}</text>
         </view>
       </scroll-view>
@@ -137,7 +137,7 @@
               <text class="hot-variant">{{ activeHotTrend.item.gpu_variant || t('standardVariant') }}</text>
             </view>
             <view class="hot-market-value">
-              <text class="hot-price">{{ activeHotTrend.item.median_price_cny == null ? '--' : `${fmtCHn(activeHotTrend.item.median_price_cny)} ${t('cardHourPerGpuHour')}` }}</text>
+              <text class="hot-price">{{ activeHotTrend.item.median_price_cny == null ? '--' : `${formatCnyCurrency(activeHotTrend.item.median_price_cny)} ${t('perGpuHour')}` }}</text>
               <text class="hot-change" :class="changeTone(trendSevenDayChange(activeHotTrend))">{{ trendChangeText(activeHotTrend) }}</text>
               <text v-if="trendHasFullHistory(activeHotTrend)" class="hot-range">{{ priceRangeText(activeHotTrend.item) }}</text>
             </view>
@@ -197,7 +197,7 @@
           </view>
           <view class="pr">
             <template v-if="commerce.directTradeEnabled">
-              <text class="pp">{{ fmtCardHours(directTradeCardHoursPerGpuHour(p)) }}</text>
+              <text class="pp">{{ formatCardHourCurrency(directTradeCardHoursPerGpuHour(p)) }}</text>
               <text class="p-buy">{{ t(directTradeProductPurchasable(p) ? 'k_25575fc0' : 'viewDetail') }}</text>
             </template>
             <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
@@ -264,7 +264,7 @@ import { getProducts } from '@/api/gpu'
 import type { AssetItem } from '@/api/asset'
 import { getMarketCandles, getMarketRanking, type MarketCandles, type MarketRankingItem } from '@/api/market'
 import { getMajorAnnouncement, type MajorAnnouncement } from '@/api/notification'
-import { fmtCHn, fmtCardHours, formatAmount, toCardHours } from '@/utils/format'
+import { formatAmount, formatCardHourCurrency, formatCnyCurrency, toCardHours } from '@/utils/format'
 import { navigateTo as go, switchTab } from '@/utils/nav'
 import type { Product } from '@/api/gpu'
 import type { RevenueSummary, RevenuePoint } from '@/api/revenue'
@@ -520,7 +520,7 @@ function startMarketTimer() {
 
 function productCardHourPrice(product: Pick<Product, 'price' | 'price_cny_per_gpu_hour' | 'price_card_hours_per_gpu_hour'>): string {
   const cny = Number(product.price_cny_per_gpu_hour ?? product.price ?? 0)
-  return formatAmount(product.price_card_hours_per_gpu_hour ?? toCardHours(cny))
+  return formatCardHourCurrency(product.price_card_hours_per_gpu_hour ?? toCardHours(cny))
 }
 
 function stopMarketTimer() {
@@ -585,7 +585,7 @@ function changeText(item: MarketRankingItem): string {
 function priceRangeText(item: MarketRankingItem): string {
   const range = hasCompleteSevenDayMetric(item) ? trustedSevenDayPriceRange(item) : null
   return range
-    ? t('sevenDayPriceRangeValue', { low: fmtCHn(range.low), high: fmtCHn(range.high) })
+    ? t('sevenDayPriceRangeValue', { low: formatCnyCurrency(range.low), high: formatCnyCurrency(range.high) })
     : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
 }
 function trendHasFullHistory(trend: HotTrend): boolean {
@@ -610,11 +610,11 @@ function amountTone(value: number | null | undefined): string {
 }
 function signedCardHours(value: number | null | undefined, positiveSign = true): string {
   const amount = Number(value || 0)
-  return `${positiveSign && amount > 0 ? '+' : ''}${fmtCardHours(amount)}`
+  return `${positiveSign && amount > 0 ? '+' : ''}${formatCardHourCurrency(amount)}`
 }
 function assetEarningsAmount(asset: AssetItem): string {
   const amount = Number(asset.purchase_type === 'holding' ? asset.pnl : asset.rebate_amount) || 0
-  return `${amount > 0 ? '+' : ''}${fmtCardHours(amount)}`
+  return `${amount > 0 ? '+' : ''}${formatCardHourCurrency(amount)}`
 }
 function assetEarningsLabel(asset: AssetItem): string {
   return t(asset.purchase_type === 'holding' ? 'pnl' : 'rebateInfo')

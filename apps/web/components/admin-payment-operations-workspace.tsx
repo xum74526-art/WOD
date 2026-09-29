@@ -54,10 +54,6 @@ function money(value: number) {
   return formatFinancialAmount(value);
 }
 
-function cardHours(value: number) {
-  return formatFinancialAmount(value);
-}
-
 function browserSessionStorage() {
   try {
     return window.sessionStorage;
@@ -73,9 +69,9 @@ function paymentOperationIntentKey(paymentOrderId: number) {
 function refundHoldLabel(status: string) {
   return ({
     not_required: "无需冻结",
-    held: "对应卡时已冻结",
-    settled: "对应卡时已扣回",
-    released: "冻结卡时已释放",
+    held: "对应账户金额已冻结",
+    settled: "对应账户金额已扣回",
+    released: "冻结金额已释放",
   } as Record<string, string>)[status] || status;
 }
 
@@ -330,11 +326,11 @@ export function AdminPaymentOperationsWorkspace() {
     if (note.length < 3) { setError("执行资金操作前，请填写至少 3 个字的核验依据或处理原因。"); return; }
     const isReview = ["review", "late_paid_review"].includes(order.status);
     const wording = action === "credit"
-      ? t("admin.payment.confirmCredit", "确认{provider}已显示支付成功，并为用户入账 {cardHours} 卡时？", {
+      ? t("admin.payment.confirmCredit", "确认{provider}已显示支付成功，并为用户入账 {amount}？", {
         provider: t(`admin.payment.provider.${order.provider}`, paymentReviewProviderLabel(order.provider)),
-        cardHours: cardHours(order.card_hours),
+        amount: `¥ ${money(order.amount_cny)} CNY`,
       })
-      : t("admin.payment.confirmRefund", "确认对充值单 {orderNo} 发起人民币 ¥{amount} 全额原支付渠道退款？这不是钱包订单退卡时。", {
+      : t("admin.payment.confirmRefund", "确认对充值单 {orderNo} 发起人民币 ¥{amount} 全额原支付渠道退款？这不是钱包订单余额退款。", {
         orderNo: order.order_no,
         amount: money(order.amount_cny),
       });
@@ -415,11 +411,11 @@ export function AdminPaymentOperationsWorkspace() {
     const note = refundRequestNote.trim();
     if (note.length < 3) { setError("请填写至少 3 个字的审核依据或驳回原因。"); return; }
     const wording = action === "approve"
-      ? t("admin.payment.approveRequestConfirm", "确认批准退款申请 {requestNo}？系统将立即尝试发起人民币 ¥{amount} 全额原支付渠道退款，并冻结或冲正对应卡时。", {
+      ? t("admin.payment.approveRequestConfirm", "确认批准退款申请 {requestNo}？系统将立即尝试发起人民币 ¥{amount} 全额原支付渠道退款，并冻结或冲正对应账户金额。", {
         requestNo: refundRequestDetail.request_no,
         amount: money(refundRequestDetail.amount_cny),
       })
-      : t("admin.payment.rejectRequestConfirm", "确认驳回退款申请 {requestNo}？本次操作不会发起人民币退款，也不会扣减用户卡时。", { requestNo: refundRequestDetail.request_no });
+      : t("admin.payment.rejectRequestConfirm", "确认驳回退款申请 {requestNo}？本次操作不会发起人民币退款，也不会扣减用户账户金额。", { requestNo: refundRequestDetail.request_no });
     if (!window.confirm(`${wording}\n\n${t("admin.payment.reviewAuditConfirm", "审核结论会写入支付审计记录，请确认申请原因、充值单和支付状态已核对。")}`)) return;
     if (!beginMutation(`refund-request-${refundRequestDetail.id}-${action}`)) return;
     try {
@@ -447,8 +443,8 @@ export function AdminPaymentOperationsWorkspace() {
     const note = refundNote.trim();
     if (note.length < 3) { setError("请填写至少 3 个字的商户后台核验依据。"); return; }
     const wording = outcome === "succeeded"
-      ? "商户后台明确显示退款成功；确认后将完成卡时冲正，并把充值单标记为已原路退款。"
-      : "商户后台明确显示退款失败；确认后将释放被冻结的卡时，并恢复充值单原状态。";
+      ? "商户后台明确显示退款成功；确认后将完成账户金额冲正，并把充值单标记为已原路退款。"
+      : "商户后台明确显示退款失败；确认后将释放被冻结的账户金额，并恢复充值单原状态。";
     if (!window.confirm(t("admin.payment.resolveConfirm", "{decision}\n\n退款号：{refundNo}\n该结论必须来自商户后台证据，不能根据用户截图或页面回跳判断。", {
       decision: t(`admin.payment.resolveDecision.${outcome}`, wording),
       refundNo: refundDetail.refund_no,
@@ -487,7 +483,7 @@ export function AdminPaymentOperationsWorkspace() {
       <h1>充值与人民币原路退款</h1>
       <span>复核支付渠道充值、追踪支付事件，并在商户后台证据充分时执行入账；人民币原支付渠道退款仅支持七相充值。</span>
     </div>
-    <div className="payment-operation-boundary"><Warning size={19}/><div><strong>两类退款必须分开处理</strong><span>{t("admin.payment.boundaryPrefix", "本页处理七相充值的人民币原支付渠道退款，并可能冻结或冲正对应卡时；")} <Link href="/admin/disputes">{t("admin.payment.walletDisputeLink", "钱包订单争议退款")}</Link> {t("admin.payment.boundarySuffix", "只退回买家钱包卡时，不会自动退回人民币。")}</span></div></div>
+    <div className="payment-operation-boundary"><Warning size={19}/><div><strong>两类退款必须分开处理</strong><span>{t("admin.payment.boundaryPrefix", "本页处理七相充值的人民币原支付渠道退款，并可能冻结或冲正对应账户金额；")} <Link href="/admin/disputes">{t("admin.payment.walletDisputeLink", "钱包订单争议退款")}</Link> {t("admin.payment.boundarySuffix", "只退回买家钱包余额，不会自动退回人民币。")}</span></div></div>
     <nav className="payment-operation-tabs" aria-label="支付运营视图">
       <button type="button" className={tab === "orders" ? "active" : ""} aria-current={tab === "orders" ? "page" : undefined} onClick={() => changeTab("orders")}><Coins size={17}/>充值订单</button>
       <button type="button" className={tab === "requests" ? "active" : ""} aria-current={tab === "requests" ? "page" : undefined} onClick={() => changeTab("requests")}><ClipboardText size={17}/>用户退款申请</button>
@@ -515,7 +511,7 @@ export function AdminPaymentOperationsWorkspace() {
           {orderDetail ? <>
             <header><div><p>{orderDetail.order.order_no} / PAYMENT #{orderDetail.order.id}</p><h2 data-i18n-skip={Boolean(orderDetail.order.user.username) || undefined}>{orderDetail.order.user.username || `用户 #${orderDetail.order.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(orderDetail.order.status)}`}>{paymentStatusLabel(orderDetail.order.status)}</span></header>
             <dl>
-              <div><dt>人民币 / 入账卡时</dt><dd>¥ {money(orderDetail.order.amount_cny)} / {cardHours(orderDetail.order.card_hours)} 卡时</dd></div>
+              <div><dt>充值金额</dt><dd>¥ {money(orderDetail.order.amount_cny)} CNY</dd></div>
               <div><dt>支付渠道</dt><dd>{orderDetail.order.provider} · {orderDetail.order.channel || "未记录"}<small>{orderDetail.order.provider_trade_no || "暂无渠道交易号"}</small></dd></div>
               <div><dt>渠道状态</dt><dd>{orderDetail.order.provider_status || "尚未记录"}</dd></div>
               <div><dt>失败原因</dt><dd data-i18n-skip={Boolean(orderDetail.order.failure_reason) || undefined}>{orderDetail.order.failure_reason || "无"}</dd></div>
@@ -557,7 +553,7 @@ export function AdminPaymentOperationsWorkspace() {
             <header><div><p>{refundRequestDetail.request_no} / REQUEST #{refundRequestDetail.id}</p><h2 data-i18n-skip={Boolean(refundRequestDetail.user.username) || undefined}>{refundRequestDetail.user.username || `用户 #${refundRequestDetail.user.id}`}</h2></div><span className={`status-chip status-chip--${paymentStatusTone(refundRequestDetail.status)}`}>{paymentRefundRequestStatusLabel(refundRequestDetail.status)}</span></header>
             <dl>
               <div><dt>关联充值单</dt><dd>{refundRequestDetail.order_no || `PAYMENT #${refundRequestDetail.payment_order_id}`}<small>{paymentStatusLabel(refundRequestDetail.payment_status || "未知状态")}</small></dd></div>
-              <div><dt>人民币 / 对应卡时</dt><dd>¥ {money(refundRequestDetail.amount_cny)} / {cardHours(refundRequestDetail.card_hours)} 卡时</dd></div>
+              <div><dt>原路退款金额</dt><dd>¥ {money(refundRequestDetail.amount_cny)} CNY</dd></div>
               <div><dt>申请用户</dt><dd><span data-i18n-skip={Boolean(refundRequestDetail.user.username) || undefined}>{refundRequestDetail.user.username || "未设置用户名"}</span><small>USER #{refundRequestDetail.user.id}</small></dd></div>
               <div><dt>申请来源 / 时间</dt><dd>{platformLabel(refundRequestDetail.created_platform)}<small>{formatDate(refundRequestDetail.created_at)}</small></dd></div>
               <div><dt>审核管理员</dt><dd>{refundRequestDetail.reviewed_by ? `ADMIN #${refundRequestDetail.reviewed_by}` : "尚未审核"}<small>{formatDate(refundRequestDetail.reviewed_at)}</small></dd></div>
@@ -567,7 +563,7 @@ export function AdminPaymentOperationsWorkspace() {
             {refundRequestDetail.review_note && <section><h3>管理员审核说明</h3><p data-i18n-skip>{refundRequestDetail.review_note}</p></section>}
             {refundRequestDetail.payment_refund && <section className="payment-refund-summary payment-refund-request-summary"><div><h3>已关联人民币原路退款</h3><p><strong>{refundRequestDetail.payment_refund.refund_no}</strong> · {paymentRefundStatusLabel(refundRequestDetail.payment_refund.status)} · {refundHoldLabel(refundRequestDetail.payment_refund.wallet_hold_status)}<br/>{refundRequestDetail.payment_refund.provider_message || "支付渠道尚未返回补充说明"}</p></div><button type="button" onClick={() => { setRefundStatus(""); setSelectedRefundId(refundRequestDetail.payment_refund!.id); setRefundNote(""); setError(""); setSuccess(""); setTab("refunds"); }}>查看原路退款</button></section>}
             {canReviewPaymentRefundRequest(refundRequestDetail.status) && <footer className="payment-operation-actions">
-              <div className="payment-provider-evidence"><Warning size={18}/><span>批准后系统会立即尝试原支付渠道全额退款，并冻结或冲正对应卡时。驳回只记录审核结论，不退款，也不扣减用户卡时。</span></div>
+              <div className="payment-provider-evidence"><Warning size={18}/><span>批准后系统会立即尝试原支付渠道全额退款，并冻结或冲正对应账户金额。驳回只记录审核结论，不退款，也不扣减用户账户金额。</span></div>
               <label><span>审核依据或驳回原因（至少 3 字）</span><textarea maxLength={500} rows={4} value={refundRequestNote} onChange={(event) => setRefundRequestNote(event.target.value)} placeholder="记录充值单、支付状态、退款条件和审核结论；不要填写密钥或签名"/></label>
               <div><button type="button" className="commerce-danger" disabled={Boolean(busy) || refundRequestNote.trim().length < 3} onClick={() => void submitRefundRequestReview("reject")}><X size={15}/>驳回申请</button><button type="button" className="commerce-primary" disabled={Boolean(busy) || refundRequestNote.trim().length < 3} onClick={() => void submitRefundRequestReview("approve")}><Check size={15}/>批准并发起原路退款</button></div>
               <small>批准不等于渠道已退款成功。若渠道返回处理中或结果未知，必须继续在“人民币原路退款”中核验最终结果。</small>
@@ -590,8 +586,8 @@ export function AdminPaymentOperationsWorkspace() {
             <header><div><p>{refundDetail.refund_no} / REFUND #{refundDetail.id}</p><h2>¥ {money(refundDetail.amount_cny)} 人民币原路退款</h2></div><span className={`status-chip status-chip--${paymentStatusTone(refundDetail.status)}`}>{paymentRefundStatusLabel(refundDetail.status)}</span></header>
             <dl>
               <div><dt>关联充值单</dt><dd>PAYMENT #{refundDetail.payment_order_id}</dd></div>
-              <div><dt>人民币 / 对应卡时</dt><dd>¥ {money(refundDetail.amount_cny)} / {cardHours(refundDetail.card_hours)} 卡时</dd></div>
-              <div><dt>钱包卡时处理</dt><dd>{refundHoldLabel(refundDetail.wallet_hold_status)}</dd></div>
+              <div><dt>原路退款金额</dt><dd>¥ {money(refundDetail.amount_cny)} CNY</dd></div>
+              <div><dt>钱包金额处理</dt><dd>{refundHoldLabel(refundDetail.wallet_hold_status)}</dd></div>
               <div><dt>退款前充值状态</dt><dd>{paymentStatusLabel(refundDetail.previous_payment_status)}</dd></div>
               <div><dt>支付渠道结果</dt><dd>{refundDetail.provider_code || "暂无渠道代码"}<small>{refundDetail.provider_message || "暂无渠道说明"}</small></dd></div>
               <div><dt>提交 / 完成时间</dt><dd>{formatDate(refundDetail.requested_at)}<small>完成：{formatDate(refundDetail.resolved_at)}</small></dd></div>

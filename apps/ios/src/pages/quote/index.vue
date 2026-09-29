@@ -57,7 +57,7 @@
               <view class="comparison-price low-price">
                 <text class="comparison-label">{{ t('lowestPrice') }}</text>
                 <view class="comparison-value-row">
-                  <text v-if="latest?.summary.min_price_cny != null" class="comparison-value">¥{{ cnyNumber(latest.summary.min_price_cny) }}</text>
+                  <text v-if="latest?.summary.min_price_cny != null" class="comparison-value">{{ cnyPriceOrDash(latest.summary.min_price_cny) }}</text>
                   <text v-else class="comparison-value muted">--</text>
                   <text class="comparison-unit">{{ t('perGpuHour') }}</text>
                 </view>
@@ -66,7 +66,7 @@
               <view class="comparison-price high-price">
                 <text class="comparison-label">{{ t('highestPrice') }}</text>
                 <view class="comparison-value-row">
-                  <text v-if="latest?.summary.max_price_cny != null" class="comparison-value">¥{{ cnyNumber(latest.summary.max_price_cny) }}</text>
+                  <text v-if="latest?.summary.max_price_cny != null" class="comparison-value">{{ cnyPriceOrDash(latest.summary.max_price_cny) }}</text>
                   <text v-else class="comparison-value muted">--</text>
                   <text class="comparison-unit">{{ t('perGpuHour') }}</text>
                 </view>
@@ -120,7 +120,6 @@
               :reference-observed-at="candles?.latest_live_observed_at || latestObservedAt"
               :bucket-seconds="candles?.bucket_seconds || 0"
               :range="timeRange"
-              display-currency="CNY"
               zoomable
             />
           </view>
@@ -275,7 +274,7 @@ import SegmentedControl from '@/components/SegmentedControl.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'
 import { switchTab } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
-import { formatAmount, formatNumber } from '@/utils/format'
+import { formatAmount, formatCnyCurrency, formatNumber } from '@/utils/format'
 import { localizeRegionName } from '@/utils/region-name'
 import { formatSignedMarketPercentNumber } from '@/utils/market-chart'
 import {
@@ -396,8 +395,7 @@ const candleStats = computed(() => {
 })
 
 function modelKey(item: Pick<MarketModel, 'gpu_model' | 'gpu_variant'>) { return `${item.gpu_model}|${item.gpu_variant || ''}` }
-function cnyNumber(value: number) { return formatAmount(value) }
-function cnyPriceOrDash(value?: number | null) { return value == null ? '--' : `¥${formatAmount(value)}` }
+function cnyPriceOrDash(value?: number | null) { return value == null ? '--' : formatCnyCurrency(value) }
 function cnyPricePerGpuHour(value?: number | null) {
   return value == null ? '--' : `${cnyPriceOrDash(value)}${t('perGpuHour')}`
 }
@@ -459,7 +457,7 @@ function changeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_c
 function priceRangeText(item: Pick<MarketRankingItem, 'change_7d_pct' | 'range_low_cny' | 'range_high_cny' | 'history_day_count' | 'history_span_hours'> | MarketModel): string {
   const range = hasCompleteSevenDayMetric(item) ? trustedSevenDayPriceRange(item) : null
   return range
-    ? t('sevenDayPriceRangeCnyValue', { low: formatAmount(range.low), high: formatAmount(range.high) })
+    ? t('sevenDayPriceRangePerGpuHourValue', { low: formatCnyCurrency(range.low), high: formatCnyCurrency(range.high) })
     : (Number(item.history_day_count || 0) > 1 ? t('chartObservedDays', { days: item.history_day_count }) : t('currentQuoteBaseline'))
 }
 function changeTone(value: number | null): string {

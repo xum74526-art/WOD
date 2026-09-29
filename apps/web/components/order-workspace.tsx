@@ -26,10 +26,11 @@ import {
   type Order,
   type OrderStatus,
 } from "@/lib/commerce-api";
-import { errorMessage, formatDate, formatMoney, orderStatusLabel } from "@/lib/commerce-ui";
+import { errorMessage, formatDate, formatMoney, orderStatusLabel, unitLabel } from "@/lib/commerce-ui";
 import { requestCreateHref } from "@/lib/request-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import { ensureRenewalIntent, renewalIntentSignature, type RenewalIntent } from "@/lib/web-business-contract";
+import { useI18n } from "@/components/locale-root";
 
 const filters: Array<[OrderStatus | "", string]> = [
   ["", "全部"],
@@ -55,6 +56,7 @@ const eventLabels: Record<string, string> = {
 };
 
 export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
+  const { formatCnyMoney, formatLedgerMoney } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const supplierView = scope === "supplier";
@@ -131,7 +133,7 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     const reason = window.prompt("请说明 SSH 无法连接、配置不符或其他交付问题（至少 5 个字）", "");
     if (reason === null) return;
     if (reason.trim().length < 5) { setError("争议说明至少需要 5 个字"); return; }
-    void act("dispute", () => disputeOrder(detail.id, reason.trim()), "争议已提交，订单卡时将继续冻结等待平台处理");
+    void act("dispute", () => disputeOrder(detail.id, reason.trim()), "争议已提交，订单金额将继续冻结等待平台处理");
   }
 
   function submitRenewal() {
@@ -191,6 +193,16 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
     if (order.cycle_days) return `${order.cycle_days} 天（历史订单）`;
     return order.duration_hours ? `${order.duration_hours} 小时` : "";
   }
+  function localizedOrderMoney(value: string | null, currency: string, unit: string) {
+    if (value === null) return "预算面议";
+    const code = String(currency || "").trim().toUpperCase();
+    const localized = detail?.order_source === "direct" || ["CH", "CARD_HOUR", "CARD_HOURS", "CARD-HOUR"].includes(code)
+      ? formatLedgerMoney(value)
+      : ["CNY", "RMB"].includes(code)
+        ? formatCnyMoney(value)
+        : formatMoney(value, currency, "order_total");
+    return unit === "order_total" ? localized : `${localized} / ${unitLabel[unit] ?? unit}`;
+  }
   function renewalRequestHref(order: Order) {
     const originalHours = Number(order.duration_hours ?? order.purchase_hours);
     return requestCreateHref({
@@ -220,7 +232,7 @@ export function OrderWorkspace({ scope }: { scope: "account" | "supplier" }) {
       <div className="order-dossier">{detail ? <>
         <header><div><p>{detail.order_no} · V{detail.version}</p><h2>{orderTitle(detail)}</h2><span>{orderReference(detail)} · {orderSpec(detail)} × {detail.quantity}</span></div><b className={`status-chip status-chip--${detail.status}`}>{orderStatusLabel[detail.status]}</b></header>
           {detail.order_source === "direct" && <div className={`sandbox-order-banner sandbox-order-banner--${detail.payment_status}`}><ShieldCheck size={18}/><div><strong>{detail.seller_type === "kai_self_operated" ? "KAI星算自营订单" : "商家订单"} · {paymentCopy(detail).title}</strong><span>卖方：{sellerCopy(detail)} · {fulfillmentCopy(detail)}。{paymentCopy(detail).body}</span></div></div>}
-        <div className="order-facts"><div><small>{detail.order_source === "direct" ? (!supplierView && Number(detail.coupon_discount || 0) > 0 ? "实际扣款" : "订单总额") : "单位报价"}</small><strong>{formatMoney(!supplierView && detail.payable_amount_card_hours != null ? String(detail.payable_amount_card_hours) : detail.amount, detail.currency, detail.price_unit)}</strong></div>{!supplierView && Number(detail.coupon_discount || 0) > 0 && <div><small>优惠券抵扣</small><strong>-{formatMoney(String(detail.coupon_discount), detail.currency, detail.price_unit)}</strong></div>}<div><small>{supplierView ? "买家" : "卖方"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
+        <div className="order-facts"><div><small>{detail.order_source === "direct" ? (!supplierView && Number(detail.coupon_discount || 0) > 0 ? "实际扣款" : "订单总额") : "单位报价"}</small><strong>{localizedOrderMoney(!supplierView && detail.payable_amount_card_hours != null ? String(detail.payable_amount_card_hours) : detail.amount, detail.currency, detail.price_unit)}</strong></div>{!supplierView && Number(detail.coupon_discount || 0) > 0 && <div><small>优惠券抵扣</small><strong>-{localizedOrderMoney(String(detail.coupon_discount), detail.currency, detail.price_unit)}</strong></div>}<div><small>{supplierView ? "买家" : "卖方"}</small><strong>{supplierView ? detail.buyer.display_name : detail.supplier.company_name || detail.supplier.display_name}</strong></div><div><small>{durationCopy(detail) ? "租用周期" : "创建时间"}</small><strong>{durationCopy(detail) || formatDate(detail.created_at)}</strong></div></div>
         <section className="confirmation-grid"><div className={detail.delivered_at ? "done" : ""}><Package size={20} /><span><small>卖方提交交付</small><strong>{detail.delivered_at ? formatDate(detail.delivered_at) : "等待有效 SSH"}</strong></span></div><div className={detail.confirmed_at ? "done" : ""}><CheckCircle size={20} /><span><small>买家验收</small><strong>{detail.confirmed_at ? formatDate(detail.confirmed_at) : "等待验收"}</strong></span></div></section>
         <div className="order-fulfillment-status"><Package size={18}/><span><small>当前履约状态</small><strong>{fulfillmentStatusCopy(detail)}</strong></span><em>{fulfillmentCopy(detail)}</em></div>
         {detail.delivery_note && <div className="delivery-note"><Package size={18} /><div><strong>最近交付说明</strong><p>{detail.delivery_note}</p></div></div>}

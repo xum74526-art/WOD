@@ -2,7 +2,7 @@
 
 This module deliberately does not import orders, wallets, ledgers, payments or
 rewards.  A matchmaking agreement records negotiated terms and credential
-delivery only; it cannot move money or card-hours.
+delivery only; it cannot move money or account balance.
 """
 
 from __future__ import annotations

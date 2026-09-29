@@ -181,7 +181,7 @@ test("Web referral page exposes both mechanisms and the approved compliance boun
   assert.match(component, /邀请达标奖励/);
   assert.match(component, /好友消费返佣/);
   assert.match(component, /名额按好友完成“实名 \+ 首笔有效订单”的北京时间日期占用，不按注册日期计算/);
-  assert.match(component, /第 6 位及以后仍保留邀请关系，但不发 58 卡时/);
+  assert.match(component, /第 6 位及以后仍保留邀请关系，但不发固定奖励/);
   assert.match(component, /仅计算一级好友/);
   assert.match(component, /不要求缴纳入门费/);
   assert.match(component, /禁止自邀和关联账号/);
@@ -190,7 +190,8 @@ test("Web referral page exposes both mechanisms and the approved compliance boun
   assert.match(api, /\/invite\/commissions\?page=1&page_size=50/);
   assert.match(api, /Promise\.allSettled/);
   assert.match(api, /!summary\.isV2 && commissionsResult\.reason instanceof ApiError/);
-  assert.match(locale, /"invite\.fixed\.creditNote": "58 card hours enter the in-app spending balance"/);
+  assert.match(component, /invite\.fixed\.creditNoteCurrency/);
+  assert.match(component, /The reward is credited to the in-app spending balance/);
   assert.match(locale, /"invite\.rebate\.rule": "Only completed, eligible consumption by first-level friends/);
   assert.match(locale, /"invite\.records\.unboundPhone": "No phone number linked"/);
   assert.match(locale, /"invite\.records\.renewalReference": "Renewal #\{id\}"/);

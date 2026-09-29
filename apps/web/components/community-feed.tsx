@@ -62,12 +62,12 @@ function postSourceHref(row: CommunityPost) {
 }
 
 function ExternalVideoPreview({ row }: { row: CommunityPost }) {
-  const { t, locale } = useI18n();
+  const { t, locale, displayCurrencyConfig } = useI18n();
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const href = postSourceHref(row);
   if (!href) return null;
   return (
-    <a className="community-video-cover" href={href} target="_blank" rel="noreferrer" data-i18n-skip aria-label={t("community.feed.video.watchAria", "观看视频：{title}", { title: communityPostContent(row, locale) })}>
+    <a className="community-video-cover" href={href} target="_blank" rel="noreferrer" data-i18n-skip aria-label={t("community.feed.video.watchAria", "观看视频：{title}", { title: communityPostContent(row, locale, displayCurrencyConfig) })}>
       {!thumbnailFailed && row.thumbnail_url ? (
         <img src={row.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setThumbnailFailed(true)} />
       ) : (
@@ -76,7 +76,7 @@ function ExternalVideoPreview({ row }: { row: CommunityPost }) {
       <span className="community-video-cover__shade" />
       <span className="community-video-cover__play"><Play size={22} weight="fill" /></span>
       <span className="community-video-cover__label">{t("community.feed.video.official", "官方视频")}</span>
-      <span className="community-video-cover__source">{communityDisplayText(row.source_name, row.source_key, locale) ? <span data-i18n-skip>{communityDisplayText(row.source_name, row.source_key, locale)}</span> : t("community.feed.video.watchSource", "在来源网站观看")}<ArrowUpRight size={15} /></span>
+      <span className="community-video-cover__source">{communityDisplayText(row.source_name, row.source_key, locale, displayCurrencyConfig) ? <span data-i18n-skip>{communityDisplayText(row.source_name, row.source_key, locale, displayCurrencyConfig)}</span> : t("community.feed.video.watchSource", "在来源网站观看")}<ArrowUpRight size={15} /></span>
     </a>
   );
 }
@@ -104,16 +104,16 @@ type CommunityCardProps = {
 };
 
 function CommunityCard({ row, featured, busy, openComments, comments, comment, onCommentChange, onLike, onFollow, onShare, onDeletePost, onReportPost, onBlockUser, onDeleteComment, onReportComment, onReportCommentUser, onBlockCommentUser, onShowComments, onSubmitComment }: CommunityCardProps) {
-  const { t, dateLocale, locale } = useI18n();
+  const { t, dateLocale, locale, displayCurrencyConfig } = useI18n();
   const externalVideo = !row.video && (row.content_type === "video" || Boolean(row.video_url));
-  const sourceName = communityDisplayText(row.source_name || row.source_author, row.source_key, locale);
+  const sourceName = communityDisplayText(row.source_name || row.source_author, row.source_key, locale, displayCurrencyConfig);
   const authorName = localizePersonName(
-    communityDisplayText(row.author_name || row.source_author || row.source_name, row.source_key, locale),
+    communityDisplayText(row.author_name || row.source_author || row.source_name, row.source_key, locale, displayCurrencyConfig),
     locale,
   ) || t("community.feed.userFallback", "社区用户");
-  const content = communityPostContent(row, locale);
-  const topic = communityPostTopic(row, locale);
-  const summary = communityDisplayText(row.summary, row.source_key, locale);
+  const content = communityPostContent(row, locale, displayCurrencyConfig);
+  const topic = communityPostTopic(row, locale, displayCurrencyConfig);
+  const summary = communityDisplayText(row.summary, row.source_key, locale, displayCurrencyConfig);
   return (
     <article className={`community-post-card${featured ? " community-post-card--featured" : ""}${externalVideo ? " community-post-card--video" : ""}`}>
       <header className="community-post-card__author">
@@ -169,7 +169,7 @@ function CommunityCard({ row, featured, busy, openComments, comments, comment, o
 }
 
 export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialCategory?: string; initialQuery?: string; initialPage?: number }) {
-  const { t, dateLocale, locale } = useI18n();
+  const { t, dateLocale, locale, displayCurrencyConfig } = useI18n();
   const [rows, setRows] = useState<CommunityPost[]>([]);
   const [tab, setTab] = useState<(typeof tabs)[number]["value"]>("recommend");
   const [query, setQuery] = useState(initialQuery);
@@ -284,7 +284,7 @@ export function CommunityFeed({ initialQuery = "", initialPage = 1 }: { initialC
   }
 
   async function share(row: CommunityPost) {
-    const text = communityShareText(row, locale);
+    const text = communityShareText(row, locale, displayCurrencyConfig);
     if (!text) return;
     const action = `share-${row.id}`;
     if (!beginAction(action)) return;

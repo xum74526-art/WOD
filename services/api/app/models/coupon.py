@@ -22,7 +22,7 @@ class Coupon(Base):
         ForeignKey("products.id"), nullable=True, index=True,
     )
     name: Mapped[str] = mapped_column(String(64))
-    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6))  # 抵扣卡时
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6))  # 抵扣金额（CNY）
     min_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))  # 满减门槛
     status: Mapped[str] = mapped_column(String(16), default="available", index=True)  # available/used/expired
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

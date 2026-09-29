@@ -14,7 +14,7 @@
       <view class="card hero">
         <view class="hero-main">
           <text class="hero-label">{{ t('k_e08bcd4e') }}</text>
-          <text class="hero-val up">{{ fmtCHn(info?.month_rebated ?? 0) }}</text>
+          <text class="hero-val up">{{ formatCardHourCurrency(info?.month_rebated ?? 0) }}</text>
         </view>
         <view class="hero-grid">
           <view class="hg-item">
@@ -22,16 +22,16 @@
             <text class="hg-l">{{ t('k_cfc752a6') }}</text>
           </view>
           <view class="hg-item">
-            <text class="hg-v">{{ fmtCHn(info?.month_sales ?? 0) }}</text>
+            <text class="hg-v">{{ formatCardHourCurrency(info?.month_sales ?? 0) }}</text>
             <text class="hg-l">{{ t('k_e1e32957') }}</text>
           </view>
           <view class="hg-item">
-            <text class="hg-v">{{ fmtCHn(info?.est_total_rebate ?? 0) }}</text>
+            <text class="hg-v">{{ formatCardHourCurrency(info?.est_total_rebate ?? 0) }}</text>
             <text class="hg-l">{{ t('supplierMonthlyTargetRebate') }}</text>
           </view>
         </view>
         <text class="hero-hint">{{ tr(info?.next_tier_hint || '') }}</text>
-        <text class="cap-hint">{{ t('rebateCapUsage', { used: formatNumber(info?.cap_used ?? 0), cap: formatNumber(info?.monthly_cap ?? 0) }) }}</text>
+        <text class="cap-hint">{{ t('rebateCapUsage', { used: formatCardHourCurrency(info?.cap_used ?? 0), cap: formatCardHourCurrency(info?.monthly_cap ?? 0) }) }}</text>
       </view>
 
       <!-- 阶梯说明 -->
@@ -53,7 +53,7 @@
         <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleTarget') }}</text></view>
         <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleTopUp') }}</text></view>
         <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierSalesRebateRuleExclusions') }}</text></view>
-        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('monthlyRebateCapRule', { amount: formatNumber(info?.monthly_cap ?? 0) }) }}</text></view>
+        <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('monthlyRebateCapRule', { amount: formatCardHourCurrency(info?.monthly_cap ?? 0) }) }}</text></view>
         <view class="rule-item"><text class="dot"></text><text class="rt">{{ t('supplierBuyerRebateIndependent') }}</text></view>
       </view>
 
@@ -62,7 +62,7 @@
       <view v-if="!records.length" class="card ph"><EmptyState text="暂无返佣记录" /></view>
       <view v-for="r in records" :key="r.id" class="card rec-row">
         <view class="rec-left">
-          <text class="rec-amount">+{{ fmtCH(r.amount) }}</text>
+          <text class="rec-amount">+{{ formatCardHourCurrency(r.amount) }}</text>
           <text class="rec-date">{{ formatDate(r.created_at) }}</text>
         </view>
         <text class="rec-remark">{{ tr(r.remark) }}</text>
@@ -77,7 +77,7 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getSupplierRebate, type SupplierRebate } from '@/api/supplier'
 import { getLedger, type LedgerItem } from '@/api/wallet'
-import { fmtCH, fmtCHn, formatDate, formatNumber } from '@/utils/format'
+import { formatCardHourCurrency, formatDate, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -97,13 +97,13 @@ function tierRange(tier: SupplierTier, index: number) {
   const previous = index > 0 ? tiers.value[index - 1]?.max_month_spent : null
   const upper = tier.max_month_spent
   if (i18n.lang === 'en') {
-    if (upper == null) return `Over ${formatNumber(previous ?? 0)} CH / month`
-    if (previous == null) return `Up to ${formatNumber(upper)} CH / month`
-    return `Over ${formatNumber(previous)} to ${formatNumber(upper)} CH / month`
+    if (upper == null) return `Over ${formatCardHourCurrency(previous ?? 0)} / month`
+    if (previous == null) return `Up to ${formatCardHourCurrency(upper)} / month`
+    return `Over ${formatCardHourCurrency(previous)} to ${formatCardHourCurrency(upper)} / month`
   }
-  if (upper == null) return tr(`月累计超过 ${formatNumber(previous ?? 0)} 卡时`)
-  if (previous == null) return tr(`月累计不超过 ${formatNumber(upper)} 卡时`)
-  return tr(`月累计超过 ${formatNumber(previous)} 至 ${formatNumber(upper)} 卡时`)
+  if (upper == null) return tr(`月累计超过 ${formatCardHourCurrency(previous ?? 0)}`)
+  if (previous == null) return tr(`月累计不超过 ${formatCardHourCurrency(upper)}`)
+  return tr(`月累计超过 ${formatCardHourCurrency(previous)} 至 ${formatCardHourCurrency(upper)}`)
 }
 
 async function load() {

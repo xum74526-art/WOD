@@ -26,7 +26,7 @@ test("recharge and withdrawal never fall below the production minimums", () => {
   assert.equal(minimumWithdrawalCardHours(25), 25);
 });
 
-test("recharge only succeeds after the backend has credited card hours", () => {
+test("recharge only succeeds after the backend has credited the account balance", () => {
   assert.equal(rechargeUiState({ status: "paid" }), "processing");
   assert.equal(rechargeUiState({ status: "review" }), "processing");
   assert.equal(rechargeUiState({ status: "late_paid_review" }), "processing");
@@ -95,6 +95,13 @@ test("wallet buttons use the defensive capability helpers instead of raw flags",
   assert.match(workspace, /rechargeMatchesActiveOrder\(pendingPayment, normalizedValue, recharge\.payment_type\)/);
   assert.doesNotMatch(workspace, /can_query !== false|can_pay !== false/);
   assert.match(workspace, /rechargeEntryEnabled && rechargeCanRestart\(pendingPayment\) && <button/);
+});
+
+test("recharge and refund UI presents one direct-money amount without a duplicate legacy credit", () => {
+  const workspace = readFileSync(new URL("../components/payment-workspace.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /支付成功后等额计入账户余额/);
+  assert.doesNotMatch(workspace, /formatLedgerMoney\((?:pendingPayment|refundFormOrder|row)\.card_hours\)/);
+  assert.doesNotMatch(workspace, /预计余额增加/);
 });
 
 test("only terminal failed recharge orders can restart", () => {

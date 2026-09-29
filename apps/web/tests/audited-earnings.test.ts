@@ -13,6 +13,7 @@ test("Web personal earnings show auditable rebate and holding P/L fields", () =>
   assert.match(api, /holding_unrealized_pnl: number/);
   assert.match(component, /summary\?\.pending_rebate/);
   assert.match(component, /summary\?\.holding_unrealized_pnl/);
+  assert.match(component, /formatLedgerMoney\(summary\?\.holding_unrealized_pnl\)/);
   assert.match(component, /row\.source_type === "holding_sale"/);
   assert.match(component, /历史模拟收益.*仅保留作审计，不计入余额或当前收益/);
   assert.match(api, /export function getRevenueSummary/);

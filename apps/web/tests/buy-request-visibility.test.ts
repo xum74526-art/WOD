@@ -41,7 +41,7 @@ test("supplier, buyer, and admin workspaces expose the closed matchmaking flow w
     assert.match(localeRoot, new RegExp(`"${source}": "${translated}"`));
   }
   assert.match(supplierPage, /scope === "quoted" \? "quoted" : "all"/);
-  assert.match(workspace, /当前未创建资金订单，也未扣除卡时/);
+  assert.match(workspace, /当前未创建资金订单，也未扣除余额/);
   assert.match(adminApi, /\/admin\/buy-requests/);
   assert.match(adminApi, /\/credential\/release/);
   assert.match(admin, /审核通过/);

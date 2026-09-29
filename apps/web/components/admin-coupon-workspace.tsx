@@ -11,7 +11,7 @@ import {
   type AdminCouponCampaignStatus,
 } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
-import { formatFinancialAmount } from "@/lib/financial-format";
+import { convertDisplayToCardHours } from "@/lib/display-currency";
 
 const PAGE_SIZE = 20;
 
@@ -23,7 +23,7 @@ function defaultExpiry() {
 }
 
 export function AdminCouponWorkspace() {
-  const { locale } = useI18n();
+  const { locale, displayCurrency, displayCurrencyConfig, formatLedgerMoney } = useI18n();
   const en = locale === "en";
   const label = (zh: string, english: string) => en ? english : zh;
   const [rows, setRows] = useState<AdminCouponCampaign[]>([]);
@@ -67,11 +67,13 @@ export function AdminCouponWorkspace() {
     setBusy(true);
     setError("");
     try {
-      const amount = Number(form.amount);
-      const minimum = Number(form.minAmount);
-      if (!Number.isFinite(amount) || !Number.isFinite(minimum) || amount <= 0 || minimum < 0) {
+      const displayAmount = Number(form.amount);
+      const displayMinimum = Number(form.minAmount);
+      if (!Number.isFinite(displayAmount) || !Number.isFinite(displayMinimum) || displayAmount <= 0 || displayMinimum < 0) {
         throw new Error(label("券面额必须大于 0，使用门槛不能为负数。", "The value must be positive and the minimum spend cannot be negative."));
       }
+      const amount = convertDisplayToCardHours(displayAmount, locale, displayCurrencyConfig);
+      const minimum = convertDisplayToCardHours(displayMinimum, locale, displayCurrencyConfig);
       const created = await createAdminCouponCampaign({
         name: form.name.trim(),
         amount,
@@ -129,8 +131,8 @@ export function AdminCouponWorkspace() {
     {generatedCode && <div className="admin-coupon-code"><Check size={20}/><div><strong>{label("请立即保存兑换码", "Save this code now")}</strong><code>{generatedCode}</code><small>{label("服务器仅保存不可逆摘要，关闭后无法再次查看明文。", "Only a non-reversible digest is stored; the plaintext cannot be displayed again.")}</small></div><button type="button" onClick={() => void copyCode()}><Copy size={17}/>{label("复制", "Copy")}</button><button type="button" onClick={() => setGeneratedCode("")}>{label("已保存", "Saved")}</button></div>}
     <form className="admin-coupon-form" onSubmit={submit}>
       <label>{label("活动名称", "Campaign name")}<input required minLength={2} maxLength={64} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label>
-      <label>{label("券面额（卡时）", "Value (CH)")}<input required type="number" min="0.001" step="0.001" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })}/></label>
-      <label>{label("使用门槛（卡时）", "Minimum spend (CH)")}<input required type="number" min="0" step="0.001" value={form.minAmount} onChange={(event) => setForm({ ...form, minAmount: event.target.value })}/></label>
+      <label>{label(`券面额（${displayCurrency}）`, `Value (${displayCurrency})`)}<input required type="number" min="0.001" step="0.001" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })}/></label>
+      <label>{label(`使用门槛（${displayCurrency}）`, `Minimum spend (${displayCurrency})`)}<input required type="number" min="0" step="0.001" value={form.minAmount} onChange={(event) => setForm({ ...form, minAmount: event.target.value })}/></label>
       <label>{label("最大发放量", "Redemption limit")}<input required type="number" min="1" max="1000000" value={form.maxRedemptions} onChange={(event) => setForm({ ...form, maxRedemptions: event.target.value })}/></label>
       <label>{label("领取后有效天数", "Coupon validity (days)")}<input required type="number" min="1" max="3650" value={form.ttlDays} onChange={(event) => setForm({ ...form, ttlDays: event.target.value })}/></label>
       <label>{label("活动截止时间", "Campaign expiry")}<input required type="datetime-local" value={form.expiresAt} onChange={(event) => setForm({ ...form, expiresAt: event.target.value })}/></label>
@@ -139,7 +141,7 @@ export function AdminCouponWorkspace() {
       <button type="submit" disabled={busy}><Ticket size={18}/>{busy ? label("正在创建…", "Creating…") : label("创建兑换活动", "Create campaign")}</button>
     </form>
     <div className="admin-coupon-toolbar"><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as AdminCouponCampaignStatus | ""); }}><option value="">{label("全部状态", "All statuses")}</option><option value="active">{label("进行中", "Active")}</option><option value="scheduled">{label("待开始", "Scheduled")}</option><option value="disabled">{label("已停用", "Disabled")}</option><option value="expired">{label("已过期", "Expired")}</option><option value="exhausted">{label("已领完", "Exhausted")}</option></select><button type="button" disabled={loading} onClick={() => void load()}><ArrowClockwise size={17}/>{label("刷新", "Refresh")}</button></div>
-    <div className="admin-coupon-list">{rows.map((row) => <article key={row.id}><header><div><small>#{row.id} · {row.code_hint}</small><h2>{row.name}</h2></div><span className={`coupon-campaign-status status-${row.status}`}>{statusText(row.status)}</span></header><dl><div><dt>{label("面额 / 门槛", "Value / minimum")}</dt><dd>{formatFinancialAmount(row.amount)} / {formatFinancialAmount(row.min_amount)} CH</dd></div><div><dt>{label("已领取 / 上限", "Redeemed / limit")}</dt><dd>{row.redeemed_count} / {row.max_redemptions}</dd></div><div><dt>{label("适用商品", "Product")}</dt><dd>{row.product_id ? `#${row.product_id}` : label("全部使用型商品", "All usage products")}</dd></div><div><dt>{label("截止时间", "Expires")}</dt><dd>{formatDate(row.expires_at)}</dd></div></dl>{["active", "scheduled", "disabled"].includes(row.status) && <button type="button" disabled={busy} onClick={() => void toggle(row)}>{row.status === "disabled" ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>} {row.status === "disabled" ? label("启用", "Enable") : label("停用", "Disable")}</button>}</article>)}</div>
+    <div className="admin-coupon-list">{rows.map((row) => <article key={row.id}><header><div><small>#{row.id} · {row.code_hint}</small><h2>{row.name}</h2></div><span className={`coupon-campaign-status status-${row.status}`}>{statusText(row.status)}</span></header><dl><div><dt>{label("面额 / 门槛", "Value / minimum")}</dt><dd>{formatLedgerMoney(row.amount)} / {formatLedgerMoney(row.min_amount)}</dd></div><div><dt>{label("已领取 / 上限", "Redeemed / limit")}</dt><dd>{row.redeemed_count} / {row.max_redemptions}</dd></div><div><dt>{label("适用商品", "Product")}</dt><dd>{row.product_id ? `#${row.product_id}` : label("全部使用型商品", "All usage products")}</dd></div><div><dt>{label("截止时间", "Expires")}</dt><dd>{formatDate(row.expires_at)}</dd></div></dl>{["active", "scheduled", "disabled"].includes(row.status) && <button type="button" disabled={busy} onClick={() => void toggle(row)}>{row.status === "disabled" ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>} {row.status === "disabled" ? label("启用", "Enable") : label("停用", "Disable")}</button>}</article>)}</div>
     {!loading && !rows.length && <div className="data-empty">{label("当前筛选条件下没有兑换活动。", "No campaigns match this filter.")}</div>}
     <div className="admin-coupon-pagination"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>{label("上一页", "Previous")}</button><span>{page} / {pages} · {total}</span><button type="button" disabled={page >= pages || loading} onClick={() => setPage((value) => value + 1)}>{label("下一页", "Next")}</button></div>
   </section>;

@@ -22,15 +22,14 @@
       <view class="card price-box">
         <template v-if="commerce.directTradeEnabled">
           <view v-if="isKaiProduct" class="price-primary">
-            <text class="currency">¥</text>
-            <text class="pp">{{ formatAmount(directTradeCnyPerGpuHour(product)) }}</text>
+            <text class="pp">{{ formatCnyCurrency(directTradeCnyPerGpuHour(product)) }}</text>
             <text class="pu">{{ t('perGpuHour') }}</text>
           </view>
           <view v-else class="price-primary">
-            <text class="pp">{{ formatAmount(directTradeCardHoursPerGpuHour(product)) }}</text>
-            <text class="pu">{{ t('cardHourPerGpuHour') }}</text>
+            <text class="pp">{{ formatCardHourCurrency(directTradeCardHoursPerGpuHour(product)) }}</text>
+            <text class="pu">{{ t('perGpuHour') }}</text>
           </view>
-          <text v-if="isKaiProduct" class="daily muted">{{ formatAmount(directTradeCardHoursPerGpuHour(product)) }} {{ t('cardHourPerGpuHour') }}</text>
+          <text v-if="isKaiProduct" class="daily muted">{{ t('kaiSelfOperated') }}</text>
           <text v-else class="daily muted">{{ t('merchantDeclaredHourlyPrice') }}</text>
         </template>
         <template v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false">
@@ -138,8 +137,8 @@
       <view v-if="canConfigure" class="card fee">
         <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseQuantity' : 'requiredQuantity') }}</text><text class="sv">{{ quantityUnits(quantity) }}</text></view>
         <view class="row"><text class="sk">{{ t(commerce.directTradeEnabled ? 'purchaseDurationHours' : 'requiredDurationHours') }}</text><text class="sv">{{ t('hoursValue', { count: hours }) }}</text></view>
-        <view v-if="commerce.directTradeEnabled" class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ fmtCardHours(directTradeCardHoursPerGpuHour(product) * hours * quantity) }} {{ t('cardHour') }}</text></view>
-        <view v-if="commerce.directTradeEnabled && purchaseType === 'usage' && rebateSummary" class="row"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">{{ fmtCardHours(rebateEstimate.amount) }} {{ t('cardHour') }}<template v-if="rebateEstimate.ratePercent"> · {{ rebateEstimate.ratePercent }}%</template></text></view>
+        <view v-if="commerce.directTradeEnabled" class="row"><text class="sk">{{ t('k_a23b0e35') }}</text><text class="sv">{{ formatCardHourCurrency(directTradeCardHoursPerGpuHour(product) * hours * quantity) }}</text></view>
+        <view v-if="commerce.directTradeEnabled && purchaseType === 'usage' && rebateSummary" class="row"><text class="sk">{{ t('estimatedExpiryRebate') }}</text><text class="sv up">{{ formatCardHourCurrency(rebateEstimate.amount) }}<template v-if="rebateEstimate.ratePercent"> · {{ rebateEstimate.ratePercent }}%</template></text></view>
         <view v-if="!commerce.directTradeEnabled" class="row"><text class="sk">{{ t('servicePrice') }}</text><text class="sv inquiry-value">{{ t('inquiry') }}</text></view>
         <view class="row"><text class="sk">{{ t('k_a46162f4') }}</text><text class="sv">{{ deliveryLabel }}</text></view>
       </view>
@@ -171,7 +170,7 @@ import { getProduct, type Product } from '@/api/gpu'
 import type { PurchaseType } from '@/api/order'
 import { getRebateSummary, type RebateSummary } from '@/api/user'
 import { getMarketCandles, type MarketCandles, type MarketCandlesParams } from '@/api/market'
-import { fmtCardHours, formatAmount, formatNumber } from '@/utils/format'
+import { formatCardHourCurrency, formatCnyCurrency, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import CandlestickChart from '@/components/CandlestickChart.vue'

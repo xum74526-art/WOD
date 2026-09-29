@@ -308,8 +308,8 @@ class SecurityStateTests(unittest.TestCase):
                 client_request_id="local-holding-0001",
             ), self.user, self.db)
         self.db.refresh(self.wallet)
-        self.assertEqual(self.wallet.balance, Decimal("92.8000"))
-        self.assertEqual(self.wallet.frozen, Decimal("7.2000"))
+        self.assertEqual(self.wallet.balance, Decimal("92.785600"))
+        self.assertEqual(self.wallet.frozen, Decimal("7.214400"))
         self.assertEqual(self.db.query(Asset).count(), 0)
         self.assertIsNone(external_result["data"]["ssh_info"])
 

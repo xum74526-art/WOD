@@ -3,29 +3,29 @@
     <AppNavBar :title="t('auditedEarningsTitle')" />
     <scroll-view scroll-y class="body">
       <view v-if="summary?.historical_test_total" class="service-warning">
-        {{ t('historicalEarningsAuditNotice', { amount: fmtCardHours(summary.historical_test_total) }) }}
+        {{ t('historicalEarningsAuditNotice', { amount: formatCardHourCurrency(summary.historical_test_total) }) }}
       </view>
       <view class="card summary">
         <view class="sum-top">
           <text class="sum-label">{{ t('todayRealizedEarnings') }}</text>
-          <AmountText :value="summary?.today ?? 0" prefix="cardHour" size="xl" :trend="amountTrend(summary?.today)" />
+          <AmountText :value="summary?.today ?? 0" currency="ledger" size="xl" :trend="amountTrend(summary?.today)" />
         </view>
         <view class="sum-grid">
           <view class="sg-item">
             <text class="sg-label">{{ t('totalRealizedEarnings') }}</text>
-            <AmountText :value="summary?.total ?? 0" prefix="cardHour" size="md" :trend="amountTrend(summary?.total)" />
+            <AmountText :value="summary?.total ?? 0" currency="ledger" size="md" :trend="amountTrend(summary?.total)" />
           </view>
           <view class="sg-item">
             <text class="sg-label">{{ t('pendingUsageRebate') }}</text>
-            <AmountText :value="summary?.pending_rebate ?? 0" prefix="cardHour" size="md" />
+            <AmountText :value="summary?.pending_rebate ?? 0" currency="ledger" size="md" />
           </view>
           <view class="sg-item">
             <text class="sg-label">{{ t('holdingUnrealizedPnl') }}</text>
-            <AmountText :value="summary?.holding_unrealized_pnl ?? 0" prefix="cardHour" size="md" :trend="amountTrend(summary?.holding_unrealized_pnl)" />
+            <AmountText :value="summary?.holding_unrealized_pnl ?? 0" currency="ledger" size="md" :trend="amountTrend(summary?.holding_unrealized_pnl)" />
           </view>
           <view class="sg-item">
             <text class="sg-label">{{ t('holdingRealizedPnl') }}</text>
-            <AmountText :value="summary?.holding_realized_pnl ?? 0" prefix="cardHour" size="md" :trend="amountTrend(summary?.holding_realized_pnl)" />
+            <AmountText :value="summary?.holding_realized_pnl ?? 0" currency="ledger" size="md" :trend="amountTrend(summary?.holding_realized_pnl)" />
           </view>
         </view>
         <text class="summary-note">{{ t('auditedEarningsScope') }}</text>
@@ -47,7 +47,7 @@
             <text class="rec-date">{{ formatDate(r.date || r.created_at) }}</text>
             <text class="rec-sub">{{ recordLabel(r) }}{{ r.asset_id ? ` · #${r.asset_id}` : '' }}</text>
           </view>
-          <AmountText :value="r.amount" prefix="cardHour" size="sm" :trend="amountTrend(r.amount)" />
+          <AmountText :value="r.amount" currency="ledger" size="sm" :trend="amountTrend(r.amount)" />
         </view>
       </view>
       <EmptyState v-else :text="t('noAuditedEarningsRecords')">
@@ -61,7 +61,7 @@
 import { ref, computed, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getRevenueSummary, getRevenueChart, getRevenueRecords, type RevenueSummary, type RevenuePoint, type RevenueRecord } from '@/api/revenue'
-import { formatDate, fmtCardHours } from '@/utils/format'
+import { formatCardHourCurrency, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'

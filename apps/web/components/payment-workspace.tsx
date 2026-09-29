@@ -3,7 +3,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, Bank, CheckCircle, ClockCountdown, Coins, LockKey, Receipt, WarningCircle } from "@phosphor-icons/react";
 import { errorMessage } from "@/lib/commerce-ui";
-import { formatFinancialAmount } from "@/lib/financial-format";
 import {
   canPrepareRechargeRestart,
   isRegisteredBankCardStatus,
@@ -37,14 +36,18 @@ import {
 } from "@/lib/client-request-intent";
 import { qixiangCheckoutHref } from "@/lib/payment-checkout-navigation";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
+import { useI18n } from "@/components/locale-root";
+import {
+  convertCardHoursToDisplay,
+  convertCnyToDisplay,
+  normalizeDisplayInputToCny,
+} from "@/lib/display-currency";
 
 const PENDING_PAYMENT_KEY = "wod-web-pending-recharge";
 const RECHARGE_INTENT_KEY = "wod-web-recharge-request-intent";
 const WITHDRAWAL_INTENT_KEY = "wod-web-withdrawal-request-intent";
 const REFUND_REQUEST_INTENT_KEY_PREFIX = "wod-web-refund-request-intent";
 type PendingRechargeSession = { order_no?: string; checkout_url?: string | null; expires_at?: string | null };
-const amount = (value: unknown) => formatFinancialAmount(value as number | string | null | undefined);
-
 function requestIntentStorage() {
   try { return window.sessionStorage; } catch { return null; }
 }
@@ -63,6 +66,7 @@ function paymentQueryNotice(order: RechargePaymentOrder) {
 }
 
 export function PaymentWorkspace() {
+  const { locale, displayCurrency, displayCurrencyConfig, formatCnyMoney, formatLedgerMoney } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const rechargeEntryEnabled = directTradeEnabled && capabilities.recharge_enabled === true;
@@ -89,7 +93,7 @@ export function PaymentWorkspace() {
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const [withdrawalTotal, setWithdrawalTotal] = useState(0);
   const [withdrawalStatus, setWithdrawalStatus] = useState("");
-  const [recharge, setRecharge] = useState({ amount: "100", payment_type: "alipay" as "alipay" | "wxpay" });
+  const [recharge, setRecharge] = useState({ amount: "", payment_type: "alipay" as "alipay" | "wxpay" });
   const [withdrawal, setWithdrawal] = useState({ amount: "", bank_card_id: "" });
   const [tab, setTab] = useState<"ledger" | "recharges" | "refundRequests" | "withdrawals">("ledger");
   const [error, setError] = useState("");
@@ -199,9 +203,15 @@ export function PaymentWorkspace() {
   async function submitRecharge(event: FormEvent) {
     event.preventDefault();
     if (creatingRecharge.current) return;
-    const value = Number(recharge.amount);
-    if (!Number.isFinite(value) || value < rechargeMinimum || value > Number(paymentConfig?.max_amount_cny || Infinity)) {
-      setError(`充值金额须在 ${amount(rechargeMinimum)} 至 ${amount(paymentConfig?.max_amount_cny)} 元之间`); return;
+    const displayValue = Number(recharge.amount);
+    const rechargeMaximum = Number(paymentConfig?.max_amount_cny || Infinity);
+    const value = normalizeDisplayInputToCny(displayValue, locale, displayCurrencyConfig, {
+      fractionDigits: 2,
+      minimum: rechargeMinimum,
+      maximum: rechargeMaximum,
+    });
+    if (!Number.isFinite(displayValue) || displayValue <= 0 || value < rechargeMinimum || value > rechargeMaximum) {
+      setError(`充值金额须在 ${formatCnyMoney(rechargeMinimum)} 至 ${formatCnyMoney(paymentConfig?.max_amount_cny)} 之间`); return;
     }
     const normalizedValue = Number(value.toFixed(2));
     if (!paymentTypes.includes(recharge.payment_type)) { setError("当前支付渠道未启用"); return; }
@@ -210,9 +220,7 @@ export function PaymentWorkspace() {
       setMessage("已有一笔相同金额和支付方式的充值订单正在等待支付或入账。请继续处理该订单，或修改金额/支付方式后再提交。");
       return;
     }
-    const rate = Number(paymentConfig?.card_hour_rmb_rate || 0);
-    const cardHours = rate > 0 ? normalizedValue / rate : 0;
-    if (!window.confirm(`请确认充值金额：¥ ${amount(normalizedValue)}\n预计到账：${amount(cardHours)} 卡时\n\n确认金额无误后再前往支付。`)) return;
+    if (!window.confirm(`请确认充值金额：${formatCnyMoney(normalizedValue)}\n支付成功后等额计入账户余额。\n\n支付通道最终以人民币结算，确认金额无误后再前往支付。`)) return;
     creatingRecharge.current = true;
     setBusy("recharge"); setError(""); setMessage("");
     try {
@@ -248,10 +256,19 @@ export function PaymentWorkspace() {
   async function submitWithdrawal(event: FormEvent) {
     event.preventDefault();
     if (creatingWithdrawal.current) return;
-    const value = Number(withdrawal.amount);
+    const displayValue = Number(withdrawal.amount);
+    const withdrawalMaximum = Math.min(
+      Number(withdrawalConfig?.max_card_hours || Infinity),
+      Number(wallet?.withdrawable_balance || 0),
+    );
+    const value = normalizeDisplayInputToCny(displayValue, locale, displayCurrencyConfig, {
+      fractionDigits: 3,
+      minimum: withdrawalMinimum,
+      maximum: withdrawalMaximum,
+    });
     const card = cards.find((item) => item.id === Number(withdrawal.bank_card_id));
-    if (!Number.isFinite(value) || value < withdrawalMinimum || value > Number(withdrawalConfig?.max_card_hours || Infinity)) {
-      setError(`提现卡时须在 ${amount(withdrawalMinimum)} 至 ${amount(withdrawalConfig?.max_card_hours)} 之间`); return;
+    if (!Number.isFinite(displayValue) || displayValue <= 0 || value < withdrawalMinimum || value > Number(withdrawalConfig?.max_card_hours || Infinity)) {
+      setError(`提现金额须在 ${formatLedgerMoney(withdrawalMinimum)} 至 ${formatLedgerMoney(withdrawalConfig?.max_card_hours)} 之间`); return;
     }
     const normalizedValue = Number(value.toFixed(3));
     if (normalizedValue > Number(wallet?.withdrawable_balance || 0)) { setError("提现金额超过当前可提现余额"); return; }
@@ -330,11 +347,11 @@ export function PaymentWorkspace() {
       return;
     }
     const paymentType = row.channel === "wxpay" ? "wxpay" : "alipay";
-    setRecharge({ amount: String(row.amount_cny), payment_type: paymentType });
+    setRecharge({ amount: String(Number(convertCnyToDisplay(row.amount_cny, locale, displayCurrencyConfig).toFixed(3))), payment_type: paymentType });
     localStorage.removeItem(PENDING_PAYMENT_KEY);
     if (pendingPayment?.order_no === row.order_no) setPendingPayment(null);
     setError("");
-    setMessage(`已带入上一单的 ${amount(row.amount_cny)} 元和${paymentType === "wxpay" ? "微信支付" : "支付宝"}，确认后即可重新下单。`);
+    setMessage(`已带入上一单的 ${formatCnyMoney(row.amount_cny)} 和${paymentType === "wxpay" ? "微信支付" : "支付宝"}，确认后即可重新下单。`);
     window.requestAnimationFrame(() => rechargeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
   }
 
@@ -350,7 +367,7 @@ export function PaymentWorkspace() {
         setMessage(`订单状态已经变为“${paymentLabel(order)}”，不能更换金额，请继续等待或查看订单记录。`);
         return;
       }
-      if (!window.confirm(`当前 ¥ ${amount(order.amount_cny)} 订单不会被支付平台立即关闭，仍会保留在充值订单中，并可能继续被支付。\n\n请不要再支付旧订单。确认后仅放弃本机支付会话并重新填写金额。`)) return;
+      if (!window.confirm(`当前 ${formatCnyMoney(order.amount_cny)} 订单不会被支付平台立即关闭，仍会保留在充值订单中，并可能继续被支付。\n\n请不要再支付旧订单。确认后仅放弃本机支付会话并重新填写金额。`)) return;
       localStorage.removeItem(PENDING_PAYMENT_KEY);
       setPendingPayment(null);
       setMessage(`已放弃订单 ${order.order_no} 的本机支付会话，原订单仍保留在充值记录中。请填写正确金额。`);
@@ -440,9 +457,9 @@ export function PaymentWorkspace() {
     <div className="mobile-ops-head"><div><p>ACCOUNT / WALLET</p><h1>{directTradeEnabled ? "钱包与结算" : "钱包与历史记录"}</h1><span>{directTradeEnabled ? "查看余额、流水、充值和提现记录。" : "查看已有余额、流水、充值和提现记录。新充值与提现暂未开放。"}</span></div><button onClick={() => void load()}><ArrowClockwise size={16}/>刷新</button></div>
     {error && <div className="commerce-error">{error}</div>}
     {message && <div className="commerce-success">{message}</div>}
-    <div className="mobile-data-spine"><article><small>可用余额</small><strong>{amount(wallet.balance)}</strong><span>卡时</span></article><article><small>可提现余额</small><strong>{amount(wallet.withdrawable_balance)}</strong><span>已结算收益</span></article><article><small>提现冻结</small><strong>{amount(wallet.withdraw_frozen)}</strong><span>卡时</span></article><article><small>累计收益</small><strong>{amount(wallet.total_income)}</strong><span>卡时</span></article></div>
+    <div className="mobile-data-spine"><article><small>可用余额</small><strong>{formatLedgerMoney(wallet.balance)}</strong><span>{displayCurrency}</span></article><article><small>可提现余额</small><strong>{formatLedgerMoney(wallet.withdrawable_balance)}</strong><span>已结算收益</span></article><article><small>提现冻结</small><strong>{formatLedgerMoney(wallet.withdraw_frozen)}</strong><span>{displayCurrency}</span></article><article><small>累计收益</small><strong>{formatLedgerMoney(wallet.total_income)}</strong><span>{displayCurrency}</span></article></div>
     {pendingPayment && <section className={`wallet-payment-state state-${pendingState}`}>
-      <div>{pendingState === "success" ? <CheckCircle size={28}/> : ["failed", "expired", "canceled", "refund_unknown", "refunded"].includes(pendingState) ? <WarningCircle size={28}/> : <ClockCountdown size={28}/>}<span><small>RECHARGE ORDER · {pendingPayment.order_no}</small><strong>{paymentLabel(pendingPayment)}</strong><em>¥ {amount(pendingPayment.amount_cny)} · {amount(pendingPayment.card_hours)} 卡时{pendingPayment.failure_reason ? ` · ${pendingPayment.failure_reason}` : ""}</em></span></div>
+      <div>{pendingState === "success" ? <CheckCircle size={28}/> : ["failed", "expired", "canceled", "refund_unknown", "refunded"].includes(pendingState) ? <WarningCircle size={28}/> : <ClockCountdown size={28}/>}<span><small>RECHARGE ORDER · {pendingPayment.order_no}</small><strong>{paymentLabel(pendingPayment)}</strong><em>{formatCnyMoney(pendingPayment.amount_cny)}{pendingPayment.failure_reason ? ` · ${pendingPayment.failure_reason}` : ""}</em></span></div>
       {pendingState === "pending" && <b>{Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:{(remainingSeconds % 60).toString().padStart(2, "0")}</b>}
       <nav>
         {rechargeEntryEnabled && pendingState === "pending" && rechargeCanPay(pendingPayment) && <button onClick={continueCheckout}>继续支付</button>}
@@ -454,8 +471,8 @@ export function PaymentWorkspace() {
       </nav>
     </section>}
     {(rechargeEntryEnabled || withdrawalEntryEnabled) ? <div className="mobile-service-columns wallet-actions">
-      {rechargeEntryEnabled && <form ref={rechargeFormRef} className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（人民币，最低 {amount(rechargeMinimum)} 元）<input type="number" min={rechargeMinimum} max={paymentConfig?.max_amount_cny || 40000} step="0.01" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><p>单笔最高 {amount(paymentConfig?.max_amount_cny ?? 40000)} 元；每个账户每日累计最高 {amount(paymentConfig?.daily_limit_cny ?? 10000000)} 元。</p><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge"}>{busy === "recharge" ? "正在创建…" : rechargeEnabled ? "确认金额并前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>相同金额和支付方式会提示已有订单；其他金额可以继续充值。到账仍以服务端确认为准。</p></form>}
-      {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现卡时（最低 {amount(withdrawalMinimum)} 卡时）<input type="number" min={withdrawalMinimum} max={Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)) || undefined} step="0.001" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {amount(wallet.withdrawable_balance)} 卡时。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
+      {rechargeEntryEnabled && <form ref={rechargeFormRef} className="mobile-business-form" onSubmit={submitRecharge}><header><Coins size={21}/><div><small>RECHARGE</small><h2>账户充值</h2></div></header><label>充值金额（{displayCurrency}，最低 {formatCnyMoney(rechargeMinimum)}）<input type="number" min={Number(convertCnyToDisplay(rechargeMinimum, locale, displayCurrencyConfig).toFixed(3))} max={Number(convertCnyToDisplay(paymentConfig?.max_amount_cny || 40000, locale, displayCurrencyConfig).toFixed(3))} step="0.001" value={recharge.amount} onChange={(event) => setRecharge({ ...recharge, amount: event.target.value })} required/></label><p>单笔最高 {formatCnyMoney(paymentConfig?.max_amount_cny ?? 40000)}；每个账户每日累计最高 {formatCnyMoney(paymentConfig?.daily_limit_cny ?? 10000000)}。支付通道最终以人民币结算。</p><label>支付方式<select value={recharge.payment_type} onChange={(event) => setRecharge({ ...recharge, payment_type: event.target.value as "alipay" | "wxpay" })} disabled={!paymentTypes.length}>{paymentTypes.length ? paymentTypes.map((type) => <option value={type} key={type}>{type === "alipay" ? "支付宝" : "微信支付"}</option>) : <option>暂无可用渠道</option>}</select></label><button className="commerce-primary" disabled={!rechargeEnabled || busy === "recharge"}>{busy === "recharge" ? "正在创建…" : rechargeEnabled ? "确认金额并前往支付" : "充值服务未开放"}</button><p><LockKey size={14}/>相同金额和支付方式会提示已有订单；其他金额可以继续充值。到账仍以服务端确认为准。</p></form>}
+      {withdrawalEntryEnabled && <form className="mobile-business-form" onSubmit={submitWithdrawal}><header><Bank size={21}/><div><small>WITHDRAWAL</small><h2>申请提现</h2></div></header><label>提现金额（最低 {formatLedgerMoney(withdrawalMinimum)}）<input type="number" min={Number(convertCardHoursToDisplay(withdrawalMinimum, locale, displayCurrencyConfig).toFixed(3))} max={Number(convertCardHoursToDisplay(Math.min(Number(withdrawalConfig?.max_card_hours || Infinity), Number(wallet.withdrawable_balance || 0)), locale, displayCurrencyConfig).toFixed(3)) || undefined} step="0.001" value={withdrawal.amount} onChange={(event) => setWithdrawal({ ...withdrawal, amount: event.target.value })} required/></label><label>到账银行卡<select value={withdrawal.bank_card_id} onChange={(event) => setWithdrawal({ ...withdrawal, bank_card_id: event.target.value })} required><option value="">选择可用银行卡</option>{cards.map((card) => <option value={card.id} key={card.id}>{card.bank_name} ···· {card.card_last4 || card.card_number.slice(-4)} · {card.status}</option>)}</select></label><button className="commerce-primary" disabled={!wallet.withdraw_service_enabled || !withdrawalConfig?.enabled || !cards.length || busy === "withdraw"}>{busy === "withdraw" ? "提交中…" : cards.length ? withdrawalConfig?.enabled && wallet.withdraw_service_enabled ? "提交提现申请" : "提现服务未开放" : "请先绑定可用银行卡"}</button><p>当前最多可提现 {formatLedgerMoney(wallet.withdrawable_balance)}。{withdrawalConfig?.notice || "提现由财务人工审核并转账。"}</p></form>}
     </div> : <div className="workspace-service-note">在线充值与提现暂未开放。已有余额、历史流水和订单状态仍可查询；如需算力服务，请前往需求页面提交信息并等待人工联系。</div>}
     <section className="mobile-record-panel wallet-ledger">
       <header><Receipt size={20}/><div><small>ACCOUNT RECORDS</small><h2>{tab === "ledger" ? "钱包流水" : tab === "recharges" ? "充值订单" : tab === "refundRequests" ? "退款申请" : "提现记录"}</h2></div><nav><button className={tab === "ledger" ? "active" : ""} onClick={() => setTab("ledger")}>钱包流水</button><button className={tab === "recharges" ? "active" : ""} onClick={() => setTab("recharges")}>充值订单</button><button className={tab === "refundRequests" ? "active" : ""} onClick={() => setTab("refundRequests")}>退款申请</button><button className={tab === "withdrawals" ? "active" : ""} onClick={() => setTab("withdrawals")}>提现记录</button></nav></header>
@@ -481,13 +498,13 @@ export function PaymentWorkspace() {
       </div>}
       {refundFormOrder && <form className="wallet-refund-request-form" onSubmit={submitRefundRequest}>
         <header><div><small>REFUND REQUEST</small><strong>申请退回充值款</strong></div><button type="button" onClick={() => { setRefundFormOrder(null); setRefundReason(""); }}>关闭</button></header>
-        <p>订单 {refundFormOrder.order_no} · ¥ {amount(refundFormOrder.amount_cny)} · {amount(refundFormOrder.card_hours)} 卡时</p>
+        <p>订单 {refundFormOrder.order_no} · {formatCnyMoney(refundFormOrder.amount_cny)}</p>
         <label>退款原因<textarea aria-label="退款原因" minLength={5} maxLength={500} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="请说明退款原因（5–500 个字符）" required/></label>
         <footer><span>提交后由平台审核；审核通过后才会发起原路退款。</span><button type="button" onClick={() => { setRefundFormOrder(null); setRefundReason(""); }}>取消</button><button className="commerce-primary" disabled={busy === "refund-request"}>{busy === "refund-request" ? "提交中…" : "提交退款申请"}</button></footer>
       </form>}
-      {tab === "ledger" ? ledger.length ? ledger.map((row) => <article key={row.id}><span><strong>{row.direction === "in" ? "+" : "-"}{amount(row.amount)} 卡时</strong><small>{row.remark || row.type} · 余额 {amount(row.balance_after)}</small></span><b>{row.type}</b><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</time></article>) : <div className="mobile-inline-empty">暂无钱包流水</div>
+      {tab === "ledger" ? ledger.length ? ledger.map((row) => <article key={row.id}><span><strong>{row.direction === "in" ? "+" : "-"}{formatLedgerMoney(row.amount)}</strong><small>{row.remark || row.type} · 余额 {formatLedgerMoney(row.balance_after)}</small></span><b>{row.type}</b><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</time></article>) : <div className="mobile-inline-empty">暂无钱包流水</div>
         : tab === "recharges" ? rechargeOrders.length ? rechargeOrders.map((row) => <article className="wallet-recharge-order" key={row.order_no}>
-          <span><strong>¥ {amount(row.amount_cny)} · {amount(row.card_hours)} 卡时</strong><small>{row.order_no} · {row.provider === "qixiangpay" ? "七相支付" : row.provider || "历史支付"}</small>{row.failure_reason && <small>{row.failure_reason}</small>}</span>
+          <span><strong>{formatCnyMoney(row.amount_cny)}</strong><small>{row.order_no} · {row.provider === "qixiangpay" ? "七相支付" : row.provider || "历史支付"}</small>{row.failure_reason && <small>{row.failure_reason}</small>}</span>
           <b>{paymentLabel(row)}</b>
           <span><strong>{row.channel === "wxpay" ? "微信支付" : row.channel === "alipay" ? "支付宝" : row.channel || "—"}</strong><small>创建：{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}</small><small>{row.paid_at ? `支付：${new Date(row.paid_at).toLocaleString("zh-CN")}` : `到期：${row.expires_at ? new Date(row.expires_at).toLocaleString("zh-CN") : "—"}`}</small></span>
           <time className="wallet-order-actions">
@@ -497,8 +514,8 @@ export function PaymentWorkspace() {
             {rechargeEntryEnabled && rechargeCanRestart(row) && <button onClick={() => restartRecharge(row)}>再来一单</button>}
           </time>
         </article>) : <div className="mobile-inline-empty">暂无充值订单</div>
-          : tab === "refundRequests" ? refundRequests.length ? refundRequests.map((row) => <article className="wallet-refund-request" key={row.id}><span><strong>¥ {amount(row.amount_cny)} · {amount(row.card_hours)} 卡时</strong><small>{row.request_no}</small><small>充值订单：{row.order_no}</small></span><b>{rechargeRefundRequestLabel(row)}</b><span><strong>申请原因</strong><small>{row.reason}</small></span><time>提交：{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.reviewed_at && <small>审核：{new Date(row.reviewed_at).toLocaleString("zh-CN")}</small>}</time></article>) : <div className="mobile-inline-empty">暂无退款申请</div>
-            : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{amount(row.amount_card_hours)} 卡时</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>¥ {amount(row.net_amount_cny)}</strong><small>手续费 ¥ {amount(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.status === "reviewing" && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}
+          : tab === "refundRequests" ? refundRequests.length ? refundRequests.map((row) => <article className="wallet-refund-request" key={row.id}><span><strong>{formatCnyMoney(row.amount_cny)}</strong><small>{row.request_no}</small><small>充值订单：{row.order_no}</small></span><b>{rechargeRefundRequestLabel(row)}</b><span><strong>申请原因</strong><small>{row.reason}</small></span><time>提交：{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.reviewed_at && <small>审核：{new Date(row.reviewed_at).toLocaleString("zh-CN")}</small>}</time></article>) : <div className="mobile-inline-empty">暂无退款申请</div>
+            : withdrawals.length ? withdrawals.map((row) => <article key={row.id}><span><strong>{formatLedgerMoney(row.amount_card_hours)}</strong><small>{row.order_no} · {row.bank_card.bank_name} ···· {row.bank_card.card_last4 || row.bank_card.card_number?.slice(-4)}</small></span><b>{row.status}</b><span><strong>{formatCnyMoney(row.net_amount_cny)}</strong><small>手续费 {formatCnyMoney(row.fee_cny)}</small></span><time>{row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "—"}{row.status === "reviewing" && <button disabled={busy === `cancel-${row.id}`} onClick={() => void cancel(row.id)}>取消</button>}</time></article>) : <div className="mobile-inline-empty">暂无提现记录</div>}
       {tab === "recharges" && <nav className="community-page-nav"><button disabled={rechargePage <= 1} onClick={() => setRechargePage((page) => page - 1)}>上一页</button><span>第 {rechargePage} / {rechargePages} 页 · 共 {rechargeTotal} 条</span><button disabled={rechargePage >= rechargePages} onClick={() => setRechargePage((page) => page + 1)}>下一页</button></nav>}
       {tab === "withdrawals" && <nav className="community-page-nav"><button disabled={withdrawalPage <= 1} onClick={() => setWithdrawalPage((page) => page - 1)}>上一页</button><span>第 {withdrawalPage} / {withdrawalPages} 页</span><button disabled={withdrawalPage >= withdrawalPages} onClick={() => setWithdrawalPage((page) => page + 1)}>下一页</button></nav>}
       {tab === "refundRequests" && <nav className="community-page-nav"><button disabled={refundRequestPage <= 1} onClick={() => setRefundRequestPage((page) => page - 1)}>上一页</button><span>第 {refundRequestPage} / {refundRequestPages} 页 · 共 {refundRequestTotal} 条</span><button disabled={refundRequestPage >= refundRequestPages} onClick={() => setRefundRequestPage((page) => page + 1)}>下一页</button></nav>}

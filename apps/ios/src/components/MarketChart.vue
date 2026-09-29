@@ -12,17 +12,15 @@
 import { computed } from 'vue'
 import type { MarketSeries } from '@/api/market'
 import { useI18nStore } from '@/store/i18n'
-import { formatAmount, toCardHours } from '@/utils/format'
+import { cnyToDisplayCurrency, displayCurrencySymbol, formatAmount } from '@/utils/format'
 
 const i18n = useI18nStore()
 const { t } = i18n
 const props = withDefaults(defineProps<{
   series: MarketSeries[]
   compact?: boolean
-  displayCurrency?: 'CNY' | 'CARD_HOUR'
 }>(), {
   compact: false,
-  displayCurrency: 'CARD_HOUR',
 })
 const compact = computed(() => props.compact)
 
@@ -44,12 +42,12 @@ const hasPoints = computed(() => validSeries.value.length > 0)
 
 function formatAxis(value: number): string {
   const formatted = formatAmount(value, false)
-  return props.displayCurrency === 'CNY' ? `¥${formatted}` : formatted
+  return `${displayCurrencySymbol()}${formatted}`
 }
 
 function displayPrice(value: number | null): number {
   const numericValue = Number(value)
-  return props.displayCurrency === 'CNY' ? numericValue : toCardHours(numericValue)
+  return cnyToDisplayCurrency(numericValue)
 }
 
 function formatTimeLabel(time: number, span: number): string {

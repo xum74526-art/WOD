@@ -6,6 +6,8 @@ export interface NotificationItem {
   content?: string
   title_en?: string
   content_en?: string
+  template_key?: string | null
+  amount_cny?: string | null
   type: string
   action_url?: string
   is_read: boolean

@@ -51,7 +51,7 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   assert.match(layout, /normalizeStoredLocale\(storedLocale\)/);
   assert.match(layout, /default: "KAI星算算力市場"/);
   assert.match(localeRoot, /locale === "zh-Hant" \? toTraditionalChinese\(fallback\)/);
-  assert.match(localeRoot, /locale === "zh-Hant"\) return toTraditionalChinese\(raw\)/);
+  assert.match(localeRoot, /locale === "zh-Hant"\) return localizeLegacyCurrencyTerms\(toTraditionalChinese\(raw\), locale, displayCurrencyConfig\)/);
   for (const key of [
     "market.kai.directDescription",
     "market.merchant.directDescription",
@@ -86,7 +86,7 @@ test("home market pulse formats visible values with the selected locale", () => 
 
   assert.match(home, /t\("home\.assurancesAria"/);
   assert.match(home, /t\("home\.flow\.aria"/);
-  assert.match(pulse, /const \{ t, dateLocale \} = useI18n\(\)/);
+  assert.match(pulse, /const \{ t, dateLocale, formatLedgerMoney \} = useI18n\(\)/);
   assert.match(pulse, /toLocaleDateString\(dateLocale\)/);
   assert.match(pulse, /toLocaleString\(dateLocale/);
   assert.doesNotMatch(pulse, /locale === "en"/);

@@ -648,7 +648,7 @@ def _fetch_source(spec: SourceSpec) -> list[Candidate]:
     if spec.kind == "bilibili-official":
         return _fetch_bilibili_official(spec)
     headers = {
-            "User-Agent": "WOD-Community/1.0",
+            "User-Agent": "KAI-Star-Community/1.0",
         "Accept": "application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.1",
     }
     with httpx.Client(timeout=settings.COMMUNITY_HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
@@ -984,33 +984,33 @@ def _internal_product_copy(product: Product, batch: str, index: int) -> tuple[st
     templates = (
         (
             f"{name}｜{date_zh}行情快报",
-            f"{region_zh}当前参考价为 {price} 卡时/GPU小时，站内可用量为 {stock} 台。数据来自KAI星算当日商品与行情记录，下单前请以确认页为准。",
+            f"{region_zh}当前参考价为 ¥{price}/GPU小时，站内可用量为 {stock} 台。数据来自KAI星算当日商品与行情记录，下单前请以确认页为准。",
             f"{name} | {date_en} Market Brief",
-            f"The current reference quote in {region_en} is {price} CH per GPU-hour, with {stock} {unit_en} available. Data comes from today's KAI Compute Market records; confirm the final checkout details before ordering.",
+            f"The current reference quote in {region_en} is CNY ¥{price} per GPU-hour, with {stock} {unit_en} available. Data comes from today's KAI Compute Market records; confirm the final checkout details before ordering.",
         ),
         (
             f"{name}｜库存与可用量观察",
-            f"当前站内可用量为 {stock} 台，参考价 {price} 卡时/GPU小时，区域为{region_zh}。库存会随订单和行情同步变化，提交前建议再次刷新商品详情。",
+            f"当前站内可用量为 {stock} 台，参考价 ¥{price}/GPU小时，区域为{region_zh}。库存会随订单和行情同步变化，提交前建议再次刷新商品详情。",
             f"{name} | Capacity Watch",
-            f"Current platform availability is {stock} {unit_en} at a reference quote of {price} CH per GPU-hour in {region_en}. Availability changes with orders and market updates, so refresh the product page before submitting.",
+            f"Current platform availability is {stock} {unit_en} at a reference quote of CNY ¥{price} per GPU-hour in {region_en}. Availability changes with orders and market updates, so refresh the product page before submitting.",
         ),
         (
             f"{name}｜24小时用量预算",
-            f"按当前参考价测算，1 台连续使用 24 小时约需 {day_cost} 卡时；实际金额会按所选时长和数量计算。该示例仅用于预算，不构成价格承诺。",
+            f"按当前参考价测算，1 台连续使用 24 小时约需 ¥{day_cost}；实际金额会按所选时长和数量计算。该示例仅用于预算，不构成价格承诺。",
             f"{name} | 24-Hour Usage Budget",
-            f"At the current reference quote, one GPU for 24 hours is approximately {day_cost} CH. The final amount depends on the selected duration and quantity; this example is for budgeting only and is not a price commitment.",
+            f"At the current reference quote, one GPU for 24 hours is approximately CNY ¥{day_cost}. The final amount depends on the selected duration and quantity; this example is for budgeting only and is not a price commitment.",
         ),
         (
             f"{name}｜短时任务成本参考",
-            f"按当前参考价，1 台使用 6 小时约为 {six_hour_cost} 卡时，使用 12 小时约为 {twelve_hour_cost} 卡时。开始任务前请同时核对显存、CUDA 和预计运行时间。",
+            f"按当前参考价，1 台使用 6 小时约为 ¥{six_hour_cost}，使用 12 小时约为 ¥{twelve_hour_cost}。开始任务前请同时核对显存、CUDA 和预计运行时间。",
             f"{name} | Short-Run Cost Guide",
-            f"At the current reference quote, one GPU is approximately {six_hour_cost} CH for 6 hours or {twelve_hour_cost} CH for 12 hours. Check VRAM, CUDA, and expected runtime before starting the workload.",
+            f"At the current reference quote, one GPU is approximately CNY ¥{six_hour_cost} for 6 hours or CNY ¥{twelve_hour_cost} for 12 hours. Check VRAM, CUDA, and expected runtime before starting the workload.",
         ),
         (
             f"{name}｜区域资源提示",
-            f"该商品当前展示区域为{region_zh}，参考价 {price} 卡时/GPU小时，可用量 {stock} 台。选择区域时还应结合网络时延、数据位置和交付安排。",
+            f"该商品当前展示区域为{region_zh}，参考价 ¥{price}/GPU小时，可用量 {stock} 台。选择区域时还应结合网络时延、数据位置和交付安排。",
             f"{name} | Region Planning Note",
-            f"This listing is currently shown in {region_en} at {price} CH per GPU-hour with {stock} {unit_en} available. Consider network latency, data location, and delivery arrangements when choosing a region.",
+            f"This listing is currently shown in {region_en} at CNY ¥{price} per GPU-hour with {stock} {unit_en} available. Consider network latency, data location, and delivery arrangements when choosing a region.",
         ),
         (
             f"{name}｜配置核对清单",
@@ -1020,21 +1020,21 @@ def _internal_product_copy(product: Product, batch: str, index: int) -> tuple[st
         ),
         (
             f"{name}｜下单前检查",
-            f"建议依次确认区域{region_zh}、可用量 {stock} 台、参考价 {price} 卡时/GPU小时，以及所需时长和数量。确认页会给出本次订单的最终计算结果。",
+            f"建议依次确认区域{region_zh}、可用量 {stock} 台、参考价 ¥{price}/GPU小时，以及所需时长和数量。确认页会给出本次订单的最终计算结果。",
             f"{name} | Pre-Order Check",
-            f"Review the region ({region_en}), availability ({stock} {unit_en}), reference quote ({price} CH per GPU-hour), duration, and quantity. The confirmation screen shows the final calculation for the order.",
+            f"Review the region ({region_en}), availability ({stock} {unit_en}), reference quote (CNY ¥{price} per GPU-hour), duration, and quantity. The confirmation screen shows the final calculation for the order.",
         ),
         (
             f"{name}｜算力使用规划",
-            f"如果任务时长尚未确定，可先用 6 小时预算 {six_hour_cost} 卡时和 24 小时预算 {day_cost} 卡时进行区间估算，再根据实际任务调整。",
+            f"如果任务时长尚未确定，可先用 6 小时预算 ¥{six_hour_cost} 和 24 小时预算 ¥{day_cost} 进行区间估算，再根据实际任务调整。",
             f"{name} | Compute Usage Planning",
-            f"If the runtime is uncertain, use the 6-hour estimate of {six_hour_cost} CH and the 24-hour estimate of {day_cost} CH as a planning range, then adjust it to the actual workload.",
+            f"If the runtime is uncertain, use the 6-hour estimate of CNY ¥{six_hour_cost} and the 24-hour estimate of CNY ¥{day_cost} as a planning range, then adjust it to the actual workload.",
         ),
         (
             f"{name}｜报价说明",
-            f"当前 {price} 卡时/GPU小时为KAI星算站内参考价，记录时间为{date_zh}。价格、库存和交付状态可能变化，最终信息以订单确认页为准。",
+            f"当前 ¥{price}/GPU小时为KAI星算站内参考价，记录时间为{date_zh}。价格、库存和交付状态可能变化，最终信息以订单确认页为准。",
             f"{name} | Quote Explanation",
-            f"The current KAI Compute Market reference quote is {price} CH per GPU-hour as of {date_en}. Price, availability, and fulfillment status may change; the order confirmation screen is authoritative.",
+            f"The current KAI Compute Market reference quote is CNY ¥{price} per GPU-hour as of {date_en}. Price, availability, and fulfillment status may change; the order confirmation screen is authoritative.",
         ),
         (
             f"{name}｜容量选择建议",

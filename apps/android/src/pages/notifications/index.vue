@@ -120,6 +120,7 @@ import { useNotificationStore } from '@/store/notification'
 import AppNavBar from '@/components/AppNavBar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useI18nStore } from '@/store/i18n'
+import { localizedNotificationContent } from '@/utils/notification-content'
 import { usePageMotion } from '@/utils/page-motion'
 
 type PreferenceKey = keyof Pick<NotificationPreferences,
@@ -230,8 +231,7 @@ function localizedTitle(notification: NotificationItem) {
 }
 
 function localizedContent(notification: NotificationItem) {
-  if (i18n.lang === 'en' && notification.content_en) return notification.content_en
-  return tr(notification.content || '')
+  return localizedNotificationContent(notification, i18n.lang, tr)
 }
 
 function typeLabel(type: string) {

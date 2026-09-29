@@ -87,10 +87,10 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(result["next_refresh_in"], settings.KAI_PRICING_REFRESH_SECONDS)
         self.assertEqual(result["summary"]["quote_sample_count"], 1)
         self.assertIsNone(result["summary"]["inventory_available"])
-        self.assertEqual(result["summary"]["wallet_charge_unit"], "CARD_HOUR")
+        self.assertEqual(result["summary"]["wallet_charge_unit"], "MONEY")
         self.assertAlmostEqual(
             result["summary"]["median_price_card_hours"],
-            2 / settings.CARD_HOUR_RMB_RATE,
+            2,
             places=6,
         )
         for retired in ("autodl", "vast", "wod", "kai,autodl"):
@@ -109,13 +109,13 @@ class MarketDataTests(unittest.TestCase):
             }],
         })
         candle = payload["candles"][0]
-        self.assertEqual(payload["wallet_charge_unit"], "CARD_HOUR")
-        self.assertEqual(payload["card_hour_rmb_rate"], settings.CARD_HOUR_RMB_RATE)
-        self.assertEqual(payload["latest_live_price_card_hours"], 2.0)
-        self.assertEqual(candle["open_price_card_hours"], 1.0)
-        self.assertEqual(candle["high_price_card_hours"], 2.0)
-        self.assertEqual(candle["low_price_card_hours"], 0.5)
-        self.assertEqual(candle["close_price_card_hours"], 1.5)
+        self.assertEqual(payload["wallet_charge_unit"], "MONEY")
+        self.assertEqual(payload["card_hour_rmb_rate"], 1.0)
+        self.assertEqual(payload["latest_live_price_card_hours"], 2.004)
+        self.assertEqual(candle["open_price_card_hours"], 1.002)
+        self.assertEqual(candle["high_price_card_hours"], 2.004)
+        self.assertEqual(candle["low_price_card_hours"], 0.501)
+        self.assertEqual(candle["close_price_card_hours"], 1.503)
 
     def test_archived_change_requires_the_same_live_provider(self):
         vast_history = {"history_provenance": {"upstream_provider": "vast"}}

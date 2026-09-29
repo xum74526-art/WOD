@@ -9,7 +9,7 @@ function storedLang(): FormatLang {
 
 // Keep the unit language reactive. Reading storage directly inside a formatter
 // is not tracked by Vue, so an in-page language switch used to update labels
-// while leaving already-rendered "卡时" units unchanged until a reload.
+// while leaving already-rendered money units unchanged until a reload.
 const formatLang = ref<FormatLang>(storedLang())
 
 export function setFormatLanguage(lang: FormatLang): void {
@@ -25,6 +25,95 @@ function currentLocale(): string {
 }
 
 type NumericValue = number | string | undefined | null
+
+export type DisplayCurrencyCode = 'CNY' | 'HKD' | 'USD'
+export type DisplayCurrencyConfig = {
+  card_hour_cny_rate: number
+  rates: Record<DisplayCurrencyCode, number>
+}
+
+export const DEFAULT_DISPLAY_CURRENCY_CONFIG: Readonly<DisplayCurrencyConfig> = Object.freeze({
+  card_hour_cny_rate: 1,
+  rates: Object.freeze({ CNY: 1, HKD: 1.169032900251, USD: 0.149020326907 }),
+})
+
+const displayCurrencyConfig = ref<DisplayCurrencyConfig>({
+  card_hour_cny_rate: DEFAULT_DISPLAY_CURRENCY_CONFIG.card_hour_cny_rate,
+  rates: { ...DEFAULT_DISPLAY_CURRENCY_CONFIG.rates },
+})
+
+/** Apply the server-owned display rates while keeping the ledger directly in CNY. */
+export function setDisplayCurrencyConfig(config?: Partial<DisplayCurrencyConfig> | null): void {
+  const positiveRate = (candidate: unknown, fallback: number) => {
+    const parsed = Number(candidate)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
+  displayCurrencyConfig.value = {
+    card_hour_cny_rate: 1,
+    rates: {
+      CNY: 1,
+      HKD: positiveRate(config?.rates?.HKD, DEFAULT_DISPLAY_CURRENCY_CONFIG.rates.HKD),
+      USD: positiveRate(config?.rates?.USD, DEFAULT_DISPLAY_CURRENCY_CONFIG.rates.USD),
+    },
+  }
+}
+
+export function displayCurrencyCode(lang: FormatLang = currentLang()): DisplayCurrencyCode {
+  if (lang === 'en') return 'USD'
+  return lang === 'zh-Hant' ? 'HKD' : 'CNY'
+}
+
+export function displayCurrencySymbol(lang: FormatLang = currentLang()): string {
+  const currency = displayCurrencyCode(lang)
+  if (currency === 'HKD') return 'HK$'
+  if (currency === 'USD') return 'US$'
+  return '¥'
+}
+
+export function cnyToDisplayCurrency(value: NumericValue, lang: FormatLang = currentLang()): number {
+  const rate = displayCurrencyConfig.value.rates[displayCurrencyCode(lang)]
+  return finiteNumber(value) * (rate > 0 ? rate : 1)
+}
+
+export function displayCurrencyToCny(value: NumericValue, lang: FormatLang = currentLang()): number {
+  const rate = displayCurrencyConfig.value.rates[displayCurrencyCode(lang)]
+  return finiteNumber(value) / (rate > 0 ? rate : 1)
+}
+
+export function normalizeDisplayInputToCny(
+  value: NumericValue,
+  options: { fractionDigits?: number; displayFractionDigits?: number; minimum?: number; maximum?: number } = {},
+  lang: FormatLang = currentLang(),
+): number {
+  const fractionDigits = Math.max(0, Math.min(options.fractionDigits ?? 3, 6))
+  const displayFractionDigits = Math.max(0, Math.min(options.displayFractionDigits ?? 3, 6))
+  const raw = displayCurrencyToCny(value, lang)
+  const halfDisplayStep = 0.5 * (10 ** -displayFractionDigits)
+  const tolerance = Math.abs(displayCurrencyToCny(halfDisplayStep, lang)) + Number.EPSILON
+  if (Number.isFinite(options.minimum) && raw < Number(options.minimum) && Number(options.minimum) - raw <= tolerance) {
+    return Number(options.minimum)
+  }
+  if (Number.isFinite(options.maximum) && raw > Number(options.maximum) && raw - Number(options.maximum) <= tolerance) {
+    return Number(options.maximum)
+  }
+  return Number(raw.toFixed(fractionDigits))
+}
+
+export function cardHoursToDisplayCurrency(value: NumericValue, lang: FormatLang = currentLang()): number {
+  return cnyToDisplayCurrency(value, lang)
+}
+
+export function displayCurrencyToCardHours(value: NumericValue, lang: FormatLang = currentLang()): number {
+  return displayCurrencyToCny(value, lang)
+}
+
+export function formatCnyCurrency(value: NumericValue, lang: FormatLang = currentLang()): string {
+  return `${displayCurrencySymbol(lang)}${formatAmount(cnyToDisplayCurrency(value, lang))}`
+}
+
+export function formatCardHourCurrency(value: NumericValue, lang: FormatLang = currentLang()): string {
+  return `${displayCurrencySymbol(lang)}${formatAmount(cardHoursToDisplayCurrency(value, lang))}`
+}
 
 function finiteNumber(value: NumericValue): number {
   const num = Number(value)
@@ -108,7 +197,7 @@ export function formatMoneyShort(n: number | string | undefined | null): string 
   return formatNumber(n)
 }
 
-/** 人民币、卡时、汇率与商品价格统一显示三位小数。 */
+/** 法币、兼容账本金额、汇率与商品价格统一显示三位小数。 */
 export function formatAmount(value: NumericValue, useGrouping = true): string {
   return formatNumber(value, {
     minimumFractionDigits: 3,
@@ -117,42 +206,52 @@ export function formatAmount(value: NumericValue, useGrouping = true): string {
   })
 }
 
-// === 卡时（算力货币单位） ===
-// 1 卡时 = 1.002 人民币
-export const CARD_HOUR_RATE = 1.002
+// === Historical API compatibility ===
+// These helpers keep installed clients and legacy field names readable. The
+// account itself settles CNY directly, so the compatibility rate is 1:1.
+export const CARD_HOUR_RATE = 1
+export const LEGACY_CARD_HOUR_CNY_RATE = 1.002
 
-/** 人民币 → 卡时 */
+/** CNY → legacy ledger field value. */
 export function toCardHours(rmb: number | string | undefined | null): number {
   return finiteNumber(rmb) / CARD_HOUR_RATE
 }
 
-/** 卡时 -> 人民币，仅用于向仍以 CNY 记账的后端提交数据 */
+/** Legacy ledger field value → CNY. */
 export function fromCardHours(cardHours: number | string | undefined | null): number {
   return finiteNumber(cardHours) * CARD_HOUR_RATE
 }
 
-/** 格式化为 "1,423.3卡时" */
+/** Convert values embedded in pre-migration text; never use for ledger fields. */
+export function legacyCardHoursToCny(cardHours: number | string | undefined | null): number {
+  return finiteNumber(cardHours) * LEGACY_CARD_HOUR_CNY_RATE
+}
+
+export function formatLegacyCardHourCurrency(
+  cardHours: number | string | undefined | null,
+  lang: FormatLang = currentLang(),
+): string {
+  return formatCnyCurrency(legacyCardHoursToCny(cardHours), lang)
+}
+
+/** 将 CNY 原始价格格式化为当前语言对应的法币。 */
 export function fmtCH(rmb: number | string | undefined | null): string {
-  const num = toCardHours(rmb)
-  const unit = currentLang() === 'en' ? ' CH' : currentLang() === 'zh-Hant' ? '卡時' : '卡时'
-  return formatAmount(num) + unit
+  return formatCnyCurrency(rmb)
 }
 
-/** 格式化为 "1.98卡时/h"（小时费率） */
+/** 将 CNY 小时费率格式化为当前语言对应的法币。 */
 export function fmtCHr(rmb: number | string | undefined | null): string {
-  const num = toCardHours(rmb)
-  const unit = currentLang() === 'en' ? ' CH/h' : currentLang() === 'zh-Hant' ? '卡時/h' : '卡时/h'
-  return formatAmount(num) + unit
+  return `${formatCnyCurrency(rmb)}/h`
 }
 
-/** 短格式卡时（不带单位，用于模板拼接） */
+/** CNY 的本地法币数值（不带单位，用于模板拼接）。 */
 export function fmtCHn(rmb: number | string | undefined | null): string {
-  return formatAmount(toCardHours(rmb))
+  return formatAmount(cnyToDisplayCurrency(rmb))
 }
 
-/** 已经以卡时为单位的数值，仅格式化展示，不再执行汇率换算。 */
+/** 将兼容账本字段中的 CNY 数值转换为当前语言对应的法币数值。 */
 export function fmtCardHours(value: NumericValue): string {
-  return formatAmount(value)
+  return formatAmount(cardHoursToDisplayCurrency(value))
 }
 
 export function formatDate(s?: string): string {

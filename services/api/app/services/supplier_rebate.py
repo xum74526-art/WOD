@@ -151,7 +151,7 @@ def get_supplier_rebate_summary(supplier_user_id: int, db: Session) -> dict:
             if threshold == float("inf") or month_sales <= Decimal(str(threshold)):
                 if rate < Decimal("0.15"):
                     next_rate = next(candidate for _, candidate in SUPPLIER_TIERS if candidate > rate)
-                    next_hint = f"再销售 {int(Decimal(str(threshold)) - month_sales)} 卡时可升至 {int(next_rate * 100)}% 返佣"
+                    next_hint = f"再销售 ¥{int(Decimal(str(threshold)) - month_sales)} 可升至 {int(next_rate * 100)}% 返佣"
                 else:
                     next_hint = "已达最高返佣等级 15%"
                 break

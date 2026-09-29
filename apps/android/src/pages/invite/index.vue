@@ -10,7 +10,7 @@
       <template v-else>
         <view class="card hero-card">
           <view class="hero-badges">
-            <text class="hero-badge">{{ t('inviteV2FixedRewardBadge', { amount: policy.fixedRewardCardHours }) }}</text>
+            <text class="hero-badge">{{ t('inviteV2FixedRewardBadge', { amount: displayCardHours(policy.fixedRewardCardHours) }) }}</text>
             <text class="hero-badge secondary">{{ t('inviteV2DailyLimitBadge', { count: policy.dailyLimit }) }}</text>
           </view>
           <text class="hero-title">{{ t('inviteV2HeroTitle') }}</text>
@@ -75,7 +75,7 @@
               <text class="section-eyebrow">{{ t('inviteFixedRewardTitle') }}</text>
               <text class="section-title small">{{ t('inviteFixedRewardSubtitle') }}</text>
             </view>
-            <text class="reward-mark">+{{ policy.fixedRewardCardHours }}</text>
+            <text class="reward-mark">+{{ displayCardHours(policy.fixedRewardCardHours) }}</text>
           </view>
           <view class="metric-grid">
             <view class="metric-item">
@@ -195,7 +195,7 @@
                 {{ t(inviteRecordStatusKey(record)) }}
               </text>
               <text v-if="recordReward(record) > 0" class="record-amount">
-                +{{ fmtCardHours(recordReward(record)) }} {{ t('cardHour') }}
+                +{{ formatCardHourCurrency(recordReward(record)) }}
               </text>
             </view>
           </view>
@@ -214,7 +214,7 @@
                 {{ t(inviteCommissionStatusKey(record)) }}
               </text>
               <text v-if="record.reward_card_hours > 0" class="record-amount">
-                +{{ fmtCardHours(record.reward_card_hours) }} {{ t('cardHour') }}
+                +{{ formatCardHourCurrency(record.reward_card_hours) }}
               </text>
             </view>
           </view>
@@ -239,7 +239,7 @@ import {
   type InviteRecordItem,
 } from '@/api/invite'
 import { ApiRequestError } from '@/api/request'
-import { fmtCardHours, formatDate } from '@/utils/format'
+import { formatCardHourCurrency, formatDate } from '@/utils/format'
 import {
   buildInvitePolicyView,
   commissionRatePercent,
@@ -276,8 +276,8 @@ const activeHasMore = computed(() => activeRecordTab.value === 'fixed'
   ? fixedRewardRecords.value.length < fixedRewardTotal.value
   : friendRebateRecords.value.length < friendRebateTotal.value)
 const inviteRules = computed(() => [
-  t('inviteQualificationRule', { amount: policy.value.fixedRewardCardHours, count: policy.value.dailyLimit }),
-  t('inviteDailyQuotaRule', { amount: policy.value.fixedRewardCardHours }),
+  t('inviteQualificationRule', { amount: displayCardHours(policy.value.fixedRewardCardHours), count: policy.value.dailyLimit }),
+  t('inviteDailyQuotaRule', { amount: displayCardHours(policy.value.fixedRewardCardHours) }),
   t('inviteFriendTierRule'),
   t('inviteFirstLevelOnlyRule'),
   t('inviteNoEntryFeeRule'),
@@ -390,7 +390,7 @@ function displayRate(value: number | null): string {
 }
 
 function displayCardHours(value: number | null): string {
-  return value == null ? t('notAvailableShort') : `${fmtCardHours(value)} ${t('cardHour')}`
+  return value == null ? t('notAvailableShort') : formatCardHourCurrency(value)
 }
 
 function recordDate(record: InviteRecordItem): string {
@@ -403,7 +403,7 @@ function recordReward(record: InviteRecordItem): number {
 
 function friendRecordDetail(record: InviteCommissionItem): string {
   return t('inviteFriendRebateRecordDetail', {
-    amount: fmtCardHours(record.base_card_hours),
+    amount: formatCardHourCurrency(record.base_card_hours),
     rate: commissionRatePercent(record),
   })
 }

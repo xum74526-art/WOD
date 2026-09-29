@@ -23,9 +23,9 @@ class PurchaseCycleTests(unittest.TestCase):
         product = SimpleNamespace(price=Decimal("1.98"))
         self.assertEqual(_calc_legacy_day_amount(product, 30, 3), Decimal("4276.8000"))
 
-    def test_kai_hour_amount_converts_cny_to_wallet_card_hours(self):
+    def test_kai_hour_amount_uses_direct_cny_amount(self):
         product = SimpleNamespace(price=Decimal("1.002"))
-        self.assertEqual(_calc_kai_hour_amount(product, 6, 2), Decimal("12.0000"))
+        self.assertEqual(_calc_kai_hour_amount(product, 6, 2), Decimal("12.0240"))
 
     def test_order_hours_are_integer_and_bounded(self):
         self.assertEqual(OrderCreateIn(product_id=1, hours=24).hours, 24)

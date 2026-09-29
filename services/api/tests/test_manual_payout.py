@@ -239,6 +239,7 @@ class ManualPayoutTests(unittest.TestCase):
         self.db.commit()
         output = self._create(amount="10", request_id="withdraw-at-minimum")
         self.assertEqual(output.amount_card_hours, Decimal("10.000000"))
+        self.assertRegex(output.order_no, r"^KAIW\d{14}[A-F0-9]{10}$")
 
     def test_card_input_rejects_non_digits_and_normalizes_spaces(self):
         with self.assertRaises(ValidationError):

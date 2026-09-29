@@ -1,5 +1,11 @@
 import type { KaiLocale } from "./language.ts";
 import { toTraditionalChinese } from "./traditional-chinese.ts";
+import {
+  DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  formatCnyForLocale,
+  formatLegacyCardHoursForLocale,
+  type DisplayCurrencyConfig,
+} from "./display-currency.ts";
 
 export const COMMUNITY_POST_MAX_LENGTH = 500;
 export const COMMUNITY_MEDIA_MAX_FILES = 9;
@@ -71,14 +77,44 @@ export function communityDisplayText(
   value?: string | null,
   sourceKey?: string | null,
   locale: KaiLocale = "zh-Hans",
+  currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
 ) {
   const source = String(value || "");
   if (sourceKey !== "wod-market") return source;
   const branded = source
     .replace(/(?:WOD|ZTW)(?:资讯|資訊)/g, "KAI星算平台行情")
     .replace(/(^|[^A-Z0-9_-])(?:WOD|ZTW)(?=$|[^A-Z0-9_-])/g, "$1KAI星算");
-  if (locale === "zh-Hant") return toTraditionalChinese(branded);
-  if (locale !== "en") return branded;
+  const localizeCurrency = (value: string) => {
+    const formatCny = (raw: string) => formatCnyForLocale(
+      Number(raw.replaceAll(",", "")),
+      locale,
+      currencyConfig,
+    );
+    const formatLegacy = (raw: string) => formatLegacyCardHoursForLocale(
+      Number(raw.replaceAll(",", "")),
+      locale,
+      currencyConfig,
+    );
+    return value
+      .replace(
+        /(?:CNY\s*)?¥\s*(-?\d[\d,]*(?:\.\d+)?)(?:\s*\/\s*(?:GPU[·•.\s-]*(?:小时|小時)|h)|\s+per\s+GPU-hour)/gi,
+        (_match, amount: string) => `${formatCny(amount)}/${locale === "en" ? "GPU-hour" : "GPU小时"}`,
+      )
+      .replace(
+        /(?:CNY\s*)?¥\s*(-?\d[\d,]*(?:\.\d+)?)/gi,
+        (_match, amount: string) => formatCny(amount),
+      )
+      .replace(
+        /(-?\d[\d,]*(?:\.\d+)?)\s*(?:卡时|卡時|CH)(?:\s*\/\s*(?:GPU[·•.\s-]*(?:小时|小時)|h)|\s+per\s+GPU-hour)/gi,
+        (_match, amount: string) => `${formatLegacy(amount)}/${locale === "en" ? "GPU-hour" : "GPU小时"}`,
+      )
+      .replace(
+        /(-?\d[\d,]*(?:\.\d+)?)\s*(?:卡时|卡時|card\s*hours?)/gi,
+        (_match, amount: string) => formatLegacy(amount),
+      );
+  };
+  if (locale === "zh-Hant") return toTraditionalChinese(localizeCurrency(branded));
+  if (locale !== "en") return localizeCurrency(branded);
 
   let localized = branded
     .replace(/KAI星算平台行情|算力星圖平台行情/g, "KAI Platform Market")
@@ -88,7 +124,7 @@ export function communityDisplayText(
     .replace(/KAI星算\s+market/gi, "KAI Star Market")
     .replace(/KAI星算/g, "KAI");
   for (const [from, to] of INTERNAL_REGION_EN) localized = localized.replaceAll(from, to);
-  return localized;
+  return localizeCurrency(localized);
 }
 
 type CommunityLocalizedPost = {
@@ -105,25 +141,34 @@ function communityPlatformText(
   sourceKey: string | null | undefined,
   origin: string | null | undefined,
   locale: KaiLocale,
+  currencyConfig: DisplayCurrencyConfig,
 ) {
   const platformOwned = origin === "internal" || origin === "aggregated" || Boolean(sourceKey);
   if (!platformOwned) return value;
-  const localized = communityDisplayText(value, sourceKey, locale);
+  const localized = communityDisplayText(value, sourceKey, locale, currencyConfig);
   return locale === "zh-Hant" ? toTraditionalChinese(localized) : localized;
 }
 
-export function communityPostContent(post: CommunityLocalizedPost, locale: KaiLocale) {
+export function communityPostContent(
+  post: CommunityLocalizedPost,
+  locale: KaiLocale,
+  currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+) {
   const source = locale === "en" && post.origin !== "user" && post.content_en
     ? post.content_en
     : String(post.content || "");
-  return communityPlatformText(source, post.source_key, post.origin, locale);
+  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig);
 }
 
-export function communityPostTopic(post: CommunityLocalizedPost, locale: KaiLocale) {
+export function communityPostTopic(
+  post: CommunityLocalizedPost,
+  locale: KaiLocale,
+  currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+) {
   const source = locale === "en" && post.origin !== "user" && post.topic_en
     ? post.topic_en
     : String(post.topic || "");
-  return communityPlatformText(source, post.source_key, post.origin, locale);
+  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig);
 }
 
 export function communityShareText(post: {
@@ -132,8 +177,8 @@ export function communityShareText(post: {
   origin?: string | null;
   source_url?: string | null;
   source_key?: string | null;
-}, locale: KaiLocale = "zh-Hans") {
-  const summary = communityPostContent(post, locale).trim().slice(0, 100);
+}, locale: KaiLocale = "zh-Hans", currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG) {
+  const summary = communityPostContent(post, locale, currencyConfig).trim().slice(0, 100);
   const source = String(post.source_url || "").trim();
   return [summary, source].filter(Boolean).join("\n");
 }

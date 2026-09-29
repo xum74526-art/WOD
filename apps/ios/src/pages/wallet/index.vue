@@ -10,7 +10,7 @@
       <template v-else>
       <view class="card balance-card">
         <text class="bc-label">{{ t('k_3c67102a') }}</text>
-        <AmountText :value="toCardHours(wallet?.balance ?? 0)" prefix="卡时" size="xl" />
+        <AmountText :value="wallet?.balance ?? 0" currency="ledger" size="xl" />
         <DirectTradeWalletActions
           v-if="commerce.directTradeEnabled"
           :wallet="wallet"
@@ -26,12 +26,12 @@
       <view class="withdraw-balance-row">
         <view class="card withdraw-balance-cell">
           <text class="c-label">{{ t('withdrawableBalance') }}</text>
-          <AmountText :value="wallet?.withdrawable_balance ?? 0" :prefix="t('cardHour')" size="md" trend="up" />
+          <AmountText :value="wallet?.withdrawable_balance ?? 0" currency="ledger" size="md" trend="up" />
           <text class="balance-hint">{{ t('onlySettledEarningsWithdrawable') }}</text>
         </view>
         <view class="card withdraw-balance-cell">
           <text class="c-label">{{ t('withdrawFrozen') }}</text>
-          <AmountText :value="wallet?.withdraw_frozen ?? 0" :prefix="t('cardHour')" size="md" />
+          <AmountText :value="wallet?.withdraw_frozen ?? 0" currency="ledger" size="md" />
           <text class="balance-hint">{{ t('unfrozenOnRejectOrFailure') }}</text>
         </view>
       </view>
@@ -40,7 +40,7 @@
         <view class="payment-state-head">
           <view>
             <text class="payment-state-title">{{ paymentStateTitle }}</text>
-            <text class="payment-state-sub">{{ formatMoney(pendingPayment.amount_cny) }} {{ t('cny') }} · {{ fmtCardHours(pendingPayment.card_hours) }} {{ t('cardHour') }}</text>
+            <text class="payment-state-sub">{{ formatCnyCurrency(pendingPayment.amount_cny) }}</text>
           </view>
           <text class="payment-state-badge">{{ paymentStateBadge }}</text>
         </view>
@@ -81,21 +81,21 @@
 
       <view v-if="wallet?.revenue_settlement_enabled === false" class="service-warning">
         {{ t('revenueSettlementUnavailable') }}
-        <text v-if="wallet.historical_test_revenue">{{ t('historicalRevenueExcluded', { amount: fmtCH(wallet.historical_test_revenue) }) }}</text>
+        <text v-if="wallet.historical_test_revenue">{{ t('historicalRevenueExcluded', { amount: formatCardHourCurrency(wallet.historical_test_revenue) }) }}</text>
       </view>
       <view v-if="wallet?.reward_service_enabled === false && wallet.historical_test_rewards" class="service-warning">
         {{ t('rewardServiceUnavailable') }}
-        <text>{{ t('historicalRewardsExcluded', { amount: fmtCH(wallet.historical_test_rewards) }) }}</text>
+        <text>{{ t('historicalRewardsExcluded', { amount: formatCardHourCurrency(wallet.historical_test_rewards) }) }}</text>
       </view>
 
       <view class="grid">
         <view class="card cell">
           <text class="c-label">{{ t('k_bf07c4a4') }}</text>
-          <AmountText :value="toCardHours(wallet?.frozen ?? 0)" prefix="卡时" size="md" />
+          <AmountText :value="wallet?.frozen ?? 0" currency="ledger" size="md" />
         </view>
         <view class="card cell">
           <text class="c-label">{{ t('cumulativeRevenue') }}</text>
-          <AmountText :value="toCardHours(wallet?.total_income ?? 0)" prefix="卡时" size="md" trend="up" />
+          <AmountText :value="wallet?.total_income ?? 0" currency="ledger" size="md" trend="up" />
         </view>
       </view>
 
@@ -134,7 +134,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { cancelRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type WalletInfo } from '@/api/wallet'
 import { useAssetStore } from '@/store/asset'
-import { fmtCardHours, fmtCH, formatMoney, formatNumber, toCardHours } from '@/utils/format'
+import { formatCardHourCurrency, formatCnyCurrency, formatNumber } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import SectionHeader from '@/components/SectionHeader.vue'

@@ -16,6 +16,7 @@ from app.services.lifecycle import expire_due
 from app.services.offer_sync import sync_offers
 from app.services.market_sync import cleanup_market_history, dispatch_market_sync, sync_market
 from app.services.market_candle_sync import dispatch_market_candle_sync, sync_market_candles
+from app.services.display_exchange_rates import load_cached_display_exchange_rates, sync_display_exchange_rates
 from app.services.merchant_settlement import assert_merchant_settlement_configuration_safe
 from app.services.payment_gateway import assert_payment_configuration_safe
 from app.services.payment_reconciliation import reconcile_payments_job
@@ -46,6 +47,10 @@ async def lifespan(app: FastAPI):
         community_timezone = ZoneInfo(settings.COMMUNITY_TIMEZONE)
     except ZoneInfoNotFoundError:
         community_timezone = timezone(timedelta(hours=8))
+    # Load the last complete FX snapshot before serving requests. The network
+    # refresh itself remains a scheduled background job, so an ECB outage can
+    # never block API startup or erase the last valid client conversion.
+    load_cached_display_exchange_rates()
     scheduler = BackgroundScheduler(timezone=community_timezone)
     scheduler.add_job(resume_deletions, "interval", seconds=60, id="account_deletion_cleanup", max_instances=1, coalesce=True)
     scheduler.add_job(
@@ -88,6 +93,16 @@ async def lifespan(app: FastAPI):
         "interval",
         seconds=max(settings.MARKET_CANDLE_SYNC_SECONDS, 60),
         id="sync_market_candles",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        sync_display_exchange_rates,
+        "cron",
+        hour=min(max(int(settings.DISPLAY_FX_REFRESH_HOUR), 0), 23),
+        minute=min(max(int(settings.DISPLAY_FX_REFRESH_MINUTE), 0), 59),
+        id="sync_display_exchange_rates",
         replace_existing=True,
         coalesce=True,
         max_instances=1,
@@ -143,6 +158,13 @@ async def lifespan(app: FastAPI):
         # history range, which can exhaust the provider quota and leave models
         # refreshed against different quote cohorts.
         kwargs={"force": False},
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        sync_display_exchange_rates,
+        "date",
+        run_date=datetime.now(community_timezone) + timedelta(seconds=6),
+        id="display_exchange_rate_startup_sync",
         replace_existing=True,
     )
     scheduler.add_job(

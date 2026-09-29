@@ -205,11 +205,7 @@ def _order_out(o: Order, db: Session) -> dict:
     # historical order whenever KAI publishes a new quote.
     if o.purchase_hours is not None and int(o.purchase_hours) > 0:
         quantity = max(int(o.quantity or 1), 1)
-        rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
-        booked_price = (
-            Decimal(o.amount) * rate / Decimal(int(o.purchase_hours) * quantity)
-            if rate > 0 else None
-        )
+        booked_price = Decimal(o.amount) / Decimal(int(o.purchase_hours) * quantity)
         out["price_cny_per_gpu_hour"] = (
             float(booked_price.quantize(Decimal("0.000001"))) if booked_price is not None else None
         )
@@ -278,17 +274,14 @@ def _calc_legacy_day_amount(p: Product, cycle_days: int, quantity: int = 1) -> D
 
 
 def _calc_kai_hour_amount(p: Product, hours: int, quantity: int = 1) -> Decimal:
-    """Convert KAI's CNY/GPU-hour quote into wallet card-hours."""
-    rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
-    if rate <= 0:
-        raise BizError("卡时兑换率配置无效，请联系管理员", status_code=503)
+    """Charge the published direct-money price for the selected GPU-hours."""
     return (
-        Decimal(str(p.price)) * Decimal(hours) * Decimal(quantity) / rate
+        Decimal(str(p.price)) * Decimal(hours) * Decimal(quantity)
     ).quantize(Decimal("0.0001"))
 
 
 def _calc_merchant_hour_amount(p: Product, hours: int, quantity: int = 1) -> Decimal:
-    """Charge a merchant's card-hour/GPU-hour listing without CNY conversion."""
+    """Charge a merchant's direct-money price per GPU-hour."""
 
     return (
         Decimal(str(p.price)) * Decimal(hours) * Decimal(quantity)
@@ -300,11 +293,7 @@ def _normalized_unit_price(value: object) -> Decimal:
 
 
 def _current_unit_price_card_hours(product: Product, source: str) -> Decimal:
-    if source == "kai":
-        rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
-        if rate <= 0:
-            raise BizError("卡时兑换率配置无效，请联系管理员", status_code=503)
-        return _normalized_unit_price(Decimal(str(product.price)) / rate)
+    del source
     return _normalized_unit_price(product.price)
 
 
@@ -384,7 +373,7 @@ def create_order(
     platform = _trusted_platform(platform)
     # SQLite ignores FOR UPDATE. Serializing before the stock and wallet reads
     # prevents two concurrent checkouts from selling the last unit twice or
-    # spending the same in-app card-hours twice.
+    # spending the same in-app account balance twice.
     _begin_serialized_write_transaction(db)
     request_id = str(data.client_request_id or "").strip() or None
     if request_id:
@@ -489,10 +478,10 @@ def create_order(
         p.stock = reserved_stock - data.quantity
         now = datetime.now(timezone.utc)
         # Usage orders reserve funds until valid SSH delivery is confirmed.
-        # A holding order is a card-hour-denominated asset acquisition and is
+        # A holding order is a CNY-denominated asset acquisition and is
         # therefore captured and registered immediately without SSH delivery.
         order = Order(
-            order_no="WOD" + datetime.now().strftime("%Y%m%d") + uuid.uuid4().hex[:8].upper(),
+            order_no="KAI" + datetime.now().strftime("%Y%m%d") + uuid.uuid4().hex[:8].upper(),
             client_request_id=request_id,
             user_id=user.id, product_id=p.id, quantity=data.quantity,
             cycle_days=cycle_days, purchase_hours=purchase_hours,
@@ -732,7 +721,7 @@ def _complete_reserved_order(
         db.flush()
 
     # Commercial proceeds are withdrawable. All reward writers below remain
-    # independent and only credit non-withdrawable in-app card-hours.
+    # independent and only credit non-withdrawable in-app reward balance.
     settle_merchant_sale(order, db, settled_at=now)
     create_consumer_order_accrual(order, asset, now, db)
     create_supplier_order_accrual(order, now, db)

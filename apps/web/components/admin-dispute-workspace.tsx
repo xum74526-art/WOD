@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Gavel, X } from "@phosphor-icons/react";
 import { listAdminOrders, resolveAdminOrderDispute, type AdminOrderItem } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
-import { formatFinancialAmount } from "@/lib/financial-format";
 import { useI18n } from "@/components/locale-root";
 
 const DISPUTE_PAGE_SIZE = 30;
@@ -24,7 +23,7 @@ function mergeOrders(current: AdminOrderItem[], incoming: AdminOrderItem[]) {
 }
 
 export function AdminDisputeWorkspace() {
-  const { t } = useI18n();
+  const { t, formatLedgerMoney } = useI18n();
   const [rows, setRows] = useState<AdminOrderItem[]>([]);
   const [selected, setSelected] = useState<AdminOrderItem | null>(null);
   const [page, setPage] = useState(0);
@@ -60,7 +59,7 @@ export function AdminDisputeWorkspace() {
     const note = resolution.trim();
     if (!note) { setError("处理争议前请填写证据与处理结论"); return; }
     const actionLabel = action === "refund"
-      ? t("admin.dispute.action.refund", "退回买家冻结卡时")
+      ? t("admin.dispute.action.refund", "退回买家冻结金额")
       : t("admin.dispute.action.release", "放行订单资金并继续商家结算");
     if (!window.confirm(t("admin.dispute.confirm", "确认“{action}”？该动作会直接写入真实订单账本。", { action: actionLabel }))) return;
     setBusy(true); setError(""); setSuccess("");
@@ -90,7 +89,7 @@ export function AdminDisputeWorkspace() {
   ));
 
   return <section className="workspace-page commerce-workspace">
-    <div className="workspace-page__head"><p>ADMIN / DISPUTE RESOLUTION</p><h1>订单争议仲裁</h1><span>这里只显示真实的争议订单；退款会退回买家冻结卡时，放行会完成订单资金结算。</span></div>
+    <div className="workspace-page__head"><p>ADMIN / DISPUTE RESOLUTION</p><h1>订单争议仲裁</h1><span>这里只显示真实的争议订单；退款会退回买家冻结金额，放行会完成订单资金结算。</span></div>
     <div className="review-console admin-dispute-console">
       <aside>
         <form><label className="admin-filter-label"><Gavel size={15}/><span>争议状态</span></label><select aria-label="争议状态" value="disputed" disabled><option value="disputed">待仲裁</option></select></form>
@@ -106,7 +105,7 @@ export function AdminDisputeWorkspace() {
           <dl>
             <div><dt>买家</dt><dd>{selected.user.username || `用户 ${selected.user.id}`}</dd></div>
             <div><dt>卖方</dt><dd>{sellerName(selected)} · {fulfillmentName(selected)}</dd></div>
-            <div><dt>订单金额</dt><dd>{formatFinancialAmount(selected.amount_card_hours)} 卡时</dd></div>
+            <div><dt>订单金额</dt><dd>{formatLedgerMoney(selected.amount_card_hours)}</dd></div>
             <div><dt>发起时间</dt><dd>{formatDate(selected.disputed_at || selected.created_at)}</dd></div>
             {selected.dispute_due_at && <div><dt>处理截止</dt><dd>{formatDate(selected.dispute_due_at)}</dd></div>}
           </dl>
@@ -122,10 +121,10 @@ export function AdminDisputeWorkspace() {
             {snapshotRegion && <>区域：{snapshotRegion}<br/></>}
             <>{t("admin.dispute.quantity", "数量：{quantity} 台", { quantity: snapshot.quantity ?? selected.quantity })}<br/></>
             {(snapshot.purchase_hours ?? selected.purchase_hours) != null && <>购买时长：{snapshot.purchase_hours ?? selected.purchase_hours} 小时<br/></>}
-            {snapshotUnitPrice != null && <>下单单价：{formatFinancialAmount(snapshotUnitPrice)} 卡时 / GPU·小时</>}
+            {snapshotUnitPrice != null && <>下单单价：{formatLedgerMoney(snapshotUnitPrice)} / GPU·小时</>}
           </p></section>}
           {selected.dispute_resolution_note && <section><h3>已有处理记录</h3><p data-i18n-skip>{selected.dispute_resolution_note}</p></section>}
-          <footer><label><span>证据与处理结论</span><textarea rows={5} maxLength={2000} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="说明 SSH 交付证据、资源参数核验结果，以及退款或放行的理由" /></label><div><button disabled={busy} onClick={() => void decide("release")}><Check size={15}/>交付有效 · 放行结算</button><button disabled={busy} onClick={() => void decide("refund")} className="commerce-danger"><X size={15}/>买家申诉成立 · 退回卡时</button></div></footer>
+          <footer><label><span>证据与处理结论</span><textarea rows={5} maxLength={2000} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="说明 SSH 交付证据、资源参数核验结果，以及退款或放行的理由" /></label><div><button disabled={busy} onClick={() => void decide("release")}><Check size={15}/>交付有效 · 放行结算</button><button disabled={busy} onClick={() => void decide("refund")} className="commerce-danger"><X size={15}/>买家申诉成立 · 退回冻结金额</button></div></footer>
         </> : <div className="commerce-empty"><Gavel size={25}/><strong>选择一笔争议订单查看详情</strong></div>}
       </article>
     </div>

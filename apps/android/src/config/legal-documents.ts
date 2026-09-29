@@ -61,7 +61,7 @@ const PRIVACY_ZH: LegalDocument = {
         '3. KAI 身份登录与关联：你主动选择 KAI 登录、注册或绑定时，我们处理关联身份标识、授权结果、一次性凭据，以及 KAI 返回的邮箱、姓名和头像，用于创建或关联本平台账号及展示基础资料。首次成功的 KAI 登录或注册会仅按 KAI 签发方和主体标识创建本地账号；我们不会按 KAI 提供的邮箱、手机号、昵称或头像自动合并既有账号，也不会索取或保存你的 KAI 密码。',
         '4. 个人资料与实名认证：昵称、头像、真实姓名、证件号码、证件正反面图片、格式校验结果及审核状态，用于个人资料展示、实名认证、商家准入和风险控制。证件图片仅供受权人员核验；服务器使用本地 Tesseract OCR 生成比对结果，不将证件图片发送给第三方 OCR 服务。',
         '5. 业务资料：银行卡登记信息以加密方式保存并仅展示掩码；地址信息用于用户主动选择的业务联系或交付。买方需求可能包含联系人、电话、算力型号、数量、期限、地区和需求说明；商家资料可能包含主体、联系人、资源、设备和交付信息。',
-        '6. 撮合、订单与交付：需求、报价、反报价、方案确认、订单、卡时或账务记录、结算、退款、争议及历史状态，用于撮合沟通、履约、对账、售后和争议处理。商家提交的 SSH 地址、端口、用户名和凭据仅用于经确认的交付，并按角色限制展示。',
+        '6. 撮合、订单与交付：需求、报价、反报价、方案确认、订单、账户金额或账务记录、结算、退款、争议及历史状态，用于撮合沟通、履约、对账、售后和争议处理。商家提交的 SSH 地址、端口、用户名和凭据仅用于经确认的交付，并按角色限制展示。',
         '7. 社区：你主动发布的文字、图片或视频，以及评论、点赞、关注、举报和互动记录，用于内容展示、互动和内容安全。公开发布的昵称、头像和内容会向其他用户展示，请勿上传证件、银行卡、密码或其他不宜公开的信息。',
         '8. 客服与工单：咨询内容、工单、附件、处理状态和必要的账号关联信息，用于答复问题、跟进服务及处理投诉。',
         '9. 设备、网络和日志：在你同意政策并使用联网功能后，App 或基础运行框架自动记录设备品牌和型号、操作系统及版本、屏幕分辨率、设备语言、时区、App 名称、包名和版本、IP 地址、网络类型和状态、User-Agent、请求时间、接口结果、崩溃及异常日志；Android 运行框架还会读取 Android ID、OAID（以系统实际提供为准），用于兼容适配、网络连接、故障分析、反滥用和账号安全。DCloud 统计已关闭，不用于广告、用户画像或个性化推荐；我们不读取 IMEI、IMSI、SIM 卡序列号、通讯录、精确位置或其他应用安装列表。',
@@ -167,7 +167,7 @@ const PRIVACY_EN: LegalDocument = {
         'When you choose KAI sign-in, registration, or binding, we process the linked identity identifier, authorization result, one-time credential, and the email address, name, and avatar returned by KAI to create or link a platform account and display basic profile information. A first successful KAI sign-in or registration creates a local account only by KAI issuer and subject; we do not automatically merge an existing account using KAI email, mobile number, nickname, or avatar. We never request or store your KAI password.',
         'Profile and verification data may include your nickname, avatar, legal name, national ID number, front and back ID images, validation results, and review status. Server-side local Tesseract OCR produces comparison results; ID images are not sent to a third-party OCR provider.',
         'Business data may include encrypted and masked bank-card details, addresses, buyer contact and compute requirements, merchant identity and contact materials, resource and device descriptions, and delivery details.',
-        'Matchmaking, order, and fulfillment data may include requirements, proposals, counteroffers, confirmations, orders, CH or ledger entries, settlement, refunds, disputes, history, and seller-provided SSH host, port, username, and credentials. SSH details are role-restricted and used only for confirmed fulfillment.',
+        'Matchmaking, order, and fulfillment data may include requirements, proposals, counteroffers, confirmations, orders, account-balance or ledger entries, settlement, refunds, disputes, history, and seller-provided SSH host, port, username, and credentials. SSH details are role-restricted and used only for confirmed fulfillment.',
         'Community and support data includes text, images or videos that you publish, comments, likes, follows, reports, support conversations, tickets, attachments and status. It is used for content display, interaction, content safety, enquiries and complaints. Public nickname, avatar and content are visible to others, so never post IDs, cards, passwords or delivery credentials.',
         'After consent and when connected features are used, the app or base runtime automatically records device brand/model, OS and version, screen resolution, device language, time zone, app name/package/version, IP address, network type/state, User-Agent, request time, API result, crash/error logs, and on Android, Android ID and OAID where the system supplies them. They support compatibility, connectivity, security and troubleshooting. DCloud statistics are disabled. We do not use this data for ads, profiling or personalised recommendations and do not read IMEI, IMSI, SIM serial number, contacts, precise location or installed-app lists.',
         'The app does not read the clipboard in the background or at startup. It writes an order number, host address or other selected text to the system clipboard only when you tap Copy.',
@@ -247,8 +247,8 @@ function agreementZh(): LegalDocument {
   const transactionSection: LegalSection = {
     title: '五、当前撮合模式与条件性直接交易',
     paragraphs: [
-      '当前审核版默认采用撮合模式，不开放新充值、新提现或在线收取交易款项，不扣减或冻结卡时，不自动创建直接交易订单或算力资产，也不承诺固定收益。',
-      '已存在的钱包、充值、提现、订单和资产记录仅用于查询历史与处理未结事项。卡时是平台业务记账单位，不是现金、存款、理财产品或无条件可兑付资产；状态及可执行操作以服务端返回为准。',
+      '当前审核版默认采用撮合模式，不开放新充值、新提现或在线收取交易款项，不扣减或冻结账户金额，不自动创建直接交易订单或算力资产，也不承诺固定收益。',
+      '已存在的钱包、充值、提现、订单和资产记录仅用于查询历史与处理未结事项。账户金额是平台业务记账展示，不是存款、理财产品或无条件可兑付资产；状态及可执行操作以服务端返回为准。',
       '未来直接交易仅会在服务端能力和客户端构建同时启用、必要资质和流程完成，并向你另行展示适用规则后开放。届时算力市场可分为 KAI 自营和入驻资料已审核商家资源，算力订单仅按整数小时购买，并会在提交前展示标的、数量、期限、价格、费用、支付、冻结、交付、验收、取消、退款和结算规则。启用时将升级适用协议版本，并在依法需要时重新取得同意；客户端页面或跳转结果本身不构成入账凭证。',
     ],
   }
@@ -363,8 +363,8 @@ function agreementEn(): LegalDocument {
   const transactionSection: LegalSection = {
     title: '5. Current matchmaking mode and conditional direct trading',
     paragraphs: [
-      'The review build uses matchmaking mode by default. It does not open new top-ups or withdrawals, collect transaction payments online, debit or freeze CH, automatically create direct orders or compute assets, or promise fixed returns.',
-      'Existing wallet, top-up, withdrawal, order, and asset records are available only for history and outstanding matters. CH is a business ledger unit, not cash, a deposit, an investment product, or an unconditional redeemable asset. Server-authorized state controls available actions.',
+      'The review build uses matchmaking mode by default. It does not open new top-ups or withdrawals, collect transaction payments online, debit or freeze account balances, automatically create direct orders or compute assets, or promise fixed returns.',
+      'Existing wallet, top-up, withdrawal, order, and asset records are available only for history and outstanding matters. Account balances are business-ledger displays, not deposits, investment products, or unconditional redeemable assets. Server-authorized state controls available actions.',
       'Future direct trading opens only after both server and client enable it and required qualifications and workflows are complete. The market may then distinguish KAI Direct resources from offers by merchants with reviewed onboarding materials; compute orders use whole hours, and the item, quantity, duration, price, fees, payment, freeze, delivery, acceptance, cancellation, refund, and settlement rules are separately presented before submission. Enabling it will require an updated applicable agreement version and renewed consent where legally required. A client page or redirect alone is not proof of payment.',
     ],
   }

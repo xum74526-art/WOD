@@ -34,7 +34,12 @@ import {
   type BuyRequestIntent,
 } from "@/lib/web-business-contract";
 import { normalizeInquiryRegionRequirement } from "@/lib/request-navigation";
-import { formatFinancialAmount } from "@/lib/financial-format";
+import { useI18n } from "@/components/locale-root";
+import {
+  displayInputToQuoteAmount,
+  formatQuoteAmountForLocale,
+  quoteAmountToDisplayInput,
+} from "@/lib/quote-currency";
 
 const statuses: Record<string, string> = {
   published: "已提交",
@@ -155,6 +160,7 @@ function canCounterQuote(view: "buyer" | "seller", request: MobileBuyRequest, it
 type SellerRequestScope = "all" | "quoted";
 
 export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, initialSellerScope = "all" }: { view: "buyer" | "seller"; initialId?: number; initialPrefill?: RequestPrefill; initialSellerScope?: SellerRequestScope }) {
+  const { locale, displayCurrency, displayCurrencyConfig } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
   const matchmakingEnabled = capabilities.matchmaking_enabled === true;
@@ -218,10 +224,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
   const detailRequirementNote = buyRequestAdditionalRequirements(detail?.request.requirements);
 
   function quoteInput(): MobileBuyQuoteInput {
+    const currency = detail?.request.currency || "CNY";
     return {
-      unit_price: quote.unit_price ? Number(quote.unit_price) : undefined,
-      total_price: Number(quote.total_price),
-      currency: detail?.request.currency || "CNY",
+      unit_price: quote.unit_price ? displayInputToQuoteAmount(quote.unit_price, currency, locale, displayCurrencyConfig) : undefined,
+      total_price: displayInputToQuoteAmount(quote.total_price, currency, locale, displayCurrencyConfig),
+      currency,
       available_at: quote.available_at ? new Date(quote.available_at).toISOString() : undefined,
       message: quote.message.trim() || undefined,
       expires_in_hours: Number(quote.expires_in_hours),
@@ -230,10 +237,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
 
   function beginCounter(item: MobileBuyQuote) {
     const latest = latestQuote(item);
+    const currency = latest.currency || item.currency || detail?.request.currency || "CNY";
     setEditingQuoteId(item.id);
     setQuote({
-      unit_price: latest.unit_price == null ? "" : String(latest.unit_price),
-      total_price: String(latest.total_price),
+      unit_price: latest.unit_price == null ? "" : quoteAmountToDisplayInput(latest.unit_price, currency, locale, displayCurrencyConfig),
+      total_price: quoteAmountToDisplayInput(latest.total_price, currency, locale, displayCurrencyConfig),
       available_at: dateTimeInput(latest.available_at),
       message: latest.message || "",
       expires_in_hours: "24",
@@ -322,7 +330,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
       try { await loadDetail(requestId); } catch { /* the existing quote remains visible */ }
       return;
     }
-    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${snapshot.currency} ${formatFinancialAmount(snapshot.totalPrice)}`;
+    const confirmedTerms = `第 ${snapshot.revisionNo} 轮 · ${formatQuoteAmountForLocale(snapshot.totalPrice, snapshot.currency, locale, displayCurrencyConfig)}`;
     const prompt = directTradeEnabled
       ? `确认选择 ${item.supplier_name} 的报价（${confirmedTerms}）？`
       : `确认选择 ${item.supplier_name} 的方案（${confirmedTerms}）？选择后商家仍需确认资源，平台审核通过后才进入 SSH 凭据交付。`;
@@ -330,7 +338,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
     setBusy(`select-${item.id}`); setError(""); setMessage("");
     try {
       const result = await selectMobileBuyQuote(requestId, item.id, snapshot.revisionId);
-      setMessage(result.commerce_mode === "matchmaking" ? "方案已选定，正在等待商家确认资源；当前未创建资金订单，也未扣除卡时。请等待工作人员联系确认平台审核进度。" : "报价已选择，请按订单流程继续处理。");
+      setMessage(result.commerce_mode === "matchmaking" ? "方案已选定，正在等待商家确认资源；当前未创建资金订单，也未扣除余额。请等待工作人员联系确认平台审核进度。" : "报价已选择，请按订单流程继续处理。");
       await load(requestId);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -421,7 +429,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
       <label>有效小时<input min="1" max="720" type="number" value={form.expires_in_hours} onChange={(event) => setForm({ ...form, expires_in_hours: event.target.value })}/></label>
       <label className="mobile-request-form__wide">补充需求<textarea rows={3} maxLength={1000} value={form.requirements_text} onChange={(event) => setForm({ ...form, requirements_text: event.target.value })} placeholder="网络、CUDA、镜像、交付时间等，可留空"/></label>
       <button className="commerce-primary" disabled={Boolean(busy)}>{busy === "request" ? "正在提交…" : "提交需求"}</button>
-      <p className="mobile-request-form__notice">提交不会扣除卡时，也不会自动生成订单。本流程不充值，联系方式仅平台管理员用于协调。</p>
+      <p className="mobile-request-form__notice">提交不会扣除余额，也不会自动生成订单。本流程不充值，联系方式仅平台管理员用于协调。</p>
     </form>}
     <div className="mobile-request-console">
       <aside>
@@ -432,7 +440,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
         </button>) : <div className="mobile-inline-empty">{view === "seller" && sellerScope === "quoted" ? "暂无报价记录" : "暂无需求"}</div>}
       </aside>
       <main>{detail ? <>
-        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model}{detail.request.gpu_variant ? ` ${detail.request.gpu_variant}` : ""} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} 卡时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
+        <header><div><small>{view === "seller" ? `ANONYMOUS REQUEST #${detail.request.id}` : `REQUEST #${detail.request.id}`}</small><h2>{detail.request.gpu_model}{detail.request.gpu_variant ? ` ${detail.request.gpu_variant}` : ""} × {detail.request.quantity}</h2><span>{detail.request.request_type === "online" ? `${detail.request.gpu_hours || 0} GPU 小时` : "线下设备"} · {detail.request.region || "地区不限"}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts">
           <span><small>服务价格</small><strong>询价</strong></span><span><small>交易方式</small><strong>平台撮合</strong></span><span><small>报价数</small><strong>{detail.request.quote_count}</strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span>
         </div>
@@ -444,7 +452,7 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
             const latest = latestQuote(item);
             return <article key={item.id} className="matchmaking-quote-card">
               <span><strong>{view === "seller" && !detail.request.is_own ? "我的方案" : item.supplier_name || "认证商家"}</strong><small>{latest.message || "无补充说明"}</small><small>第 {item.revision_count || item.revisions?.length || 1} 轮 · {latest.available_at ? `${formatDate(latest.available_at)} 可交付` : "交付时间待确认"}</small></span>
-              <b>¥{latest.total_price}</b><em>{statusLabel(item.status)}</em>
+              <b>{formatQuoteAmountForLocale(latest.total_price, latest.currency || item.currency, locale, displayCurrencyConfig)}</b><em>{statusLabel(item.status)}</em>
               <div className="matchmaking-actions">
                 {canCounterQuote(view, detail.request, item, Boolean(detail.deal), matchmakingEnabled) && <button type="button" disabled={Boolean(busy)} onClick={() => beginCounter(item)}>{view === "buyer" ? "还价" : "修改方案"}</button>}
                 {view === "seller" && item.can_withdraw !== false && !detail.deal && matchmakingEnabled && openRequestStatuses.has(detail.request.status) && activeQuoteStatuses.has(item.status) && <button className="danger" type="button" disabled={Boolean(busy)} onClick={() => void withdrawQuote(item)}>撤回</button>}
@@ -461,13 +469,14 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
                   }}
                   busy={busy === "quote"}
                   label={view === "buyer" ? "提交还价" : "保存新方案"}
+                  currency={displayCurrency}
                 />
               )}
             </article>;
           }) : <div className="mobile-inline-empty">暂无报价</div>}
         </section>
         {view === "seller" && detail.request.is_own && <div className="workspace-service-note">这是当前账号提交的需求，不能给自己的需求报价。</div>}
-        {view === "seller" && canCreateSellerQuote && <QuoteForm value={quote} onChange={setQuote} onSubmit={submitQuote} busy={busy === "quote"} label="提交商家方案"/>}
+        {view === "seller" && canCreateSellerQuote && <QuoteForm value={quote} onChange={setQuote} onSubmit={submitQuote} busy={busy === "quote"} label="提交商家方案" currency={displayCurrency}/>}
         {detail.deal && <section className="matchmaking-deal">
           <header><div><small>PLATFORM ESCROW</small><h3>撮合与交付</h3></div><b>#{detail.deal.id}</b></header>
           <ol className="matchmaking-timeline">
@@ -483,11 +492,11 @@ export function MobileBuyRequestWorkspace({ view, initialId, initialPrefill, ini
   </section>;
 }
 
-function QuoteForm({ value, onChange, onSubmit, onCancel, busy, label }: { value: QuoteDraft; onChange: (next: QuoteDraft) => void; onSubmit: (event: FormEvent) => void; onCancel?: () => void; busy: boolean; label: string }) {
+function QuoteForm({ value, onChange, onSubmit, onCancel, busy, label, currency }: { value: QuoteDraft; onChange: (next: QuoteDraft) => void; onSubmit: (event: FormEvent) => void; onCancel?: () => void; busy: boolean; label: string; currency: string }) {
   return <form className="mobile-quote-form matchmaking-quote-form" onSubmit={onSubmit}>
     <header><Storefront size={18}/><strong>{label}</strong></header>
-    <label>单位价格<input min="0" step="0.001" type="number" value={value.unit_price} onChange={(event) => onChange({ ...value, unit_price: event.target.value })}/></label>
-    <label>总报价<input required min="0" step="0.001" type="number" value={value.total_price} onChange={(event) => onChange({ ...value, total_price: event.target.value })}/></label>
+    <label>单位价格（{currency}）<input min="0" step="0.001" type="number" value={value.unit_price} onChange={(event) => onChange({ ...value, unit_price: event.target.value })}/></label>
+    <label>总报价（{currency}）<input required min="0" step="0.001" type="number" value={value.total_price} onChange={(event) => onChange({ ...value, total_price: event.target.value })}/></label>
     <label>最早交付时间<input type="datetime-local" value={value.available_at} onChange={(event) => onChange({ ...value, available_at: event.target.value })}/></label>
     <label>有效小时<input required min="1" max="720" type="number" value={value.expires_in_hours} onChange={(event) => onChange({ ...value, expires_in_hours: event.target.value })}/></label>
     <label className="wide">方案说明<textarea maxLength={1000} rows={3} value={value.message} onChange={(event) => onChange({ ...value, message: event.target.value })}/></label>

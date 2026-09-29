@@ -46,21 +46,21 @@ test('home keeps representative KAI cards while market separates KAI and merchan
   assert.match(marketPage, /merchantResourcesHint/)
 })
 
-test('quote views render raw KAI CNY while shared charts keep explicit display units', () => {
-  assert.match(quotePage, /display-currency="CNY"/)
+test('quote views and shared charts convert KAI CNY into the language currency', () => {
+  assert.doesNotMatch(quotePage, /display-currency=/)
   assert.match(quotePage, /cnyPricePerGpuHour/)
   assert.match(quotePage, /cnyPriceOrDash/)
+  assert.match(quotePage, /formatCnyCurrency/)
   assert.match(quotePage, /t\('perGpuHour'\)/)
   assert.doesNotMatch(quotePage, /toCardHours|fmtCHn|cardHoursOrDash|cardHourNumber|cardHourPerGpuHour/)
 
   for (const chart of [candleChart, marketChart]) {
-    assert.match(chart, /displayCurrency\?: 'CNY' \| 'CARD_HOUR'/)
-    assert.match(chart, /displayCurrency: 'CARD_HOUR'/)
+    assert.doesNotMatch(chart, /displayCurrency\?: 'CNY' \| 'CARD_HOUR'/)
+    assert.match(chart, /cnyToDisplayCurrency/)
+    assert.match(chart, /displayCurrencySymbol/)
   }
-  assert.match(candleChart, /props\.displayCurrency === 'CNY' \? Number\(value\) : toCardHours\(value\)/)
-  assert.match(marketChart, /props\.displayCurrency === 'CNY' \? numericValue : toCardHours\(numericValue\)/)
-  assert.match(candleChart, /props\.displayCurrency === 'CNY' \? `¥\$\{formatted\}` : formatted/)
-  assert.match(marketChart, /props\.displayCurrency === 'CNY' \? `¥\$\{formatted\}` : formatted/)
+  assert.match(candleChart, /return cnyToDisplayCurrency\(value\)/)
+  assert.match(marketChart, /return cnyToDisplayCurrency\(numericValue\)/)
 })
 
 test('new inquiry and renewal requests keep integer-hour requirements without checkout', () => {

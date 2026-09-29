@@ -46,6 +46,12 @@ import {
   type MarketChartSnapshot,
 } from "@/lib/market-candlestick-chart";
 import { useI18n } from "./locale-root";
+import {
+  convertCardHoursToDisplay,
+  displayCurrencyForLocale,
+  displayCurrencySymbol,
+} from "@/lib/display-currency";
+import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
 import styles from "./market-candlestick-chart.module.css";
 
 type ScopedValue<T> = { key: string; value: T };
@@ -184,7 +190,18 @@ function linePath(points: Array<{ x: number; y: number }>) {
 }
 
 export function MarketCandlestickChart({ model, initialLatest = null, onLatest, onSnapshot }: MarketCandlestickChartProps) {
-  const { t, dateLocale } = useI18n();
+  const { locale, t, dateLocale } = useI18n();
+  const { capabilities } = usePlatformCapabilities();
+  const currencySymbol = displayCurrencySymbol(displayCurrencyForLocale(locale));
+  const formatDisplayedPrice = useCallback((value: number | null | undefined) => {
+    if (value == null || !Number.isFinite(value)) return "--";
+    return `${currencySymbol}${formatPrice(convertCardHoursToDisplay(value, locale, capabilities.display_currency), dateLocale)}`;
+  }, [capabilities.display_currency, currencySymbol, dateLocale, locale]);
+  const formatDisplayedAxis = useCallback((value: number, span: number) => formatAxis(
+    convertCardHoursToDisplay(value, locale, capabilities.display_currency),
+    convertCardHoursToDisplay(span, locale, capabilities.display_currency),
+    dateLocale,
+  ), [capabilities.display_currency, dateLocale, locale]);
   const chartStatusId = useId();
   const identity = modelIdentity(model);
   const [range, setRange] = useState<MarketChartRange>("30d");
@@ -547,14 +564,14 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
   const accessibleReadout = cursorVisible && focused
     ? t("trends.candles.accessibility.ohlc", "{date}，开 {open}，高 {high}，低 {low}，收 {close}", {
       date: formatDateTime(focused.time, dateLocale, currentQuoteLabel),
-      open: formatPrice(focused.open, dateLocale),
-      high: formatPrice(focused.high, dateLocale),
-      low: formatPrice(focused.low, dateLocale),
-      close: formatPrice(focused.close, dateLocale),
+      open: formatDisplayedPrice(focused.open),
+      high: formatDisplayedPrice(focused.high),
+      low: formatDisplayedPrice(focused.low),
+      close: formatDisplayedPrice(focused.close),
     })
     : t("trends.candles.accessibility.summary", "{label} {price}，{history}", {
       label: latestReadoutLabel,
-      price: formatPrice(latestReadout.price, dateLocale),
+      price: formatDisplayedPrice(latestReadout.price),
       history: historyLabel,
     });
 
@@ -614,7 +631,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
     return <g className={styles.extremeMark} key={`${high ? "high" : "low"}-${index}`}>
       <line x1={center} y1={vertical} x2={lineEnd} y2={vertical}/>
       <text x={lineEnd + (toRight ? 2 : -2)} y={vertical + (high ? -2.5 : 8)} textAnchor={toRight ? "start" : "end"}>
-        {formatAxis(value, valueRange, dateLocale)}
+        {formatDisplayedAxis(value, valueRange)}
       </text>
     </g>;
   };
@@ -677,7 +694,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
       <div className={styles.toolbar}>
         <div>
           <p><strong>{t("trends.candles.title", "K线")}</strong><em>{historyLabel}</em></p>
-          <small>{t("trends.candles.unit", "卡时 / GPU·小时")}</small>
+          <small>{t("trends.candles.unit", "当前语言货币 / GPU·小时")}</small>
         </div>
         <div className={styles.latestReadout}>
           <small>{cursorVisible
@@ -686,7 +703,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               ? t("trends.candles.currentPrice", "当前价")
               : t("trends.candles.latestClose", "最新收盘")}</small>
           <strong className={focusedChange == null ? styles.neutral : focusedChange > 0 ? styles.riseText : focusedChange < 0 ? styles.fallText : styles.neutral}>
-            {formatPrice(cursorVisible ? focused?.close : displayedLatestValue, dateLocale)}
+            {formatDisplayedPrice(cursorVisible ? focused?.close : displayedLatestValue)}
           </strong>
         </div>
       </div>
@@ -704,13 +721,13 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
             [t("trends.candles.ohlc.high", "高"), focused.high, styles.riseText],
             [t("trends.candles.ohlc.low", "低"), focused.low, styles.fallText],
             [t("trends.candles.ohlc.close", "收"), focused.close, focused.close > focused.open ? styles.riseText : focused.close < focused.open ? styles.fallText : styles.neutral],
-          ].map(([label, value, tone]) => <span key={String(label)}><small>{label}</small><strong className={String(tone)}>{formatPrice(Number(value), dateLocale)}</strong></span>)
-            : <span><small>{latestReadoutLabel}</small><strong>{formatPrice(latestReadout.price, dateLocale)}</strong></span>}
+          ].map(([label, value, tone]) => <span key={String(label)}><small>{label}</small><strong className={String(tone)}>{formatDisplayedPrice(Number(value))}</strong></span>)
+            : <span><small>{latestReadoutLabel}</small><strong>{formatDisplayedPrice(latestReadout.price)}</strong></span>}
         </div>
       </div>
 
       {activeMaReadout.length > 0 && <div className={styles.maRow} aria-label={t("trends.candles.maAria", "移动平均线")}>
-        {activeMaReadout.map((item) => <span style={{ color: item.color }} key={item.period}><strong>MA{item.period}</strong>{formatPrice(item.value, dateLocale)}</span>)}
+        {activeMaReadout.map((item) => <span style={{ color: item.color }} key={item.period}><strong>MA{item.period}</strong>{formatDisplayedPrice(item.value)}</span>)}
       </div>}
 
       {normalized.length > 1 && <div className={styles.viewportToolbar}>
@@ -753,7 +770,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               const gridY = layout.plot.top + ratio * plotHeight;
               return <g key={`grid-${index}`}>
                 <line x1={layout.plot.left} y1={gridY} x2={layout.plot.left + plotWidth} y2={gridY}/>
-                {(latestY == null || Math.abs(gridY - latestY) >= 16) && <text x={layout.plot.left + plotWidth + 4} y={gridY + 3}>{formatAxis(domain.max - ratio * valueRange, valueRange, dateLocale)}</text>}
+                {(latestY == null || Math.abs(gridY - latestY) >= 16) && <text x={layout.plot.left + plotWidth + 4} y={gridY + 3}>{formatDisplayedAxis(domain.max - ratio * valueRange, valueRange)}</text>}
               </g>;
             })}
             {[1 / 3, 2 / 3].map((ratio) => {
@@ -765,7 +782,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
           {latestY != null && latestChipY != null && latestValue != null && <g className={styles.latestLine} style={{ color: latestColor }}>
             <line x1={layout.plot.left} y1={latestY} x2={layout.plot.left + plotWidth} y2={latestY}/>
             <rect x={layout.plot.left + plotWidth + 2} y={latestChipY} width={layout.plot.right - 4} height="14" rx="2.5"/>
-            <text x={layout.plot.left + plotWidth + 5} y={latestChipY + 10}>{formatAxis(latestValue, valueRange, dateLocale)}</text>
+            <text x={layout.plot.left + plotWidth + 5} y={latestChipY + 10}>{formatDisplayedAxis(latestValue, valueRange)}</text>
           </g>}
 
           {baselineOnly && referenceValue != null
@@ -781,10 +798,10 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
               return <g className={tone} key={point.startTime}>
                 <title>{t("trends.candles.accessibility.ohlc", "{date}，开 {open}，高 {high}，低 {low}，收 {close}", {
                   date: formatDateTime(point.time, dateLocale, currentQuoteLabel),
-                  open: formatPrice(point.open, dateLocale),
-                  high: formatPrice(point.high, dateLocale),
-                  low: formatPrice(point.low, dateLocale),
-                  close: formatPrice(point.close, dateLocale),
+                  open: formatDisplayedPrice(point.open),
+                  high: formatDisplayedPrice(point.high),
+                  low: formatDisplayedPrice(point.low),
+                  close: formatDisplayedPrice(point.close),
                 })}</title>
                 <line x1={point.x} y1={point.highY} x2={point.x} y2={point.lowY}/>
                 {rising || falling

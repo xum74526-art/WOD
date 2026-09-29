@@ -156,7 +156,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "pid": settings.QIXIANGPAY_PID,
             "addtime": "2026-08-22 10:00:00",
             "endtime": paid_at.strftime("%Y-%m-%d %H:%M:%S") if status == 1 else "",
-            "name": "KAI钱包卡时充值",
+            "name": "KAI星算钱包充值",
             "money": f"{order.amount_cny:.2f}",
             "status": status,
             "param": order.order_no,
@@ -224,7 +224,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
             "trade_no": f"QX-{order.order_no}",
             "out_trade_no": order.order_no,
             "type": order.channel,
-            "name": "KAI钱包卡时充值",
+            "name": "KAI星算钱包充值",
             "money": f"{order.amount_cny:.2f}",
             "trade_status": "TRADE_SUCCESS",
             "param": order.order_no,
@@ -634,7 +634,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
         self.db.refresh(order)
         self.db.refresh(self.wallet)
         self.assertEqual(order.status, "paid")
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
         self.assertEqual(
             self.db.query(Ledger).filter_by(ref_payment_order_id=order.id).count(),
             1,
@@ -646,7 +646,7 @@ class QixiangPayPaymentTests(unittest.TestCase):
         with self.assertRaisesRegex(BizError, "签名无效"):
             handle_notification(self.db, tampered)
         self.db.refresh(self.wallet)
-        self.assertEqual(self.wallet.balance, Decimal("10.009980"))
+        self.assertEqual(self.wallet.balance, Decimal("10.010000"))
 
     def test_validly_signed_callback_fields_must_match_local_order(self):
         mutations = {

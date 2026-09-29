@@ -27,7 +27,7 @@
             {{ localizeRegionName(device.region, i18n.lang) }} {{ localizeRegionName(device.city, i18n.lang) }}
           </text>
           <view class="dinfo">
-            <text class="di price-value">{{ fmtCardHours(device.price) }} {{ t('cardHourPerGpuHour') }}</text>
+            <text class="di price-value">{{ formatCardHourCurrency(device.price) }}{{ t('perGpuHour') }}</text>
             <text class="di">{{ t('可租 {count}', { count: device.stock }) }}</text>
             <text class="di">{{ t('{count} 个订单', { count: device.order_count }) }}</text>
           </view>
@@ -94,7 +94,7 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCardHours, formatAmount } from '@/utils/format'
+import { cardHoursToDisplayCurrency, displayCurrencyToCardHours, formatCardHourCurrency, formatNumberInput } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 import { navigateTo } from '@/utils/nav'
 import { fallbackProductImage, resolveProductImage } from '@/utils/product-image'
@@ -173,7 +173,7 @@ function onEdit(device: SupplierDeviceItem) {
   if (busyId.value !== null) return
   editTarget.value = device
   editForm.name = device.name
-  editForm.price = formatAmount(device.price, false)
+  editForm.price = formatNumberInput(cardHoursToDisplayCurrency(device.price))
   editForm.stock = String(device.stock)
   editShow.value = true
 }
@@ -206,7 +206,7 @@ async function onSaveEdit() {
     uni.showToast({ title: t('enterProductName'), icon: 'none' })
     return
   }
-  const priceInCardHours = Number(editForm.price)
+  const priceInCardHours = displayCurrencyToCardHours(editForm.price)
   if (!Number.isFinite(priceInCardHours) || priceInCardHours <= 0 || priceInCardHours > 100000) {
     uni.showToast({ title: t('invalidSupplierPrice'), icon: 'none' })
     return

@@ -41,7 +41,7 @@ def historical_synthetic_rewards(user_id: int, db: Session) -> Decimal:
 
 
 def spendable_wallet_balance(wallet, db: Session) -> Decimal:
-    """Return card-hours available for in-app purchases only.
+    """Return CNY account balance available for in-app purchases only.
 
     Withdrawable earnings are a separate reserved bucket: they may be paid out
     or unfrozen, but never consumed by an order.  Keeping ``W <= B`` means all

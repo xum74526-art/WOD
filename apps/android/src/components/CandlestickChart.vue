@@ -91,7 +91,7 @@
 import { computed, ref, watch } from 'vue'
 import type { MarketCandle, MarketCandleRange, MarketHistoryState } from '@/api/market'
 import { useI18nStore } from '@/store/i18n'
-import { formatAmount, toCardHours } from '@/utils/format'
+import { cnyToDisplayCurrency, displayCurrencySymbol, formatAmount } from '@/utils/format'
 import { candleChangePercent, formatSignedMarketPercent } from '@/utils/market-chart'
 import {
   candleBucketMilliseconds,
@@ -123,7 +123,6 @@ const props = withDefaults(defineProps<{
   referenceObservedAt?: string
   bucketSeconds?: number
   range?: MarketCandleRange
-  displayCurrency?: 'CNY' | 'CARD_HOUR'
   zoomable?: boolean
 }>(), {
   compact: false,
@@ -138,7 +137,6 @@ const props = withDefaults(defineProps<{
   referenceObservedAt: '',
   bucketSeconds: 0,
   range: '30d',
-  displayCurrency: 'CARD_HOUR',
   zoomable: false,
 })
 
@@ -162,10 +160,10 @@ const visibleLimit = computed(() => props.compact
   : props.zoomable ? requestedVisibleCount.value : 60)
 
 function displayPrice(value: number): number {
-  return props.displayCurrency === 'CNY' ? Number(value) : toCardHours(value)
+  return cnyToDisplayCurrency(value)
 }
 
-const displayUnitLabel = computed(() => t(props.displayCurrency === 'CNY' ? 'cnyPerGpuHour' : 'cardHourPerGpuHour'))
+const displayUnitLabel = computed(() => t('cardHourPerGpuHour'))
 const referenceDisplayPrice = computed(() => props.referencePriceCny == null
   ? null
   : displayPrice(props.referencePriceCny))
@@ -288,7 +286,7 @@ function zoomOut() { if (canZoomOut.value) applyZoom(zoomOutLimit.value) }
 function price(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '--'
   const formatted = formatAmount(value)
-  return props.displayCurrency === 'CNY' ? `¥${formatted}` : formatted
+  return `${displayCurrencySymbol()}${formatted}`
 }
 
 const focusedDate = computed(() => {

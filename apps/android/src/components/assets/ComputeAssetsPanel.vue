@@ -16,8 +16,7 @@
       <view class="asset-panel__hero">
         <text class="asset-panel__eyebrow">{{ t('computeAssetValue') }}</text>
         <view class="asset-panel__amount">
-          <text class="asset-panel__amount-value">{{ fmtCardHours(summary?.total_value) }}</text>
-          <text class="asset-panel__amount-unit">{{ t('cardHour') }}</text>
+          <text class="asset-panel__amount-value">{{ formatCardHourCurrency(summary?.total_value) }}</text>
         </view>
         <text class="asset-panel__hero-note">{{ t('computeAssetsSummary') }}</text>
         <view class="asset-panel__metrics">
@@ -26,7 +25,7 @@
             <text class="asset-panel__metric-label">{{ t('activeResources') }}</text>
           </view>
           <view class="asset-panel__metric">
-            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ todayRevenue > 0 ? '+' : '' }}{{ fmtCardHours(todayRevenue) }}</text>
+            <text class="asset-panel__metric-value" :class="earningsTone(todayRevenue)">{{ todayRevenue > 0 ? '+' : '' }}{{ formatCardHourCurrency(todayRevenue) }}</text>
             <text class="asset-panel__metric-label">{{ t('todayRealizedEarnings') }}</text>
           </view>
           <view class="asset-panel__metric">
@@ -91,7 +90,7 @@ import type { AssetItem, AssetSummary } from '@/api/asset'
 import AppIcon from '@/components/AppIcon.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCardHours } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const props = defineProps<{
@@ -134,6 +133,6 @@ function assetEarnings(asset: AssetItem): number {
 
 function signedAssetEarnings(asset: AssetItem): string {
   const value = assetEarnings(asset)
-  return `${value > 0 ? '+' : ''}${fmtCardHours(value)}`
+  return `${value > 0 ? '+' : ''}${formatCardHourCurrency(value)}`
 }
 </script>

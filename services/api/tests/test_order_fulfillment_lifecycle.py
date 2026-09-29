@@ -130,7 +130,9 @@ class OrderFulfillmentLifecycleTests(unittest.TestCase):
             client_request_id=f"lifecycle-order-{self.db.query(Order).count() + 1:04d}",
         )
         result = create_order(payload, self.buyer, self.db, "android")
-        return self.db.get(Order, result["data"]["id"])
+        order = self.db.get(Order, result["data"]["id"])
+        self.assertRegex(order.order_no, r"^KAI\d{8}[A-F0-9]{8}$")
+        return order
 
     def _deliver(self, order: Order) -> Order:
         deliver_ssh(

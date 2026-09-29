@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/components/locale-root";
 import { publicApiEnvelopeRequest } from "@/lib/api";
 import type { PublicMarketRanking } from "@/lib/public-data";
-import { formatFinancialAmount } from "@/lib/financial-format";
 
 type PulseMarket = {
   gpu_model: string;
@@ -22,7 +21,7 @@ type PulseResponse = {
 };
 
 export function MarketPulseRail({ initialData = null }: { initialData?: PublicMarketRanking | null }) {
-  const { t, dateLocale } = useI18n();
+  const { t, dateLocale, formatLedgerMoney } = useI18n();
   const initialMarkets = (initialData?.data ?? []).filter((item) => item.median_price_card_hours > 0).slice(0, 4);
   const [markets, setMarkets] = useState<PulseMarket[]>(initialMarkets);
   const [updatedAt, setUpdatedAt] = useState(initialData?.meta.observed_at ?? "");
@@ -58,7 +57,7 @@ export function MarketPulseRail({ initialData = null }: { initialData?: PublicMa
         const modelName = `${market.gpu_model} ${market.gpu_variant}`.trim();
         return <article key={`${market.gpu_model}:${market.gpu_variant}`}>
           <span><strong>{modelName}</strong><small>{t(market.source_count === 1 ? "home.pulse.source" : "home.pulse.sources", "{count} 个数据源", { count: market.source_count.toLocaleString(dateLocale) })}</small></span>
-          <span className="market-pulse-value"><strong>{formatFinancialAmount(market.median_price_card_hours, dateLocale)}</strong><small>{t("home.pulse.unit", "卡时 / GPU·小时")}</small></span>
+          <span className="market-pulse-value"><strong>{formatLedgerMoney(market.median_price_card_hours)}</strong><small>{t("home.pulse.unit", "/ GPU·小时")}</small></span>
           <b className={`is-${direction}`}>{direction === "up" ? "▲" : "▼"} {Math.abs(market.change_24h).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% / 24H</b>
         </article>;
       })}

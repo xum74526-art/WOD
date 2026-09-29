@@ -7,6 +7,8 @@ import { createMobileSupplierDevice, deleteMobileSupplierDevice, listMobileSuppl
 import { errorMessage } from "@/lib/commerce-ui";
 import { displayBusinessReference } from "@/lib/display-reference";
 import { formatFinancialAmount } from "@/lib/financial-format";
+import { useI18n } from "@/components/locale-root";
+import { convertCardHoursToDisplay, convertDisplayToCardHours } from "@/lib/display-currency";
 import {
   ensureSupplierDeviceIntent,
   supplierDeviceIntentSignature,
@@ -26,6 +28,7 @@ const blank = {
 };
 
 export function ResourceWorkspace() {
+  const { locale, displayCurrency, displayCurrencyConfig, formatLedgerMoney } = useI18n();
   const [rows, setRows] = useState<MobileSupplierDevice[]>([]);
   const [selected, setSelected] = useState<MobileSupplierDevice | null>(null);
   const [form, setForm] = useState(blank);
@@ -68,7 +71,7 @@ export function ResourceWorkspace() {
       name: item.name,
       gpu_model: item.gpu_model,
       memory: item.memory,
-      price: String(item.price),
+      price: formatFinancialAmount(convertCardHoursToDisplay(item.price, locale, displayCurrencyConfig), undefined, false),
       stock: String(item.stock),
       region_name: item.region,
       city: item.city,
@@ -85,7 +88,7 @@ export function ResourceWorkspace() {
       let id: number;
       if (selected) {
         const changes: MobileSupplierDeviceUpdate = {};
-        const price = Number(form.price);
+        const price = convertDisplayToCardHours(form.price, locale, displayCurrencyConfig);
         const stock = Number(form.stock);
         if (form.name !== selected.name) changes.name = form.name;
         if (price !== selected.price) changes.price = price;
@@ -101,7 +104,7 @@ export function ResourceWorkspace() {
           name: form.name,
           gpu_model: form.gpu_model,
           memory: form.memory,
-          price: Number(form.price),
+          price: convertDisplayToCardHours(form.price, locale, displayCurrencyConfig),
           stock: Number(form.stock),
           region_code: form.region_code,
           region_name: form.region_name,
@@ -195,7 +198,7 @@ export function ResourceWorkspace() {
                 }}
               >
                 <span>
-                  <small>{displayBusinessReference(`WOD-P-${item.id}`)}</small>
+                  <small>{displayBusinessReference(`KAI-P-${item.id}`)}</small>
                   <strong>{item.name}</strong>
                   <em>
                     {item.gpu_model} · {item.region}
@@ -219,7 +222,7 @@ export function ResourceWorkspace() {
           {editing ? (
             <form className="resource-form" onSubmit={(event) => void save(event)}>
               <header>
-                <p>{selected ? `EDIT / ${displayBusinessReference(`WOD-P-${selected.id}`)}` : "NEW MOBILE PRODUCT"}</p>
+                <p>{selected ? `EDIT / ${displayBusinessReference(`KAI-P-${selected.id}`)}` : "NEW MOBILE PRODUCT"}</p>
                 <h2>{selected ? "编辑商品" : "新增算力商品"}</h2>
               </header>
               <div className="resource-form__grid">
@@ -236,7 +239,7 @@ export function ResourceWorkspace() {
                   <input required disabled={Boolean(selected)} value={form.memory} onChange={(event) => setForm({ ...form, memory: event.target.value })} />
                 </label>
                 <label>
-                  <span>每 GPU 小时价格（卡时）</span>
+                  <span>每 GPU 小时价格（{displayCurrency}）</span>
                   <input required type="number" min="0.001" step="0.001" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} />
                 </label>
                 <label>
@@ -280,7 +283,7 @@ export function ResourceWorkspace() {
             <div className="resource-dossier">
               <header>
                 <div>
-                  <p>{displayBusinessReference(`WOD-P-${selected.id}`)}</p>
+                  <p>{displayBusinessReference(`KAI-P-${selected.id}`)}</p>
                   <h2>{selected.name}</h2>
                   <span>
                     {selected.gpu_model} · {selected.memory}
@@ -291,7 +294,7 @@ export function ResourceWorkspace() {
               <div className="order-facts">
                 <div>
                   <small>每小时价格</small>
-                  <strong>{formatFinancialAmount(selected.price)} 卡时 / GPU·小时</strong>
+                  <strong>{formatLedgerMoney(selected.price)} / GPU·小时</strong>
                 </div>
                 <div>
                   <small>当前库存</small>

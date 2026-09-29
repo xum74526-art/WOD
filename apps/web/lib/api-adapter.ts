@@ -451,6 +451,8 @@ function notice(value: unknown) {
     body: text(item.content),
     title_en: text(item.title_en) || null,
     body_en: text(item.content_en) || null,
+    template_key: text(item.template_key) || null,
+    amount_cny: text(item.amount_cny) || null,
     action_path: notificationActionPath(item.action_url),
     is_read: Boolean(item.is_read),
     read_at: null,
@@ -517,7 +519,7 @@ function order(value: unknown, supplierView = false) {
     snapshot: {
       payment_mode: "mobile_wallet",
       product: {
-        resource_no: `WOD-P-${number(item.product_id)}`,
+        resource_no: `KAI-P-${number(item.product_id)}`,
         name: text(productSnapshot.product_name, text(item.product_name, "算力资源")),
         gpu_model: text(productSnapshot.gpu_model, text(item.gpu_model)),
         region: text(productSnapshot.region_name, text(productSnapshot.region_code, text(productSnapshot.city))),

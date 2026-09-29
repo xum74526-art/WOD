@@ -27,12 +27,12 @@
           </view>
           <view class="o-bottom">
             <view class="o-amount">
-              <text class="o-amt-label">{{ t('cardHour') }}</text>
-              <text class="o-amt-val">{{ fmtCardHours(o.payable_amount_card_hours ?? o.amount_card_hours ?? o.amount) }}</text>
+              <text class="o-amt-label">{{ t('orderAmountCardHours') }}</text>
+              <text class="o-amt-val">{{ formatCardHourCurrency(o.payable_amount_card_hours ?? o.amount_card_hours ?? o.amount) }}</text>
             </view>
             <view v-if="o.revenue_settlement_enabled" class="o-amount">
               <text class="o-amt-label">{{ t('cumulativeRevenue') }}</text>
-              <text class="o-amt-val up">{{ fmtCardHours(o.accumulated_revenue ?? 0) }}</text>
+              <text class="o-amt-val up">{{ formatCardHourCurrency(o.accumulated_revenue ?? 0) }}</text>
             </view>
             <view v-else class="o-amount">
               <text class="o-amt-label">{{ t('revenueSettlementStatus') }}</text>
@@ -56,7 +56,7 @@
 import { ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getOrders, type OrderItem } from '@/api/order'
-import { fmtCardHours } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'

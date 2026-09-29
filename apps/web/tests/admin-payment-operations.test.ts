@@ -39,14 +39,17 @@ test("operator labels distinguish wallet refunds from original-rail CNY refunds"
   const workspace = readFileSync(new URL("../components/admin-payment-operations-workspace.tsx", import.meta.url), "utf8");
   assert.match(workspace, /钱包订单争议退款/);
   assert.match(workspace, /人民币原支付渠道退款/);
-  assert.match(workspace, /这不是钱包订单退卡时/);
+  assert.match(workspace, /这不是钱包订单余额退款/);
   assert.match(workspace, /历史 MaPay 商户后台/);
   assert.match(workspace, /对应支付渠道后台/);
   assert.match(workspace, /页面回跳、用户截图和客户端参数都不是成功凭据/);
   assert.match(workspace, /必须由另一名管理员登录七相商户后台/);
   assert.match(workspace, /批准不等于渠道已退款成功/);
-  assert.match(workspace, /驳回只记录审核结论，不退款，也不扣减用户卡时/);
+  assert.match(workspace, /驳回只记录审核结论，不退款，也不扣减用户账户金额/);
   assert.match(workspace, /formatFinancialAmount\(value\)/);
+  assert.match(workspace, /<dt>充值金额<\/dt>/);
+  assert.match(workspace, /<dt>原路退款金额<\/dt>/);
+  assert.doesNotMatch(workspace, /渠道付款 \/ 账户入账|渠道退款 \/ 对应账户金额/);
   assert.doesNotMatch(workspace, /toFixed\(6\)/);
 });
 

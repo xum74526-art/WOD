@@ -124,10 +124,9 @@ _Payload = TypeVar("_Payload")
 
 
 def _card_hour_rate() -> Decimal:
-    rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
-    if rate <= 0:
-        raise BizError("卡时换算配置无效", status_code=503)
-    return rate
+    # Legacy response fields retain their names, but their values now carry
+    # direct money amounts with no intermediate unit conversion.
+    return Decimal("1")
 
 
 def _to_card_hours(value: object | None) -> float | None:
@@ -149,7 +148,7 @@ def _with_card_hour_candles(payload: dict) -> dict:
         payload.get("latest_live_price_cny")
     )
     payload["card_hour_rmb_rate"] = float(_card_hour_rate())
-    payload["wallet_charge_unit"] = "CARD_HOUR"
+    payload["wallet_charge_unit"] = "MONEY"
     return payload
 
 
@@ -1366,7 +1365,7 @@ def _latest_prices_payload(
             "inventory_available": None,
             "sample_semantics": "current_quote_observations_not_inventory",
             "billing_unit": "GPU_HOUR",
-            "wallet_charge_unit": "CARD_HOUR",
+            "wallet_charge_unit": "MONEY",
             "card_hour_rmb_rate": float(_card_hour_rate()),
             "source_count": len(rows),
         },
@@ -2564,7 +2563,7 @@ def _ranking_payload(db: Session) -> dict:
         "source_states": source_states,
         "source": "kai",
         "billing_unit": "GPU_HOUR",
-        "wallet_charge_unit": "CARD_HOUR",
+        "wallet_charge_unit": "MONEY",
         "card_hour_rmb_rate": float(_card_hour_rate()),
         "sample_semantics": "current_quote_observations_not_inventory",
     }

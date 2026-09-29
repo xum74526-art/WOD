@@ -4,8 +4,45 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { localeForFormatting, nextLocale, type KaiLocale } from "@/lib/language";
 import { toTraditionalChinese } from "@/lib/traditional-chinese";
 import { adminLegacyEnglish } from "@/lib/admin-legacy-english";
+import {
+  displayCurrencyForLocale,
+  formatCardHoursForLocale,
+  formatCnyForLocale,
+  formatLegacyCardHoursForLocale,
+} from "@/lib/display-currency";
+import {
+  DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  getPlatformCapabilities,
+  type DisplayCurrencyCode,
+  type DisplayCurrencyConfig,
+} from "@/lib/platform-capabilities";
 
 export type { KaiLocale } from "@/lib/language";
+
+function localizeLegacyCurrencyTerms(
+  value: string,
+  locale: KaiLocale,
+  config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+): string {
+  const alreadyFormatted = value.replace(
+    /((?:HK\$|US\$|[$¥])\s*[\d,.]+)\s*(?:卡时|卡時|card[\s-]?hours?|CH)(?![A-Za-z])/gi,
+    "$1",
+  );
+  const converted = alreadyFormatted.replace(
+    /(^|[^A-Za-z0-9$¥])([\d,.]+)\s*(?:卡时|卡時|card[\s-]?hours?|CH)(?![A-Za-z])/gi,
+    (_full, prefix: string, raw: string) => {
+      const amount = Number(raw.replaceAll(",", ""));
+      return Number.isFinite(amount)
+        ? `${prefix}${formatLegacyCardHoursForLocale(amount, locale, config)}`
+        : _full;
+    },
+  );
+  if (locale === "zh-Hans") return converted.replaceAll("卡時", "人民币").replaceAll("卡时", "人民币");
+  if (locale === "zh-Hant") return converted.replaceAll("卡时", "港幣").replaceAll("卡時", "港幣");
+  return converted
+    .replace(/\bcard[\s-]?hours?\b/gi, "USD")
+    .replace(/\bCH\b/g, "USD");
+}
 
 const english: Record<string, string> = {
   "language.switchEnglish": "Switch to English",
@@ -108,7 +145,7 @@ const english: Record<string, string> = {
   "admin.dashboard.suppliers.description": "Review merchant applications separately. Only applicants with completed identity verification can be approved.",
   "admin.dashboard.suppliers.action": "Open admission queue",
   "admin.dashboard.disputes.title": "Order Disputes",
-  "admin.dashboard.disputes.description": "Review product snapshots and secure-delivery evidence, then return card hours to the buyer or release supplier settlement.",
+  "admin.dashboard.disputes.description": "Review product snapshots and secure-delivery evidence, then return the frozen balance to the buyer or release supplier settlement.",
   "admin.dashboard.disputes.action": "Open dispute queue",
   "admin.dashboard.notifications.title": "Message Broadcast",
   "admin.dashboard.notifications.description": "Publish in-app notices to all active accounts with safe links and a complete publishing audit trail.",
@@ -133,6 +170,7 @@ const english: Record<string, string> = {
   "admin.dispute.confirm": "Confirm “{action}”? This action writes directly to the real order ledger.",
   "admin.dispute.success": "Order {orderNo} processed: {action}",
   "admin.dispute.quantity": "Quantity: {quantity} units",
+  "admin.dispute.action.refund": "Return frozen account balance to buyer",
   "admin.notification.majorPublished": "Major announcement published. It will appear on all three home screens, and {count} active accounts will also receive it in Notifications.",
   "admin.notification.published": "Published to {count} active accounts.",
   "admin.notification.revokePrompt": "Enter a revocation reason (at least 2 characters). This notice will immediately disappear from every client.",
@@ -140,8 +178,8 @@ const english: Record<string, string> = {
   "admin.notification.revokeConfirm": "Revoke this notice now?",
   "admin.notification.revoked": "The notice was revoked and removed from every user's notification center. The audit record remains available.",
   "admin.notification.originalLanguage": "Original-language content",
-  "admin.payment.confirmCredit": "Confirm that {provider} shows a successful payment and credit {cardHours} card hours to the user?",
-  "admin.payment.confirmRefund": "Refund recharge {orderNo} in full to the original RMB payment method (¥{amount})? This is not a wallet card-hour dispute refund.",
+  "admin.payment.confirmCredit": "Confirm that {provider} shows a successful payment and credit {amount} to the user's balance?",
+  "admin.payment.confirmRefund": "Refund recharge {orderNo} in full to the original RMB payment method (¥{amount})? This is not a wallet balance dispute refund.",
   "admin.payment.confirmEvidence": "Before continuing, verify the merchant transaction number, amount, and payment status again.",
   "admin.payment.creditSuccess": "Recharge {orderNo} was credited according to the server-verified result.",
   "admin.payment.refundAccepted": "Original-method refund {refundNo} is currently {status}. Use the refund record and merchant console as the final references.",
@@ -149,8 +187,8 @@ const english: Record<string, string> = {
   "admin.payment.uncertain": "The {action} result is uncertain. Refresh the details before retrying; the same review note will reuse the existing request identifier.",
   "admin.payment.action.credit": "credit",
   "admin.payment.action.refund": "original-method refund",
-  "admin.payment.approveRequestConfirm": "Approve refund request {requestNo}? The system will immediately attempt a full ¥{amount} refund to the original RMB payment method and freeze or reverse the corresponding card hours.",
-  "admin.payment.rejectRequestConfirm": "Reject refund request {requestNo}? No RMB refund will be submitted and no card hours will be deducted.",
+  "admin.payment.approveRequestConfirm": "Approve refund request {requestNo}? The system will immediately attempt a full ¥{amount} refund to the original RMB payment method and freeze or reverse the corresponding account balance.",
+  "admin.payment.rejectRequestConfirm": "Reject refund request {requestNo}? No RMB refund will be submitted and no account balance will be deducted.",
   "admin.payment.reviewAuditConfirm": "The decision is written to the payment audit log. Confirm that the request reason, recharge, and payment status have been verified.",
   "admin.payment.requestRejected": "Refund request {requestNo} was rejected; no RMB refund was submitted.",
   "admin.payment.requestApproved": "Refund request {requestNo} was approved and is currently {status}. Continue to rely on the original-method refund record and payment-channel result.",
@@ -158,6 +196,8 @@ const english: Record<string, string> = {
   "admin.payment.resolveSuccess": "Original-method RMB refund {refundNo} was confirmed as {outcome}.",
   "admin.payment.outcome.succeeded": "successful",
   "admin.payment.outcome.failed": "failed",
+  "admin.payment.boundaryPrefix": "This page handles RMB refunds to the original payment method for Qixiang recharges and may freeze or reverse the corresponding account balance;",
+  "admin.payment.boundarySuffix": "returns the buyer's wallet balance only and does not automatically refund RMB.",
   "admin.moderation.confirm": "Proceed with “{action}”?",
   "admin.moderation.account": "Account: {username}",
   "admin.moderation.loading": "Loading report queue…",
@@ -222,7 +262,7 @@ const english: Record<string, string> = {
   "home.pulse.error": "Live quotes are temporarily unavailable",
   "home.pulse.source": "{count} data source",
   "home.pulse.sources": "{count} data sources",
-  "home.pulse.unit": "card-hours / GPU-hours",
+  "home.pulse.unit": "/ GPU-hour",
   "home.pulse.updated": "Updated {date}",
   "home.pulse.publicData": "Public market data",
   "home.pulse.open": "Open market",
@@ -295,13 +335,13 @@ const english: Record<string, string> = {
   "market.inquiry": "Request quote",
   "market.submitRequest": "Submit Request",
   "product.rebate.label": "Estimated personal purchase rebate at expiry",
-  "product.rebate.amount": "+{amount} card hours",
+  "product.rebate.amount": "+{amount}",
   "product.rebate.login": "Sign in to load your personal rebate tier.",
   "product.rebate.unavailable": "Your personal rebate policy could not be loaded. Please refresh shortly.",
   "product.rebate.disabled": "Personal purchase rebates are currently disabled.",
-  "product.rebate.minimum": "Your current personal tier is {current}%. Personal purchase rebates apply to orders of at least {amount} card hours.",
+  "product.rebate.minimum": "Your current personal tier is {current}%. Personal purchase rebates apply to orders of at least {amount}.",
   "product.rebate.capExhausted": "Your current tier is {current}% and the post-order estimate is {projected}%. Your monthly allowance is fully used, so this order's estimated rebate is 0.",
-  "product.rebate.capLimited": "Your current tier is {current}% and the post-order estimate is {projected}%. The remaining monthly allowance limits this order's estimated rebate to {remaining} card hours.",
+  "product.rebate.capLimited": "Your current tier is {current}% and the post-order estimate is {projected}%. The remaining monthly allowance limits this order's estimated rebate to {remaining}.",
   "product.rebate.tierChange": "Your current personal tier is {current}%; after this order it is estimated to be {projected}%.",
   "product.rebate.tierStable": "Your current and estimated personal tier for this order is {rate}%.",
   "product.rebate.settlement": "This is an estimate. At delivery confirmation, the server recalculates it from your personal tier and remaining allowance; the final amount is settled when the asset expires.",
@@ -332,7 +372,7 @@ const english: Record<string, string> = {
   "product.mode.usage": "usage",
   "product.mode.holdingSellable": "Hold and resell",
   "product.holding.registration": "Platform-held asset registration",
-  "product.holding.confirmNotice": "Held assets do not include SSH access, usage revenue, or purchase rebates. A sale is settled in card hours at the latest valid KAI market price.",
+  "product.holding.confirmNotice": "Held assets do not include SSH access, usage revenue, or purchase rebates. A sale is settled into your account balance at the latest valid KAI market price.",
   "product.unavailable": "This resource is currently unavailable for ordering",
   "product.available": "Inventory available · Order with the unified wallet",
   "product.inquiryAvailable": "Requests are currently accepted",
@@ -349,12 +389,12 @@ const english: Record<string, string> = {
   "product.merchantNoDescription": "The merchant has not added resource details yet.",
   "product.holding.rules": "Held-asset rules",
   "product.guaranteeFlow": "Protected fulfillment flow",
-  "product.holding.risk": "The asset is registered immediately at the current KAI self-operated price. It does not include SSH access or usage revenue. A sale is settled in card hours at the latest valid price and may incur a loss when prices change.",
-  "product.guaranteeDescription": "Card hours are frozen when the order is placed. {seller} submits valid SSH credentials, and settlement occurs after buyer acceptance. Delivered specifications govern; issues can be disputed from the order.",
+  "product.holding.risk": "The asset is registered immediately at the current KAI self-operated price. It does not include SSH access or usage revenue. A sale is settled into the account balance at the latest valid price and may incur a loss when prices change.",
+  "product.guaranteeDescription": "The order amount is frozen when the order is placed. {seller} submits valid SSH credentials, and settlement occurs after buyer acceptance. Delivered specifications govern; issues can be disputed from the order.",
   "product.platformFulfillmentStaff": "Platform fulfillment staff",
   "product.correspondingMerchant": "The merchant",
   "product.manualPlan": "Manually confirmed plan",
-  "product.manualPlanDescription": "Submitting a request does not deduct card hours or create an order automatically. Staff will contact you to confirm specifications, price, delivery time, and next steps.",
+  "product.manualPlanDescription": "Submitting a request does not deduct your balance or create an order automatically. Staff will contact you to confirm specifications, price, delivery time, and next steps.",
   "product.duration.buy": "Purchase duration (hours)",
   "product.duration.estimate": "Estimated usage duration (hours)",
   "product.hour.decrease": "Decrease by one hour",
@@ -385,24 +425,24 @@ const english: Record<string, string> = {
   "earnings.purchaseRebate": "Purchase rebate settled",
   "rebate.personal.currentTier": "Current tier: {rate}%",
   "rebate.personal.currentTierLabel": "Current personal purchase tier",
-  "rebate.personal.pending": "Pending expiry settlement (card hours)",
+  "rebate.personal.pending": "Pending expiry settlement",
   "rebate.personal.noHint": "There is no new personal-tier update.",
-  "rebate.personal.mechanism": "Only confirmed usage orders count. Your tier is based on personal card-hour purchases confirmed this month, and the rebate is credited when the asset term ends.",
-  "rebate.personal.capProgress": "Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap} card hours · {mode}",
-  "rebate.personal.summary": "Pending at expiry: {pending} · Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap} card hours",
+  "rebate.personal.mechanism": "Only confirmed usage orders count. Your tier is based on personal purchase value confirmed this month, and the rebate is credited when the asset term ends.",
+  "rebate.personal.capProgress": "Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap} · {mode}",
+  "rebate.personal.summary": "Pending at expiry: {pending} · Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap}",
   "rebate.personal.tiers": "Personal Purchase Tiers",
   "rebate.supplier.title": "Supplier Sales Rebate",
   "rebate.supplier.monthSales": "Confirmed sales this month",
   "rebate.supplier.monthRebated": "Supplier sales rebates this month",
   "rebate.supplier.currentTierLabel": "Current supplier sales tier",
   "rebate.supplier.noHint": "There is no new supplier-tier update.",
-  "rebate.supplier.mechanism": "The rebate base is the total card hours from confirmed sales this month—not the platform service fee. The rebate equals confirmed sales multiplied by the current tier rate.",
-  "rebate.supplier.summary": "Estimated rebate: {estimated} · Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap} card hours",
+  "rebate.supplier.mechanism": "The rebate base is confirmed sales value this month—not the platform service fee. The rebate equals confirmed sales multiplied by the current tier rate.",
+  "rebate.supplier.summary": "Estimated rebate: {estimated} · Entitled this month: {entitled} · Cap used: {used} · Remaining allowance: {remaining} · Monthly cap: {cap}",
   "rebate.supplier.tiers": "Supplier Sales Tiers",
-  "rebate.unit.cardHours": "card hours",
+  "rebate.unit.cardHours": "account balance",
   "rebate.current": "Current",
-  "rebate.mode.live": "live card hours",
-  "rebate.mode.cardHours": "in-app card hours",
+  "rebate.mode.live": "cash balance",
+  "rebate.mode.cardHours": "in-app reward balance",
   "rebate.mode.disabled": "disabled",
   "rebate.center.title": "Rebate Center",
   "rebate.center.description": "Review personal purchase rebates and supplier sales rebates separately, with independent tiers and progress.",
@@ -433,16 +473,16 @@ const english: Record<string, string> = {
   "invite.fixed.identity": "Identity verified",
   "invite.fixed.identityNote": "Your friend's identity review must pass",
   "invite.fixed.firstOrder": "First valid order completed",
-  "invite.fixed.firstOrderNote": "The completed order must be funded by recharged card hours",
+  "invite.fixed.firstOrderNote": "The completed order must be funded by a real paid balance",
   "invite.fixed.credit": "Inviter rewarded",
-  "invite.fixed.creditNote": "58 card hours enter the in-app spending balance",
-  "invite.fixed.quotaRule": "Daily capacity is assigned on the Beijing date when a friend completes identity verification and their first valid order, not their registration date. Up to five friends qualify each day. Later relationships remain linked, but receive no 58-card-hour reward, do not count toward tiers, and never generate future consumption commission.",
+  "invite.fixed.creditNote": "The fixed reward enters the in-app spending balance",
+  "invite.fixed.quotaRule": "Daily capacity is assigned on the Beijing date when a friend completes identity verification and their first valid order, not their registration date. Up to five friends qualify each day. Later relationships remain linked, but receive no fixed reward, do not count toward tiers, and never generate future consumption commission.",
   "invite.rebate.title": "Friend consumption commission",
   "invite.rebate.eligibleFriends": "Eligible friends",
   "invite.rebate.eligibleSpend": "Eligible consumption base",
   "invite.rebate.pending": "Commission pending",
   "invite.rebate.settled": "Commission settled",
-  "invite.rebate.rule": "Only completed, eligible consumption by first-level friends and funded by real recharges counts. Downstream referrals, refunds, cancellations, disputes, and spending from reward card hours do not count.",
+  "invite.rebate.rule": "Only completed, eligible consumption by first-level friends and funded by real recharges counts. Downstream referrals, refunds, cancellations, disputes, and promotional-balance spending do not count.",
   "invite.tier.current": "Current",
   "invite.tier.maximum": "Highest commission tier reached at 8%",
   "invite.tier.next": "{count} more eligible friends to reach {rate}%",
@@ -469,9 +509,9 @@ const english: Record<string, string> = {
   "invite.rules.body": "This program covers first-level friends only and requires no entrance fee. Self-referrals and related accounts are prohibited. Server risk checks and ledger records determine all eligibility, consumption, and settlement results.",
   "invite.restriction.both": "For in-app spending only. Not withdrawable or transferable.",
   "invite.restriction.withdraw": "For in-app spending only. Not withdrawable.",
-  "invite.restriction.transfer": "Reward card hours are not transferable.",
+  "invite.restriction.transfer": "Rewards are not transferable.",
   "invite.restriction.account": "Reward use follows the current account rules.",
-  "invite.unit.cardHours": "card hours",
+  "invite.unit.cardHours": "account balance",
   "invite.unit.people": "friends",
   "invite.status.pendingIdentity": "Identity verification pending",
   "invite.status.pendingOrder": "First valid order pending",
@@ -647,7 +687,7 @@ const english: Record<string, string> = {
   "settings.avatarUpdated": "Avatar updated",
   "settings.kaiNoUrl": "Kai SSO did not return an authorization URL",
   "trends.title": "GPU Compute Market Trends",
-  "trends.description": "Compare card-hour price movements and current market ranges across GPU models.",
+  "trends.description": "Compare localized price movements and current market ranges across GPU models.",
   "trends.range.4Weeks": "4 weeks",
   "trends.range.8Weeks": "8 weeks",
   "trends.range.3Months": "3 months",
@@ -685,7 +725,7 @@ const english: Record<string, string> = {
   "trends.candles.state.emptyDescription": "This model currently has no verified OHLC data to display.",
   "trends.candles.state.retry": "Reload",
   "trends.candles.title": "Candlesticks",
-  "trends.candles.unit": "card-hours / GPU-hours",
+  "trends.candles.unit": "Local currency / GPU-hour",
   "trends.candles.change": "Change {value}",
   "trends.candles.ohlc.open": "Open",
   "trends.candles.ohlc.high": "High",
@@ -706,7 +746,7 @@ const english: Record<string, string> = {
   "trends.candles.latestHistoricalClose": "Chart shows the latest historical close",
   "trends.candles.liveRefresh": "Current price checked every {seconds} seconds",
   "trends.candles.stale": "{error} The last successful data remains displayed.",
-  "trends.value.cardHours": "{value} card-hours",
+  "trends.value.cardHours": "{value}",
   "trends.value.vram": "{value} GB VRAM",
   "trends.value.insufficient": "Insufficient data",
   "trends.state.loading": "Loading compute market",
@@ -761,7 +801,7 @@ const english: Record<string, string> = {
   "trends.regional.aboveLowest": "+{value}% above lowest",
   "trends.regional.loading": "Loading regional quotes for this model…",
   "trends.regional.empty": "No comparable regional quotes are available for this model",
-  "trends.regional.disclaimer": "KAI quote observations are compared for the same GPU model and VRAM, shown uniformly as card-hours / GPU-hours. Quote count does not indicate live inventory.",
+  "trends.regional.disclaimer": "KAI quote observations compare the same GPU model and VRAM, with each GPU-hour shown in the currency selected by the current language. Quote count does not indicate live inventory.",
   "trends.board.gainers": "Top gainers",
   "trends.board.losers": "Top losers",
   "trends.board.accumulating": "Building history",
@@ -1148,7 +1188,7 @@ const legacyEnglish: Record<string, string> = {
   "把算力市场": "Put the compute market", "装进口袋": "in your pocket",
 };
 
-function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
+function LegacyLocaleBridge({ locale, displayCurrencyConfig }: { locale: KaiLocale; displayCurrencyConfig: DisplayCurrencyConfig }) {
   const originalText = useRef(new Map<Text, string>());
   const originalAttributes = useRef(new Map<Element, Map<string, string>>());
   useLayoutEffect(() => {
@@ -1159,13 +1199,13 @@ function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
     textEntries.clear();
     attributeEntries.clear();
 
-    if (locale === "zh-Hans") return;
-
     const translate = (raw: string) => {
-      if (locale === "zh-Hant") return toTraditionalChinese(raw);
+      if (locale === "zh-Hans") return localizeLegacyCurrencyTerms(raw, locale, displayCurrencyConfig);
+      if (locale === "zh-Hant") return localizeLegacyCurrencyTerms(toTraditionalChinese(raw), locale, displayCurrencyConfig);
       const trimmed = raw.trim();
       const translated = legacyEnglish[trimmed] || adminLegacyEnglish[trimmed];
-      return translated ? raw.replace(trimmed, translated.replaceAll("KAI星算", "KAI Star")) : raw;
+      const localized = translated ? raw.replace(trimmed, translated.replaceAll("KAI星算", "KAI Star")) : raw;
+      return localizeLegacyCurrencyTerms(localized, locale, displayCurrencyConfig);
     };
     const shouldSkip = (element: Element | null) => Boolean(element?.closest("script, style, noscript, code, pre, [data-i18n-skip]"));
     const translateText = (node: Text) => {
@@ -1211,7 +1251,7 @@ function LegacyLocaleBridge({ locale }: { locale: KaiLocale }) {
       attributeFilter: ["placeholder", "title", "aria-label", "aria-description", "alt"],
     });
     return () => observer.disconnect();
-  }, [locale]);
+  }, [displayCurrencyConfig, locale]);
   return null;
 }
 
@@ -1221,12 +1261,17 @@ type LocaleContextValue = {
   toggleLocale: () => void;
   t: (key: string, fallback: string, values?: Record<string, string | number>) => string;
   dateLocale: string;
+  displayCurrency: DisplayCurrencyCode;
+  displayCurrencyConfig: DisplayCurrencyConfig;
+  formatCnyMoney: (value: number | string | null | undefined) => string;
+  formatLedgerMoney: (value: number | string | null | undefined) => string;
 };
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLocale; children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<KaiLocale>(initialLocale);
+  const [displayCurrencyConfig, setDisplayCurrencyConfig] = useState<DisplayCurrencyConfig>(DEFAULT_DISPLAY_CURRENCY_CONFIG);
   const setLocale = useCallback((next: KaiLocale) => {
     setLocaleState(next);
     document.documentElement.lang = next;
@@ -1239,14 +1284,40 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
     const localized = locale === "en"
       ? (english[key] || legacyEnglish[fallback] || adminLegacyEnglish[fallback] || fallback).replaceAll("KAI星算", "KAI Star")
       : locale === "zh-Hant" ? toTraditionalChinese(fallback) : fallback;
-    return Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localized);
-  }, [locale]);
+    const interpolated = Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localized);
+    return localizeLegacyCurrencyTerms(interpolated, locale, displayCurrencyConfig);
+  }, [displayCurrencyConfig, locale]);
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dataset.locale = locale;
   }, [locale]);
-  const value = useMemo(() => ({ locale, setLocale, toggleLocale, t, dateLocale: localeForFormatting(locale) }), [locale, setLocale, toggleLocale, t]);
-  return <LocaleContext.Provider value={value}><LegacyLocaleBridge locale={locale}/>{children}</LocaleContext.Provider>;
+  useEffect(() => {
+    let active = true;
+    void getPlatformCapabilities()
+      .then((capabilities) => { if (active) setDisplayCurrencyConfig(capabilities.display_currency); })
+      .catch(() => { if (active) setDisplayCurrencyConfig(DEFAULT_DISPLAY_CURRENCY_CONFIG); });
+    return () => { active = false; };
+  }, []);
+  const formatCnyMoney = useCallback(
+    (value: number | string | null | undefined) => formatCnyForLocale(value, locale, displayCurrencyConfig),
+    [displayCurrencyConfig, locale],
+  );
+  const formatLedgerMoney = useCallback(
+    (value: number | string | null | undefined) => formatCardHoursForLocale(value, locale, displayCurrencyConfig),
+    [displayCurrencyConfig, locale],
+  );
+  const value = useMemo(() => ({
+    locale,
+    setLocale,
+    toggleLocale,
+    t,
+    dateLocale: localeForFormatting(locale),
+    displayCurrency: displayCurrencyForLocale(locale),
+    displayCurrencyConfig,
+    formatCnyMoney,
+    formatLedgerMoney,
+  }), [displayCurrencyConfig, formatCnyMoney, formatLedgerMoney, locale, setLocale, toggleLocale, t]);
+  return <LocaleContext.Provider value={value}><LegacyLocaleBridge locale={locale} displayCurrencyConfig={displayCurrencyConfig}/>{children}</LocaleContext.Provider>;
 }
 
 export function useI18n() {

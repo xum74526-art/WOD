@@ -1,4 +1,4 @@
-"""Validated client for KAI's public GPU card-hour pricing API.
+"""Validated client for KAI's public GPU hourly-pricing API.
 
 The integration deliberately keeps KAI's identity separate from every other
 provider.  Current quotes and historical candles are accepted only when their
@@ -254,7 +254,7 @@ class _AsyncHttpRunner:
     def _default_client_factory(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             follow_redirects=True,
-            headers={"Accept": "application/json", "User-Agent": "WOD-KAI-Pricing/1.0"},
+            headers={"Accept": "application/json", "User-Agent": "KAI-Star-Pricing/1.0"},
             limits=httpx.Limits(
                 max_connections=self.max_pending,
                 max_keepalive_connections=self.max_pending,

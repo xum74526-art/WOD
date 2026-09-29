@@ -167,7 +167,7 @@ def get_deletion_blockers(db: Session, user: User) -> list[dict]:
         ))
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).first()
     if wallet and any(Decimal(str(getattr(wallet, field) or 0)) != 0 for field in WALLET_BUCKETS):
-        blockers.append({"code": "wallet_not_empty", "message": "账户仍有余额、冻结资金或其他卡时权益，请先核对处理；注销不会自动清零。", "count": 1})
+        blockers.append({"code": "wallet_not_empty", "message": "账户仍有余额、冻结资金或其他资金权益，请先核对处理；注销不会自动清零。", "count": 1})
     relationships = db.query(InviteRecord.id).filter(or_(
         InviteRecord.inviter_id == user.id, InviteRecord.invitee_id == user.id,
     ))
@@ -209,7 +209,7 @@ def get_automatic_actions(db: Session, user: User) -> list[str]:
     if db.query(Product.id).filter(Product.supplier_id.in_(suppliers), Product.status == "on").first():
         actions.append("下架本账号的商家资源")
     if db.query(Coupon.id).filter(Coupon.user_id == user.id, Coupon.status == "available").first():
-        actions.append("停用尚未使用的优惠券；卡时余额仍须先处理，不会自动放弃")
+        actions.append("停用尚未使用的优惠券；账户余额仍须先处理，不会自动放弃")
     return actions
 
 

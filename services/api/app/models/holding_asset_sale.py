@@ -8,11 +8,11 @@ from app.db.base import Base
 
 
 class HoldingAssetSale(Base):
-    """Immutable audit fact for a platform card-hour buyback.
+    """Immutable audit fact for a platform CNY wallet buyback.
 
     A held asset can be sold exactly once.  The split fields preserve the
     original cash/promotional classification so a resale can never turn
-    promotional card-hours into cash-backed consumption.
+    promotional reward balance into cash-backed consumption.
     """
 
     __tablename__ = "holding_asset_sales"

@@ -128,12 +128,11 @@ def holding_asset_quote(asset: Asset, db: Session) -> dict:
         base["trading_unavailable_reason"] = "当前行情已延迟或过期，请稍后刷新"
         return base
 
-    rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
-    if rate <= 0 or Decimal(str(product.price or 0)) <= 0 or product.price_updated_at is None:
+    if Decimal(str(product.price or 0)) <= 0 or product.price_updated_at is None:
         base["trading_unavailable_reason"] = "当前报价配置无效，请联系平台核查"
         return base
 
-    unit = _amount(Decimal(str(product.price)) / rate)
+    unit = _amount(product.price)
     quantity = max(int(asset.quantity or 1), 1)
     sell_value = _amount(unit * Decimal(int(order.purchase_hours)) * Decimal(quantity))
     buy_value = _amount(order.amount)
@@ -246,8 +245,8 @@ def settle_holding_asset_sale(
         price_observed_at=product.price_updated_at,
         policy_version=HOLDING_SALE_POLICY,
         policy_snapshot={
-            "counterparty": "kai_platform_card_hour_buyback",
-            "settlement_currency": "card_hours",
+            "counterparty": "kai_platform_money_buyback",
+            "settlement_currency": "money",
             "withdrawable_credit": False,
             "quote_source": "kai",
             "promotional_classification": "preserve_original_ratio_round_up",
@@ -273,7 +272,7 @@ def settle_holding_asset_sale(
         balance_after=spendable_wallet_balance(wallet, db),
         ref_order_id=order.id,
         event_key=sale.event_key,
-        remark=f"出售持有资产({order.order_no})，按 KAI 最新有效行情结算为卡时",
+        remark=f"出售持有资产({order.order_no})，按 KAI 最新有效行情结算到账户金额",
     ))
     assert_wallet_funding_invariants(wallet, db)
     db.flush()

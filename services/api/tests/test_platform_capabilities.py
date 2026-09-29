@@ -93,6 +93,16 @@ class PlatformCapabilityTests(unittest.TestCase):
         self.assertFalse(data["recharge_enabled"])
         self.assertFalse(data["withdraw_enabled"])
         self.assertTrue(data["history_read_enabled"])
+        self.assertEqual(data["display_currency"]["base_currency"], "CNY")
+        self.assertEqual(data["display_currency"]["fraction_digits"], 3)
+        self.assertEqual(data["display_currency"]["card_hour_cny_rate"], 1.0)
+        self.assertEqual(data["display_currency"]["rates"]["CNY"], 1.0)
+        self.assertGreater(data["display_currency"]["rates"]["HKD"], 0)
+        self.assertGreater(data["display_currency"]["rates"]["USD"], 0)
+        self.assertEqual(data["display_currency"]["rate_mode"], "daily_reference")
+        self.assertEqual(data["display_currency"]["settlement_currency"], "CNY")
+        self.assertEqual(data["display_currency"]["conversion_scope"], "display_only")
+        self.assertRegex(data["display_currency"]["rate_date"], r"^\d{4}-\d{2}-\d{2}$")
 
     def test_credential_escrow_fails_closed_when_sensitive_config_is_unsafe(self):
         with patch(

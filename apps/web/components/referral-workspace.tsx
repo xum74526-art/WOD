@@ -19,22 +19,13 @@ import {
 import { useI18n } from "@/components/locale-root";
 import { errorMessage } from "@/lib/commerce-ui";
 import { getInviteBundle, getInviteCommissionPage, getInviteRecordPage, type InviteRecord, type InviteSummary } from "@/lib/mobile-business-api";
-import { formatFinancialAmount } from "@/lib/financial-format";
 import styles from "./referral-workspace.module.css";
 
 type RecordTab = "fixed" | "rebate";
 
-function amount(value: unknown, locale: string) {
-  return formatFinancialAmount(value as number | string | null | undefined, locale);
-}
-
 function rate(value: unknown, locale: string) {
   const number = Number(value || 0);
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Number.isFinite(number) ? number : 0);
-}
-
-function optionalAmount(value: number | null, locale: string) {
-  return value === null ? "-" : amount(value, locale);
 }
 
 function date(value: string | null, locale: string) {
@@ -128,7 +119,7 @@ function recordReference(row: InviteRecord, t: ReturnType<typeof useI18n>["t"]) 
 }
 
 function RecordRow({ row, summary }: { row: InviteRecord; summary: InviteSummary }) {
-  const { dateLocale, t } = useI18n();
+  const { dateLocale, displayCurrency, formatLedgerMoney, t } = useI18n();
   const isCommission = row.kind === "friend_rebate";
   const isLegacy = row.kind === "legacy";
   const fallbackAmount = !isCommission && !isLegacy && row.status === "rewarded"
@@ -149,7 +140,7 @@ function RecordRow({ row, summary }: { row: InviteRecord; summary: InviteSummary
     <div className={styles.recordBasis}>
       {isCommission ? <>
         <small>{t("invite.records.eligibleConsumption", "有效消费")}</small>
-        <strong>{amount(row.eligibleConsumptionCardHours, dateLocale)} {t("invite.unit.cardHours", "卡时")}</strong>
+        <strong>{formatLedgerMoney(row.eligibleConsumptionCardHours)}</strong>
         <span>{row.sourceType === "renewal" ? t("invite.records.sourceRenewal", "续费") : t("invite.records.sourceOrder", "订单")} / {rate(row.ratePercent, dateLocale)}%</span>
       </> : <>
         <small>{isLegacy ? t("invite.records.legacy", "历史邀请奖励") : t("invite.records.qualification", "实名及首单资格")}</small>
@@ -157,8 +148,8 @@ function RecordRow({ row, summary }: { row: InviteRecord; summary: InviteSummary
       </>}
     </div>
     <div className={styles.recordValue}>
-      <strong>{displayAmount > 0 ? `+${amount(displayAmount, dateLocale)}` : "-"}</strong>
-      <small>{t("invite.unit.cardHours", "卡时")}</small>
+      <strong>{displayAmount > 0 ? `+${formatLedgerMoney(displayAmount)}` : "-"}</strong>
+      <small>{displayCurrency}</small>
       <time>{date(row.settledAt || row.createdAt, dateLocale)}</time>
     </div>
     {reason && <p className={`${styles.recordReason} ${["risk_rejected", "daily_cap_exceeded", "forfeited"].includes(row.status) ? styles.recordReasonNegative : ""}`}>{positiveReason ? <CheckCircle size={14}/> : <WarningCircle size={14}/>} {reason}</p>}
@@ -166,7 +157,7 @@ function RecordRow({ row, summary }: { row: InviteRecord; summary: InviteSummary
 }
 
 export function ReferralWorkspace() {
-  const { dateLocale, t } = useI18n();
+  const { locale, dateLocale, displayCurrency, formatLedgerMoney, t } = useI18n();
   const [summary, setSummary] = useState<InviteSummary | null>(null);
   const [fixedRecords, setFixedRecords] = useState<InviteRecord[]>([]);
   const [rebateRecords, setRebateRecords] = useState<InviteRecord[]>([]);
@@ -331,18 +322,18 @@ export function ReferralWorkspace() {
         <header>
           <span className={styles.iconBox}><Gift size={22}/></span>
           <div><h2>{t("invite.fixed.title", "邀请达标奖励")}</h2><p>{t("invite.fixed.subtitle", "每位合格好友固定奖励")}</p></div>
-          <strong>+{amount(summary.fixedRewardCardHours, dateLocale)}</strong>
+          <strong>+{formatLedgerMoney(summary.fixedRewardCardHours)}</strong>
         </header>
         <div className={styles.mechanismStats}>
-          <div><small>{t("invite.fixed.settled", "累计已发")}</small><strong>{optionalAmount(summary.fixedRewardTotal, dateLocale)}</strong><span>{t("invite.unit.cardHours", "卡时")}</span></div>
-          <div><small>{t("invite.fixed.pending", "待发奖励")}</small><strong>{optionalAmount(summary.fixedRewardPending, dateLocale)}</strong><span>{t("invite.unit.cardHours", "卡时")}</span></div>
+          <div><small>{t("invite.fixed.settled", "累计已发")}</small><strong>{summary.fixedRewardTotal === null ? "-" : formatLedgerMoney(summary.fixedRewardTotal)}</strong><span>{displayCurrency}</span></div>
+          <div><small>{t("invite.fixed.pending", "待发奖励")}</small><strong>{summary.fixedRewardPending === null ? "-" : formatLedgerMoney(summary.fixedRewardPending)}</strong><span>{displayCurrency}</span></div>
         </div>
         <ol className={styles.qualificationSteps}>
           <li><UserCheck size={18}/><span><strong>{t("invite.fixed.identity", "完成实名认证")}</strong><small>{t("invite.fixed.identityNote", "好友身份审核通过")}</small></span></li>
-          <li><Receipt size={18}/><span><strong>{t("invite.fixed.firstOrder", "完成首笔有效订单")}</strong><small>{t("invite.fixed.firstOrderNote", "订单由真实充值卡时支持并完成")}</small></span></li>
-          <li><Coins size={18}/><span><strong>{t("invite.fixed.credit", "奖励邀请人")}</strong><small>{t("invite.fixed.creditNote", "58 卡时进入站内消费余额")}</small></span></li>
+          <li><Receipt size={18}/><span><strong>{t("invite.fixed.firstOrder", "完成首笔有效订单")}</strong><small>{t("invite.fixed.firstOrderNoteCurrency", locale === "en" ? "The order is completed with a real paid balance." : "订单由真实充值余额支持并完成")}</small></span></li>
+          <li><Coins size={18}/><span><strong>{t("invite.fixed.credit", "奖励邀请人")}</strong><small>{t("invite.fixed.creditNoteCurrency", locale === "en" ? "The reward is credited to the in-app spending balance." : "奖励进入站内消费余额")}</small></span></li>
         </ol>
-        <p className={styles.quotaRule}>{t("invite.fixed.quotaRule", "每日名额按好友完成“实名 + 首笔有效订单”的北京时间日期占用，不按注册日期计算。每天最多 5 位；第 6 位及以后仍保留邀请关系，但不发 58 卡时、不计入等级，也不产生后续消费返佣。")}</p>
+        <p className={styles.quotaRule}>{t("invite.fixed.quotaRuleCurrency", locale === "en" ? "Daily slots are assigned by the Beijing date on which a friend completes identity verification and their first eligible order. Up to five friends qualify per day; later friends remain linked but receive no fixed reward, tier credit, or follow-on rebate." : "每日名额按好友完成“实名 + 首笔有效订单”的北京时间日期占用，不按注册日期计算。每天最多 5 位；第 6 位及以后仍保留邀请关系，但不发固定奖励、不计入等级，也不产生后续消费返佣。")}</p>
       </article>
 
       <article className={styles.rebatePanel}>
@@ -352,9 +343,9 @@ export function ReferralWorkspace() {
         </header>
         <div className={styles.rebateStats}>
           <div><small>{t("invite.rebate.eligibleFriends", "合格好友")}</small><strong>{summary.eligibleFriendCount ?? "-"}</strong><span>{t("invite.unit.people", "人")}</span></div>
-          <div><small>{t("invite.rebate.eligibleSpend", "有效消费基数")}</small><strong>{optionalAmount(summary.eligibleFriendSpendCardHours, dateLocale)}</strong><span>{t("invite.unit.cardHours", "卡时")}</span></div>
-          <div><small>{t("invite.rebate.pending", "待结算返佣")}</small><strong>{optionalAmount(summary.friendRebatePending, dateLocale)}</strong><span>{t("invite.unit.cardHours", "卡时")}</span></div>
-          <div><small>{t("invite.rebate.settled", "累计已结算")}</small><strong>{optionalAmount(summary.friendRebateSettled, dateLocale)}</strong><span>{t("invite.unit.cardHours", "卡时")}</span></div>
+          <div><small>{t("invite.rebate.eligibleSpend", "有效消费基数")}</small><strong>{summary.eligibleFriendSpendCardHours === null ? "-" : formatLedgerMoney(summary.eligibleFriendSpendCardHours)}</strong><span>{displayCurrency}</span></div>
+          <div><small>{t("invite.rebate.pending", "待结算返佣")}</small><strong>{summary.friendRebatePending === null ? "-" : formatLedgerMoney(summary.friendRebatePending)}</strong><span>{displayCurrency}</span></div>
+          <div><small>{t("invite.rebate.settled", "累计已结算")}</small><strong>{summary.friendRebateSettled === null ? "-" : formatLedgerMoney(summary.friendRebateSettled)}</strong><span>{displayCurrency}</span></div>
         </div>
         <div className={styles.tierGrid}>
           {summary.friendRebateTiers.map((tier) => {
@@ -370,7 +361,7 @@ export function ReferralWorkspace() {
             </div>;
           })}
         </div>
-        <p className={styles.rebateRule}>{t("invite.rebate.rule", "仅计算一级好友由真实充值支持且已完成的有效消费。好友再次邀请的人不计入；退款、取消、争议和奖励卡时消费不计返佣。")}</p>
+        <p className={styles.rebateRule}>{t("invite.rebate.ruleCurrency", locale === "en" ? "Only completed eligible spending by directly invited friends and backed by real payments is counted. Further referrals, refunds, cancellations, disputes, and promotional-balance spending do not earn rebates." : "仅计算一级好友由真实充值支持且已完成的有效消费。好友再次邀请的人不计入；退款、取消、争议和奖励余额消费不计返佣。")}</p>
       </article>
     </section>
 

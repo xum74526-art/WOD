@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.db.base import Base
 from app.models import SupportConversation, SupportMessage, SupportTicket, User  # noqa: F401
-from app.routers.chat import chat, create_support_ticket, get_support_session
+from app.routers.chat import _system_prompt, chat, create_support_ticket, get_support_session
 from app.schemas.support import SupportMessageIn, SupportTicketIn
 from app.services.support import FAQ_ANSWERS, match_faq
 from app.utils.response import BizError
@@ -80,7 +80,7 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
             lang="zh",
         ), self.user, self.db)["data"]
         ticket = created["ticket"]
-        self.assertRegex(ticket["ticket_no"], r"^WOD-\d{8}-[A-F0-9]{6}$")
+        self.assertRegex(ticket["ticket_no"], r"^KAI-\d{8}-[A-F0-9]{6}$")
         self.assertEqual(ticket["status"], "pending_unassigned")
         self.assertIsNone(ticket["assigned_to"])
         self.assertEqual(self.db.query(SupportTicket).filter_by(user_id=self.user.id).count(), 1)
@@ -116,6 +116,14 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("autodl", combined)
         self.assertIn("kai pricing", combined)
         self.assertIn("server-verified callback", combined)
+        self.assertNotIn("wallet card-hours", combined)
+        self.assertNotIn("扣卡时", combined)
+        self.assertIn("recorded and settled in cny", combined)
+
+        prompt = _system_prompt().lower()
+        self.assertIn("canonical ledger", prompt)
+        self.assertIn("daily reference rate", prompt)
+        self.assertIn("never use ch or card-hours", prompt)
 
     def test_trade_support_copy_follows_server_mode_without_losing_future_flow(self):
         with patch.object(settings, "DIRECT_TRADE_ENABLED", False), patch.object(
@@ -125,11 +133,13 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
             payment = match_faq("怎么充值付款", "zh")
         self.assertIn("提交需求", purchase.zh)
         self.assertIn("未开放 App 内充值", payment.zh)
-        self.assertNotIn("冻结站内卡时", purchase.zh)
+        self.assertIn("扣减账户余额", purchase.zh)
+        self.assertNotIn("扣卡时", purchase.zh)
 
         with patch.object(settings, "DIRECT_TRADE_ENABLED", True):
             direct_purchase = match_faq("怎么购买算力和交付 SSH", "zh")
-        self.assertIn("冻结站内卡时", direct_purchase.zh)
+        self.assertIn("人民币记账结算", direct_purchase.zh)
+        self.assertNotIn("卡时", direct_purchase.zh)
 
 
 if __name__ == "__main__":

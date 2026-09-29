@@ -23,13 +23,15 @@ from app.utils.response import BizError, success
 router = APIRouter(prefix="/api/chat", tags=["support"])
 
 DIRECT_TRADE_SYSTEM_FACTS = """- A current KAI Pricing quote explicitly marked Purchasable can create an hourly
-  order, reserve wallet CH, and wait for manual platform SSH delivery.
+  order, reserve the corresponding CNY-denominated wallet balance, and wait for
+  manual platform SSH delivery.
 - KAI Pricing is the sole active live quote source. Quote observations are not
   live inventory, and listings marked reference-only cannot be ordered."""
 
 MATCHMAKING_SYSTEM_FACTS = """- This release is a matchmaking service: users submit requirements, verified
   sellers quote, and choosing a quote records only a cooperation intention for
-  platform coordination. It does not create a paid order, debit CH, or collect money.
+  platform coordination. It does not create a paid order, debit the wallet balance,
+  or collect money.
 - KAI Pricing observations and charts remain visible for inquiry reference; they
   are not live inventory or a transaction price. KAI-operated and seller resources
   are identified separately.
@@ -52,6 +54,10 @@ Only answer from these verified product facts:
 {commerce_facts}
 - Payment, recharge, refund, withdrawal, SMS verification, push delivery, and
   human-agent systems are available only when the server explicitly enables them.
+- The canonical ledger, orders, recharge, refund, and withdrawal amounts are CNY.
+  Simplified Chinese displays CNY; Traditional Chinese and English may display HKD
+  or USD using the daily reference rate. Those foreign-currency values are display-only,
+  never a separate settlement balance. Never use CH or card-hours as a money unit.
 - Never claim a payment, payout, human handoff, email, phone, SLA, or feature is
   available unless the supplied context explicitly says so.
 - Never request passwords, full identity numbers, bank card numbers, or SSH secrets.
@@ -150,9 +156,9 @@ async def _optional_ai_reply(message: str, lang: str, recent_messages: list[Supp
         return None
     _, api_key, base_url, model = config
     language_instruction = (
-        "Reply entirely in concise English. Use CH for the platform unit."
+        "Reply entirely in concise English. Use CNY for canonical money and never use CH or card-hours as a money unit."
         if lang == "en"
-        else "请始终使用简洁、专业的中文回答，平台单位写作“卡时”。"
+        else "请始终使用简洁、专业的中文回答。金额以人民币为记账结算基准，不得再使用“卡时”作为货币单位。"
     )
     messages = [{"role": "system", "content": f"{_system_prompt()}\n{language_instruction}"}]
     for item in recent_messages[-10:]:
@@ -322,7 +328,7 @@ async def chat(
 def _new_ticket_no(db: Session) -> str:
     day = datetime.now().strftime("%Y%m%d")
     for _ in range(10):
-        value = f"WOD-{day}-{token_hex(3).upper()}"
+        value = f"KAI-{day}-{token_hex(3).upper()}"
         if not db.query(SupportTicket.id).filter(SupportTicket.ticket_no == value).first():
             return value
     raise BizError("工单编号生成失败，请重试", status_code=503)

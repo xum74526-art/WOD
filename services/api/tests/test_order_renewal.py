@@ -96,7 +96,7 @@ class OrderRenewalTests(unittest.TestCase):
             order = db.get(Order, self.order_id)
             wallet = db.query(Wallet).filter(Wallet.user_id == self.user_id).one()
             self.assertEqual(order.purchase_hours, 30)
-            self.assertEqual(wallet.balance, Decimal("99.401200"))
+            self.assertEqual(wallet.balance, Decimal("99.400000"))
             self.assertEqual(db.query(OrderRenewal).count(), 1)
             renewal = db.query(OrderRenewal).one()
             self.assertEqual(renewal.created_platform, "android")
@@ -150,7 +150,7 @@ class OrderRenewalTests(unittest.TestCase):
             wallet = db.query(Wallet).filter(Wallet.user_id == self.user_id).one()
             self.assertEqual(order.purchase_hours, 26)
             self.assertEqual(order.status, "running")
-            self.assertEqual(wallet.balance, Decimal("99.800400"))
+            self.assertEqual(wallet.balance, Decimal("99.800000"))
             self.assertEqual(db.query(OrderRenewal).count(), 2)
             self.assertEqual(
                 db.query(Ledger).filter(Ledger.ref_order_renewal_id.isnot(None)).count(),

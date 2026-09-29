@@ -530,7 +530,7 @@ test("Web K-line renderer localizes chart copy, accessibility text, and formatti
   const chart = fs.readFileSync(new URL("../components/market-candlestick-chart.tsx", import.meta.url), "utf8");
   const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
 
-  assert.match(chart, /const \{ t, dateLocale \} = useI18n\(\)/);
+  assert.match(chart, /const \{ locale, t, dateLocale \} = useI18n\(\)/);
   assert.doesNotMatch(chart, /toLocale(?:Date|Time)?String\("zh-CN"/);
   assert.match(chart, /formatDateTime\([\s\S]*dateLocale/);
   assert.match(chart, /formatTimeLabel\([\s\S]*dateLocale/);

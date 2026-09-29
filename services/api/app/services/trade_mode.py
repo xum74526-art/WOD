@@ -1,5 +1,6 @@
 from app.core.config import settings
 from app.core.sensitive import sensitive_capability_enabled, sensitive_security_errors
+from app.services.display_exchange_rates import current_display_currency_config
 from app.utils.response import BizError
 
 
@@ -11,6 +12,16 @@ WITHDRAWAL_DISABLED_MESSAGE = "提现服务暂未开放"
 COMMERCE_MODE_DIRECT_TRADE = "direct_trade"
 COMMERCE_MODE_MATCHMAKING = "matchmaking"
 COMMERCE_MODE_HISTORY_ONLY = "history_only"
+
+
+def display_currency_config() -> dict:
+    """Return one dated, server-owned display conversion for all clients.
+
+    Account and payment amounts remain CNY money. Compatibility field names
+    remain until historical API/DB records can be migrated safely.
+    """
+
+    return current_display_currency_config()
 
 
 def direct_trade_enabled() -> bool:
@@ -86,6 +97,7 @@ def platform_capabilities() -> dict:
         "recharge_enabled": recharge_enabled(),
         "withdraw_enabled": withdrawal_enabled(),
         "history_read_enabled": True,
+        "display_currency": display_currency_config(),
     }
 
 

@@ -8,7 +8,6 @@ import { useI18n } from "@/components/locale-root";
 import { localeForFormatting, type KaiLocale } from "@/lib/language";
 import { getMobileMarketCandles, type MobileMarketModel } from "@/lib/mobile-market-api";
 import type { InitialGpuTrend } from "@/lib/public-data";
-import { formatFinancialAmount } from "@/lib/financial-format";
 
 type PricePoint = {
   date: string;
@@ -47,10 +46,6 @@ const ranges: { value: RangeDays; label: string }[] = [
 ];
 const chart = { width: 720, left: 34, right: 650, top: 24, bottom: 254 };
 
-function formatPrice(value: number) {
-  return formatFinancialAmount(value, "en-US", false);
-}
-
 function formatDate(value: string, locale: KaiLocale) {
   const timestamp = value.includes("T") ? value : `${value}T00:00:00Z`;
   return new Date(timestamp).toLocaleDateString(localeForFormatting(locale), {
@@ -61,7 +56,8 @@ function formatDate(value: string, locale: KaiLocale) {
 }
 
 export function GpuDailyTrendChart({ initialData = null }: { initialData?: InitialGpuTrend | null }) {
-  const { locale } = useI18n();
+  const { locale, displayCurrency, formatLedgerMoney } = useI18n();
+  const formatPrice = formatLedgerMoney;
   const [market, setMarket] = useState<MarketSummary | null>(initialData?.market ?? null);
   const [updatedAt, setUpdatedAt] = useState(initialData?.updated_at ?? "");
   const [days, setDays] = useState<RangeDays>(90);
@@ -190,15 +186,15 @@ export function GpuDailyTrendChart({ initialData = null }: { initialData?: Initi
         <div>
           <span className="gpu-kline-eyebrow"><i /> GPU RENTAL CANDLE INDEX</span>
           <h2 id="gpu-trend-title">{market.gpu_model} {locale === "en" ? "daily price candles" : "日价格 K 线"}</h2>
-          <p>{locale === "en" ? "KAI market median" : "KAI 行情中位价"} · {locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</p>
+          <p>{locale === "en" ? "KAI market median" : "KAI 行情中位价"} · {displayCurrency} / {locale === "en" ? "GPU·h" : "GPU·小时"}</p>
         </div>
         <span className="gpu-kline-simulated gpu-trend-source">KAI Pricing</span>
       </header>
 
       <div className="gpu-kline-quote">
-        <div><strong>{formatPrice(active.close)}</strong><span>{locale === "en" ? "CH / GPU·h" : "卡时 / GPU·小时"}</span></div>
+        <div><strong>{formatPrice(active.close)}</strong><span>{displayCurrency} / {locale === "en" ? "GPU·h" : "GPU·小时"}</span></div>
         <b className={isUp ? "is-up" : "is-down"}>
-          {plot.delta >= 0 ? "+" : ""}{formatFinancialAmount(plot.delta, "en-US", false)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
+          {plot.delta >= 0 ? "+" : ""}{formatPrice(plot.delta)} · {plot.percent >= 0 ? "+" : ""}{plot.percent.toFixed(2)}%
         </b>
         <nav aria-label={locale === "en" ? "Chart range" : "K 线周期"}>
           {ranges.map((range) => <button

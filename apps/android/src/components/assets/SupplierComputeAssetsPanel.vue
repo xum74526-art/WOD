@@ -54,7 +54,7 @@
               <text class="asset-panel__row-meta">{{ device.gpu_model }} · {{ t('countDevices', { count: device.stock }) }} · {{ locationText(device) }}</text>
             </view>
             <view class="asset-panel__row-side">
-              <text class="asset-panel__row-value positive">{{ fmtCH(device.price) }}/h</text>
+              <text class="asset-panel__row-value positive">{{ formatCardHourCurrency(device.price) }}/h</text>
               <text class="asset-panel__row-hint">{{ t(device.list_status === 'on' ? 'onSale2' : 'offShelf') }}</text>
             </view>
           </view>
@@ -79,7 +79,7 @@ import type { SupplierDeviceItem } from '@/api/supplier'
 import AppIcon from '@/components/AppIcon.vue'
 import { useHostingStore } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 import { localizeRegionName } from '@/utils/region-name'
 

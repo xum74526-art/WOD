@@ -10,8 +10,9 @@ from app.db.base import Base
 class PaymentOrder(Base):
     """One provider payment mapped to one wallet credit.
 
-    Money is persisted in CNY while ``card_hours`` records the immutable
-    customer-facing conversion result.  ``credited_at`` is the idempotency
+    Money is persisted directly in CNY. ``card_hours`` is a compatibility
+    column whose value now equals ``amount_cny`` at the fixed 1:1 rate.
+    ``credited_at`` is the idempotency
     boundary: a verified provider notification and wallet credit are committed
     in the same database transaction.
     """
@@ -95,7 +96,7 @@ class PaymentRefund(Base):
     """One full, original-rail CNY refund for a recharge payment.
 
     This is deliberately separate from the wallet/order ``refund`` ledger
-    semantics.  A provider refund may be uncertain while wallet card-hours
+    semantics. A provider refund may be uncertain while wallet balance
     remain frozen, so the saga has its own durable state.
     """
 

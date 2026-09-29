@@ -44,6 +44,13 @@ test('recharge-facing copy identifies Qixiang Pay instead of MaPay', () => {
   assert.doesNotMatch(locale, /码支付订单号|MaPay order|MaPay has no merchant/)
 })
 
+test('recharge and refund screens show one money amount instead of a second legacy balance unit', () => {
+  assert.match(locale, /支付成功后等额计入账户余额/)
+  assert.doesNotMatch(walletPage, /pendingPayment\.card_hours/)
+  assert.doesNotMatch(rechargeOrdersPage, /formatCardHourCurrency\((?:order|request|refundOrder)\.card_hours\)/)
+  assert.doesNotMatch(rechargeOrdersPage, /estimatedCardHours/)
+})
+
 test('an existing recharge blocks only the same amount and payment channel', () => {
   assert.match(walletActions, /rechargeMatchesActiveOrder\(props\.pendingPayment, amount, sheet\.paymentType\)/)
   assert.match(walletActions, /rechargeSessionMatches\(currentSession\(\), amount, sheet\.paymentType\)/)

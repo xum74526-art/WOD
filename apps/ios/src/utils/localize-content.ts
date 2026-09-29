@@ -1,6 +1,7 @@
 import { pinyin } from 'pinyin-pro'
 import type { AppLanguage } from './language.ts'
 import { toTraditionalChinese } from './traditional-chinese.ts'
+import { formatCnyCurrency, formatLegacyCardHourCurrency } from './format.ts'
 
 const PERSON_EN: Record<string, string> = {
   '体验用户': 'Demo User',
@@ -33,7 +34,6 @@ const COMMUNITY_EN: Record<string, string> = {
   '公告': 'Announcement',
   '社区上线了！欢迎大家分享算力使用心得、收益攻略、机型测评。优质内容有奖励！': 'The community is live! Share your compute experience, revenue tips, and GPU reviews. Quality posts can earn rewards.',
   '用A800跑LLM微调，NVLink互联确实快很多。推荐大家用多卡集群模式。': 'I used A800 for LLM fine-tuning. NVLink is noticeably faster. I recommend using a multi-GPU cluster.',
-  'RTX 4090现在价格不错，1.98卡时/h，可租81台。建议短线租用做推理，性价比很高。': 'RTX 4090 is well priced right now at 1.98 CH/h, with 81 units available. Short-term rentals are a great value for inference.',
   '刚入了2张H100，跑了3天训练，收益比预期高15%。autodl行情确实稳，分享给大家看看收益曲线。': 'I added two H100 GPUs and ran training for three days. Returns are 15% higher than expected. The autodl market has been stable, so I am sharing the revenue curve.',
   '感谢分享，我也在用这款，确实稳定。': 'Thanks for sharing. I use this model too, and it is very stable.',
   '楼主说得很中肯，收益确实看机型。': 'Good point. Returns really do depend on the GPU model.',
@@ -194,39 +194,64 @@ function productName(value: string): string {
   return value.replace(/机$/, '')
 }
 
+function localizeInternalCurrencyText(value: string, lang: AppLanguage): string {
+  const formatCny = (raw: string) => formatCnyCurrency(Number(raw.replace(/,/g, '')), lang)
+  const formatLegacy = (raw: string) => formatLegacyCardHourCurrency(Number(raw.replace(/,/g, '')), lang)
+  return value
+    .replace(
+      /(?:CNY\s*)?¥\s*(-?[\d,.]+)(?:\s*\/\s*(?:GPU[·•.\s-]*(?:小时|小時)|h)|\s+per\s+GPU-hour)/gi,
+      (_full, raw: string) => `${formatCny(raw)}/${lang === 'en' ? 'GPU-hour' : 'GPU小时'}`,
+    )
+    .replace(
+      /(?:CNY\s*)?¥\s*(-?[\d,.]+)/gi,
+      (_full, raw: string) => formatCny(raw),
+    )
+    .replace(
+      /(价格|priced at )([\d,.]+)(?:卡时|卡時)?\s+vs\s+([\d,.]+)(?:\s*(?:卡时|卡時|CH|USD))?\s*\/h/gi,
+      (_full, prefix: string, left: string, right: string) => `${prefix}${formatLegacy(left)} vs ${formatLegacy(right)}/h`,
+    )
+    .replace(
+      /([\d,.]+)\s*(?:卡时|卡時|CH|USD)\s*\/h/gi,
+      (_full, raw: string) => `${formatLegacy(raw)}/h`,
+    )
+}
+
 function translateGeneratedPost(source: string): string | null {
+  if (source === 'RTX 4090现在价格不错，1.98卡时/h，可租81台。建议短线租用做推理，性价比很高。') {
+    return `RTX 4090 is well priced right now at ${formatLegacyCardHourCurrency(1.98, 'en')}/GPU-hour, with 81 units available. Short-term rentals are a great value for inference.`
+  }
   let match = source.match(/^用(.+)跑了一周(.+)，整体体验：速度(.+)，(.+)显存(.+)，价格([\d.]+)卡时(?:卡时)?\/h算(.+)。推荐(.+)使用。$/)
-  if (match) return `I used ${productName(match[1])} for ${term(match[2])} for one week. Speed was ${term(match[3])}, ${match[4]} VRAM ${term(match[5])}, and ${match[6]} CH/h offers ${term(match[7])} value. ${term(match[8])} use.`
+  if (match) return `I used ${productName(match[1])} for ${term(match[2])} for one week. Speed was ${term(match[3])}, ${match[4]} VRAM ${term(match[5])}, and ${formatLegacyCardHourCurrency(Number(match[6]), 'en')}/GPU-hour offers ${term(match[7])} value. ${term(match[8])} use.`
 
   match = source.match(/^(.+)到手3天，跑了(.+)训练，显存(.+)，CUDA (.+)。(.+)，性价比(.+)。$/)
   if (match) return `After three days with ${productName(match[1])}, I ran ${term(match[2])} training with ${match[3]} VRAM and CUDA ${match[4]}. ${term(match[5])}, with ${term(match[6])} value.`
 
   match = source.match(/^刚试了(.+)在(.+)的机器，([\d.]+)卡时(?:卡时)?\/h，(.+)显存。跑(.+)效率比预期(.+)，给个([\d.]+)分。$/)
-  if (match) return `I just tested ${productName(match[1])} in ${term(match[2])} at ${match[3]} CH/h with ${match[4]} VRAM. ${term(match[5])} performance was ${term(match[6])} than expected. Rating: ${match[7]}/10.`
+  if (match) return `I just tested ${productName(match[1])} in ${term(match[2])} at ${formatLegacyCardHourCurrency(Number(match[3]), 'en')}/GPU-hour with ${match[4]} VRAM. ${term(match[5])} performance was ${term(match[6])} than expected. Rating: ${match[7]}/10.`
 
   match = source.match(/^(.+)使用小技巧：(.+)显存跑(.+)时，batch size建议设([\d.]+)，能跑满利用率。([\d.]+)卡时(?:卡时)?\/h的机器别浪费。$/)
-  if (match) return `${productName(match[1])} tip: with ${match[2]} VRAM for ${term(match[3])}, set the batch size to ${match[4]} for full utilization. Make the most of a machine priced at ${match[5]} CH/h.`
+  if (match) return `${productName(match[1])} tip: with ${match[2]} VRAM for ${term(match[3])}, set the batch size to ${match[4]} for full utilization. Make the most of a machine priced at ${formatLegacyCardHourCurrency(Number(match[5]), 'en')}/GPU-hour.`
 
   match = source.match(/^省钱攻略：(.+)在(.+)的机器最便宜，([\d.]+)卡时(?:卡时)?\/h，比同型号其他地区便宜不少。$/)
-  if (match) return `Saving tip: ${productName(match[1])} is cheapest in ${term(match[2])} at ${match[3]} CH/h, well below other regions for the same model.`
+  if (match) return `Saving tip: ${productName(match[1])} is cheapest in ${term(match[2])} at ${formatLegacyCardHourCurrency(Number(match[3]), 'en')}/GPU-hour, well below other regions for the same model.`
 
   match = source.match(/^刚发现(.+)可租([\d.]+)台，([\d.]+)卡时(?:卡时)?\/h，做(.+)推理完全够用，不用上更贵的卡。$/)
-  if (match) return `I found ${productName(match[1])} with ${match[2]} units available at ${match[3]} CH/h. It is sufficient for ${term(match[4])} inference, so a more expensive GPU is unnecessary.`
+  if (match) return `I found ${productName(match[1])} with ${match[2]} units available at ${formatLegacyCardHourCurrency(Number(match[3]), 'en')}/GPU-hour. It is sufficient for ${term(match[4])} inference, so a more expensive GPU is unnecessary.`
 
   match = source.match(/^请教各位，(.+)（(.+)显存）跑(.+)，需要装什么环境？CUDA (.+)够用吗？$/)
   if (match) return `What environment should I install to run ${term(match[3])} on ${productName(match[1])} with ${match[2]} VRAM? Is CUDA ${match[4]} sufficient?`
 
   match = source.match(/^(.+) ([\d.]+)卡时(?:卡时)?\/h vs 同型号其他平台，这个价格合理吗？有没有更便宜的渠道？$/)
-  if (match) return `${productName(match[1])} costs ${match[2]} CH/h. Is that reasonable compared with other platforms, or is there a cheaper option?`
+  if (match) return `${productName(match[1])} costs ${formatLegacyCardHourCurrency(Number(match[2]), 'en')}/GPU-hour. Is that reasonable compared with other platforms, or is there a cheaper option?`
 
   match = source.match(/^打算用(.+)做(.+)，(.+)显存够吗？求大佬指点。$/)
   if (match) return `I plan to use ${productName(match[1])} for ${term(match[2])}. Is ${match[3]} VRAM enough? Advice is welcome.`
 
   match = source.match(/^(.+) vs (.+)：都是做(.+)，(.+) vs (.+)显存，价格([\d.]+)(?:卡时)? vs ([\d.]+)卡时(?:卡时)?\/h。大家选哪个？$/)
-  if (match) return `${productName(match[1])} vs ${productName(match[2])} for ${term(match[3])}: ${match[4]} vs ${match[5]} VRAM, priced at ${match[6]} vs ${match[7]} CH/h. Which would you choose?`
+  if (match) return `${productName(match[1])} vs ${productName(match[2])} for ${term(match[3])}: ${match[4]} vs ${match[5]} VRAM, priced at ${formatLegacyCardHourCurrency(Number(match[6]), 'en')} vs ${formatLegacyCardHourCurrency(Number(match[7]), 'en')}/GPU-hour. Which would you choose?`
 
   match = source.match(/^算力比价：(.+) ([\d.]+)卡时(?:卡时)?\/h，([\d.]+)台可租。同样预算你们选这张卡还是别的？$/)
-  if (match) return `Compute price comparison: ${productName(match[1])} at ${match[2]} CH/h, with ${match[3]} units available. Would you choose this GPU on the same budget?`
+  if (match) return `Compute price comparison: ${productName(match[1])} at ${formatLegacyCardHourCurrency(Number(match[2]), 'en')}/GPU-hour, with ${match[3]} units available. Would you choose this GPU on the same budget?`
 
   return null
 }
@@ -275,7 +300,7 @@ export function profileUsernameSubmissionValue(
 export function localizeCommunityText(value: string, lang: AppLanguage): string {
   if (!value || lang === 'zh-Hans') return value
   if (lang === 'zh-Hant') return toTraditionalChinese(value)
-  return COMMUNITY_EN[value] ?? translateGeneratedPost(value) ?? value
+  return translateGeneratedPost(value) ?? COMMUNITY_EN[value] ?? value
 }
 
 /** Localize only first-party market copy; never rewrite user-authored content. */
@@ -286,8 +311,8 @@ export function localizeInternalBrandText(
 ): string {
   if (!value || sourceKey !== 'wod-market') return value
   const branded = value.replace(/(?:WOD|ZTW)(?![A-Z0-9_-])/g, 'KAI星算')
-  if (lang === 'zh-Hant') return toTraditionalChinese(branded)
-  if (lang !== 'en') return branded
+  if (lang === 'zh-Hant') return localizeInternalCurrencyText(toTraditionalChinese(branded), lang)
+  if (lang !== 'en') return localizeInternalCurrencyText(branded, lang)
 
   let localized = branded
     .replace(/(?:KAI星算|算力星圖)(?:平台)?(?:算力)?(?:行情|资讯|資訊)/g, 'KAI Star Market')
@@ -299,7 +324,7 @@ export function localizeInternalBrandText(
   // String.prototype.replaceAll; otherwise English first-party posts abort
   // the whole community render after the API response arrives.
   for (const [source, target] of INTERNAL_REGION_EN) localized = localized.split(source).join(target)
-  return localized
+  return localizeInternalCurrencyText(localized, lang)
 }
 
 export function localizeProductName(value: string | null | undefined, lang: AppLanguage): string {

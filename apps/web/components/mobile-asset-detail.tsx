@@ -12,7 +12,7 @@ import { formatFinancialAmount } from "@/lib/financial-format";
 const amount = (value: unknown) => formatFinancialAmount(value as number | string | null | undefined);
 
 export function MobileAssetDetail({ id }: { id: number }) {
-  const { t } = useI18n();
+  const { t, displayCurrency, formatLedgerMoney } = useI18n();
   const [item, setItem] = useState<MobileAsset | null>(null);
   const [error, setError] = useState("");
   useEffect(() => { getMobileAsset(id).then(setItem).catch((reason) => setError(errorMessage(reason))); }, [id]);
@@ -28,9 +28,9 @@ export function MobileAssetDetail({ id }: { id: number }) {
     {error && <div className="commerce-error">{error}</div>}
     {!item && !error ? <div className="workspace-skeleton"/> : item && <>
       <div className="mobile-data-spine">
-        <article><small>{holding ? "当前估值" : "资产价值"}</small><strong>{amount(currentValue)}</strong><span>卡时</span></article>
-        <article><small>{holding ? "买入价值" : "待结算购买返佣"}</small><strong>{amount(holding ? item.buy_price : item.rebate_info?.pending_rebate)}</strong><span>卡时</span></article>
-        <article><small>{holding ? "持有盈亏" : "已结算购买返佣"}</small><strong>{amount(holding ? item.pnl : item.rebate_info?.settled_rebate)}</strong><span>卡时</span></article>
+        <article><small>{holding ? "当前估值" : "资产价值"}</small><strong>{formatLedgerMoney(currentValue)}</strong><span>{displayCurrency}</span></article>
+        <article><small>{holding ? "买入价值" : "待结算购买返佣"}</small><strong>{formatLedgerMoney(holding ? item.buy_price : item.rebate_info?.pending_rebate)}</strong><span>{displayCurrency}</span></article>
+        <article><small>{holding ? "持有盈亏" : "已结算购买返佣"}</small><strong>{formatLedgerMoney(holding ? item.pnl : item.rebate_info?.settled_rebate)}</strong><span>{displayCurrency}</span></article>
         <article><small>{holding ? "盈亏比例" : "剩余时间"}</small><strong>{holding ? amount(item.pnl_pct) : item.remaining_days ?? "—"}</strong><span>{holding ? "%" : "天"}</span></article>
       </div>
       <section className="mobile-record-panel asset-detail-facts">
@@ -41,8 +41,8 @@ export function MobileAssetDetail({ id }: { id: number }) {
           <div><dt>购买模式</dt><dd>{holding ? "持有并可出售" : "使用"}</dd></div>
           <div><dt><CalendarDots/>生效时间</dt><dd>{formatDate(item.start_at)}</dd></div>
           <div><dt><CalendarDots/>到期时间</dt><dd>{holding ? "长期持有" : formatDate(item.end_at)}</dd></div>
-          <div><dt><Coins/>当前估值</dt><dd>{item.current_price == null ? holding ? "暂不可用" : amount(item.value) : amount(item.current_price)}</dd></div>
-          <div><dt><TrendUp/>{holding ? "持有盈亏" : "到期返佣"}</dt><dd>{holding ? item.pnl == null ? "暂不可用" : `${item.pnl >= 0 ? "+" : ""}${amount(item.pnl)}` : amount(item.rebate_amount)}</dd></div>
+          <div><dt><Coins/>当前估值</dt><dd>{item.current_price == null ? holding ? "暂不可用" : formatLedgerMoney(item.value) : formatLedgerMoney(item.current_price)}</dd></div>
+          <div><dt><TrendUp/>{holding ? "持有盈亏" : "到期返佣"}</dt><dd>{holding ? item.pnl == null ? "暂不可用" : `${item.pnl >= 0 ? "+" : ""}${formatLedgerMoney(item.pnl)}` : formatLedgerMoney(item.rebate_amount)}</dd></div>
         </dl>
         {item.trading_unavailable_reason && <div className="workspace-service-note"><Gauge size={17}/>{item.trading_unavailable_reason}</div>}
       </section>

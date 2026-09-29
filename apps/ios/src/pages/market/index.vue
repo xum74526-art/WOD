@@ -70,8 +70,7 @@
           <view class="pbot">
             <view class="pprice">
               <template v-if="commerce.directTradeEnabled">
-                <view class="hourly-price"><text class="pp">{{ formatAmount(directTradeCardHoursPerGpuHour(p)) }}</text><text class="pu">{{ t('cardHourPerGpuHour') }}</text></view>
-                <text v-if="isKaiProduct(p)" class="price-cny">¥{{ formatAmount(directTradeCnyPerGpuHour(p)) }}{{ t('perGpuHour') }}</text>
+                <view class="hourly-price"><text class="pp">{{ isKaiProduct(p) ? formatCnyCurrency(directTradeCnyPerGpuHour(p)) : formatCardHourCurrency(directTradeCardHoursPerGpuHour(p)) }}</text><text class="pu">{{ t('perGpuHour') }}</text></view>
               </template>
               <template v-else-if="commerce.matchmakingEnabled && p.inquiry_available !== false">
                 <view class="hourly-price"><text class="pp">{{ t('inquiry') }}</text></view>
@@ -109,7 +108,7 @@ import type { Product } from '@/api/gpu'
 import AppIcon from '@/components/AppIcon.vue'
 import { navigateTo as nav } from '@/utils/nav'
 import { usePageMotion } from '@/utils/page-motion'
-import { fmtCHn, formatAmount, formatNumber } from '@/utils/format'
+import { fmtCHn, formatCardHourCurrency, formatCnyCurrency, formatNumber } from '@/utils/format'
 import { directTradeCardHoursPerGpuHour, directTradeCnyPerGpuHour, directTradeProductPurchasable } from '@/utils/direct-trade'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'

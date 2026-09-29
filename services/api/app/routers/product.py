@@ -116,15 +116,12 @@ def _product_out(
         # before the next catalogue synchronization updates stored rows.
         out["desc"] = KAI_PRODUCT_DESCRIPTION
         cny_price = Decimal(str(p.price or 0))
-        rate = Decimal(str(settings.CARD_HOUR_RMB_RATE or 0))
         out["cycle"] = []
         out["billing_unit"] = "GPU_HOUR"
         out["price_currency"] = "CNY"
         out["price_cny_per_gpu_hour"] = float(cny_price)
-        out["price_card_hours_per_gpu_hour"] = (
-            float((cny_price / rate).quantize(Decimal("0.000001"))) if rate > 0 else None
-        )
-        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["price_card_hours_per_gpu_hour"] = float(cny_price)
+        out["wallet_charge_unit"] = "MONEY"
         out["purchase_unit"] = "hour"
         out["purchase_hour_options"] = list(PURCHASE_HOUR_OPTIONS)
         out["min_purchase_hours"] = MIN_PURCHASE_HOURS
@@ -132,10 +129,10 @@ def _product_out(
     elif source == "wod":
         out["cycle"] = []
         out["billing_unit"] = "GPU_HOUR"
-        out["price_currency"] = "CARD_HOUR"
-        out["price_cny_per_gpu_hour"] = float(Decimal(str(p.price or 0)) * Decimal(str(settings.CARD_HOUR_RMB_RATE)))
+        out["price_currency"] = "CNY"
+        out["price_cny_per_gpu_hour"] = float(p.price or 0)
         out["price_card_hours_per_gpu_hour"] = float(p.price or 0)
-        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["wallet_charge_unit"] = "MONEY"
         out["purchase_unit"] = "hour"
         out["purchase_hour_options"] = list(PURCHASE_HOUR_OPTIONS)
         out["min_purchase_hours"] = MIN_PURCHASE_HOURS
@@ -143,10 +140,10 @@ def _product_out(
     else:
         out["cycle"] = available_purchase_cycles(p.cycle)
         out["billing_unit"] = "GPU_HOUR"
-        out["price_currency"] = "CARD_HOUR"
-        out["price_cny_per_gpu_hour"] = float(Decimal(str(p.price or 0)) * Decimal(str(settings.CARD_HOUR_RMB_RATE)))
+        out["price_currency"] = "CNY"
+        out["price_cny_per_gpu_hour"] = float(p.price or 0)
         out["price_card_hours_per_gpu_hour"] = float(p.price or 0)
-        out["wallet_charge_unit"] = "CARD_HOUR"
+        out["wallet_charge_unit"] = "MONEY"
         out["purchase_unit"] = "day"
         out["purchase_hour_options"] = []
         out["min_purchase_hours"] = None

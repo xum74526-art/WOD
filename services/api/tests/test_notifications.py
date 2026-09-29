@@ -116,6 +116,60 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(len(second["items"]), 10)
         self.assertNotIn("B 的私有消息", {row["title"] for row in first["items"] + second["items"]})
 
+    def test_revenue_notifications_expose_structured_cny_for_locale_conversion(self):
+        create_notification(
+            self.db,
+            user_id=self.user_a.id,
+            title="今日收益已更新",
+            content="今日已记录 12.34 卡时收益，可在收益中心查看明细。",
+            title_en="Today's revenue updated",
+            content_en="12.34 card-hours of revenue have been recorded today.",
+            notification_type="revenue",
+            action_url="/pages/revenue/index",
+            dedupe_key="revenue:2026-09-29:summary",
+            respect_preferences=False,
+        )
+        self.db.commit()
+
+        listed = notification_router.list_notifications(
+            type_filter="revenue",
+            unread_only=False,
+            page=1,
+            page_size=20,
+            user=self.user_a,
+            db=self.db,
+        )["data"]
+        revenue = listed["items"][0]
+        self.assertEqual(revenue["template_key"], "daily_revenue_recorded")
+        self.assertEqual(revenue["amount_cny"], "12.365")
+
+    def test_current_revenue_notifications_do_not_repeat_legacy_conversion(self):
+        create_notification(
+            self.db,
+            user_id=self.user_a.id,
+            title="今日收益已更新",
+            content="今日已记录人民币 ¥12.340 收益，可在收益中心查看明细。",
+            title_en="Today's revenue updated",
+            content_en="CNY ¥12.340 of revenue has been recorded today.",
+            notification_type="revenue",
+            action_url="/pages/revenue/index",
+            dedupe_key="revenue:2026-09-30:summary",
+            respect_preferences=False,
+        )
+        self.db.commit()
+
+        listed = notification_router.list_notifications(
+            type_filter="revenue",
+            unread_only=False,
+            page=1,
+            page_size=20,
+            user=self.user_a,
+            db=self.db,
+        )["data"]
+        revenue = listed["items"][0]
+        self.assertEqual(revenue["template_key"], "daily_revenue_recorded")
+        self.assertEqual(revenue["amount_cny"], "12.340")
+
     def test_read_operations_cannot_cross_accounts(self):
         private = create_notification(
             self.db,

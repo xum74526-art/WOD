@@ -17,6 +17,7 @@ import {
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { buyRequestAdditionalRequirements } from "@/lib/web-business-contract";
 import { useI18n } from "@/components/locale-root";
+import { formatQuoteAmountForLocale } from "@/lib/quote-currency";
 
 const statusLabels: Record<string, string> = {
   published: "待报价",
@@ -111,7 +112,7 @@ function targetLabel(row: AdminBuyRequestItem, supplierFallback: (id: number) =>
 }
 
 export function AdminBuyRequestWorkspace() {
-  const { t } = useI18n();
+  const { t, locale, displayCurrencyConfig } = useI18n();
   const [rows, setRows] = useState<AdminBuyRequestItem[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState("");
@@ -203,7 +204,7 @@ export function AdminBuyRequestWorkspace() {
         <header><div><small>REQUEST #{detail.request.id}</small><h2 data-i18n-skip>{metadata(detail.request, "product_name") || detail.request.gpu_model} × {detail.request.quantity}</h2><span>{formatDate(detail.request.created_at)}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>
         <div className="mobile-request-facts"><span><small>需求人</small><strong><User size={14}/>{detail.request.contact ? <span data-i18n-skip>{detail.request.contact}</span> : "未填写"}</strong></span><span><small>联系电话</small><strong data-i18n-skip={Boolean(detail.request.phone) || undefined}>{detail.request.phone || "未填写"}</strong></span><span><small>分发对象</small><strong><Storefront size={14}/><span data-i18n-skip>{targetLabel(detail.request, (id) => t("admin.common.supplierFallback", "商家 #{id}", { id }), t("admin.buyRequest.publicMarket", "公开需求市场"))}</span></strong></span><span><small>截止时间</small><strong>{formatDate(detail.request.expires_at)}</strong></span></div>
         {detailRequirementNote && <div className="workspace-service-note"><strong>补充需求：</strong><span data-i18n-skip>{detailRequirementNote}</span></div>}
-        <section className="admin-request-quotes"><h3>报价与协商记录</h3>{detail.quotes.length ? detail.quotes.map((quote) => <article key={quote.id}><div><strong data-i18n-skip={Boolean(quote.supplier_name) || undefined}>{quote.supplier_name || t("admin.common.supplierFallback", "商家 #{id}", { id: quote.supplier_id })}</strong><small>报价 #{quote.id} · {quote.revision_count || quote.revisions?.length || 1} 轮</small></div><b>¥{quote.latest_revision?.total_price ?? quote.total_price}</b><em>{statusLabel(quote.status)}</em></article>) : <div className="mobile-inline-empty">暂无报价</div>}</section>
+        <section className="admin-request-quotes"><h3>报价与协商记录</h3>{detail.quotes.length ? detail.quotes.map((quote) => <article key={quote.id}><div><strong data-i18n-skip={Boolean(quote.supplier_name) || undefined}>{quote.supplier_name || t("admin.common.supplierFallback", "商家 #{id}", { id: quote.supplier_id })}</strong><small>报价 #{quote.id} · {quote.revision_count || quote.revisions?.length || 1} 轮</small></div><b>{formatQuoteAmountForLocale(quote.latest_revision?.total_price ?? quote.total_price, quote.latest_revision?.currency ?? quote.currency, locale, displayCurrencyConfig)}</b><em>{statusLabel(quote.status)}</em></article>) : <div className="mobile-inline-empty">暂无报价</div>}</section>
         {detail.deal ? <section className="admin-deal-review"><header><div><small>DEAL #{detail.deal.id}</small><h3>撮合审核与凭据托管</h3></div><b>{statusLabel(detail.deal.status)}</b></header>
           {detail.events?.length ? <ol className="matchmaking-timeline">{detail.events.map((event) => <li key={event.id}><span><CheckCircle size={16}/></span><div><strong>{timelineEventLabel(event)}</strong><small data-i18n-skip={Boolean(event.message) || undefined}>{event.message || formatDate(event.created_at)}</small></div></li>)}</ol> : null}
           {["supplier_confirmed", "platform_review"].includes(detail.deal.status) && <div className="admin-review-actions"><button className="danger" disabled={Boolean(busy)} onClick={() => void dealAction("reject")}><WarningCircle size={15}/>退回方案</button><button className="commerce-primary" disabled={Boolean(busy)} onClick={() => void dealAction("approve")}><ShieldCheck size={15}/>审核通过</button></div>}

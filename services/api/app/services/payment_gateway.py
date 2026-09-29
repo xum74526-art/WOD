@@ -99,8 +99,6 @@ def payment_readiness_errors() -> list[str]:
             errors.append("payment_checkout_allowed_hosts_invalid")
         if settings.SECRET_KEY == DEFAULT_SECRET_KEY or not str(settings.SECRET_KEY).strip():
             errors.append("default_secret_key")
-        if not _finite_positive(settings.CARD_HOUR_RMB_RATE):
-            errors.append("card_hour_rmb_rate_invalid")
         if not _finite_positive(settings.QIXIANGPAY_MIN_AMOUNT_CNY):
             errors.append("qixiangpay_min_amount_invalid")
         if (

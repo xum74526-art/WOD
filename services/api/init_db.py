@@ -1884,6 +1884,389 @@ def _migrate_invite_v2_funding_fields(db_engine=None, db_session=None):
             db.close()
 
 
+def _migrate_legacy_card_hours_to_cny(db_engine=None, db_session=None):
+    """Convert the complete legacy card-hour ledger into direct CNY money.
+
+    The retired accounting unit had the immutable production conversion
+    ``1 card hour = CNY 1.002``.  This migration is intentionally separate
+    from display FX: CNY remains the canonical settlement currency, while
+    HKD/USD are presentation-only conversions fetched from the daily FX
+    table.
+
+    A marker is claimed in the same transaction as every balance change.  A
+    concurrent or repeated startup therefore cannot apply the factor twice.
+    Source-market CNY prices and provider CNY payment/refund/payout amounts
+    are not scaled.  Their legacy companion ``card_hours`` fields are instead
+    normalized to the already authoritative CNY amount and a 1:1 rate.
+    """
+    import copy
+    import json
+    from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+    from app.models.order import Order
+    from app.models.order_renewal import OrderRenewal
+
+    target_engine = db_engine or engine
+    owns_session = db_session is None
+    db = db_session or Session(bind=target_engine)
+    marker = "20260929_legacy_card_hours_to_direct_cny_v1"
+    factor = Decimal("1.002")
+    quantum = Decimal("0.000001")
+
+    inspector = inspect(target_engine)
+    table_columns = {
+        table: {column["name"] for column in inspector.get_columns(table)}
+        for table in inspector.get_table_names()
+    }
+
+    def has_columns(table: str, *columns: str) -> bool:
+        return table in table_columns and set(columns).issubset(table_columns[table])
+
+    def touched(result) -> int:
+        return max(int(result.rowcount or 0), 0)
+
+    def scale_columns(table: str, columns: tuple[str, ...], where: str | None = None) -> int:
+        existing = tuple(column for column in columns if has_columns(table, column))
+        if not existing:
+            return 0
+        assignments = ", ".join(
+            f'"{column}" = "{column}" * 1.002' for column in existing
+        )
+        predicate = f" WHERE {where}" if where else ""
+        return touched(db.execute(text(
+            f'UPDATE "{table}" SET {assignments}{predicate}'
+        )))
+
+    money_keys = {
+        "amount",
+        "amount_card_hours",
+        "coupon_discount",
+        "payable_amount_card_hours",
+        "renewal_amount_card_hours",
+        "historical_test_revenue",
+        "accumulated_revenue",
+    }
+
+    def scaled_json(value):
+        """Scale known money keys without reinterpreting unrelated numbers."""
+        if isinstance(value, dict):
+            changed = False
+            result = {}
+            for key, item in value.items():
+                if key in money_keys and item is not None and not isinstance(item, bool):
+                    try:
+                        converted = (
+                            Decimal(str(item)) * factor
+                        ).quantize(quantum, rounding=ROUND_HALF_UP)
+                    except (InvalidOperation, ValueError, TypeError):
+                        result[key] = item
+                    else:
+                        result[key] = float(converted)
+                        changed = changed or result[key] != item
+                else:
+                    result[key], item_changed = scaled_json(item)
+                    changed = changed or item_changed
+            return result, changed
+        if isinstance(value, list):
+            changed = False
+            result = []
+            for item in value:
+                converted, item_changed = scaled_json(item)
+                result.append(converted)
+                changed = changed or item_changed
+            return result, changed
+        return value, False
+
+    counts: dict[str, int] = {}
+    try:
+        db.execute(text(
+            "CREATE TABLE IF NOT EXISTS app_migrations ("
+            "name VARCHAR(128) PRIMARY KEY, "
+            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        db.execute(text(
+            "CREATE TABLE IF NOT EXISTS app_migration_audits ("
+            "name VARCHAR(128) PRIMARY KEY, "
+            "from_unit VARCHAR(32) NOT NULL, "
+            "to_unit VARCHAR(32) NOT NULL, "
+            "conversion_factor VARCHAR(32) NOT NULL, "
+            "details TEXT NOT NULL, "
+            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        claim = db.execute(
+            text(
+                "INSERT INTO app_migrations (name) VALUES (:name) "
+                "ON CONFLICT (name) DO NOTHING"
+            ),
+            {"name": marker},
+        )
+        if claim.rowcount != 1:
+            db.commit()
+            return {"applied": False, "factor": str(factor), "rows": {}}
+
+        scalable_columns = {
+            "wallets": (
+                "balance", "frozen", "withdrawable_balance", "withdraw_frozen",
+                "promotional_balance", "promotional_frozen",
+            ),
+            "ledger": ("amount", "balance_after"),
+            "orders": ("amount", "coupon_discount"),
+            "order_renewals": ("amount", "total_amount_after"),
+            "assets": ("value", "sell_price", "rebate_amount"),
+            "revenues": ("amount",),
+            "reward_accruals": ("base_amount", "reward_amount"),
+            "invite_records": ("reward_amount",),
+            "coupon_campaigns": ("amount", "min_amount"),
+            "coupons": ("amount", "min_amount"),
+        }
+        for table, columns in scalable_columns.items():
+            count = scale_columns(table, columns)
+            if count:
+                counts[table] = count
+
+        # Preserve exact conservation constraints after rounding each CNY
+        # component to the six-decimal ledger scale.
+        if has_columns(
+            "order_funding_allocations",
+            "gross_amount", "cash_amount", "promotional_amount",
+        ):
+            result = db.execute(text(
+                "UPDATE order_funding_allocations SET "
+                "cash_amount = ROUND(cash_amount * 1.002, 6), "
+                "promotional_amount = ROUND(promotional_amount * 1.002, 6), "
+                "gross_amount = ROUND(cash_amount * 1.002, 6) + "
+                "ROUND(promotional_amount * 1.002, 6)"
+            ))
+            if touched(result):
+                counts["order_funding_allocations"] = touched(result)
+
+        if has_columns(
+            "merchant_settlements",
+            "gross_amount", "service_fee_amount", "net_amount",
+        ):
+            result = db.execute(text(
+                "UPDATE merchant_settlements SET "
+                "service_fee_amount = ROUND(service_fee_amount * 1.002, 6), "
+                "net_amount = ROUND(net_amount * 1.002, 6), "
+                "gross_amount = ROUND(service_fee_amount * 1.002, 6) + "
+                "ROUND(net_amount * 1.002, 6)"
+            ))
+            if touched(result):
+                counts["merchant_settlements"] = touched(result)
+
+        if has_columns(
+            "holding_asset_sales",
+            "unit_price_cny_per_gpu_hour",
+            "unit_price_card_hours_per_gpu_hour",
+            "buy_value_card_hours",
+            "sell_value_card_hours",
+            "pnl_card_hours",
+            "cash_value_card_hours",
+            "promotional_value_card_hours",
+        ):
+            result = db.execute(text(
+                "UPDATE holding_asset_sales SET "
+                "unit_price_card_hours_per_gpu_hour = unit_price_cny_per_gpu_hour, "
+                "buy_value_card_hours = ROUND(buy_value_card_hours * 1.002, 6), "
+                "cash_value_card_hours = ROUND(cash_value_card_hours * 1.002, 6), "
+                "promotional_value_card_hours = ROUND(promotional_value_card_hours * 1.002, 6), "
+                "sell_value_card_hours = ROUND(cash_value_card_hours * 1.002, 6) + "
+                "ROUND(promotional_value_card_hours * 1.002, 6), "
+                "pnl_card_hours = ROUND(cash_value_card_hours * 1.002, 6) + "
+                "ROUND(promotional_value_card_hours * 1.002, 6) - "
+                "ROUND(buy_value_card_hours * 1.002, 6)"
+            ))
+            if touched(result):
+                counts["holding_asset_sales"] = touched(result)
+
+        # KAI stores its upstream quote directly in CNY. Historical supplier
+        # and retired external catalogue rows stored their charge in card
+        # hours, so only non-KAI product prices are converted.
+        if has_columns("products", "price", "market_source"):
+            version_assignment = (
+                ", version = version + 1" if has_columns("products", "version") else ""
+            )
+            result = db.execute(text(
+                "UPDATE products SET price = price * 1.002"
+                f"{version_assignment} "
+                "WHERE LOWER(COALESCE(market_source, 'wod')) <> 'kai'"
+            ))
+            if touched(result):
+                counts["products"] = touched(result)
+        if has_columns("price_history", "price", "product_id") and has_columns(
+            "products", "id", "market_source"
+        ):
+            result = db.execute(text(
+                "UPDATE price_history SET price = price * 1.002 "
+                "WHERE EXISTS (SELECT 1 FROM products "
+                "WHERE products.id = price_history.product_id "
+                "AND LOWER(COALESCE(products.market_source, 'wod')) <> 'kai')"
+            ))
+            if touched(result):
+                counts["price_history"] = touched(result)
+
+        # Negotiation rows already declared as CNY stay unchanged. This branch
+        # only handles databases that explicitly persisted the retired unit.
+        for table, columns in (
+            ("buy_requests", ("max_unit_price", "budget")),
+            ("buy_request_quotes", ("unit_price", "total_price")),
+            ("buy_request_quote_revisions", ("unit_price", "total_price")),
+        ):
+            if not has_columns(table, "currency"):
+                continue
+            count = scale_columns(
+                table,
+                columns,
+                "UPPER(TRIM(currency)) IN ('CARD_HOUR', 'CARD_HOURS', 'CH')",
+            )
+            if count:
+                db.execute(text(
+                    f'UPDATE "{table}" SET currency = \'CNY\' '
+                    "WHERE UPPER(TRIM(currency)) IN ('CARD_HOUR', 'CARD_HOURS', 'CH')"
+                ))
+                counts[table] = count
+
+        # Provider CNY is authoritative for these records; assigning rather
+        # than multiplying also eliminates historical rounding residue.
+        for table in ("payment_orders", "payment_refunds", "payment_refund_requests"):
+            if not has_columns(table, "amount_cny", "card_hours"):
+                continue
+            assignments = "card_hours = amount_cny"
+            if table == "payment_orders" and has_columns(table, "card_hour_rate"):
+                assignments += ", card_hour_rate = 1"
+            result = db.execute(text(f'UPDATE "{table}" SET {assignments}'))
+            if touched(result):
+                counts[table] = touched(result)
+
+        if has_columns(
+            "withdrawal_orders", "amount_card_hours", "locked_rate_cny", "gross_amount_cny"
+        ):
+            result = db.execute(text(
+                "UPDATE withdrawal_orders SET "
+                "amount_card_hours = gross_amount_cny, locked_rate_cny = 1"
+            ))
+            if touched(result):
+                counts["withdrawal_orders"] = touched(result)
+
+        # Historical idempotency responses and immutable order snapshots are
+        # still served to clients, so their compatibility money fields must
+        # describe the same newly converted values as the relational columns.
+        if has_columns("orders", "product_snapshot"):
+            snapshots_changed = 0
+            for order in db.query(Order).filter(Order.product_snapshot.isnot(None)).all():
+                snapshot = copy.deepcopy(order.product_snapshot)
+                if not isinstance(snapshot, dict):
+                    continue
+                unit_keys = (
+                    "confirmed_unit_price_card_hours",
+                    "unit_price_card_hours",
+                )
+                converted_any = False
+                for unit_key in unit_keys:
+                    raw_unit = snapshot.get(unit_key)
+                    if raw_unit is None:
+                        continue
+                    try:
+                        converted = (Decimal(str(raw_unit)) * factor).quantize(
+                            quantum, rounding=ROUND_HALF_UP
+                        )
+                    except (InvalidOperation, ValueError, TypeError):
+                        continue
+                    snapshot[unit_key] = format(converted, "f")
+                    converted_any = True
+                if not converted_any:
+                    continue
+                snapshot["settlement_currency"] = "CNY"
+                snapshot["legacy_card_hour_conversion_factor"] = str(factor)
+                order.product_snapshot = snapshot
+                snapshots_changed += 1
+            if snapshots_changed:
+                counts["order_product_snapshots"] = snapshots_changed
+
+        if has_columns("order_renewals", "response_payload"):
+            payloads_changed = 0
+            for renewal in db.query(OrderRenewal).filter(
+                OrderRenewal.response_payload.isnot(None)
+            ).all():
+                payload, changed = scaled_json(copy.deepcopy(renewal.response_payload))
+                if changed:
+                    renewal.response_payload = payload
+                    payloads_changed += 1
+            if payloads_changed:
+                counts["order_renewal_payloads"] = payloads_changed
+
+        db.flush()
+        conservation_checks = []
+        if has_columns(
+            "order_funding_allocations",
+            "gross_amount", "cash_amount", "promotional_amount",
+        ):
+            conservation_checks.append((
+                "order funding",
+                "SELECT COUNT(*) FROM order_funding_allocations "
+                "WHERE ABS(gross_amount - cash_amount - promotional_amount) > 0.000001",
+            ))
+        if has_columns(
+            "merchant_settlements",
+            "gross_amount", "service_fee_amount", "net_amount",
+        ):
+            conservation_checks.append((
+                "merchant settlement",
+                "SELECT COUNT(*) FROM merchant_settlements "
+                "WHERE ABS(gross_amount - service_fee_amount - net_amount) > 0.000001",
+            ))
+        if has_columns(
+            "holding_asset_sales",
+            "buy_value_card_hours", "sell_value_card_hours", "pnl_card_hours",
+            "cash_value_card_hours", "promotional_value_card_hours",
+        ):
+            conservation_checks.extend((
+                (
+                    "holding sale funding",
+                    "SELECT COUNT(*) FROM holding_asset_sales "
+                    "WHERE ABS(sell_value_card_hours - cash_value_card_hours - "
+                    "promotional_value_card_hours) > 0.000001",
+                ),
+                (
+                    "holding sale P&L",
+                    "SELECT COUNT(*) FROM holding_asset_sales "
+                    "WHERE ABS(pnl_card_hours - sell_value_card_hours + "
+                    "buy_value_card_hours) > 0.000001",
+                ),
+            ))
+        for label, statement in conservation_checks:
+            invalid = int(db.execute(text(statement)).scalar_one() or 0)
+            if invalid:
+                raise RuntimeError(
+                    f"direct CNY migration violated {label} conservation for {invalid} rows"
+                )
+
+        db.execute(text(
+            "INSERT INTO app_migration_audits "
+            "(name, from_unit, to_unit, conversion_factor, details) "
+            "VALUES (:name, :from_unit, :to_unit, :factor, :details)"
+        ), {
+            "name": marker,
+            "from_unit": "CARD_HOUR",
+            "to_unit": "CNY",
+            "factor": str(factor),
+            "details": json.dumps(counts, ensure_ascii=False, sort_keys=True),
+        })
+        db.commit()
+        if counts:
+            print(
+                "[init_db] 历史卡时直转人民币: "
+                f"倍率 {factor}, 迁移记录 {sum(counts.values())} 条"
+            )
+        return {"applied": True, "factor": str(factor), "rows": counts}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if owns_session:
+            db.close()
+
+
 def init():
     # This must be the first executable statement: create_all and every helper
     # below can write. Deployment preflight runs earlier too, but init_db must
@@ -1906,6 +2289,7 @@ def init():
     _migrate_payment_precision_and_pending_deadlines()
     _migrate_manual_payout_fields()
     _migrate_invite_v2_funding_fields()
+    _migrate_legacy_card_hours_to_cny()
     if engine.dialect.name == "sqlite":
         # WAL permits App reads to continue while independent market-source
         # collectors persist fresh snapshots.  The setting is durable for the

@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     # Inquiry submission and human follow-up remain available independently.
     DIRECT_TRADE_ENABLED: bool = False
     # Holding purchases are a separate, higher-risk commitment. They are
-    # enabled only when the platform explicitly acts as the card-hour buyback
+    # enabled only when the platform explicitly acts as the CNY wallet buyback
     # counterparty for fresh KAI-operated quotes. Merchant-declared listings
     # never inherit this switch.
     HOLDING_TRADE_ENABLED: bool = False
@@ -139,7 +139,9 @@ class Settings(BaseSettings):
     # enabling wallet recharge.
     MANUAL_BANK_CARD_ENABLED: bool = False
     MANUAL_PAYOUT_ENABLED: bool = False
-    PAYOUT_CARD_HOUR_RMB_RATE: float = 1.002
+    # Compatibility field names are retained in persisted payout records, but
+    # new balances and withdrawals are direct money amounts at a 1:1 rate.
+    PAYOUT_CARD_HOUR_RMB_RATE: float = 1.0
     PAYOUT_FEE_RATE: float = 0.0
     PAYOUT_MIN_CARD_HOURS: float = 10.0
     PAYOUT_MAX_CARD_HOURS: float = 100000.0
@@ -148,7 +150,7 @@ class Settings(BaseSettings):
     # one-time proof returned by the reveal endpoint when recording a payment.
     PAYOUT_INSTRUCTION_REVEAL_TTL_SECONDS: int = 300
     # Confirmed ZTW merchant sales settle independently from promotional
-    # reward card-hours and synthetic asset revenue. Ten percent = 1000 bps.
+    # reward balances and synthetic asset revenue. Ten percent = 1000 bps.
     MERCHANT_SERVICE_FEE_BPS: int = 1000
     # Reserved order funds cannot remain frozen forever. Pending delivery is
     # refunded, a delivered order auto-confirms if the buyer raises no dispute,
@@ -159,7 +161,9 @@ class Settings(BaseSettings):
     # Existing pending/delivering rows may reflect manual agreements. They are
     # never auto-migrated into the new SLA until operations explicitly opts in.
     ORDER_LEGACY_PENDING_MIGRATION_ENABLED: bool = False
-    CARD_HOUR_RMB_RATE: float = 1.002
+    # Deprecated compatibility setting. New transactions use direct money
+    # settlement and therefore always apply a nominal 1:1 rate.
+    CARD_HOUR_RMB_RATE: float = 1.0
     # MaPay is retired for new collection.  ``MAPAY_ENABLED`` remains only as
     # a fail-closed legacy deployment signal so an old environment cannot
     # silently become the active gateway.  Historical callback/query support
@@ -229,7 +233,7 @@ class Settings(BaseSettings):
     # Registration/invite/consumer/supplier rebates remain disabled until an
     # auditable verification and settlement policy is connected.
     REWARD_SERVICE_ENABLED: bool = False
-    # In-app card-hour rewards are spendable only inside ZTW and are always
+    # In-app reward balances are spendable only inside KAI Star and are always
     # non-withdrawable, independently of recharge or payout configuration.
     # They use dedicated ledger types so legacy synthetic rewards stay excluded.
     CLOSED_TEST_REWARD_ENABLED: bool = False
@@ -302,6 +306,15 @@ class Settings(BaseSettings):
     # same official 1h/4h/1d history coverage.
     MARKET_CANDLE_SYNC_MAX_JOBS: int = 36
     MARKET_CANDLE_HISTORY_DAYS: int = 100
+    # Dated ECB reference rates are used only to present the CNY ledger in the
+    # locale-selected HKD/USD currency. Payment and accounting remain CNY.
+    DISPLAY_FX_HTTP_TIMEOUT_SECONDS: float = 10.0
+    DISPLAY_FX_MAX_RESPONSE_BYTES: int = 64 * 1024
+    DISPLAY_FX_MAX_REFERENCE_AGE_DAYS: int = 10
+    DISPLAY_FX_STALE_AFTER_DAYS: int = 7
+    DISPLAY_FX_RETENTION_DAYS: int = 400
+    DISPLAY_FX_REFRESH_HOUR: int = 23
+    DISPLAY_FX_REFRESH_MINUTE: int = 30
     PRODUCT_OFFER_MAX_AGE_SECONDS: int = 900
     # Authenticated users allowed to fulfil KAI-backed manually delivered orders.
     # Use comma-separated numeric user IDs.  KAI purchases fail closed when no

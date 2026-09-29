@@ -26,29 +26,29 @@
           </view>
           <view class="hero-value">
             <text class="hero-label">{{ t(asset.purchase_type === 'holding' ? 'purchaseCost' : '当前价值') }}</text>
-            <AmountText :value="asset.value" prefix="cardHour" size="lg" />
+            <AmountText :value="asset.value" currency="ledger" size="lg" />
           </view>
           <!-- 持有模式：显示当前市场价 + 盈亏 -->
           <view v-if="asset.purchase_type === 'holding' && asset.current_price != null" class="sell-info">
             <view class="si-row">
               <text class="si-label">{{ t('k_87165f6a') }}</text>
-              <text class="si-val" :class="{ up: (asset.pnl ?? 0) >= 0, down: (asset.pnl ?? 0) < 0 }">{{ fmtCardHours(asset.current_price) }} {{ t('cardHour') }}</text>
+              <text class="si-val" :class="{ up: (asset.pnl ?? 0) >= 0, down: (asset.pnl ?? 0) < 0 }">{{ formatCardHourCurrency(asset.current_price) }}</text>
             </view>
             <view class="si-row">
               <text class="si-label">{{ t('k_a8401d10') }}</text>
               <text class="si-val" :class="{ up: (asset.pnl ?? 0) >= 0, down: (asset.pnl ?? 0) < 0 }">
-                {{ (asset.pnl ?? 0) >= 0 ? '+' : '' }}{{ fmtCardHours(asset.pnl) }} {{ t('cardHour') }} ({{ (asset.pnl_pct ?? 0) >= 0 ? '+' : '' }}{{ formatNumber(asset.pnl_pct ?? 0) }}%)
+                {{ (asset.pnl ?? 0) >= 0 ? '+' : '' }}{{ formatCardHourCurrency(asset.pnl) }} ({{ (asset.pnl_pct ?? 0) >= 0 ? '+' : '' }}{{ formatNumber(asset.pnl_pct ?? 0) }}%)
               </text>
             </view>
           </view>
           <view v-else-if="asset.purchase_type === 'usage' && asset.audited_earnings_enabled" class="hero-grid">
             <view class="hg-item">
               <text class="hg-label">{{ t('pendingUsageRebate') }}</text>
-              <AmountText :value="asset.pending_rebate ?? 0" prefix="cardHour" size="md" />
+              <AmountText :value="asset.pending_rebate ?? 0" currency="ledger" size="md" />
             </view>
             <view class="hg-item">
               <text class="hg-label">{{ t('rebated') }}</text>
-              <AmountText :value="asset.settled_rebate ?? 0" prefix="cardHour" size="md" trend="up" />
+              <AmountText :value="asset.settled_rebate ?? 0" currency="ledger" size="md" trend="up" />
             </view>
           </view>
         </view>
@@ -69,11 +69,11 @@
           <view class="row" v-if="asset.purchase_type === 'usage'"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ t('{days} 天', { days: asset.remaining_days ?? 0 }) }}</text></view>
           <view class="row" v-if="asset.pending_rebate">
             <text class="sk">{{ t('k_64913945') }}</text>
-            <text class="sv up">+{{ fmtCardHours(asset.pending_rebate) }} {{ t('cardHour') }}</text>
+            <text class="sv up">+{{ formatCardHourCurrency(asset.pending_rebate) }}</text>
           </view>
           <view class="row" v-if="asset.settled_rebate">
             <text class="sk">{{ t('k_ca7204ca') }}</text>
-            <text class="sv up">+{{ fmtCardHours(asset.settled_rebate) }} {{ t('cardHour') }}</text>
+            <text class="sv up">+{{ formatCardHourCurrency(asset.settled_rebate) }}</text>
           </view>
           <view class="row" v-if="asset.rebate_status === 'forfeited'">
             <text class="sk">{{ t('k_080a8165') }}</text>
@@ -106,7 +106,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getAsset, type AssetItem } from '@/api/asset'
 import { ApiRequestError } from '@/api/request'
 import { getRevenueChart, type RevenuePoint } from '@/api/revenue'
-import { formatNumber, fmtCardHours, formatDate } from '@/utils/format'
+import { formatNumber, formatCardHourCurrency, formatDate } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'

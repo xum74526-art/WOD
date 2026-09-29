@@ -12,13 +12,12 @@ class Wallet(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
-    # Card-hours are quoted to six decimal places (for example
-    # CNY 0.01 / 1.002 = 0.009980 CH).  Four decimal places silently rounded
-    # that value to 0.0100 and broke conservation between a payment order and
-    # the wallet/ledger credit.
+    # CNY account amounts retain six decimal places internally so payment,
+    # wallet, and ledger conservation is exact before three-decimal display
+    # rounding is applied by clients.
     balance: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
     frozen: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
-    # Promotional card-hours are a strict subset of ``balance``/``frozen``.
+    # Promotional rewards are a strict subset of ``balance``/``frozen``.
     # They may be spent inside ZTW, but never withdrawn and never counted as
     # cash-backed consumption for invitation commission.
     promotional_balance: Mapped[Decimal] = mapped_column(
@@ -28,7 +27,7 @@ class Wallet(Base):
         Numeric(18, 6), default=Decimal("0"), server_default="0"
     )
     # Only funds backed by an auditable, settled earnings source may be moved
-    # into this bucket.  Historical wallets, recharge card-hours, test rebates,
+    # into this bucket. Historical wallets, recharge balances, test rebates,
     # and synthetic revenue migrate as zero-withdrawable by design.
     withdrawable_balance: Mapped[Decimal] = mapped_column(
         Numeric(18, 6), default=Decimal("0")

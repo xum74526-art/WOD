@@ -12,6 +12,8 @@ class NotificationOut(OrmModel):
     content: str | None = None
     title_en: str | None = None
     content_en: str | None = None
+    template_key: str | None = None
+    amount_cny: str | None = None
     type: str
     action_url: str | None = None
     is_read: bool

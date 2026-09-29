@@ -65,7 +65,7 @@ def _decimal_setting(value: float) -> Decimal:
 
 
 def payout_rate() -> Decimal:
-    return _decimal_setting(settings.PAYOUT_CARD_HOUR_RMB_RATE).quantize(AMOUNT_QUANTUM)
+    return Decimal("1").quantize(AMOUNT_QUANTUM)
 
 
 def payout_fee_rate() -> Decimal:
@@ -155,10 +155,10 @@ def _ledger_event(
 def _amounts(amount_card_hours: Decimal) -> tuple[Decimal, Decimal, Decimal, Decimal]:
     amount = amount_card_hours.quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
     if amount <= 0:
-        raise BizError("提现卡时必须大于 0")
+        raise BizError("提现金额必须大于 0")
     minimum, maximum = payout_bounds()
     if amount < minimum or amount > maximum:
-        raise BizError(f"提现卡时需在 {minimum} 至 {maximum} 之间")
+        raise BizError(f"提现金额需在 {minimum} 至 {maximum} 之间")
     rate = payout_rate()
     gross = (amount * rate).quantize(CNY_QUANTUM, rounding=ROUND_HALF_UP)
     fee = (gross * payout_fee_rate()).quantize(CNY_QUANTUM, rounding=ROUND_HALF_UP)
@@ -169,7 +169,7 @@ def _amounts(amount_card_hours: Decimal) -> tuple[Decimal, Decimal, Decimal, Dec
 
 
 def _new_order_no() -> str:
-    return "WODW" + utc_now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:10].upper()
+    return "KAIW" + utc_now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:10].upper()
 
 
 def _masked_card(card: BankCard | None, order: WithdrawalOrder) -> dict:

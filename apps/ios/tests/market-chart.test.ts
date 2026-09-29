@@ -77,7 +77,7 @@ test('professional K-line prioritizes candles, current price and available avera
   assert.match(chartSource, /class="viewport-controls"/)
   assert.match(chartSource, /class="viewport-button"/)
   assert.match(chartSource, /props\.zoomable && !props\.compact/)
-  assert.match(quoteSource, /display-currency="CNY"[\s\S]*?zoomable/)
+  assert.match(quoteSource, /<CandlestickChart[\s\S]*?zoomable/)
   assert.doesNotMatch(chartSource, /t\('mergedMarketChart'\)|t\('priceTrendLine'\)/)
   assert.match(chartSource, /t\('candlestickMode'\)/)
   assert.match(chartSource, /const latestPriceLine/)
@@ -183,18 +183,19 @@ test('moving averages and flat price domains remain numerically stable', () => {
   assert.equal(canSharePriceDomain(26.96, [26.73, 27.05], false), false)
 })
 
-test('quote charts can display raw CNY without changing shared card-hour defaults', () => {
-  assert.match(quoteSource, /display-currency="CNY"/)
+test('quote charts convert canonical CNY into the selected language currency', () => {
+  assert.doesNotMatch(quoteSource, /display-currency=/)
   assert.doesNotMatch(quoteSource, /toCardHours|cardHoursOrDash|cardHourNumber/)
 
   for (const source of [chartSource, lineChartSource]) {
-    assert.match(source, /displayCurrency\?: 'CNY' \| 'CARD_HOUR'/)
-    assert.match(source, /displayCurrency: 'CARD_HOUR'/)
+    assert.doesNotMatch(source, /displayCurrency\?: 'CNY' \| 'CARD_HOUR'/)
+    assert.match(source, /cnyToDisplayCurrency/)
+    assert.match(source, /displayCurrencySymbol/)
   }
   assert.match(chartSource, /function displayPrice\(value: number\)/)
-  assert.match(chartSource, /props\.displayCurrency === 'CNY' \? Number\(value\) : toCardHours\(value\)/)
+  assert.match(chartSource, /return cnyToDisplayCurrency\(value\)/)
   assert.match(lineChartSource, /function displayPrice\(value: number \| null\)/)
-  assert.match(lineChartSource, /props\.displayCurrency === 'CNY' \? numericValue : toCardHours\(numericValue\)/)
+  assert.match(lineChartSource, /return cnyToDisplayCurrency\(numericValue\)/)
 })
 
 test('trend compares observed high and low while ranking and regions expose the real median', () => {

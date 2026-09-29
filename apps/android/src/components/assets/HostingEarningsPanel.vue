@@ -16,8 +16,7 @@
       <view class="asset-panel__hero">
         <text class="asset-panel__eyebrow">{{ t('availableBalance') }}</text>
         <view class="asset-panel__amount">
-          <text class="asset-panel__amount-value">{{ fmtCHn(availableAmount) }}</text>
-          <text class="asset-panel__amount-unit">{{ t('cardHour') }}</text>
+          <text class="asset-panel__amount-value">{{ formatCardHourCurrency(availableAmount) }}</text>
         </view>
         <text class="asset-panel__hero-note">{{ t('hostingEarningsSummary') }}</text>
         <view class="asset-panel__metrics">
@@ -49,7 +48,7 @@
               <text class="asset-panel__row-meta">{{ t('computeRevenueDesc') }}</text>
             </view>
             <view class="asset-panel__row-side">
-              <text class="asset-panel__row-value positive">{{ fmtCH(totalIncome) }}</text>
+              <text class="asset-panel__row-value positive">{{ formatCardHourCurrency(totalIncome) }}</text>
             </view>
           </view>
           <view class="asset-panel__row" @tap="openHostingRevenue">
@@ -90,7 +89,7 @@ import { computed } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useHostingStore } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
-import { fmtCH, fmtCHn } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 
 const props = defineProps<{
   walletBalance: number
@@ -109,10 +108,10 @@ const hostingStore = useHostingStore()
 const { t } = useI18nStore()
 const hasData = computed(() => props.walletBalance > 0 || props.totalIncome > 0 || !!hostingStore.supplierWallet)
 const availableAmount = computed(() => hostingStore.isApprovedMerchant ? hostingStore.supplierWallet?.available ?? 0 : props.walletBalance)
-const todayAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.today_revenue) : '--')
-const totalAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.total_revenue) : fmtCHn(props.totalIncome))
-const pendingAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? fmtCHn(hostingStore.supplierWallet.pending_amount) : fmtCHn(props.pendingRevenue))
-const hostingRevenueText = computed(() => hostingStore.hostingRevenue == null ? '--' : fmtCH(hostingStore.hostingRevenue))
+const todayAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.today_revenue) : '--')
+const totalAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.total_revenue) : formatCardHourCurrency(props.totalIncome))
+const pendingAmountText = computed(() => hostingStore.isApprovedMerchant && hostingStore.supplierWallet ? formatCardHourCurrency(hostingStore.supplierWallet.pending_amount) : formatCardHourCurrency(props.pendingRevenue))
+const hostingRevenueText = computed(() => hostingStore.hostingRevenue == null ? '--' : formatCardHourCurrency(hostingStore.hostingRevenue))
 
 function openHostingRevenue() {
   if (hostingStore.isApprovedMerchant) emit('navigate', '/pages/supplier/revenue')

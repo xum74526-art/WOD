@@ -168,7 +168,7 @@ class PaymentOperationsTests(unittest.TestCase):
             "trade_no": order.provider_trade_no or f"QX-{order.order_no}",
             "out_trade_no": order.order_no,
             "type": order.channel,
-            "name": "KAI钱包卡时充值",
+            "name": "KAI星算钱包充值",
             "money": f"{order.amount_cny:.2f}",
             "trade_status": "TRADE_SUCCESS",
             "param": order.order_no,

@@ -1,6 +1,6 @@
 """Consumer rebate calculation and expiry settlement.
 
-Only confirmed usage orders participate. In-app rewards are card-hours
+Only confirmed usage orders participate. In-app rewards are CNY account credits
 that can be reused for eligible purchases, never fiat and never withdrawable while
 the payment service is disabled.
 """
@@ -53,7 +53,7 @@ def _get_rebate_rate(monthly_spent: float | Decimal) -> Decimal:
 
 
 def _get_month_spent(user_id: int, db: Session, month: date | None = None) -> Decimal:
-    """Completed usage-order card-hours for the month, including pending rebates."""
+    """Completed usage-order value in CNY for the month, including pending rebates."""
     total = db.query(func.coalesce(func.sum(Order.amount), 0)).filter(
         Order.user_id == user_id,
         Order.purchase_type == "usage",
@@ -213,7 +213,7 @@ def get_rebate_summary(user_id: int, db: Session) -> dict:
             if threshold == float("inf") or month_spent <= Decimal(str(threshold)):
                 if rate < Decimal("0.10"):
                     next_rate = next(candidate for _, candidate in MONTHLY_TIERS if candidate > rate)
-                    next_hint = f"再消费 {int(Decimal(str(threshold)) - month_spent)} 卡时可升至 {int(next_rate * 100)}% 返佣"
+                    next_hint = f"再消费 ¥{int(Decimal(str(threshold)) - month_spent)} 可升至 {int(next_rate * 100)}% 返佣"
                 else:
                     next_hint = "已达最高返佣等级 10%"
                 break

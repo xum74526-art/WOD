@@ -62,6 +62,7 @@ import { useI18nStore } from '@/store/i18n'
 import { localizeRegionName } from '@/utils/region-name'
 import { navigateBack } from '@/utils/nav'
 import { ensureClientRequestIntent, type ClientRequestIntent } from '@/utils/client-request-intent'
+import { displayCurrencyToCardHours } from '@/utils/format'
 
 const i18n = useI18nStore()
 const { t, localizedErrorMessage } = i18n
@@ -152,7 +153,7 @@ async function onSubmit() {
     uni.showToast({ title: t('selectRegion'), icon: 'none' })
     return
   }
-  const priceInCardHours = Number(form.price)
+  const priceInCardHours = displayCurrencyToCardHours(form.price)
   if (!Number.isFinite(priceInCardHours) || priceInCardHours <= 0 || priceInCardHours > 100000) {
     uni.showToast({ title: t('invalidSupplierPrice'), icon: 'none' })
     return

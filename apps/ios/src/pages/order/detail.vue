@@ -20,7 +20,7 @@
           </view>
           <view class="hero-amount">
             <text class="hero-label">{{ order.coupon_discount ? t('couponPayable') : t('k_cc6be3d9') }}</text>
-            <AmountText :value="order.payable_amount_card_hours ?? order.amount_card_hours ?? order.amount" :prefix="t('cardHour')" size="lg" />
+            <AmountText :value="order.payable_amount_card_hours ?? order.amount_card_hours ?? order.amount" currency="ledger" size="lg" />
           </view>
         </view>
 
@@ -30,10 +30,10 @@
           <view class="row"><text class="sk">{{ t('k_0292a021') }}</text><text class="sv">{{ order.purchase_type === 'holding' ? formatDate(order.start_at) : order.end_at ? `${formatDate(order.start_at)} ~ ${formatDate(order.end_at)}` : t('startsAfterDeliveryConfirmation') }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseDuration') }}</text><text class="sv">{{ orderDuration }}</text></view>
           <view class="row"><text class="sk">{{ t('purchaseQuantity') }}</text><text class="sv">{{ t('quantityUnits', { count: order.quantity || 1 }) }}</text></view>
-          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponOriginalAmount') }}</text><text class="sv">{{ fmtCH(order.amount_card_hours ?? order.amount) }}</text></view>
-          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponDiscount') }}</text><text class="sv up">-{{ fmtCH(order.coupon_discount) }}</text></view>
+          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponOriginalAmount') }}</text><text class="sv">{{ formatCardHourCurrency(order.amount_card_hours ?? order.amount) }}</text></view>
+          <view v-if="order.coupon_discount" class="row"><text class="sk">{{ t('couponDiscount') }}</text><text class="sv up">-{{ formatCardHourCurrency(order.coupon_discount) }}</text></view>
           <view v-if="order.end_at" class="row"><text class="sk">{{ t('k_927babb3') }}</text><text class="sv">{{ orderRemaining }}</text></view>
-          <view class="row" v-if="order.purchase_type !== 'holding' && order.revenue_settlement_enabled"><text class="sk">{{ t('cumulativeRevenue') }}</text><text class="sv up">{{ fmtCH(order.accumulated_revenue ?? 0) }}</text></view>
+          <view class="row" v-if="order.purchase_type !== 'holding' && order.revenue_settlement_enabled"><text class="sk">{{ t('cumulativeRevenue') }}</text><text class="sv up">{{ formatCardHourCurrency(order.accumulated_revenue ?? 0) }}</text></view>
           <view class="row"><text class="sk">{{ t('gpuModel') }}</text><text class="sv">{{ order.gpu_model || '-' }}</text></view>
           <view v-if="order.status === 'paid' && order.delivery_due_at" class="row"><text class="sk">{{ t('交付截止时间') }}</text><text class="sv">{{ formatDeadline(order.delivery_due_at) }}</text></view>
           <view v-if="order.status === 'delivering' && order.confirmation_due_at" class="row"><text class="sk">{{ t('验收截止时间') }}</text><text class="sv">{{ formatDeadline(order.confirmation_due_at) }}</text></view>
@@ -42,7 +42,7 @@
 
         <view v-if="order.status === 'disputed'" class="card dispute-card">
           <text class="dispute-title">{{ t('订单正在争议处理中') }}</text>
-          <text class="dispute-desc">{{ t('争议期间卡时继续冻结，不会释放给商家；平台逾期未处理将自动退款。') }}</text>
+          <text class="dispute-desc">{{ t('争议期间账户金额继续冻结，不会释放给商家；平台逾期未处理将自动退款。') }}</text>
           <text v-if="order.dispute_reason" class="dispute-reason">{{ order.dispute_reason }}</text>
         </view>
 
@@ -99,7 +99,7 @@
     <ConfirmSheet
       :visible="showDispute"
       :title="t('发起争议')"
-      :desc="t('请说明 SSH 无法连接、配置不符或其他交付问题。提交后卡时保持冻结。')"
+      :desc="t('请说明 SSH 无法连接、配置不符或其他交付问题。提交后账户金额保持冻结。')"
       :cancelText="t('取消')"
       :confirmText="t('提交争议')"
       @cancel="showDispute = false"
@@ -115,7 +115,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '@/api/request'
 import { getOrder, cancelOrder, disputeOrder, type OrderItem } from '@/api/order'
-import { formatDate, formatDeadline, fmtCH } from '@/utils/format'
+import { formatCardHourCurrency, formatDate, formatDeadline } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'

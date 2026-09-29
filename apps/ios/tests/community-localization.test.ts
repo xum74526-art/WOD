@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { localizeInternalBrandText, localizePersonName } from '../src/utils/localize-content.ts'
+import { setDisplayCurrencyConfig } from '../src/utils/format.ts'
 
 const indexSource = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
 const detailSource = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
@@ -35,14 +36,19 @@ test('community navigation and empty-state keys have English translations', () =
 })
 
 test('first-party market posts remove mixed Chinese from English display copy', () => {
+  setDisplayCurrencyConfig({ card_hour_cny_rate: 1, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
   assert.equal(localizePersonName('KAI星算平台行情', 'en'), 'KAI Platform Market')
   assert.equal(
     localizeInternalBrandText(
-      'The current reference price in 北美 is 5.04 CH/h. KAI星算 market data.',
+      'The current reference price in 北美 is CNY ¥5.04 per GPU-hour. KAI星算 market data.',
       'wod-market',
       'en',
     ),
-    'The current reference price in North America is 5.04 CH/h. KAI Star Market data.',
+    'The current reference price in North America is US$0.706/GPU-hour. KAI Star Market data.',
+  )
+  assert.equal(
+    localizeInternalBrandText('The legacy reference price is 5.04 CH/h.', 'wod-market', 'en'),
+    'The legacy reference price is US$0.707/h.',
   )
   assert.equal(
     localizeInternalBrandText('北美用戶原文', 'user-post', 'en'),
@@ -52,6 +58,7 @@ test('first-party market posts remove mixed Chinese from English display copy', 
 })
 
 test('App localization avoids String.replaceAll for older DCloud service runtimes', () => {
+  assert.doesNotMatch(localeSource, /\.replaceAll\(/)
   assert.doesNotMatch(contentLocalizationSource, /\.replaceAll\(/)
   assert.doesNotMatch(legalDocumentsSource, /\.replaceAll\(/)
 })

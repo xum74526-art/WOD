@@ -111,7 +111,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { useHostingStore, type HostingDeviceItem, type HostingDeviceStatus } from '@/store/hosting'
 import { useI18nStore } from '@/store/i18n'
 import { useUserStore } from '@/store/user'
-import { fmtCH } from '@/utils/format'
+import { formatCardHourCurrency } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 
 const emit = defineEmits<{
@@ -128,7 +128,7 @@ const reviewCount = computed(() => hostingStore.statusCounts.pending_review + ho
 const roleLabel = computed(() => t(hostingStore.hostingRole === 'merchant_operator' ? 'merchantOperator' : hostingStore.hostingRole === 'personal_owner' ? 'personalOwner' : 'hostingVisitor'))
 const qualificationLabel = computed(() => t(hostingStore.verification?.status === 'verified' ? 'verified' : hostingStore.verification?.status === 'pending' ? 'verificationPending' : 'notVerified'))
 const hostingHeroNote = computed(() => t(hostingStore.hostingRole === 'merchant_operator' ? 'merchantHostingHero' : hostingStore.hostingRole === 'personal_owner' ? 'personalHostingHero' : 'viewerHostingHero'))
-const hostingRevenueText = computed(() => hostingStore.hostingRevenue == null ? '--' : fmtCH(hostingStore.hostingRevenue))
+const hostingRevenueText = computed(() => hostingStore.hostingRevenue == null ? '--' : formatCardHourCurrency(hostingStore.hostingRevenue))
 const emptyDescription = computed(() => t(hostingStore.hostingRole === 'viewer' ? 'verifyBeforeHosting' : 'noHostingDevicesDesc'))
 const primaryActionLabel = computed(() => {
   if (!userStore.isLogin) return t('loginNow')
