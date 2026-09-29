@@ -6,14 +6,14 @@
     <ConfirmSheet
       :visible="showConfirm"
       :title="t(purchaseType === 'holding' ? 'confirmHoldingPurchase' : 'confirmUsagePurchase')"
-      :desc="`${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${formatCardHourCurrency(totalCardHours)}`"
+      :desc="`${localizeProductName(product.name, i18n.lang)} × ${quantity}，${t('hoursValue', { count: hours })}，${checkoutAmountSummary}`"
       :confirmText="t('k_936de2c4')"
       @cancel="cancelConfirm"
       @confirm="submitOrder"
     >
       <view class="confirm-fee">
-        <text>{{ t('k_99b6bb88') }}</text>
-        <text class="confirm-value">{{ formatCardHourCurrency(totalCardHours) }}</text>
+        <text>{{ t(showCurrencyReference ? 'displayReferenceAmount' : 'actualCnySettlement') }}</text>
+        <text class="confirm-value">{{ showCurrencyReference ? formatCardHourCurrency(totalCardHours) : formatSettlementCny(totalCardHours) }}</text>
       </view>
       <view v-if="purchaseType === 'usage'" class="coupon-field">
         <text>{{ t('couponSelect') }}</text>
@@ -30,10 +30,15 @@
         <text>{{ t('couponPayable') }}</text>
         <text class="confirm-value">{{ formatCardHourCurrency(payableCardHours) }}</text>
       </view>
+      <view v-if="showCurrencyReference" class="confirm-fee rebate-row settlement-row">
+        <text>{{ t('actualCnySettlement') }}</text>
+        <text class="settlement-value">{{ formatSettlementCny(payableCardHours) }}</text>
+      </view>
       <view v-if="purchaseType === 'usage'" class="confirm-fee rebate-row">
         <text>{{ t('estimatedExpiryRebate') }}</text>
         <text class="confirm-value">{{ formatCardHourCurrency(estimatedRebate || 0) }}<template v-if="estimatedRebateRate"> · {{ estimatedRebateRate }}%</template></text>
       </view>
+      <text class="confirm-note">{{ t('cnySettlementAlways') }}</text>
       <text v-if="purchaseType === 'usage'" class="confirm-note">{{ t('rebateEstimateCheckoutNotice') }}</text>
       <text v-else class="confirm-note">{{ t('holdingRisk') }}</text>
     </ConfirmSheet>
@@ -48,7 +53,7 @@ import { getAvailableCoupons, type CouponItem } from '@/api/coupon'
 import type { Product } from '@/api/gpu'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
 import { directTradeCardHoursPerGpuHour } from '@/utils/direct-trade'
-import { formatCardHourCurrency } from '@/utils/format'
+import { displayCurrencyCode, formatCardHourCurrency, formatSettlementCny } from '@/utils/format'
 import { localizeProductName } from '@/utils/localize-content'
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
@@ -75,6 +80,10 @@ const selectedCouponId = ref<number | undefined>()
 const couponLoading = ref(false)
 const pricePerGpuHour = computed(() => directTradeCardHoursPerGpuHour(props.product))
 const totalCardHours = computed(() => pricePerGpuHour.value * props.hours * props.quantity)
+const showCurrencyReference = computed(() => displayCurrencyCode() !== 'CNY')
+const checkoutAmountSummary = computed(() => showCurrencyReference.value
+  ? `${formatCardHourCurrency(totalCardHours.value)} / ${formatSettlementCny(totalCardHours.value)}`
+  : formatSettlementCny(totalCardHours.value))
 const couponOptions = computed(() => [
   { id: undefined, label: t('couponDoNotUse') },
   ...coupons.value.map((coupon) => ({
@@ -167,5 +176,7 @@ async function submitOrder() {
 .coupon-picker { min-height: 72rpx; margin-top: 10rpx; padding: 0 18rpx; display: flex; align-items: center; color: var(--text); background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 12rpx; font-size: 23rpx; }
 .coupon-discount { color: var(--primary); font-weight: 800; }
 .payable-row { padding-top: 16rpx; border-top: 1rpx solid var(--border); }
+.settlement-row { padding: 16rpx 0; border-top: 1rpx solid var(--border); border-bottom: 1rpx solid var(--border); }
+.settlement-value { color: var(--text); font-weight: 850; }
 .confirm-note { display: block; margin-top: 18rpx; color: var(--text-sub); font-size: 22rpx; line-height: 1.55; }
 </style>

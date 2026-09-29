@@ -10,10 +10,10 @@
         <text class="sheet-title">{{ t('k_2d1872ca') }}</text>
         <view class="rate-card">
           <text>{{ t('rechargeRateLockedHint') }}</text>
-          <text>{{ t('rechargeSettlementHint', { currency: displayCurrencyCode() }) }}</text>
+          <text>{{ t('rechargeSettlementHint') }}</text>
         </view>
-        <text class="recharge-limit-hint">{{ t('rechargeDisplayLimitsHint', { max: formatCnyCurrency(maximumAmount), daily: formatCnyCurrency(dailyLimit) }) }}</text>
-        <view class="input-wrap"><text>{{ displayCurrencySymbol() }}</text><input v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeAmount')" /></view>
+        <text class="recharge-limit-hint">{{ t('rechargeDisplayLimitsHint', { max: formatSettlementCny(maximumAmount), daily: formatSettlementCny(dailyLimit) }) }}</text>
+        <view class="input-wrap"><text>¥</text><input v-model="sheet.amount" type="digit" :placeholder="t('enterRechargeAmount')" /></view>
         <view class="quick-amounts">
           <view v-for="amount in quickAmounts" :key="amount.cny" class="quick-amount pressable" @tap="sheet.amount = amount.input">{{ amount.label }}</view>
         </view>
@@ -38,13 +38,13 @@
           <view class="sheet-button primary pressable" @tap="goBankCards">{{ t('k_e2f477a5') }}</view>
         </view>
         <template v-else>
-          <view class="input-wrap"><text>{{ displayCurrencySymbol() }}</text><input v-model="sheet.amount" type="digit" :placeholder="t('withdrawableValue', { amount: formatCardHourCurrency(wallet?.withdrawable_balance ?? 0) })" /></view>
+          <view class="input-wrap"><text>¥</text><input v-model="sheet.amount" type="digit" :placeholder="t('withdrawableValue', { amount: formatSettlementCny(wallet?.withdrawable_balance ?? 0) })" /></view>
           <picker :range="bankCards" range-key="displayName" :value="cardIndex" @change="onCardChange">
             <view class="picker-value">{{ bankCards[cardIndex]?.displayName || t('请选择银行卡') }}</view>
           </picker>
           <view class="withdraw-preview">
             <text>{{ t('estimatedArrival') }}</text>
-            <text>{{ formatCnyCurrency(withdrawNet) }}</text>
+            <text>{{ formatSettlementCny(withdrawNet) }}</text>
           </view>
           <view class="sheet-actions">
             <view class="sheet-button ghost pressable" @tap="closeSheet">{{ t('cancel') }}</view>
@@ -65,14 +65,8 @@ import { createWithdrawal, getWithdrawalConfig, type WithdrawalConfig } from '@/
 import { isRegisteredBankCardStatus } from '@/utils/bank-card'
 import { resolveBackendUrl } from '@/utils/config'
 import {
-  cnyToDisplayCurrency,
-  displayCurrencyCode,
-  displayCurrencySymbol,
-  displayCurrencyToCny,
-  formatCardHourCurrency,
-  formatCnyCurrency,
+  formatSettlementCny,
   formatNumberInput,
-  normalizeDisplayInputToCny,
 } from '@/utils/format'
 import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
 import { openPaymentCheckout } from '@/utils/payment-checkout'
@@ -105,8 +99,8 @@ const RECHARGE_REQUEST_INTENT_KEY = 'wod-recharge-request-intent'
 const WITHDRAWAL_REQUEST_INTENT_KEY = 'wod-withdrawal-request-intent'
 const quickAmounts = computed(() => [RECHARGE_BUILD_MINIMUM_CNY, 50, 100].map(cny => ({
   cny,
-  input: formatNumberInput(cnyToDisplayCurrency(cny)),
-  label: formatCnyCurrency(cny),
+  input: formatNumberInput(cny),
+  label: formatSettlementCny(cny),
 })))
 const submitting = ref(false)
 const withdrawConfig = ref<WithdrawalConfig | null>(null)
@@ -135,7 +129,7 @@ const minimumAmount = computed(() => effectiveRechargeMinimum(props.wallet?.paym
 const maximumAmount = computed(() => Number(props.wallet?.payment_config?.max_amount_cny || 40_000))
 const dailyLimit = computed(() => Number(props.wallet?.payment_config?.daily_limit_cny || 10_000_000))
 const minimumWithdrawal = computed(() => effectiveWithdrawalMinimum(withdrawConfig.value?.min_card_hours))
-const withdrawGross = computed(() => Math.max(0, displayCurrencyToCny(sheet.amount)))
+const withdrawGross = computed(() => Math.max(0, Number(sheet.amount) || 0))
 const withdrawFee = computed(() => withdrawGross.value * Number(withdrawConfig.value?.fee_rate || 0))
 const withdrawNet = computed(() => Math.max(0, withdrawGross.value - withdrawFee.value))
 
@@ -161,7 +155,7 @@ function openRecharge(prefill?: RechargePrefill | null) {
     return
   }
   sheet.type = 'recharge'
-  sheet.amount = prefill?.amount ? formatNumberInput(cnyToDisplayCurrency(prefill.amount)) : ''
+  sheet.amount = prefill?.amount ? formatNumberInput(prefill.amount) : ''
   sheet.paymentType = prefill?.paymentType && paymentMethods.value.some(item => item.value === prefill.paymentType)
     ? prefill.paymentType
     : paymentMethods.value[0]?.value || 'alipay'
@@ -203,14 +197,10 @@ function financialRequestId(storageKey: string, fingerprint: string, prefix: str
 
 async function submitRecharge() {
   const raw = String(sheet.amount || '').trim()
-  const displayAmount = Number(raw)
-  const amount = normalizeDisplayInputToCny(displayAmount, {
-    fractionDigits: 2,
-    minimum: minimumAmount.value,
-    maximum: maximumAmount.value,
-  })
-  if (!/^\d+(?:\.\d{1,3})?$/.test(raw) || !Number.isFinite(displayAmount) || displayAmount <= 0 || amount < minimumAmount.value || amount > maximumAmount.value) {
-    uni.showToast({ title: t('invalidDisplayRechargeAmount', { min: formatCnyCurrency(minimumAmount.value), max: formatCnyCurrency(maximumAmount.value) }), icon: 'none' })
+  const rawAmount = Number(raw)
+  const amount = Number(rawAmount.toFixed(2))
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw) || !Number.isFinite(rawAmount) || rawAmount <= 0 || amount < minimumAmount.value || amount > maximumAmount.value) {
+    uni.showToast({ title: t('invalidDisplayRechargeAmount', { min: formatSettlementCny(minimumAmount.value), max: formatSettlementCny(maximumAmount.value) }), icon: 'none' })
     return
   }
   if (!rechargeEnabled.value || submitting.value) {
@@ -263,17 +253,11 @@ async function submitRecharge() {
 }
 
 async function submitWithdrawal() {
-  const maximum = Math.min(
-    Number(withdrawConfig.value?.max_card_hours || Infinity),
-    Number(props.wallet?.withdrawable_balance || 0),
-  )
-  const amount = normalizeDisplayInputToCny(sheet.amount, {
-    fractionDigits: 3,
-    minimum: minimumWithdrawal.value,
-    maximum,
-  })
-  if (!Number.isFinite(amount) || amount < minimumWithdrawal.value || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
-    uni.showToast({ title: t('withdrawAmountRange', { min: formatCardHourCurrency(minimumWithdrawal.value), max: formatCardHourCurrency(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
+  const raw = String(sheet.amount || '').trim()
+  const rawAmount = Number(raw)
+  const amount = Number(rawAmount.toFixed(3))
+  if (!/^\d+(?:\.\d{1,3})?$/.test(raw) || !Number.isFinite(rawAmount) || rawAmount <= 0 || amount < minimumWithdrawal.value || amount > Number(withdrawConfig.value?.max_card_hours || Infinity)) {
+    uni.showToast({ title: t('withdrawAmountRange', { min: formatSettlementCny(minimumWithdrawal.value), max: formatSettlementCny(withdrawConfig.value?.max_card_hours || 0) }), icon: 'none' })
     return
   }
   if (amount > Number(props.wallet?.withdrawable_balance || 0)) {

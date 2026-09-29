@@ -195,7 +195,7 @@ test("Web market and detail keep inquiry as the safe default while preserving ga
   assert.match(market, /imageUrl=\{row\.image_url\}/);
   assert.match(market, /t\("market\.inquiry", "询价"\)/);
   assert.match(market, /t\("market\.submitRequest", "提交需求"\)/);
-  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency, displayCurrency\)/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(market, /directTradeEnabled \? row\.purchasable \?/);
   assert.doesNotMatch(market, /href: "\/(supplier|admin)\/resources"/);

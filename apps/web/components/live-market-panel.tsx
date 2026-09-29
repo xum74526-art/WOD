@@ -226,7 +226,7 @@ function MiniTrend({ item, days, tone, emptyLabel }: { item: MarketSummary; days
 }
 
 export function LiveMarketPanel({ featured = false, initialData = null }: { featured?: boolean; initialData?: InitialMarketDashboard | null }) {
-  const { locale, t, dateLocale } = useI18n();
+  const { locale, displayCurrency, t, dateLocale } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const integerFormatter = useMemo(() => new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 0 }), [dateLocale]);
   const changeFormatter = useMemo(() => new Intl.NumberFormat(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), [dateLocale]);
@@ -234,13 +234,13 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
   const timeFormatter = useMemo(() => new Intl.DateTimeFormat(dateLocale, { hour: "2-digit", minute: "2-digit" }), [dateLocale]);
   const formatInteger = useCallback((value: number) => integerFormatter.format(value), [integerFormatter]);
   const formatPrice = useCallback(
-    (value: number) => formatCardHoursForLocale(value, locale, capabilities.display_currency),
-    [capabilities.display_currency, locale],
+    (value: number) => formatCardHoursForLocale(value, locale, capabilities.display_currency, displayCurrency),
+    [capabilities.display_currency, displayCurrency, locale],
   );
   const formatCurrencyChange = useCallback((value: number) => {
-    const converted = convertCardHoursToDisplay(value, locale, capabilities.display_currency);
+    const converted = convertCardHoursToDisplay(value, locale, capabilities.display_currency, displayCurrency);
     return `${converted >= 0 ? "+" : ""}${changeFormatter.format(converted)}`;
-  }, [capabilities.display_currency, changeFormatter, locale]);
+  }, [capabilities.display_currency, changeFormatter, displayCurrency, locale]);
   const formatChange = useCallback((value: number, suffix = "") => `${value >= 0 ? "+" : ""}${changeFormatter.format(value)}${suffix}`, [changeFormatter]);
   const formatDate = useCallback((value: string | undefined) => {
     const date = new Date(value ?? "");
@@ -623,7 +623,7 @@ export function LiveMarketPanel({ featured = false, initialData = null }: { feat
     {selected && <section className="trend-regional-spread" aria-labelledby="trend-regional-title">
       <header><div><p className="hero-eyebrow">{t("trends.regional.eyebrow", "KAI 区域报价")}</p><h2 id="trend-regional-title">{t("trends.regional.title", "区域价差")}</h2><span>{selected.gpu_model}{regionalQuotes?.gpu_variant ? ` · ${regionalQuotes.gpu_variant}` : ""}</span></div><small>{regionalQuotes ? t("trends.regional.summary", "{count} 个区域 · {status}", { count: formatInteger(regionalQuotes.region_count), status: regionalQuotes.market_status }) : liveLoading ? t("trends.regional.refreshing", "正在刷新") : t("trends.regional.none", "暂无区域报价")}</small></header>
       {regionalQuotes?.regions.length ? <div className="trend-regional-grid">{regionalQuotes.regions.map((region) => <article className={region.is_lowest ? "is-lowest" : ""} key={region.region_code || region.region}><div><MapPin size={16}/><span><strong>{region.region}</strong><small>{t("trends.regional.quoteLocations", "{quotes} 条报价 · {locations} 个地点", { quotes: formatInteger(region.quote_sample_count), locations: formatInteger(region.location_count) })}</small></span></div><dl><div><dt>{t("trends.regional.median", "中位价")}</dt><dd>{regionalMoney(region.median_price_cny, formatPrice)}</dd></div><div><dt>{t("trends.regional.range", "区间")}</dt><dd>{regionalMoney(region.min_price_cny, formatPrice)} – {regionalMoney(region.max_price_cny, formatPrice)}</dd></div></dl><b>{region.is_lowest ? t("trends.regional.lowest", "当前最低") : region.relative_to_lowest_pct == null ? "—" : t("trends.regional.aboveLowest", "较最低 +{value}%", { value: changeFormatter.format(region.relative_to_lowest_pct) })}</b></article>)}</div> : <div className="trend-regional-empty">{liveLoading ? t("trends.regional.loading", "正在读取同型号区域报价…") : t("trends.regional.empty", "该型号当前没有可比较的区域报价")}</div>}
-      <p>{t("trends.regional.disclaimer", "按同一 GPU 型号与显存比较 KAI 当前报价观察值，并按当前语言对应货币显示每 GPU 小时价格；报价数量不代表实时库存。")}</p>
+      <p>{t("trends.regional.disclaimer", "按同一 GPU 型号与显存比较 KAI 当前报价观察值，并按所选显示币种换算每 GPU 小时价格；报价数量不代表实时库存。")}</p>
     </section>}
 
     <div className="trend-mobile-board-tabs"><button className={mobileBoard === "gainers" ? "is-active" : ""} onClick={() => setMobileBoard("gainers")} type="button">{t("trends.board.gainers", "涨幅榜")}</button><button className={mobileBoard === "losers" ? "is-active" : ""} onClick={() => setMobileBoard("losers")} type="button">{t("trends.board.losers", "跌幅榜")}</button></div>

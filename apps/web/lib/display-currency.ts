@@ -36,6 +36,10 @@ export function displayCurrencyForLocale(locale: KaiLocale): DisplayCurrencyCode
   return locale === "zh-Hant" ? "HKD" : "CNY";
 }
 
+export function isDisplayCurrencyCode(value: unknown): value is DisplayCurrencyCode {
+  return value === "CNY" || value === "HKD" || value === "USD";
+}
+
 export function displayCurrencySymbol(currency: DisplayCurrencyCode): string {
   if (currency === "HKD") return "HK$";
   if (currency === "USD") return "US$";
@@ -51,9 +55,9 @@ export function convertCnyToDisplay(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): number {
-  const currency = displayCurrencyForLocale(locale);
-  const rate = finite(config.rates[currency]);
+  const rate = finite(config.rates[displayCurrency]);
   return finite(value) * (rate > 0 ? rate : 1);
 }
 
@@ -61,9 +65,9 @@ export function convertDisplayToCny(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): number {
-  const currency = displayCurrencyForLocale(locale);
-  const rate = finite(config.rates[currency]);
+  const rate = finite(config.rates[displayCurrency]);
   return finite(value) / (rate > 0 ? rate : 1);
 }
 
@@ -72,12 +76,13 @@ export function normalizeDisplayInputToCny(
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
   options: { fractionDigits?: number; displayFractionDigits?: number; minimum?: number; maximum?: number } = {},
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): number {
   const fractionDigits = Math.max(0, Math.min(options.fractionDigits ?? 3, 6));
   const displayFractionDigits = Math.max(0, Math.min(options.displayFractionDigits ?? 3, 6));
-  const raw = convertDisplayToCny(value, locale, config);
+  const raw = convertDisplayToCny(value, locale, config, displayCurrency);
   const halfDisplayStep = 0.5 * (10 ** -displayFractionDigits);
-  const tolerance = Math.abs(convertDisplayToCny(halfDisplayStep, locale, config)) + Number.EPSILON;
+  const tolerance = Math.abs(convertDisplayToCny(halfDisplayStep, locale, config, displayCurrency)) + Number.EPSILON;
   if (Number.isFinite(options.minimum) && raw < Number(options.minimum) && Number(options.minimum) - raw <= tolerance) {
     return Number(options.minimum);
   }
@@ -95,40 +100,48 @@ export function formatLegacyCardHoursForLocale(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): string {
-  return formatCnyForLocale(legacyCardHoursToCny(value), locale, config);
+  return formatCnyForLocale(legacyCardHoursToCny(value), locale, config, displayCurrency);
 }
 
 export function convertCardHoursToDisplay(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): number {
-  return convertCnyToDisplay(value, locale, config);
+  return convertCnyToDisplay(value, locale, config, displayCurrency);
 }
 
 export function convertDisplayToCardHours(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): number {
-  return convertDisplayToCny(value, locale, config);
+  return convertDisplayToCny(value, locale, config, displayCurrency);
 }
 
 export function formatCnyForLocale(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): string {
-  const currency = displayCurrencyForLocale(locale);
-  return `${displayCurrencySymbol(currency)}${formatFinancialAmount(convertCnyToDisplay(value, locale, config))}`;
+  return `${displayCurrencySymbol(displayCurrency)}${formatFinancialAmount(convertCnyToDisplay(value, locale, config, displayCurrency))}`;
 }
 
 export function formatCardHoursForLocale(
   value: number | string | null | undefined,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): string {
-  const currency = displayCurrencyForLocale(locale);
-  return `${displayCurrencySymbol(currency)}${formatFinancialAmount(convertCardHoursToDisplay(value, locale, config))}`;
+  return `${displayCurrencySymbol(displayCurrency)}${formatFinancialAmount(convertCardHoursToDisplay(value, locale, config, displayCurrency))}`;
+}
+
+/** The canonical ledger and payment amount. This must never use an FX rate. */
+export function formatCnySettlement(value: number | string | null | undefined): string {
+  return `¥${formatFinancialAmount(finite(value))}`;
 }

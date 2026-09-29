@@ -16,7 +16,7 @@ const { t } = i18n
 const props = withDefaults(defineProps<{
   value: number | string
   prefix?: string
-  currency?: 'plain' | 'ledger' | 'cny'
+  currency?: 'plain' | 'ledger' | 'cny' | 'settlement'
   size?: 'sm' | 'md' | 'lg' | 'xl'
   trend?: 'up' | 'down' | 'none'
 }>(), {
@@ -38,7 +38,7 @@ const str = computed(() => {
     maximumFractionDigits: 3,
   })
 })
-const resolvedPrefix = computed(() => props.currency === 'plain' ? t(props.prefix) : displayCurrencySymbol())
+const resolvedPrefix = computed(() => props.currency === 'plain' ? t(props.prefix) : props.currency === 'settlement' ? '¥' : displayCurrencySymbol())
 const parts = computed(() => str.value.split('.'))
 const intPart = computed(() => parts.value[0])
 const decPart = computed(() => parts.value[1])

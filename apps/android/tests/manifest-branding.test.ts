@@ -19,8 +19,8 @@ test('native package identity and icon paths use the KAI星算 Vue 3 source tree
   assert.equal(manifest.name, 'KAI星算')
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'KAI星算')
-  assert.equal(manifest.versionName, '1.2.4')
-  assert.equal(manifest.versionCode, '125')
+  assert.equal(manifest.versionName, '1.2.5')
+  assert.equal(manifest.versionCode, '126')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
 

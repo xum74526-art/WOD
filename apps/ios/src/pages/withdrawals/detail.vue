@@ -13,10 +13,10 @@
 
         <view class="card amount-card">
           <text class="section-label">{{ t('estimatedArrival') }}</text>
-          <text class="arrival-amount">{{ formatCnyCurrency(order.net_amount_cny) }}</text>
-          <view class="data-row"><text>{{ t('withdrawCardHours') }}</text><text>{{ formatCardHourCurrency(order.amount_card_hours) }}</text></view>
-          <view class="data-row"><text>{{ t('grossAmount') }}</text><text>{{ formatCnyCurrency(order.gross_amount_cny) }}</text></view>
-          <view class="data-row"><text>{{ t('serviceFee') }}</text><text>- {{ formatCnyCurrency(order.fee_cny) }}</text></view>
+          <text class="arrival-amount">{{ formatSettlementCny(order.net_amount_cny) }}</text>
+          <view class="data-row"><text>{{ t('withdrawCardHours') }}</text><text>{{ formatSettlementCny(order.amount_card_hours) }}</text></view>
+          <view class="data-row"><text>{{ t('grossAmount') }}</text><text>{{ formatSettlementCny(order.gross_amount_cny) }}</text></view>
+          <view class="data-row"><text>{{ t('serviceFee') }}</text><text>- {{ formatSettlementCny(order.fee_cny) }}</text></view>
         </view>
 
         <view class="card detail-card">
@@ -58,7 +58,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { cancelWithdrawal, getWithdrawal, type WithdrawalOrder, type WithdrawalStatus } from '@/api/withdrawal'
 import AppNavBar from '@/components/AppNavBar.vue'
 import { useI18nStore } from '@/store/i18n'
-import { formatCardHourCurrency, formatCnyCurrency, formatDate } from '@/utils/format'
+import { formatDate, formatSettlementCny } from '@/utils/format'
 import { displayBusinessReference } from '@/utils/display-reference'
 
 const { t, tr } = useI18nStore()

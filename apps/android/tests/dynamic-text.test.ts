@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { translateDynamicEnglishText } from '../src/utils/dynamic-text.ts'
-import { setDisplayCurrencyConfig, setFormatLanguage } from '../src/utils/format.ts'
+import { setDisplayCurrency, setDisplayCurrencyConfig, setFormatLanguage } from '../src/utils/format.ts'
 
 function useTestRates() {
   setDisplayCurrencyConfig({ card_hour_cny_rate: 1, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
+  setDisplayCurrency('USD')
   setFormatLanguage('en')
 }
 

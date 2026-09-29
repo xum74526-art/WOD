@@ -48,7 +48,6 @@ import {
 import { useI18n } from "./locale-root";
 import {
   convertCardHoursToDisplay,
-  displayCurrencyForLocale,
   displayCurrencySymbol,
 } from "@/lib/display-currency";
 import { usePlatformCapabilities } from "@/lib/use-platform-capabilities";
@@ -190,18 +189,18 @@ function linePath(points: Array<{ x: number; y: number }>) {
 }
 
 export function MarketCandlestickChart({ model, initialLatest = null, onLatest, onSnapshot }: MarketCandlestickChartProps) {
-  const { locale, t, dateLocale } = useI18n();
+  const { locale, displayCurrency, t, dateLocale } = useI18n();
   const { capabilities } = usePlatformCapabilities();
-  const currencySymbol = displayCurrencySymbol(displayCurrencyForLocale(locale));
+  const currencySymbol = displayCurrencySymbol(displayCurrency);
   const formatDisplayedPrice = useCallback((value: number | null | undefined) => {
     if (value == null || !Number.isFinite(value)) return "--";
-    return `${currencySymbol}${formatPrice(convertCardHoursToDisplay(value, locale, capabilities.display_currency), dateLocale)}`;
-  }, [capabilities.display_currency, currencySymbol, dateLocale, locale]);
+    return `${currencySymbol}${formatPrice(convertCardHoursToDisplay(value, locale, capabilities.display_currency, displayCurrency), dateLocale)}`;
+  }, [capabilities.display_currency, currencySymbol, dateLocale, displayCurrency, locale]);
   const formatDisplayedAxis = useCallback((value: number, span: number) => formatAxis(
-    convertCardHoursToDisplay(value, locale, capabilities.display_currency),
-    convertCardHoursToDisplay(span, locale, capabilities.display_currency),
+    convertCardHoursToDisplay(value, locale, capabilities.display_currency, displayCurrency),
+    convertCardHoursToDisplay(span, locale, capabilities.display_currency, displayCurrency),
     dateLocale,
-  ), [capabilities.display_currency, dateLocale, locale]);
+  ), [capabilities.display_currency, dateLocale, displayCurrency, locale]);
   const chartStatusId = useId();
   const identity = modelIdentity(model);
   const [range, setRange] = useState<MarketChartRange>("30d");
@@ -694,7 +693,7 @@ export function MarketCandlestickChart({ model, initialLatest = null, onLatest, 
       <div className={styles.toolbar}>
         <div>
           <p><strong>{t("trends.candles.title", "K线")}</strong><em>{historyLabel}</em></p>
-          <small>{t("trends.candles.unit", "当前语言货币 / GPU·小时")}</small>
+          <small>{t("trends.candles.unit", "显示币种 / GPU·小时")}</small>
         </div>
         <div className={styles.latestReadout}>
           <small>{cursorVisible

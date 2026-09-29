@@ -19,7 +19,7 @@
           </view>
           <view class="heading-copy">
             <text class="sheet-title">{{ t('switchLanguage') }}</text>
-            <text class="sheet-current">{{ currentOption.label }} · {{ currentOption.locale }}</text>
+            <text class="sheet-current">{{ currentOption.label }} · {{ currentOption.locale }} · {{ currentCurrency }}</text>
           </view>
         </view>
         <view
@@ -31,7 +31,7 @@
           @keydown.enter="close"
           @keydown.space.prevent="close"
         >
-          <text>{{ t('cancel') }}</text>
+          <text>{{ t('done') }}</text>
         </view>
       </view>
 
@@ -61,6 +61,33 @@
           </view>
         </view>
       </view>
+
+      <view class="currency-section">
+        <view class="currency-heading">
+          <text class="currency-title">{{ t('displayCurrency') }}</text>
+          <text class="currency-subtitle">{{ t('displayCurrencyReferenceOnly') }}</text>
+        </view>
+        <view class="currency-options" role="radiogroup" :aria-label="t('displayCurrency')">
+          <view
+            v-for="option in CURRENCY_OPTIONS"
+            :key="option.value"
+            class="currency-option"
+            :class="{ selected: option.value === currentCurrency }"
+            role="radio"
+            tabindex="0"
+            :aria-checked="option.value === currentCurrency ? 'true' : 'false'"
+            @tap="selectCurrency(option.value)"
+            @keydown.enter="selectCurrency(option.value)"
+            @keydown.space.prevent="selectCurrency(option.value)"
+          >
+            <text class="currency-symbol">{{ option.symbol }}</text>
+            <text class="currency-name">{{ t(option.label) }}</text>
+            <text class="currency-code">{{ option.value }}</text>
+            <AppIcon v-if="option.value === currentCurrency" name="check" :size="24" />
+          </view>
+        </view>
+        <text class="currency-note">{{ t('cnySettlementAlways') }}</text>
+      </view>
     </view>
   </view>
 </template>
@@ -69,6 +96,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useI18nStore } from '@/store/i18n'
+import { displayCurrencyCode, setDisplayCurrency, type DisplayCurrencyCode } from '@/utils/format'
 import {
   LANGUAGE_OPTIONS,
   languageOption,
@@ -80,6 +108,12 @@ const emit = defineEmits<{ (event: 'update:visible', value: boolean): void }>()
 const i18n = useI18nStore()
 const { t } = i18n
 const currentOption = computed(() => languageOption(i18n.lang))
+const currentCurrency = computed(() => displayCurrencyCode())
+const CURRENCY_OPTIONS: Array<{ value: DisplayCurrencyCode; label: string; symbol: string }> = [
+  { value: 'CNY', label: 'currencyCny', symbol: '¥' },
+  { value: 'HKD', label: 'currencyHkd', symbol: 'HK$' },
+  { value: 'USD', label: 'currencyUsd', symbol: 'US$' },
+]
 const reduceMotion = ref(false)
 
 let previousBodyOverflow = ''
@@ -123,7 +157,10 @@ function close() {
 
 function selectLanguage(language: AppLanguage) {
   if (language !== i18n.lang) i18n.setLanguage(language)
-  close()
+}
+
+function selectCurrency(currency: DisplayCurrencyCode) {
+  setDisplayCurrency(currency)
 }
 
 function lockPage(locked: boolean) {
@@ -333,10 +370,25 @@ onBeforeUnmount(() => {
   box-shadow: 0 8rpx 20rpx rgba(24, 175, 196, 0.22);
 }
 
+.currency-section { margin-top: 26rpx; padding-top: 24rpx; border-top: 1rpx solid var(--divider); }
+.currency-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 18rpx; margin-bottom: 14rpx; }
+.currency-title { color: var(--text); font-size: 28rpx; font-weight: 730; }
+.currency-subtitle { color: var(--text-sub); font-size: 20rpx; }
+.currency-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12rpx; }
+.currency-option { position: relative; min-height: 112rpx; padding: 14rpx 10rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1rpx solid var(--border); border-radius: 20rpx; color: var(--text-sub); background: var(--bg-2); }
+.currency-option.selected { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.currency-option :deep(.app-icon) { position: absolute; top: 8rpx; right: 8rpx; }
+.currency-symbol { color: currentColor; font-size: 27rpx; font-weight: 800; }
+.currency-name { margin-top: 5rpx; color: var(--text); font-size: 21rpx; font-weight: 650; }
+.currency-code { margin-top: 2rpx; font-size: 17rpx; font-variant-numeric: tabular-nums; }
+.currency-note { display: block; margin-top: 14rpx; color: var(--text-sub); font-size: 19rpx; line-height: 1.5; }
+
 .sheet-close:active,
-.language-option:active { transform: scale(0.985); }
+.language-option:active,
+.currency-option:active { transform: scale(0.985); }
 .sheet-close:focus-visible,
-.language-option:focus-visible { outline: 3rpx solid var(--primary); outline-offset: 2rpx; }
+.language-option:focus-visible,
+.currency-option:focus-visible { outline: 3rpx solid var(--primary); outline-offset: 2rpx; }
 
 @keyframes language-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes language-sheet-in {

@@ -72,8 +72,8 @@ export function AdminCouponWorkspace() {
       if (!Number.isFinite(displayAmount) || !Number.isFinite(displayMinimum) || displayAmount <= 0 || displayMinimum < 0) {
         throw new Error(label("券面额必须大于 0，使用门槛不能为负数。", "The value must be positive and the minimum spend cannot be negative."));
       }
-      const amount = convertDisplayToCardHours(displayAmount, locale, displayCurrencyConfig);
-      const minimum = convertDisplayToCardHours(displayMinimum, locale, displayCurrencyConfig);
+      const amount = convertDisplayToCardHours(displayAmount, locale, displayCurrencyConfig, displayCurrency);
+      const minimum = convertDisplayToCardHours(displayMinimum, locale, displayCurrencyConfig, displayCurrency);
       const created = await createAdminCouponCampaign({
         name: form.name.trim(),
         amount,

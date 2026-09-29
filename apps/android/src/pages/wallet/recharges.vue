@@ -91,7 +91,7 @@
         <view class="amount-row">
           <view>
             <text class="meta-label">{{ t('rechargeAmount') }}</text>
-            <text class="amount-value">{{ formatCnyCurrency(order.amount_cny) }}</text>
+            <text class="amount-value">{{ formatSettlementCny(order.amount_cny) }}</text>
           </view>
         </view>
 
@@ -171,7 +171,7 @@
             <text class="status" :class="refundPresentation(request).tone">{{ t(refundPresentation(request).labelKey) }}</text>
           </view>
           <view class="amount-row">
-            <view><text class="meta-label">{{ t('refundRequestAmount') }}</text><text class="amount-value">{{ formatCnyCurrency(request.amount_cny) }}</text></view>
+            <view><text class="meta-label">{{ t('refundRequestAmount') }}</text><text class="amount-value">{{ formatSettlementCny(request.amount_cny) }}</text></view>
           </view>
           <view class="detail-grid">
             <view class="detail-cell"><text class="meta-label">{{ t('refundRequestOrder') }}</text><text class="detail-value business-reference">{{ displayBusinessReference(request.order_no) }}</text></view>
@@ -189,7 +189,7 @@
     <view v-if="refundOrder" class="refund-mask" @tap="closeRefundSheet">
       <view class="refund-sheet" @tap.stop>
         <view class="refund-sheet-head"><view><text>{{ t('applyForRefund') }}</text><text>{{ displayBusinessReference(refundOrder.order_no) }}</text></view><view role="button" @tap="closeRefundSheet">×</view></view>
-        <view class="refund-order-summary"><text>{{ formatCnyCurrency(refundOrder.amount_cny) }}</text></view>
+        <view class="refund-order-summary"><text>{{ formatSettlementCny(refundOrder.amount_cny) }}</text></view>
         <text class="refund-notice">{{ t('refundReviewNotice') }}</text>
         <textarea v-model="refundReason" class="refund-textarea" :placeholder="t('refundRequestReasonPlaceholder')" :maxlength="500" />
         <text class="refund-count">{{ refundReason.length }}/500</text>
@@ -218,7 +218,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import DirectTradeRechargeRestartAction from '@/components/direct-trade/DirectTradeRechargeRestartAction.vue'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
-import { formatCnyCurrency } from '@/utils/format'
+import { formatSettlementCny } from '@/utils/format'
 import { rechargeCanCancel, rechargeCanQuery, rechargeCanRequestRefund, rechargeHistoryPresentation, rechargeRefundRequestPresentation } from '@/utils/recharge-payment'
 import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
 import { displayBusinessReference } from '@/utils/display-reference'

@@ -187,7 +187,7 @@ test("trend panel explicitly localizes controls, states, and locale-sensitive va
   const panel = fs.readFileSync(new URL("../components/live-market-panel.tsx", import.meta.url), "utf8");
   const localeRoot = fs.readFileSync(new URL("../components/locale-root.tsx", import.meta.url), "utf8");
 
-  assert.match(panel, /const \{ locale, t, dateLocale \} = useI18n\(\)/);
+  assert.match(panel, /const \{ locale, displayCurrency, t, dateLocale \} = useI18n\(\)/);
   assert.match(panel, /new Intl\.NumberFormat\(dateLocale/);
   assert.match(panel, /new Intl\.DateTimeFormat\(dateLocale/);
   assert.match(panel, /trends\.state\.loading/);

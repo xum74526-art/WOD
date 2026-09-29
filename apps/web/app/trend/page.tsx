@@ -24,5 +24,5 @@ export function generateMetadata(): Promise<Metadata> {
 
 export default async function TrendsPage() {
   const initialData = await getInitialMarketDashboard();
-  return <div className="site-page public-v2 trend-public-page"><SiteHeader/><main className="public-data-page trend-page"><header><p className="hero-eyebrow">GPU PRICE TRENDS</p><h1><I18nText id="trends.title" zh="GPU 算力行情"/></h1><p><I18nText id="trends.description" zh="查看不同 GPU 型号按当前语言货币显示的价格变化与市场区间。"/></p></header><LiveMarketPanel initialData={initialData}/></main></div>;
+  return <div className="site-page public-v2 trend-public-page"><SiteHeader/><main className="public-data-page trend-page"><header><p className="hero-eyebrow">GPU PRICE TRENDS</p><h1><I18nText id="trends.title" zh="GPU 算力行情"/></h1><p><I18nText id="trends.description" zh="查看不同 GPU 型号按所选显示币种换算的价格变化与市场区间。"/></p></header><LiveMarketPanel initialData={initialData}/></main></div>;
 }

@@ -37,6 +37,31 @@ export const DEFAULT_DISPLAY_CURRENCY_CONFIG: Readonly<DisplayCurrencyConfig> = 
   rates: Object.freeze({ CNY: 1, HKD: 1.169032900251, USD: 0.149020326907 }),
 })
 
+const DISPLAY_CURRENCY_STORAGE_KEY = 'kai-display-currency'
+
+function languageDefaultCurrency(lang: FormatLang): DisplayCurrencyCode {
+  if (lang === 'en') return 'USD'
+  return lang === 'zh-Hant' ? 'HKD' : 'CNY'
+}
+
+function storedDisplayCurrency(): DisplayCurrencyCode {
+  try {
+    const value = String(uni.getStorageSync(DISPLAY_CURRENCY_STORAGE_KEY) || '').toUpperCase()
+    if (value === 'CNY' || value === 'HKD' || value === 'USD') return value
+  } catch {}
+  return languageDefaultCurrency(storedLang())
+}
+
+// Display currency is a user preference, not a side effect of interface
+// language. Changing language must never make a wallet look as though its
+// underlying ledger currency changed.
+const selectedDisplayCurrency = ref<DisplayCurrencyCode>(storedDisplayCurrency())
+
+export function setDisplayCurrency(currency: DisplayCurrencyCode): void {
+  selectedDisplayCurrency.value = currency
+  try { uni.setStorageSync(DISPLAY_CURRENCY_STORAGE_KEY, currency) } catch {}
+}
+
 const displayCurrencyConfig = ref<DisplayCurrencyConfig>({
   card_hour_cny_rate: DEFAULT_DISPLAY_CURRENCY_CONFIG.card_hour_cny_rate,
   rates: { ...DEFAULT_DISPLAY_CURRENCY_CONFIG.rates },
@@ -58,9 +83,8 @@ export function setDisplayCurrencyConfig(config?: Partial<DisplayCurrencyConfig>
   }
 }
 
-export function displayCurrencyCode(lang: FormatLang = currentLang()): DisplayCurrencyCode {
-  if (lang === 'en') return 'USD'
-  return lang === 'zh-Hant' ? 'HKD' : 'CNY'
+export function displayCurrencyCode(_lang: FormatLang = currentLang()): DisplayCurrencyCode {
+  return selectedDisplayCurrency.value
 }
 
 export function displayCurrencySymbol(lang: FormatLang = currentLang()): string {
@@ -113,6 +137,16 @@ export function formatCnyCurrency(value: NumericValue, lang: FormatLang = curren
 
 export function formatCardHourCurrency(value: NumericValue, lang: FormatLang = currentLang()): string {
   return `${displayCurrencySymbol(lang)}${formatAmount(cardHoursToDisplayCurrency(value, lang))}`
+}
+
+/** Canonical account, payment, withdrawal and order-settlement amount. */
+export function formatSettlementCny(value: NumericValue): string {
+  return `¥${formatAmount(value)}`
+}
+
+/** Optional reference amount shown beside a canonical CNY amount. */
+export function formatDisplayReference(value: NumericValue): string {
+  return displayCurrencyCode() === 'CNY' ? '' : `≈ ${formatCnyCurrency(value)}`
 }
 
 function finiteNumber(value: NumericValue): number {
@@ -234,12 +268,12 @@ export function formatLegacyCardHourCurrency(
   return formatCnyCurrency(legacyCardHoursToCny(cardHours), lang)
 }
 
-/** 将 CNY 原始价格格式化为当前语言对应的法币。 */
+/** 将 CNY 原始价格格式化为用户独立选择的显示币种。 */
 export function fmtCH(rmb: number | string | undefined | null): string {
   return formatCnyCurrency(rmb)
 }
 
-/** 将 CNY 小时费率格式化为当前语言对应的法币。 */
+/** 将 CNY 小时费率格式化为用户独立选择的显示币种。 */
 export function fmtCHr(rmb: number | string | undefined | null): string {
   return `${formatCnyCurrency(rmb)}/h`
 }
@@ -249,7 +283,7 @@ export function fmtCHn(rmb: number | string | undefined | null): string {
   return formatAmount(cnyToDisplayCurrency(rmb))
 }
 
-/** 将兼容账本字段中的 CNY 数值转换为当前语言对应的法币数值。 */
+/** 将兼容账本字段中的 CNY 数值转换为用户独立选择的显示币种数值。 */
 export function fmtCardHours(value: NumericValue): string {
   return formatAmount(cardHoursToDisplayCurrency(value))
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { localizedNotificationContent } from '../src/utils/notification-content.ts'
-import { setDisplayCurrencyConfig } from '../src/utils/format.ts'
+import { setDisplayCurrency, setDisplayCurrencyConfig } from '../src/utils/format.ts'
 
 const revenue = {
   id: 1,
@@ -17,8 +17,11 @@ const revenue = {
 
 test('mobile revenue notification converts canonical CNY for every language', () => {
   setDisplayCurrencyConfig({ card_hour_cny_rate: 1, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
+  setDisplayCurrency('CNY')
   assert.match(localizedNotificationContent(revenue, 'zh-Hans', value => value), /¥100\.000/)
+  setDisplayCurrency('HKD')
   assert.match(localizedNotificationContent(revenue, 'zh-Hant', value => value), /HK\$108\.000/)
+  setDisplayCurrency('USD')
   assert.match(localizedNotificationContent(revenue, 'en', value => value), /US\$14\.000/)
 })
 

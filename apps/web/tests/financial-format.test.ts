@@ -9,6 +9,7 @@ import {
   displayCurrencyForLocale,
   formatCardHoursForLocale,
   formatCnyForLocale,
+  formatCnySettlement,
   normalizeDisplayInputToCny,
 } from "../lib/display-currency.ts";
 import { localizeSupplierName } from "../lib/market-localization.ts";
@@ -22,7 +23,7 @@ test("financial values use exactly three decimal places", () => {
   assert.equal(financialDecimal(19.898521), "19.899");
 });
 
-test("language selects a currency and applies the dated display exchange rate", () => {
+test("language supplies only the initial currency while an explicit display currency applies the dated rate", () => {
   const config = {
     base_currency: "CNY" as const,
     settlement_currency: "CNY" as const,
@@ -45,6 +46,9 @@ test("language selects a currency and applies the dated display exchange rate", 
   assert.equal(formatCnyForLocale(10, "en", config), "US$1.400");
   assert.equal(formatCnyForLocale(100, "zh-Hant", config), "HK$108.000");
   assert.equal(formatCnyForLocale(100, "en", config), "US$14.000");
+  assert.equal(formatCnyForLocale(100, "en", config, "HKD"), "HK$108.000");
+  assert.equal(formatCnyForLocale(100, "zh-Hant", config, "CNY"), "¥100.000");
+  assert.equal(formatCnySettlement(100), "¥100.000");
   assert.equal(convertCardHoursToDisplay(10, "zh-Hans", config), 10);
   assert.ok(Math.abs(convertDisplayToCardHours(1.4, "en", config) - 10) < 1e-9);
 });
@@ -91,7 +95,7 @@ test("English market copy does not render Chinese backend assurance fields", () 
   assert.doesNotMatch(market, /row\.assurance_(?:label|description)/);
   assert.match(market, /t\("market\.assurance\.kai"/);
   assert.match(market, /t\("market\.assurance\.merchantDirect"/);
-  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency, displayCurrency\)/);
   assert.match(locale, /"market\.buy": "Buy Now"/);
   assert.match(locale, /"market\.hourly": "Hourly price"/);
   assert.equal(localizeSupplierName("KAI 自营", "en"), "KAI Self-operated");

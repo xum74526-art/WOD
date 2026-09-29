@@ -51,7 +51,7 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   assert.match(layout, /normalizeStoredLocale\(storedLocale\)/);
   assert.match(layout, /default: "KAI星算算力市場"/);
   assert.match(localeRoot, /locale === "zh-Hant" \? toTraditionalChinese\(fallback\)/);
-  assert.match(localeRoot, /locale === "zh-Hant"\) return localizeLegacyCurrencyTerms\(toTraditionalChinese\(raw\), locale, displayCurrencyConfig\)/);
+  assert.match(localeRoot, /locale === "zh-Hant"\) return localizeLegacyCurrencyTerms\(toTraditionalChinese\(raw\), locale, displayCurrencyConfig, displayCurrency\)/);
   for (const key of [
     "market.kai.directDescription",
     "market.merchant.directDescription",

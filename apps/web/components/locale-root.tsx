@@ -9,6 +9,7 @@ import {
   formatCardHoursForLocale,
   formatCnyForLocale,
   formatLegacyCardHoursForLocale,
+  isDisplayCurrencyCode,
 } from "@/lib/display-currency";
 import {
   DEFAULT_DISPLAY_CURRENCY_CONFIG,
@@ -23,6 +24,7 @@ function localizeLegacyCurrencyTerms(
   value: string,
   locale: KaiLocale,
   config: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency: DisplayCurrencyCode = displayCurrencyForLocale(locale),
 ): string {
   const alreadyFormatted = value.replace(
     /((?:HK\$|US\$|[$¥])\s*[\d,.]+)\s*(?:卡时|卡時|card[\s-]?hours?|CH)(?![A-Za-z])/gi,
@@ -33,7 +35,7 @@ function localizeLegacyCurrencyTerms(
     (_full, prefix: string, raw: string) => {
       const amount = Number(raw.replaceAll(",", ""));
       return Number.isFinite(amount)
-        ? `${prefix}${formatLegacyCardHoursForLocale(amount, locale, config)}`
+        ? `${prefix}${formatLegacyCardHoursForLocale(amount, locale, config, displayCurrency)}`
         : _full;
     },
   );
@@ -687,7 +689,7 @@ const english: Record<string, string> = {
   "settings.avatarUpdated": "Avatar updated",
   "settings.kaiNoUrl": "Kai SSO did not return an authorization URL",
   "trends.title": "GPU Compute Market Trends",
-  "trends.description": "Compare localized price movements and current market ranges across GPU models.",
+  "trends.description": "Compare price movements and market ranges across GPU models in the selected display currency.",
   "trends.range.4Weeks": "4 weeks",
   "trends.range.8Weeks": "8 weeks",
   "trends.range.3Months": "3 months",
@@ -725,7 +727,7 @@ const english: Record<string, string> = {
   "trends.candles.state.emptyDescription": "This model currently has no verified OHLC data to display.",
   "trends.candles.state.retry": "Reload",
   "trends.candles.title": "Candlesticks",
-  "trends.candles.unit": "Local currency / GPU-hour",
+  "trends.candles.unit": "Display currency / GPU-hour",
   "trends.candles.change": "Change {value}",
   "trends.candles.ohlc.open": "Open",
   "trends.candles.ohlc.high": "High",
@@ -801,7 +803,7 @@ const english: Record<string, string> = {
   "trends.regional.aboveLowest": "+{value}% above lowest",
   "trends.regional.loading": "Loading regional quotes for this model…",
   "trends.regional.empty": "No comparable regional quotes are available for this model",
-  "trends.regional.disclaimer": "KAI quote observations compare the same GPU model and VRAM, with each GPU-hour shown in the currency selected by the current language. Quote count does not indicate live inventory.",
+  "trends.regional.disclaimer": "KAI quote observations compare the same GPU model and VRAM, with each GPU-hour converted to the selected display currency. Quote count does not indicate live inventory.",
   "trends.board.gainers": "Top gainers",
   "trends.board.losers": "Top losers",
   "trends.board.accumulating": "Building history",
@@ -1188,7 +1190,7 @@ const legacyEnglish: Record<string, string> = {
   "把算力市场": "Put the compute market", "装进口袋": "in your pocket",
 };
 
-function LegacyLocaleBridge({ locale, displayCurrencyConfig }: { locale: KaiLocale; displayCurrencyConfig: DisplayCurrencyConfig }) {
+function LegacyLocaleBridge({ locale, displayCurrency, displayCurrencyConfig }: { locale: KaiLocale; displayCurrency: DisplayCurrencyCode; displayCurrencyConfig: DisplayCurrencyConfig }) {
   const originalText = useRef(new Map<Text, string>());
   const originalAttributes = useRef(new Map<Element, Map<string, string>>());
   useLayoutEffect(() => {
@@ -1200,12 +1202,12 @@ function LegacyLocaleBridge({ locale, displayCurrencyConfig }: { locale: KaiLoca
     attributeEntries.clear();
 
     const translate = (raw: string) => {
-      if (locale === "zh-Hans") return localizeLegacyCurrencyTerms(raw, locale, displayCurrencyConfig);
-      if (locale === "zh-Hant") return localizeLegacyCurrencyTerms(toTraditionalChinese(raw), locale, displayCurrencyConfig);
+      if (locale === "zh-Hans") return localizeLegacyCurrencyTerms(raw, locale, displayCurrencyConfig, displayCurrency);
+      if (locale === "zh-Hant") return localizeLegacyCurrencyTerms(toTraditionalChinese(raw), locale, displayCurrencyConfig, displayCurrency);
       const trimmed = raw.trim();
       const translated = legacyEnglish[trimmed] || adminLegacyEnglish[trimmed];
       const localized = translated ? raw.replace(trimmed, translated.replaceAll("KAI星算", "KAI Star")) : raw;
-      return localizeLegacyCurrencyTerms(localized, locale, displayCurrencyConfig);
+      return localizeLegacyCurrencyTerms(localized, locale, displayCurrencyConfig, displayCurrency);
     };
     const shouldSkip = (element: Element | null) => Boolean(element?.closest("script, style, noscript, code, pre, [data-i18n-skip]"));
     const translateText = (node: Text) => {
@@ -1251,7 +1253,7 @@ function LegacyLocaleBridge({ locale, displayCurrencyConfig }: { locale: KaiLoca
       attributeFilter: ["placeholder", "title", "aria-label", "aria-description", "alt"],
     });
     return () => observer.disconnect();
-  }, [displayCurrencyConfig, locale]);
+  }, [displayCurrency, displayCurrencyConfig, locale]);
   return null;
 }
 
@@ -1262,6 +1264,7 @@ type LocaleContextValue = {
   t: (key: string, fallback: string, values?: Record<string, string | number>) => string;
   dateLocale: string;
   displayCurrency: DisplayCurrencyCode;
+  setDisplayCurrency: (currency: DisplayCurrencyCode) => void;
   displayCurrencyConfig: DisplayCurrencyConfig;
   formatCnyMoney: (value: number | string | null | undefined) => string;
   formatLedgerMoney: (value: number | string | null | undefined) => string;
@@ -1271,6 +1274,7 @@ const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLocale; children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<KaiLocale>(initialLocale);
+  const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrencyCode>(() => displayCurrencyForLocale(initialLocale));
   const [displayCurrencyConfig, setDisplayCurrencyConfig] = useState<DisplayCurrencyConfig>(DEFAULT_DISPLAY_CURRENCY_CONFIG);
   const setLocale = useCallback((next: KaiLocale) => {
     setLocaleState(next);
@@ -1279,18 +1283,29 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
     document.cookie = `kai.locale=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax`;
     localStorage.setItem("kai.locale", next);
   }, []);
+  const setDisplayCurrency = useCallback((currency: DisplayCurrencyCode) => {
+    setDisplayCurrencyState(currency);
+    document.documentElement.dataset.currency = currency;
+    document.cookie = `kai.display_currency=${currency}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    localStorage.setItem("kai.display_currency", currency);
+  }, []);
   const toggleLocale = useCallback(() => setLocale(nextLocale(locale)), [locale, setLocale]);
   const t = useCallback((key: string, fallback: string, values?: Record<string, string | number>) => {
     const localized = locale === "en"
       ? (english[key] || legacyEnglish[fallback] || adminLegacyEnglish[fallback] || fallback).replaceAll("KAI星算", "KAI Star")
       : locale === "zh-Hant" ? toTraditionalChinese(fallback) : fallback;
     const interpolated = Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localized);
-    return localizeLegacyCurrencyTerms(interpolated, locale, displayCurrencyConfig);
-  }, [displayCurrencyConfig, locale]);
+    return localizeLegacyCurrencyTerms(interpolated, locale, displayCurrencyConfig, displayCurrency);
+  }, [displayCurrency, displayCurrencyConfig, locale]);
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dataset.locale = locale;
   }, [locale]);
+  useEffect(() => {
+    const stored = localStorage.getItem("kai.display_currency");
+    if (isDisplayCurrencyCode(stored)) setDisplayCurrency(stored);
+    else document.documentElement.dataset.currency = displayCurrency;
+  }, [displayCurrency, setDisplayCurrency]);
   useEffect(() => {
     let active = true;
     void getPlatformCapabilities()
@@ -1299,12 +1314,12 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
     return () => { active = false; };
   }, []);
   const formatCnyMoney = useCallback(
-    (value: number | string | null | undefined) => formatCnyForLocale(value, locale, displayCurrencyConfig),
-    [displayCurrencyConfig, locale],
+    (value: number | string | null | undefined) => formatCnyForLocale(value, locale, displayCurrencyConfig, displayCurrency),
+    [displayCurrency, displayCurrencyConfig, locale],
   );
   const formatLedgerMoney = useCallback(
-    (value: number | string | null | undefined) => formatCardHoursForLocale(value, locale, displayCurrencyConfig),
-    [displayCurrencyConfig, locale],
+    (value: number | string | null | undefined) => formatCardHoursForLocale(value, locale, displayCurrencyConfig, displayCurrency),
+    [displayCurrency, displayCurrencyConfig, locale],
   );
   const value = useMemo(() => ({
     locale,
@@ -1312,12 +1327,13 @@ export function LocaleRoot({ initialLocale, children }: { initialLocale: KaiLoca
     toggleLocale,
     t,
     dateLocale: localeForFormatting(locale),
-    displayCurrency: displayCurrencyForLocale(locale),
+    displayCurrency,
+    setDisplayCurrency,
     displayCurrencyConfig,
     formatCnyMoney,
     formatLedgerMoney,
-  }), [displayCurrencyConfig, formatCnyMoney, formatLedgerMoney, locale, setLocale, toggleLocale, t]);
-  return <LocaleContext.Provider value={value}><LegacyLocaleBridge locale={locale} displayCurrencyConfig={displayCurrencyConfig}/>{children}</LocaleContext.Provider>;
+  }), [displayCurrency, displayCurrencyConfig, formatCnyMoney, formatLedgerMoney, locale, setDisplayCurrency, setLocale, toggleLocale, t]);
+  return <LocaleContext.Provider value={value}><LegacyLocaleBridge locale={locale} displayCurrency={displayCurrency} displayCurrencyConfig={displayCurrencyConfig}/>{children}</LocaleContext.Provider>;
 }
 
 export function useI18n() {

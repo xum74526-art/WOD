@@ -4,6 +4,7 @@ import {
   DEFAULT_DISPLAY_CURRENCY_CONFIG,
   formatCnyForLocale,
   formatLegacyCardHoursForLocale,
+  type DisplayCurrencyCode,
   type DisplayCurrencyConfig,
 } from "./display-currency.ts";
 
@@ -78,6 +79,7 @@ export function communityDisplayText(
   sourceKey?: string | null,
   locale: KaiLocale = "zh-Hans",
   currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency?: DisplayCurrencyCode,
 ) {
   const source = String(value || "");
   if (sourceKey !== "wod-market") return source;
@@ -89,11 +91,13 @@ export function communityDisplayText(
       Number(raw.replaceAll(",", "")),
       locale,
       currencyConfig,
+      displayCurrency,
     );
     const formatLegacy = (raw: string) => formatLegacyCardHoursForLocale(
       Number(raw.replaceAll(",", "")),
       locale,
       currencyConfig,
+      displayCurrency,
     );
     return value
       .replace(
@@ -142,10 +146,11 @@ function communityPlatformText(
   origin: string | null | undefined,
   locale: KaiLocale,
   currencyConfig: DisplayCurrencyConfig,
+  displayCurrency?: DisplayCurrencyCode,
 ) {
   const platformOwned = origin === "internal" || origin === "aggregated" || Boolean(sourceKey);
   if (!platformOwned) return value;
-  const localized = communityDisplayText(value, sourceKey, locale, currencyConfig);
+  const localized = communityDisplayText(value, sourceKey, locale, currencyConfig, displayCurrency);
   return locale === "zh-Hant" ? toTraditionalChinese(localized) : localized;
 }
 
@@ -153,22 +158,24 @@ export function communityPostContent(
   post: CommunityLocalizedPost,
   locale: KaiLocale,
   currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency?: DisplayCurrencyCode,
 ) {
   const source = locale === "en" && post.origin !== "user" && post.content_en
     ? post.content_en
     : String(post.content || "");
-  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig);
+  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig, displayCurrency);
 }
 
 export function communityPostTopic(
   post: CommunityLocalizedPost,
   locale: KaiLocale,
   currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG,
+  displayCurrency?: DisplayCurrencyCode,
 ) {
   const source = locale === "en" && post.origin !== "user" && post.topic_en
     ? post.topic_en
     : String(post.topic || "");
-  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig);
+  return communityPlatformText(source, post.source_key, post.origin, locale, currencyConfig, displayCurrency);
 }
 
 export function communityShareText(post: {
@@ -177,8 +184,8 @@ export function communityShareText(post: {
   origin?: string | null;
   source_url?: string | null;
   source_key?: string | null;
-}, locale: KaiLocale = "zh-Hans", currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG) {
-  const summary = communityPostContent(post, locale, currencyConfig).trim().slice(0, 100);
+}, locale: KaiLocale = "zh-Hans", currencyConfig: DisplayCurrencyConfig = DEFAULT_DISPLAY_CURRENCY_CONFIG, displayCurrency?: DisplayCurrencyCode) {
+  const summary = communityPostContent(post, locale, currencyConfig, displayCurrency).trim().slice(0, 100);
   const source = String(post.source_url || "").trim();
   return [summary, source].filter(Boolean).join("\n");
 }

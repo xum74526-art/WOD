@@ -18,7 +18,7 @@ test("user notification center exposes viewed and account-scoped delete actions"
   assert.match(workspace, /全部标为已查看/);
   assert.match(adapter, /expires_at: text\(item\.expires_at\) \|\| null/);
   assert.match(adapter, /amount_cny: text\(item\.amount_cny\) \|\| null/);
-  assert.match(workspace, /localizedNotificationBody\(row, locale, displayCurrencyConfig\)/);
+  assert.match(workspace, /localizedNotificationBody\(row, locale, displayCurrencyConfig, displayCurrency\)/);
 });
 
 test("administrator announcements expose expiration and auditable revoke", () => {

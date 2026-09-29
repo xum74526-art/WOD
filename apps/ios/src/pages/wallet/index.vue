@@ -10,7 +10,8 @@
       <template v-else>
       <view class="card balance-card">
         <text class="bc-label">{{ t('k_3c67102a') }}</text>
-        <AmountText :value="wallet?.balance ?? 0" currency="ledger" size="xl" />
+        <AmountText :value="wallet?.balance ?? 0" currency="settlement" size="xl" />
+        <text v-if="formatDisplayReference(wallet?.balance ?? 0)" class="balance-reference">{{ formatDisplayReference(wallet?.balance ?? 0) }}</text>
         <DirectTradeWalletActions
           v-if="commerce.directTradeEnabled"
           :wallet="wallet"
@@ -26,12 +27,14 @@
       <view class="withdraw-balance-row">
         <view class="card withdraw-balance-cell">
           <text class="c-label">{{ t('withdrawableBalance') }}</text>
-          <AmountText :value="wallet?.withdrawable_balance ?? 0" currency="ledger" size="md" trend="up" />
+          <AmountText :value="wallet?.withdrawable_balance ?? 0" currency="settlement" size="md" trend="up" />
+          <text v-if="formatDisplayReference(wallet?.withdrawable_balance ?? 0)" class="balance-reference">{{ formatDisplayReference(wallet?.withdrawable_balance ?? 0) }}</text>
           <text class="balance-hint">{{ t('onlySettledEarningsWithdrawable') }}</text>
         </view>
         <view class="card withdraw-balance-cell">
           <text class="c-label">{{ t('withdrawFrozen') }}</text>
-          <AmountText :value="wallet?.withdraw_frozen ?? 0" currency="ledger" size="md" />
+          <AmountText :value="wallet?.withdraw_frozen ?? 0" currency="settlement" size="md" />
+          <text v-if="formatDisplayReference(wallet?.withdraw_frozen ?? 0)" class="balance-reference">{{ formatDisplayReference(wallet?.withdraw_frozen ?? 0) }}</text>
           <text class="balance-hint">{{ t('unfrozenOnRejectOrFailure') }}</text>
         </view>
       </view>
@@ -40,7 +43,7 @@
         <view class="payment-state-head">
           <view>
             <text class="payment-state-title">{{ paymentStateTitle }}</text>
-            <text class="payment-state-sub">{{ formatCnyCurrency(pendingPayment.amount_cny) }}</text>
+            <text class="payment-state-sub">{{ formatSettlementCny(pendingPayment.amount_cny) }}</text>
           </view>
           <text class="payment-state-badge">{{ paymentStateBadge }}</text>
         </view>
@@ -91,11 +94,13 @@
       <view class="grid">
         <view class="card cell">
           <text class="c-label">{{ t('k_bf07c4a4') }}</text>
-          <AmountText :value="wallet?.frozen ?? 0" currency="ledger" size="md" />
+          <AmountText :value="wallet?.frozen ?? 0" currency="settlement" size="md" />
+          <text v-if="formatDisplayReference(wallet?.frozen ?? 0)" class="balance-reference">{{ formatDisplayReference(wallet?.frozen ?? 0) }}</text>
         </view>
         <view class="card cell">
           <text class="c-label">{{ t('cumulativeRevenue') }}</text>
-          <AmountText :value="wallet?.total_income ?? 0" currency="ledger" size="md" trend="up" />
+          <AmountText :value="wallet?.total_income ?? 0" currency="settlement" size="md" trend="up" />
+          <text v-if="formatDisplayReference(wallet?.total_income ?? 0)" class="balance-reference">{{ formatDisplayReference(wallet?.total_income ?? 0) }}</text>
         </view>
       </view>
 
@@ -134,7 +139,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { cancelRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type WalletInfo } from '@/api/wallet'
 import { useAssetStore } from '@/store/asset'
-import { formatCardHourCurrency, formatCnyCurrency, formatNumber } from '@/utils/format'
+import { formatCardHourCurrency, formatDisplayReference, formatNumber, formatSettlementCny } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -610,6 +615,7 @@ function goWithdrawals() { nav('/pages/withdrawals/index') }
 .withdraw-balance-row { display: flex; gap: 16rpx; margin: -8rpx 0 24rpx; }
 .withdraw-balance-cell { flex: 1; min-width: 0; padding: 24rpx; }
 .balance-hint { display: block; color: var(--text-dim); font-size: 19rpx; line-height: 1.4; margin-top: 8rpx; }
+.balance-reference { display: block; margin-top: 7rpx; color: var(--text-sub); font-size: 21rpx; font-variant-numeric: tabular-nums; }
 .cell { flex: 1; padding: 28rpx; }
 .c-label { color: var(--text-sub); font-size: 24rpx; display: block; margin-bottom: 8rpx; }
 .menu { padding: 0; }

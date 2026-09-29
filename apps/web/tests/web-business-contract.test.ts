@@ -30,9 +30,9 @@ test("legacy community brand values are renamed for display without changing bac
   assert.equal(communityDisplayText("资源编号 WOD-P-12", "wod-market"), "资源编号 WOD-P-12");
 
   const feed = fs.readFileSync(new URL("../components/community-feed.tsx", import.meta.url), "utf8");
-  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key, locale, displayCurrencyConfig\)/);
-  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key, locale, displayCurrencyConfig\)/);
-  assert.match(feed, /communityPostContent\(row, locale, displayCurrencyConfig\)/);
+  assert.match(feed, /communityDisplayText\(row\.source_name \|\| row\.source_author, row\.source_key, locale, displayCurrencyConfig, displayCurrency\)/);
+  assert.match(feed, /communityDisplayText\(row\.author_name \|\| row\.source_author \|\| row\.source_name, row\.source_key, locale, displayCurrencyConfig, displayCurrency\)/);
+  assert.match(feed, /communityPostContent\(row, locale, displayCurrencyConfig, displayCurrency\)/);
 });
 
 test("all live market requests force KAI Pricing as the only source", () => {
@@ -376,7 +376,7 @@ test("Web compute catalogue separates representative KAI offers from individual 
   assert.match(market, /提交需求后由对应商家人工联系确认方案/);
   assert.match(market, /market\.inquiry/);
   assert.match(market, /market\.submitRequest/);
-  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency\)/);
+  assert.match(market, /formatCardHoursForLocale\(row\.unit_price_ch, locale, capabilities\.display_currency, displayCurrency\)/);
   assert.match(market, /matchmakingEnabled && row\.inquiry_available !== false/);
   assert.match(detail, /beginInquiry/);
   assert.match(detail, /\/account\/requests/);
@@ -480,7 +480,7 @@ test("seller resource workspace preserves the backend ledger contract while show
   assert.doesNotMatch(resource, /WOD-P-\$\{item\.id\}/);
   assert.match(resource, /每 GPU 小时价格（\{displayCurrency\}）/);
   assert.match(resource, /formatLedgerMoney\(selected\.price\).*GPU·小时/);
-  assert.match(resource, /convertDisplayToCardHours\(form\.price, locale, displayCurrencyConfig\)/);
+  assert.match(resource, /convertDisplayToCardHours\(form\.price, locale, displayCurrencyConfig, displayCurrency\)/);
   assert.match(supplierApi, /MobileSupplierDevice[\s\S]*version: number/);
   assert.match(supplierApi, /expected_version: expectedVersion/);
   assert.match(resource, /updateMobileSupplierDevice\(selected\.id, selected\.version, changes\)/);

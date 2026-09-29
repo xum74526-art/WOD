@@ -71,7 +71,7 @@ export function ResourceWorkspace() {
       name: item.name,
       gpu_model: item.gpu_model,
       memory: item.memory,
-      price: formatFinancialAmount(convertCardHoursToDisplay(item.price, locale, displayCurrencyConfig), undefined, false),
+      price: formatFinancialAmount(convertCardHoursToDisplay(item.price, locale, displayCurrencyConfig, displayCurrency), undefined, false),
       stock: String(item.stock),
       region_name: item.region,
       city: item.city,
@@ -88,7 +88,7 @@ export function ResourceWorkspace() {
       let id: number;
       if (selected) {
         const changes: MobileSupplierDeviceUpdate = {};
-        const price = convertDisplayToCardHours(form.price, locale, displayCurrencyConfig);
+        const price = convertDisplayToCardHours(form.price, locale, displayCurrencyConfig, displayCurrency);
         const stock = Number(form.stock);
         if (form.name !== selected.name) changes.name = form.name;
         if (price !== selected.price) changes.price = price;
@@ -104,7 +104,7 @@ export function ResourceWorkspace() {
           name: form.name,
           gpu_model: form.gpu_model,
           memory: form.memory,
-          price: convertDisplayToCardHours(form.price, locale, displayCurrencyConfig),
+          price: convertDisplayToCardHours(form.price, locale, displayCurrencyConfig, displayCurrency),
           stock: Number(form.stock),
           region_code: form.region_code,
           region_name: form.region_name,

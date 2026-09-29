@@ -247,7 +247,7 @@ html[data-radius="square"] .ui-settings--language { border-radius: 999px !import
 
 .ui-language-popover {
   width: min(390px, calc(100vw - 30px)) !important;
-  max-height: min(420px, var(--radix-dropdown-menu-content-available-height)) !important;
+  max-height: min(680px, var(--radix-dropdown-menu-content-available-height)) !important;
   padding: 0 !important;
   overflow: hidden;
   border: 1px solid var(--border-subtle) !important;
@@ -261,6 +261,7 @@ html[data-radius="square"] .ui-language-popover { border-radius: 18px !important
 .ui-language-popover[data-state="open"] { animation: kai-language-popover-in var(--motion-standard) cubic-bezier(.2, .7, .2, 1) both; }
 .ui-language-popover[data-state="closed"] { animation: kai-language-popover-out 120ms ease-in both; }
 .ui-language-popover .rt-DropdownMenuViewport { padding: 0 !important; }
+.ui-language-popover .rt-DropdownMenuSeparator { height: 1px; margin: 0 18px; background: var(--border-subtle); }
 .ui-language-popover__header {
   min-height: 64px;
   padding: 0 18px !important;
@@ -313,6 +314,14 @@ html[data-radius="square"] .ui-language-popover .ui-language-option { border-rad
 }
 html[data-radius="square"] .ui-language-popover .ui-language-option .rt-BaseMenuItemIndicator { border-radius: 50% !important; }
 .ui-language-popover .ui-language-option .rt-BaseMenuItemIndicatorIcon { width: 14px; height: 14px; }
+.ui-currency-note {
+  margin: 0;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.55;
+}
 html.dark .ui-language-popover,
 html[data-color-mode="dark"] .ui-language-popover {
   box-shadow: 0 26px 68px rgb(0 0 0 / .46), inset 0 1px rgb(255 255 255 / .08) !important;

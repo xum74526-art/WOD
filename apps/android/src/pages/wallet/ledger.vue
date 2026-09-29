@@ -19,7 +19,7 @@
           <view class="it-top">
             <text class="it-type">{{ typeLabel(it.type) }}</text>
             <text class="it-amt" :class="it.direction === 'in' ? 'up' : 'down'">
-              {{ it.direction === 'in' ? '+' : '-' }}{{ formatCardHourCurrency(it.amount) }}
+              {{ it.direction === 'in' ? '+' : '-' }}{{ formatSettlementCny(it.amount) }}
             </text>
           </view>
           <view class="it-mid">
@@ -28,7 +28,7 @@
           </view>
           <view class="it-bottom">
             <text class="it-time">{{ formatDate(it.created_at) }}</text>
-            <text class="it-bal">{{ t('walletBalanceLabel') }} {{ formatCardHourCurrency(it.balance_after) }}</text>
+            <text class="it-bal">{{ t('walletBalanceLabel') }} {{ formatSettlementCny(it.balance_after) }}</text>
           </view>
         </view>
         <view v-if="loading" class="load-more">{{ t('loading') }}</view>
@@ -42,7 +42,7 @@
 import { ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getLedger, type LedgerItem } from '@/api/wallet'
-import { formatCardHourCurrency, formatDate } from '@/utils/format'
+import { formatDate, formatSettlementCny } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import EmptyState from '@/components/EmptyState.vue'

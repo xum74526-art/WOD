@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { localizeInternalBrandText, localizePersonName } from '../src/utils/localize-content.ts'
-import { setDisplayCurrencyConfig } from '../src/utils/format.ts'
+import { setDisplayCurrency, setDisplayCurrencyConfig } from '../src/utils/format.ts'
 
 const indexSource = readFileSync(new URL('../src/pages/community/index.vue', import.meta.url), 'utf8')
 const detailSource = readFileSync(new URL('../src/pages/community/detail.vue', import.meta.url), 'utf8')
@@ -37,6 +37,7 @@ test('community navigation and empty-state keys have English translations', () =
 
 test('first-party market posts remove mixed Chinese from English display copy', () => {
   setDisplayCurrencyConfig({ card_hour_cny_rate: 1, rates: { CNY: 1, HKD: 1.08, USD: 0.14 } })
+  setDisplayCurrency('USD')
   assert.equal(localizePersonName('KAI星算平台行情', 'en'), 'KAI Platform Market')
   assert.equal(
     localizeInternalBrandText(
