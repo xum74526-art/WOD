@@ -38,8 +38,8 @@ class RedeemIn(BaseModel):
 
 class CouponCampaignCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=64)
-    amount: Decimal = Field(gt=0, le=Decimal("1000000"), decimal_places=6)
-    min_amount: Decimal = Field(ge=0, le=Decimal("100000000"), decimal_places=6)
+    amount: Decimal = Field(gt=0, le=Decimal("1000000"), decimal_places=3)
+    min_amount: Decimal = Field(ge=0, le=Decimal("100000000"), decimal_places=3)
     max_redemptions: int = Field(ge=1, le=1_000_000)
     coupon_ttl_days: int = Field(default=30, ge=1, le=3650)
     product_id: int | None = Field(default=None, ge=1)

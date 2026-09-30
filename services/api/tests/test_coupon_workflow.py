@@ -2,6 +2,7 @@ import unittest
 from datetime import timedelta
 from decimal import Decimal
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -112,6 +113,28 @@ class CouponWorkflowTests(unittest.TestCase):
             actor_user_id=self.admin.id,
             platform="web",
         )
+
+    def test_campaign_amounts_allow_at_most_three_decimal_places(self):
+        valid = CouponCampaignCreateIn(
+            name="三位小数优惠券",
+            amount=Decimal("42.770"),
+            min_amount=Decimal("0.001"),
+            max_redemptions=100,
+            coupon_ttl_days=30,
+            expires_at=utc_now() + timedelta(days=60),
+        )
+        self.assertEqual(valid.amount, Decimal("42.770"))
+        self.assertEqual(valid.min_amount, Decimal("0.001"))
+
+        with self.assertRaises(ValidationError):
+            CouponCampaignCreateIn(
+                name="四位小数优惠券",
+                amount=Decimal("42.7701"),
+                min_amount=Decimal("0.0001"),
+                max_redemptions=100,
+                coupon_ttl_days=30,
+                expires_at=utc_now() + timedelta(days=60),
+            )
 
     def test_campaign_stores_only_hash_and_enforces_account_and_total_limits(self):
         campaign, plaintext = self._campaign()

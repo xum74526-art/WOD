@@ -11,9 +11,10 @@ import {
   type AdminCouponCampaignStatus,
 } from "@/lib/admin-audit-api";
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
-import { convertDisplayToCardHours } from "@/lib/display-currency";
+import { normalizeDisplayInputToCny } from "@/lib/display-currency";
 
 const PAGE_SIZE = 20;
+const MONEY_INPUT_PATTERN = /^(?:\d+|\d*\.\d{1,3})$/;
 
 function defaultExpiry() {
   const value = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -72,8 +73,26 @@ export function AdminCouponWorkspace() {
       if (!Number.isFinite(displayAmount) || !Number.isFinite(displayMinimum) || displayAmount <= 0 || displayMinimum < 0) {
         throw new Error(label("券面额必须大于 0，使用门槛不能为负数。", "The value must be positive and the minimum spend cannot be negative."));
       }
-      const amount = convertDisplayToCardHours(displayAmount, locale, displayCurrencyConfig, displayCurrency);
-      const minimum = convertDisplayToCardHours(displayMinimum, locale, displayCurrencyConfig, displayCurrency);
+      if (!MONEY_INPUT_PATTERN.test(form.amount.trim()) || !MONEY_INPUT_PATTERN.test(form.minAmount.trim())) {
+        throw new Error(label("券面额和使用门槛最多只能填写三位小数。", "The value and minimum spend can have at most three decimal places."));
+      }
+      const amount = normalizeDisplayInputToCny(
+        form.amount,
+        locale,
+        displayCurrencyConfig,
+        { fractionDigits: 3, displayFractionDigits: 3 },
+        displayCurrency,
+      );
+      const minimum = normalizeDisplayInputToCny(
+        form.minAmount,
+        locale,
+        displayCurrencyConfig,
+        { fractionDigits: 3, displayFractionDigits: 3 },
+        displayCurrency,
+      );
+      if (amount <= 0 || minimum < 0) {
+        throw new Error(label("换算后的券面额必须大于 0，使用门槛不能为负数。", "The converted value must be positive and the minimum spend cannot be negative."));
+      }
       const created = await createAdminCouponCampaign({
         name: form.name.trim(),
         amount,

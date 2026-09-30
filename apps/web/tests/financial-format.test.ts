@@ -86,6 +86,8 @@ test("three-decimal display input preserves legal CNY payment boundaries", () =>
   assert.equal(normalizeDisplayInputToCny("1.490", "en", config, { fractionDigits: 2, minimum: 10 }), 10);
   assert.equal(normalizeDisplayInputToCny("1.490", "en", config, { fractionDigits: 3, minimum: 10 }), 10);
   assert.equal(normalizeDisplayInputToCny("1.489", "en", config, { fractionDigits: 3, minimum: 10 }), 9.992);
+  assert.equal(normalizeDisplayInputToCny("50", "zh-Hant", config, { fractionDigits: 3 }, "HKD"), 42.77);
+  assert.equal(normalizeDisplayInputToCny("0.001", "zh-Hant", config, { fractionDigits: 3 }, "HKD"), 0.001);
 });
 
 test("English market copy does not render Chinese backend assurance fields", () => {
