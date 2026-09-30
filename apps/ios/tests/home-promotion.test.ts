@@ -11,6 +11,7 @@ function source(path: string) {
 
 const homePage = source('../src/pages/index/index.vue')
 const carousel = source('../src/components/HomePromoCarousel.vue')
+const languageSelector = source('../src/components/LanguageSelectorSheet.vue')
 const appStyles = source('../src/App.vue')
 const i18n = source('../src/store/i18n.ts')
 const pages = JSON.parse(source('../src/pages.json')) as {
@@ -88,6 +89,12 @@ test('mobile promotion carousel uses a dark media card with internal paging and 
   assert.doesNotMatch(carousel, /promo-motion-toggle|togglePaused|motion-icon--play|motion-icon--pause/)
   assert.doesNotMatch(carousel, /homeCarouselPause|homeCarouselResume/)
   assert.match(carousel, /class="notice-swiper"[\s\S]*?vertical/)
+})
+
+test('homepage language sheet stays above carousel controls', () => {
+  assert.match(languageSelector, /\.language-layer \{[\s\S]*?z-index: 10000;/)
+  assert.match(carousel, /\.promo-inline-controls \{[\s\S]*?z-index: 4;/)
+  assert.doesNotMatch(homePage, /\.topbar \{[^}]*z-index:/)
 })
 
 test('English homepage keeps the greeting and quick actions aligned', () => {

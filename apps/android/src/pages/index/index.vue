@@ -676,7 +676,7 @@ function markProductImageFailed(id: number) {
 .startup-label { font-size: 24rpx; }
 .shell { padding: 0 20px calc(132rpx + var(--safe-bottom)); }
 
-.topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }
+.topbar { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 88rpx; padding: 8rpx 0 20rpx; }
 .greeting { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 4rpx; padding-right: 8rpx; }
 .hi { flex-shrink: 0; color: var(--text-sub); font-size: 13px; }
 .uname { min-width: 0; overflow: hidden; color: var(--text); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
