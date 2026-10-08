@@ -40,7 +40,7 @@ export function LegalDocument({ sections, accountDeletionLink = false, localeOve
   const localize = (zh: string, en: string) => text({ zh, en });
 
   return (
-    <article className="legal-document">
+    <article className="legal-document" data-i18n-skip lang={locale}>
       <dl className="legal-document__meta">
         <div><dt>{localize("版本", "Version")}</dt><dd>{LEGAL_VERSION}</dd></div>
         <div><dt>{localize("更新日期", "Last updated")}</dt><dd>{LEGAL_EFFECTIVE_DATE}</dd></div>

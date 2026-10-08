@@ -102,4 +102,10 @@ npm run audit:deps
 git diff --check
 ```
 
-开发时从 `main` 创建功能分支，修改在本地完成并通过检查后才合并。生产服务器不作为代码编辑环境。
+移动端构建依赖中的 `braces` 暂使用仓库内的安全修复，详见
+[`packages/braces/README.md`](../packages/braces/README.md)。安装依赖时保留两端
+`.npmrc` 的 `install-links=true`；只复制 `apps/ios` 或 `apps/android` 目录不足以安装完整依赖。
+`npm run test:dependency-security` 验证实际安装的补丁和漏洞样例，已包含在上述两项门禁中。
+
+沿用当前协作分支完成修改，检查通过后按发布负责人要求合并到 `main`；需要隔离时再创建分支。
+生产服务器不作为代码编辑环境。

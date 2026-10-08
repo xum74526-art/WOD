@@ -135,6 +135,7 @@ jobs:
           cache-dependency-path: apps/ios/package-lock.json
       - run: npm install --global npm@11.9.0 --no-audit --no-fund
       - run: npm ci --prefix apps/ios --no-audit
+      - run: node tooling/test-braces-security.mjs ios
       - run: npm --prefix apps/ios audit --audit-level=high --registry=https://registry.npmjs.org
       - run: npm run check:ios
       - run: npm run test:ios
@@ -153,6 +154,7 @@ jobs:
           cache-dependency-path: apps/android/package-lock.json
       - run: npm install --global npm@11.9.0 --no-audit --no-fund
       - run: npm ci --prefix apps/android --no-audit
+      - run: node tooling/test-braces-security.mjs android
       - run: npm --prefix apps/android audit --audit-level=high --registry=https://registry.npmjs.org
       - run: npm run check:android
       - run: npm run test:android

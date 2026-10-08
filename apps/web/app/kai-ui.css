@@ -344,13 +344,16 @@ html[data-color-mode="dark"] .ui-language-popover {
   .site-mobile-settings .ui-settings--language { min-width: 0; padding-inline: 12px; }
   .site-mobile-settings .ui-language-name { display: inline; }
 }
-@media (max-width: 360px) {
-  .site-header__actions > .ui-settings-group .ui-settings--language,
+/* Workspace headers retain both theme and navigation controls on phones. */
+@media (max-width: 480px) {
   .workspace-mobile-head .ui-settings--language { width: 44px; min-width: 44px; padding: 0; }
-  .site-header__actions > .ui-settings-group .ui-language-current,
   .workspace-mobile-head .ui-language-current { display: none; }
-  .site-header__actions > .ui-settings-group .ui-language-caret,
   .workspace-mobile-head .ui-language-caret { display: none; }
+}
+@media (max-width: 360px) {
+  .site-header__actions > .ui-settings-group .ui-settings--language { width: 44px; min-width: 44px; padding: 0; }
+  .site-header__actions > .ui-settings-group .ui-language-current { display: none; }
+  .site-header__actions > .ui-settings-group .ui-language-caret { display: none; }
   .site-mobile-settings .ui-settings--language { width: auto; min-width: 0; padding-inline: 12px; }
   .site-mobile-settings .ui-language-current { display: flex; }
   .site-mobile-settings .ui-language-caret { display: block; }

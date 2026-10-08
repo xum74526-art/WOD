@@ -23,6 +23,7 @@
     "test:mobile": "npm run test:ios && npm run test:android",
     "build:mobile:app": "npm run build:ios:app && npm run build:android:app",
     "test:static-review": "node --test static-review/site.test.mjs",
+    "test:dependency-security": "node tooling/test-braces-security.mjs",
     "check:all": "./tooling/check-all.sh",
     "audit:deps": "./tooling/audit-dependencies.sh"
   },

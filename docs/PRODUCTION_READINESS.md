@@ -30,7 +30,7 @@ git diff --check
 | 静态审核页 | 本地资源、无外部网络、备案与客服等固定审核信息测试通过 |
 | Mobile | 单元测试、TypeScript 检查及 API 边界检查通过 |
 | 移动端构建 | CI 的 H5 和 App production build 通过 |
-| 依赖安全 | API、Collector、Web、Mobile 没有命令报告的已知漏洞 |
+| 依赖安全 | API、Collector、Web、Mobile 注册表依赖审计通过；仓库内补丁通过安装源校验和漏洞回归测试 |
 | Git | 没有意外构建产物、密钥或未解释的兼容代码 |
 
 检查失败必须修复根因；不能通过跳过断言、降低审计级别或提交生成目录获得“通过”。
