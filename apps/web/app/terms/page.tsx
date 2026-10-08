@@ -40,8 +40,8 @@ const termsSections: LegalSection[] = [
     title: { zh: "服务范围与当前模式", en: "Service scope and current mode" },
     paragraphs: [
       {
-        zh: "KAI星算提供自有平台行情、资源目录、需求发布、商家入驻与报价、方案确认、交付协作、历史记录、算力技术社区和客服等功能。当前面向审核的版本采用需求撮合和人工确认模式：用户提交需求后，由商家或平台人员核对资源、价格、交付条件和方案。",
-        en: "KAI Star provides first-party platform market data, resource listings, request publication, supplier onboarding and quotes, plan confirmation, fulfilment collaboration, history, a compute technical community, and support. The current review release uses request matching and manual confirmation: after a request is submitted, a supplier or platform staff verifies resources, price, delivery conditions and the proposed plan.",
+        zh: "KAI星算提供自有平台行情、资源目录、需求发布、商家入驻与报价、方案确认、算力服务订单、交付协作、历史记录、算力技术社区和客服等功能。预约版本采用需求撮合和人工确认模式；已开放交易的版本提供算力使用服务的购买与续期，实际功能须同时满足客户端版本、账号条件和服务端能力。",
+        en: "KAI Star provides first-party platform market data, resource listings, request publication, supplier onboarding and quotes, plan confirmation, compute-service orders, fulfilment collaboration, history, a compute technical community, and support. Inquiry releases use request matching and manual confirmation. Transaction-enabled releases support purchase and renewal of compute usage services, subject to the client version, account eligibility and server capabilities.",
       },
       {
         zh: "除另有书面服务文件明确约定，平台展示不等同于资源销售、即时成交或由KAI星算自行提供全部算力。具体服务内容、资源提供方、价格、期限、验收、退款和责任以双方最终确认的订单、方案或合同为准。",
@@ -136,12 +136,24 @@ const termsSections: LegalSection[] = [
     title: { zh: "费用、支付与结算", en: "Fees, payments and settlement" },
     paragraphs: [
       {
-        zh: "当前审核版本关闭新的直接交易、充值、提现和在线支付，撮合方案的费用和结算方式应在最终确认文件中明确。页面保留的历史记录或未开放入口不表示相关能力已启用。",
-        en: "The current review release disables new direct trading, top-ups, withdrawals and online payments. Fees and settlement for a matched proposal must be stated in the final confirmation. Historical records or an unavailable entry point do not mean that a capability is enabled.",
+        zh: "直接交易、充值、提现和在线支付仅在相应客户端版本、账号条件及服务端能力均允许时开放。iOS 1.2.4 提供算力购买使用及续期、充值、退款申请和符合条件余额的提现，暂不提供购买持有或资产转售。历史订单和账务记录保留用于查询及未结事项处理；功能调整不免除已经发生的履约、退款或结算义务。",
+        en: "Direct transactions, top-ups, withdrawals and online payments are available only when permitted by the client release, account eligibility and server capabilities. iOS 1.2.4 supports purchase and renewal of compute usage services, top-ups, refund requests and withdrawal of eligible balances; purchase-to-hold and asset resale are unavailable. Historical orders and ledger records remain available for enquiries and outstanding matters. Feature changes do not remove existing fulfilment, refund or settlement obligations.",
       },
       {
-        zh: "未来如启用平台服务费、支付、提现、返佣或磨损等计费规则，我们会在使用前单独展示适用费率、计算口径、条件、退款和结算规则，并取得必要确认；不会仅凭本协议概括条款自动收取未明确告知的费用。支付结果以服务端验签、查单和账务记录为准。",
-        en: "If platform fees, payments, withdrawals, rewards, wear or other charging rules are enabled later, the applicable rate, calculation, conditions, refunds and settlement rules will be shown separately before use and any required confirmation obtained. This general agreement alone does not authorise an undisclosed charge. Payment status is determined by server-side signature verification, order query and ledger records.",
+        zh: "购买使用的标的是订单约定的算力服务，不是投资份额或收益权。订单按小时及数量计费，提交前单独展示价格、费用、总额和适用条件；交付 SSH 访问资料后按订单流程验收、使用或提出争议。具体服务方、交付、费用、退款及结算规则以订单和确认页面为准，不会仅凭本协议概括条款收取未告知费用，也不承诺固定收益或保本回报。",
+        en: "A usage purchase is for the compute service specified in the order, not an investment share or a right to returns. Orders are priced by hours and quantity, with price, fees, total and conditions shown separately before submission. After SSH access details are delivered, follow the order process for acceptance, use or disputes. The order and confirmation page specify the provider, delivery, fees, refunds and settlement. This general agreement alone does not authorise undisclosed charges or promise fixed returns or capital protection.",
+      },
+      {
+        zh: "充值通过七相支付 HTTPS 收银台选择已开放的支付宝或微信支付渠道，人民币为实际结算币种，其他币种仅供显示参考。用户须具备所选渠道支持的付款账户。充值成功后记入平台账本供平台服务消费；账户余额不构成可自由流通的货币、存款或理财产品。客户端跳转不构成入账凭证，支付结果以服务端验签、查单和账务记录为准。",
+        en: "Top-ups use the Qixiang Pay HTTPS checkout with available Alipay or WeChat Pay channels. Actual settlement is in CNY; other currencies are display references only. You need an account supported by the selected channel. Verified top-ups are credited to the platform ledger for service consumption; the balance is not freely transferable money, a deposit or an investment product. A client redirect is not proof of payment; server-side signature verification, order queries and ledger records determine the result.",
+      },
+      {
+        zh: "充值余额不能直接作为提现资金。需要退回充值款时，应从充值记录发起退款申请，经核对订单、可退金额及渠道状态后按原支付渠道处理。退款申请不等于退款完成，也不承诺即时到账；算力服务订单的取消、退款或解冻按订单状态及适用规则处理，退回平台账本与退回支付渠道是不同流程。",
+        en: "Top-up balances cannot be withdrawn directly. Request a refund from the recharge history; after checks of the order, refundable amount and channel status, eligible refunds return through the original payment channel. A request is not a completed refund and does not promise instant receipt. Compute-order cancellation, refunds and unfreezing follow the order state and applicable rules; a ledger credit and a payment-channel refund are separate processes.",
+      },
+      {
+        zh: "提现仅限服务端确认的可提现余额，须完成页面要求的实名认证并登记本人符合要求的银行卡。提交前展示金额、手续费及预计到账金额，申请后相关金额按服务端规则冻结；经审核后由财务人员人工转账。实际时间受审核、银行和业务状态影响，不承诺自动即时到账。银行卡登记或平台审核不等于银行四要素认证，当前表单不表示支持所有国家的证件和银行账户。",
+        en: "Withdrawals are limited to server-confirmed withdrawable balances and require the identity verification shown on the page and an eligible bank card in your own name. The amount, fee and estimated net amount are shown before submission; funds are frozen under server rules and authorised finance staff manually transfer them after review. Timing depends on review, the bank and the business state, with no promise of automatic or instant receipt. Card registration or platform review is not bank four-factor verification, and the current forms do not imply support for every country's identity documents or bank accounts.",
       },
     ],
   },

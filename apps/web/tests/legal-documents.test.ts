@@ -20,7 +20,7 @@ test("privacy policy is a versioned trilingual disclosure matching implemented d
     "锆芯期算人工智能科技（上海）有限公司",
     "上海市浦东新区川南奉公路5058号3幢一层（集中登记地）",
     "沪ICP备2026046279号-1",
-    "2026-09-20",
+    "2026-10-08",
     "联系我们：+86 4001082026",
     "邮箱找回",
     "KAI 统一身份登录与绑定",
@@ -54,20 +54,24 @@ test("privacy policy is a versioned trilingual disclosure matching implemented d
   assert.match(privacy, /en: \{/);
   assert.match(renderer, /href="tel:\+864001082026"/);
   assert.match(renderer, /localeOverride/);
+  assert.match(renderer, /data-i18n-skip lang=\{locale\}/);
   assert.match(renderer, /legal-document__sensitive/);
   assert.doesNotMatch(privacy, /个人信息主要在中华人民共和国境内存储|Data is generally stored on servers in mainland China/);
-  assert.doesNotMatch(privacy, /以后续.*安装包检测结果|可能涉及的 OAID|七相支付|Qixiang Pay/);
+  assert.doesNotMatch(privacy, /以后续.*安装包检测结果|可能涉及的 OAID/);
   assert.doesNotMatch(source, /access@kai\.com|mailto:|正式隐私政策需要|上线前公布|Formal privacy policy requires/);
 });
 
 test("Xiaomi review policy is fixed Simplified Chinese and has no public-site shell", () => {
   const review = read("../app/privacy/zh-cn/page.tsx");
   assert.match(review, /localeOverride="zh-Hans"/);
+  assert.match(review, /data-i18n-skip lang="zh-Hans"/);
   assert.match(review, /privacySections/);
+  assert.match(review, /KAI星算 \/ 隐私政策/);
+  assert.doesNotMatch(review, /算力星图/);
   assert.doesNotMatch(review, /SimplePage|SiteHeader|SiteFooter|下载|二维码/);
 });
 
-test("terms describe the live matchmaking mode without inventing enabled payments or guarantees", () => {
+test("terms distinguish inquiry and service-trade releases without promising investments", () => {
   const terms = read("../app/terms/page.tsx");
   for (const required of [
     "需求撮合和人工确认模式",
@@ -80,6 +84,19 @@ test("terms describe the live matchmaking mode without inventing enabled payment
     "中华人民共和国大陆地区法律",
   ]) assert.match(terms, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(terms, /正式用户协议需要|The formal terms must|access@kai\.com|mailto:/);
+  assert.doesNotMatch(terms, /当前审核版本关闭新的直接交易|current review release disables new direct trading/);
+  assert.doesNotMatch(terms, /账本中的卡时为内部计价单位|card hours are internal accounting units/);
+  for (const required of ["iOS 1.2.4", "购买持有或资产转售", "人民币为实际结算币种", "充值余额不能直接作为提现资金", "原支付渠道", "人工转账"]) {
+    assert.ok(terms.includes(required), required);
+  }
+});
+
+test("payment privacy covers the checkout provider and manual withdrawal data boundary", () => {
+  const privacy = read("../app/privacy/page.tsx");
+  for (const required of ["七相支付", "Qixiang Pay", "api.payqixiang.cn", "支付及退款状态", "提现银行卡资料", "完整收款资料", "人工转账", "所有地区的用户", "users in any region"]) {
+    assert.ok(privacy.includes(required), required);
+  }
+  assert.doesNotMatch(privacy, /不接入广告、个性化推荐、一键登录、地图定位或支付 SDK/);
 });
 
 test("public legal shell localizes the brand and exposes no public email", () => {
