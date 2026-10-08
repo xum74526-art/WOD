@@ -56,7 +56,7 @@ test('a failed startup cannot trap the user behind the native splash', () => {
   assert.equal(closed, 1)
 })
 
-function loginFixture(opacities: number[] = [1]) {
+function loginFixture(opacities: number[] = [1], reducedMotion = false) {
   const source = readFileSync(new URL('../src/pages/login/index.vue', import.meta.url), 'utf8')
   const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
   const hooks: Record<string, Array<() => void>> = {}
@@ -64,13 +64,14 @@ function loginFixture(opacities: number[] = [1]) {
   const navigated: string[] = []
   let restoreResolve: (() => void) | undefined
   let loginResolve: (() => void) | undefined
+  let loginReject: ((error: Error) => void) | undefined
   let logins = 0
   let coverCloses = 0
   const user = {
     isLogin: false,
     authReady: false,
     restore: () => new Promise<void>((resolve) => { restoreResolve = resolve }),
-    login: () => { logins++; return new Promise<void>((resolve) => { loginResolve = resolve }) },
+    login: () => { logins++; return new Promise<void>((resolve, reject) => { loginResolve = resolve; loginReject = reject }) },
   }
   const query: Record<string, any> = {}
   for (const key of ['in', 'select', 'exec']) query[key] = () => query
@@ -96,7 +97,7 @@ function loginFixture(opacities: number[] = [1]) {
     if (name === '@/api/user') return {}
     if (name === '@/store/i18n') return { useI18nStore: () => ({ t: (key: string) => key }) }
     if (name === '@/utils/app-launch') return { finishAppLaunch: () => { coverCloses++ } }
-    if (name === '@/utils/motion') return { prefersReducedMotion: () => false }
+    if (name === '@/utils/motion') return { prefersReducedMotion: () => reducedMotion }
     if (name === '@/utils/nav') return { switchTab: (url: string) => navigated.push(url) }
     if (name === '@/utils/auth-return-path') return { consumeAuthReturnPath: () => null }
     if (name === '@/utils/inquiry-request') return { hasInquiryRequestPrefill: () => false }
@@ -113,6 +114,7 @@ function loginFixture(opacities: number[] = [1]) {
     view, user, hooks, timer, navigated,
     logins: () => logins, coverCloses: () => coverCloses,
     resolveRestore: () => restoreResolve!(), resolveLogin: () => loginResolve!(),
+    rejectLogin: () => loginReject!(new Error('Login failed')),
   }
 }
 
@@ -229,7 +231,7 @@ test('login blocks repeat submission and mode changes until success navigation c
   assert.equal(f.view.loginSucceeded.value, true)
   await f.view.submit()
   assert.equal(f.logins(), 1)
-  f.timer.flush(280)
+  f.timer.flush(520)
   assert.deepEqual(f.navigated, ['/pages/index/index'])
 })
 
@@ -247,6 +249,76 @@ test('unmount clears entrance and success timers so an old login cannot redirect
   assert.equal(f.timer.timers.size, 2)
   f.hooks.unmounted.forEach((hook) => hook())
   assert.equal(f.timer.timers.size, 0)
-  f.timer.flush(280)
+  f.timer.flush(520)
   assert.deepEqual(f.navigated, [])
+})
+
+test('a failed request releases the loading button without success or navigation', async () => {
+  const f = loginFixture()
+  f.view.agree.value = true
+  f.view.form.phone = '13800000000'
+  f.view.form.password = 'fixture-password'
+  const pending = f.view.submit()
+  assert.equal(f.view.submitting.value, true)
+  assert.equal(f.view.loginSucceeded.value, false)
+  f.rejectLogin()
+  await pending
+  assert.equal(f.view.submitting.value, false)
+  assert.equal(f.view.loginSucceeded.value, false)
+  assert.equal(f.timer.timers.size, 0)
+  assert.deepEqual(f.navigated, [])
+  // An error must leave the form editable and allow another attempt.
+  f.view.setAuthMethod('kai')
+  assert.equal(f.view.authMethod.value, 'kai')
+})
+
+test('reduced motion skips the success animation wait after a verified login', async () => {
+  const f = loginFixture([1], true)
+  f.view.agree.value = true
+  f.view.form.phone = '13800000000'
+  f.view.form.password = 'fixture-password'
+  const pending = f.view.submit()
+  f.user.isLogin = true
+  f.user.authReady = true
+  f.resolveLogin()
+  await pending
+  f.timer.flush(0)
+  assert.deepEqual(f.navigated, ['/pages/index/index'])
+  assert.equal(f.timer.timers.size, 0)
+})
+
+test('login completing in the background waits until the page is visible', async () => {
+  const f = loginFixture()
+  f.view.agree.value = true
+  f.view.form.phone = '13800000000'
+  f.view.form.password = 'fixture-password'
+  const pending = f.view.submit()
+  f.hooks.onHide.forEach((hook) => hook())
+  f.user.isLogin = true
+  f.user.authReady = true
+  f.resolveLogin()
+  await pending
+  assert.equal(f.timer.timers.size, 0)
+  assert.deepEqual(f.navigated, [])
+  f.hooks.onShow.forEach((hook) => hook())
+  f.timer.flush(520)
+  assert.deepEqual(f.navigated, ['/pages/index/index'])
+})
+
+test('hiding the success state cancels its navigation until returning', async () => {
+  const f = loginFixture()
+  f.view.agree.value = true
+  f.view.form.phone = '13800000000'
+  f.view.form.password = 'fixture-password'
+  const pending = f.view.submit()
+  f.user.isLogin = true
+  f.user.authReady = true
+  f.resolveLogin()
+  await pending
+  f.hooks.onHide.forEach((hook) => hook())
+  f.timer.flush(520)
+  assert.deepEqual(f.navigated, [])
+  f.hooks.onShow.forEach((hook) => hook())
+  f.timer.flush(520)
+  assert.deepEqual(f.navigated, ['/pages/index/index'])
 })

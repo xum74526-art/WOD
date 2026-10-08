@@ -9,9 +9,39 @@ function source(relative) {
   return fs.readFileSync(path.join(root, relative), 'utf8')
 }
 
-// Keep this list focused on user-visible capabilities that are shared across
-// Web, Android and iOS. Platform-only integrations do not belong here.
+// Keep this list focused on user-visible capabilities shared by their applicable
+// clients. Native login motion applies to Android/iOS; the Web login keeps its
+// own layout. Platform-only integrations do not belong here.
 const commonCapabilities = [
+  {
+    name: 'mobile login motion and safe success navigation',
+    evidence: ['android', 'ios'].flatMap(client => [
+      {
+        client: `${client} login`,
+        file: `apps/${client}/src/pages/login/index.vue`,
+        patterns: [
+          'class="brand-emblem"',
+          'class="submit-track"',
+          'class="submit-status" aria-live="polite"',
+          ':aria-disabled="!agree || submitting || loginSucceeded',
+          'function scheduleLoginNavigation()',
+          'if (!pageVisible) return',
+          'prefersReducedMotion() ? 0 : 520',
+          '@media (prefers-reduced-motion: reduce)',
+        ],
+      },
+      {
+        client: `${client} login regression coverage`,
+        file: `apps/${client}/tests/login-startup-motion.test.ts`,
+        patterns: [
+          'a failed request releases the loading button without success or navigation',
+          'reduced motion skips the success animation wait after a verified login',
+          'login completing in the background waits until the page is visible',
+          'hiding the success state cancels its navigation until returning',
+        ],
+      },
+    ]),
+  },
   {
     name: 'GPU image rights disclosure',
     evidence: [
