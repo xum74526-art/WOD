@@ -1,8 +1,12 @@
 <template>
-  <view class="page" :class="{ 'auth-ready': pageEntered }">
+  <view class="page" :class="{ 'auth-ready': pageEntered, 'auth-success': loginSucceeded }">
+    <view class="auth-ambient" aria-hidden="true"><view class="ambient-glow" /><view class="ambient-ring" /></view>
     <view class="shell" :style="{ paddingTop: 'calc(52rpx + var(--safe-top))' }">
       <view class="logo-area">
-        <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
+        <view class="brand-emblem">
+          <view class="brand-orbit" aria-hidden="true" />
+          <image class="logo-img" src="/static/logo/logo.png" mode="aspectFit" />
+        </view>
         <view class="brand-copy">
           <text class="logo">{{ t('appName') }}</text>
           <text class="sub">{{ t('算力资源撮合平台') }}</text>
@@ -30,7 +34,7 @@
         </view>
 
         <view class="auth-panel-frame" :style="{ height: panelHeight }">
-          <view :key="mode + '-' + authMethod" class="auth-panel-content">
+          <view :key="mode + '-' + authMethod" class="auth-panel-content" :class="{ 'panel-forward': mode === 'register' || authMethod === 'kai' }">
             <view v-if="authMethod === 'phone'" class="phone-form">
               <view class="field" :class="{ focused: focusedField === 'username' }" v-if="mode === 'register'">
                 <text class="flabel">{{ t('k_819767ad') }}</text>
@@ -83,12 +87,20 @@
           <view class="atext">{{ t('我已阅读并同意') }}<text class="alink" @tap.stop="goAgreement('agreement')">{{ t('用户协议') }}</text>{{ t('和') }}<text class="alink" @tap.stop="goAgreement('privacy')">{{ t('隐私政策') }}</text></view>
         </view>
 
-        <view class="btn-primary" :class="{ disabled: !agree, busy: submitting, succeeded: loginSucceeded }" role="button" :aria-busy="submitting ? 'true' : 'false'" @tap="submit">
-          <view v-if="submitting && !loginSucceeded" class="submit-spinner" aria-hidden="true" />
-          <text v-if="loginSucceeded" class="submit-check" aria-hidden="true">✓</text>
-          <text v-if="loginSucceeded">{{ t('loginSuccess') }}</text>
-          <text v-else-if="authMethod === 'phone'">{{ t(submitting ? '提交中...' : (mode === 'login' ? '登录' : '注册')) }}</text>
-          <text v-else>{{ t(submitting ? 'kaiOpening' : (mode === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister')) }}</text>
+        <view class="submit-area" :class="{ 'submit-active': submitting || loginSucceeded }">
+          <view class="submit-track">
+            <view v-if="loginSucceeded" class="success-ripple" aria-hidden="true" />
+            <view class="btn-primary" :class="{ disabled: !agree, busy: submitting, succeeded: loginSucceeded }" role="button" tabindex="0" :aria-label="submitLabel()" :aria-disabled="!agree || submitting || loginSucceeded ? 'true' : 'false'" :aria-busy="submitting && !loginSucceeded ? 'true' : 'false'" @tap="submit" @keydown.enter="submit" @keydown.space.prevent="submit">
+              <text class="submit-label" :aria-hidden="submitting || loginSucceeded ? 'true' : 'false'">{{ submitLabel() }}</text>
+              <view class="submit-symbol" aria-hidden="true">
+                <view v-if="submitting && !loginSucceeded" class="submit-spinner" />
+                <view v-if="loginSucceeded" class="submit-check" />
+              </view>
+            </view>
+          </view>
+          <view class="submit-status" aria-live="polite">
+            <text v-if="submitting || loginSucceeded">{{ submitLabel() }}</text>
+          </view>
         </view>
         <text v-if="authMethod === 'kai'" class="security-note">{{ t('kaiPasswordPrivacy') }}</text>
         <button class="contact-link" @tap="callContactPhone">{{ t('platformContactLink', { phone: t('platformContactNumber') }) }}</button>
@@ -392,9 +404,25 @@ function handleStagedKaiCallback() {
 
 let authenticatedNavigationStarted = false
 
+function submitLabel() {
+  if (loginSucceeded.value) return t('loginSuccess')
+  if (authMethod.value === 'phone') return t(submitting.value ? '提交中...' : (mode.value === 'login' ? '登录' : '注册'))
+  return t(submitting.value ? 'kaiOpening' : (mode.value === 'login' ? 'kaiAccountLogin' : 'kaiAccountRegister'))
+}
+
+function scheduleLoginNavigation() {
+  if (loginSuccessTimer) clearTimeout(loginSuccessTimer)
+  loginSuccessTimer = null
+  if (!pageVisible) return
+  loginSuccessTimer = setTimeout(() => {
+    loginSuccessTimer = null
+    if (pageVisible) enterAuthenticatedApp()
+  }, prefersReducedMotion() ? 0 : 520)
+}
+
 function completeLogin() {
   loginSucceeded.value = true
-  loginSuccessTimer = setTimeout(enterAuthenticatedApp, prefersReducedMotion() ? 0 : 280)
+  scheduleLoginNavigation()
 }
 
 function enterAuthenticatedApp() {
@@ -566,6 +594,13 @@ onShow(() => {
   pageVisible = true
   measureAuthPanel()
   captchaPageVisible = true
+  if (loginSucceeded.value) {
+    if (userStore.isLogin) {
+      scheduleLoginNavigation()
+      return
+    }
+    loginSucceeded.value = false
+  }
   if (userStore.isLogin) {
     clearPendingLoginKaiCallback()
     stopCaptchaExpiryTimer()
@@ -578,6 +613,8 @@ onShow(() => {
 
 onHide(() => {
   pageVisible = false
+  if (loginSuccessTimer) clearTimeout(loginSuccessTimer)
+  loginSuccessTimer = null
   captchaPageVisible = false
   stopCaptchaExpiryTimer()
 })
@@ -602,32 +639,47 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.page { min-height: 100vh; background: var(--bg-2); }
-.logo-area, .auth-card { opacity: 0; transform: translate3d(0, 18rpx, 0); transition: opacity 420ms ease, transform 480ms cubic-bezier(.22, 1, .36, 1); }
-.auth-card { transition-delay: 65ms; }
+.page { position: relative; min-height: 100vh; overflow: hidden; background: var(--bg-2); --auth-ease: cubic-bezier(.22, 1, .36, 1); --auth-spring: cubic-bezier(.2, .85, .25, 1.12); }
+.auth-ambient { position: absolute; top: 0; left: 0; right: 0; height: 620rpx; overflow: hidden; pointer-events: none; }
+.ambient-glow { position: absolute; width: 740rpx; height: 740rpx; top: -390rpx; right: -200rpx; background: radial-gradient(circle, var(--primary-soft) 0%, transparent 68%); opacity: 0; transform: scale(.85); transition: opacity 700ms ease, transform 900ms var(--auth-ease); }
+.ambient-ring { position: absolute; width: 390rpx; height: 390rpx; right: -155rpx; top: -200rpx; border: 1rpx solid var(--primary-soft); border-radius: 50%; }
+.auth-ready .ambient-glow { opacity: 1; transform: scale(1); }
+.logo-area, .auth-card { opacity: 0; transform: translate3d(0, 28rpx, 0); transition: opacity 260ms ease, transform 620ms var(--auth-ease); }
+.auth-card { transition-delay: 55ms; }
 .auth-ready .logo-area, .auth-ready .auth-card { opacity: 1; transform: none; }
-.shell { padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
-.logo-area { display: flex; align-items: center; margin: 28rpx 8rpx 40rpx; }
-.logo-img { width: 88rpx; height: 88rpx; border-radius: 22rpx; margin-right: 22rpx; }
-.brand-copy { display: flex; flex-direction: column; }
+.shell { position: relative; max-width: 820rpx; margin: 0 auto; padding-left: 36rpx; padding-right: 36rpx; padding-bottom: 48rpx; }
+.logo-area { display: flex; align-items: center; margin: 30rpx 12rpx 46rpx; }
+.brand-emblem { position: relative; width: 96rpx; height: 96rpx; flex-shrink: 0; margin-right: 26rpx; }
+.brand-orbit { position: absolute; inset: -9rpx; border: 1rpx solid var(--primary-soft); border-radius: 34rpx; }
+.logo-img { width: 96rpx; height: 96rpx; border-radius: 26rpx; box-shadow: 0 10rpx 28rpx var(--primary-soft); }
+.auth-ready .brand-emblem { animation: auth-emblem-in 660ms var(--auth-ease) both; }
+@keyframes auth-emblem-in { 0% { transform: scale(.88) rotate(-5deg); } 65% { transform: scale(1.035) rotate(1deg); } 100% { transform: none; } }
+.brand-copy { display: flex; flex-direction: column; min-width: 0; }
 .logo { font-size: 44rpx; line-height: 1; font-weight: 800; color: var(--text); letter-spacing: 2rpx; }
-.sub { margin-top: 12rpx; color: var(--text-sub); font-size: 24rpx; }
-.auth-card { background: var(--card); border: 1rpx solid var(--border); border-radius: 28rpx; padding: 24rpx; box-shadow: 0 14rpx 42rpx rgba(15, 38, 47, 0.06); }
+.sub { margin-top: 12rpx; color: var(--text-sub); font-size: 24rpx; line-height: 1.5; }
+.auth-card { background: var(--bg); border: 1rpx solid var(--card-border); border-radius: 36rpx; padding: 28rpx; box-shadow: 0 16rpx 56rpx rgba(15, 38, 47, 0.045); }
+.auth-card + .auth-card { margin-top: 20rpx; }
 .mode-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border-radius: 18rpx; padding: 6rpx; margin-bottom: 28rpx; }
-.mode-indicator { position: absolute; top: 6rpx; bottom: 6rpx; left: 6rpx; width: calc(50% - 6rpx); border-radius: 14rpx; background: var(--bg); box-shadow: 0 5rpx 18rpx rgba(15, 38, 47, 0.08); transition: transform 280ms cubic-bezier(.22, 1, .36, 1); }
+.mode-indicator { position: absolute; top: 6rpx; bottom: 6rpx; left: 6rpx; width: calc(50% - 6rpx); border-radius: 14rpx; background: var(--bg); box-shadow: 0 5rpx 18rpx rgba(15, 38, 47, 0.08); transition: transform 380ms var(--auth-spring); }
 .mode-register .mode-indicator { transform: translateX(100%); }
 .mode-item { position: relative; z-index: 1; height: 76rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 28rpx; font-weight: 600; border-radius: 14rpx; transition: color 180ms ease, transform 140ms ease; }
 .mode-item.active { color: var(--text); }
 .method-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-bottom: 24rpx; }
-.method-indicator { position: absolute; top: 0; bottom: 0; left: 0; width: calc(50% - 8rpx); box-sizing: border-box; border: 1rpx solid var(--primary); border-radius: 16rpx; background: var(--primary-soft); transition: transform 260ms cubic-bezier(.22, 1, .36, 1); }
+.method-indicator { position: absolute; top: 0; bottom: 0; left: 0; width: calc(50% - 8rpx); box-sizing: border-box; border: 1rpx solid var(--primary); border-radius: 16rpx; background: var(--primary-soft); transition: transform 360ms var(--auth-spring); }
 .method-kai .method-indicator { transform: translateX(calc(100% + 16rpx)); }
 .method-item { position: relative; z-index: 1; min-height: 76rpx; border: 1rpx solid var(--border); border-radius: 16rpx; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-size: 26rpx; transition: color 180ms ease, border-color 180ms ease, transform 140ms ease; }
 .method-item.active { color: var(--primary); border-color: transparent; font-weight: 600; }
 .mode-item:active, .method-item:active { transform: scale(.97); }
-.auth-panel-frame { overflow: hidden; transition: height 280ms cubic-bezier(.22, 1, .36, 1); }
-.auth-panel-content { padding: 4rpx; box-sizing: border-box; animation: auth-panel-in 240ms cubic-bezier(.22, 1, .36, 1); }
-@keyframes auth-panel-in { from { opacity: .45; transform: translate3d(0, 8rpx, 0); } to { opacity: 1; transform: none; } }
-.field { position: relative; margin-bottom: 22rpx; background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 16rpx; padding: 20rpx 24rpx; transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+.auth-panel-frame { overflow: hidden; transition: height 380ms var(--auth-ease); }
+.auth-panel-content { --panel-from: -16rpx; padding: 5rpx; box-sizing: border-box; animation: auth-panel-in 340ms var(--auth-ease); }
+.auth-panel-content.panel-forward { --panel-from: 16rpx; }
+@keyframes auth-panel-in { from { opacity: .3; transform: translate3d(var(--panel-from), 0, 0); } to { opacity: 1; transform: none; } }
+.field { position: relative; margin-bottom: 22rpx; background: var(--bg-2); border: 1rpx solid var(--border); border-radius: 20rpx; padding: 20rpx 24rpx; transition: border-color 220ms ease, box-shadow 220ms ease, background-color 220ms ease; animation: auth-field-in 440ms var(--auth-ease) both; }
+.field:nth-child(2) { animation-delay: 35ms; }
+.field:nth-child(3) { animation-delay: 70ms; }
+.field:nth-child(4) { animation-delay: 105ms; }
+.field:nth-child(5) { animation-delay: 140ms; }
+@keyframes auth-field-in { from { opacity: .35; transform: translate3d(0, 10rpx, 0); } to { opacity: 1; transform: none; } }
 .field.focused { border-color: var(--primary); box-shadow: 0 0 0 4rpx var(--primary-soft); background: var(--bg); }
 .field.focused .flabel { color: var(--primary); }
 .flabel { color: var(--text-sub); font-size: 22rpx; display: block; margin-bottom: 10rpx; transition: color 180ms ease; }
@@ -660,21 +712,34 @@ onUnmounted(() => {
 .ck { color: #fff; font-size: 22rpx; animation: auth-check-in 180ms ease-out; }
 .atext { color: var(--text-sub); font-size: 23rpx; flex: 1; line-height: 1.55; }
 .alink { color: var(--primary); }
-.btn-primary { display: flex; align-items: center; justify-content: center; gap: 16rpx; min-height: 96rpx; box-sizing: border-box; background: var(--primary); color: #fff; text-align: center; padding: 27rpx 20rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 650; transition: transform 140ms ease, opacity 180ms ease, background-color 200ms ease, box-shadow 180ms ease; }
-.btn-primary:not(.disabled):not(.busy):not(.succeeded):active { transform: scale(.98); box-shadow: 0 4rpx 18rpx var(--primary-soft); }
-.btn-primary.disabled { opacity: 0.4; }
-.btn-primary.succeeded { background: #158466; }
-.submit-spinner { width: 28rpx; height: 28rpx; border: 3rpx solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: auth-submit-spin 750ms linear infinite; }
-.submit-check { animation: auth-check-in 180ms ease-out; }
+.submit-track { position: relative; min-height: 100rpx; display: flex; align-items: center; justify-content: center; }
+.btn-primary { position: relative; width: 100%; height: 100rpx; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; overflow: hidden; background: var(--primary); color: #fff; text-align: center; border-radius: 22rpx; font-size: 30rpx; font-weight: 650; box-shadow: 0 10rpx 24rpx var(--primary-soft); transition: width 380ms var(--auth-ease), border-radius 380ms var(--auth-ease), transform 160ms var(--auth-spring), opacity 180ms ease, background-color 240ms ease, box-shadow 220ms ease; }
+.btn-primary:not(.disabled):not(.busy):not(.succeeded):active { transform: scale(.97); box-shadow: 0 4rpx 12rpx var(--primary-soft); }
+.btn-primary.disabled { opacity: .45; box-shadow: none; }
+.btn-primary.busy, .btn-primary.succeeded { width: 100rpx; border-radius: 50rpx; }
+.btn-primary.succeeded { background: #158466; box-shadow: 0 8rpx 24rpx rgba(21,132,102,.16); }
+.submit-label { display: block; padding: 0 24rpx; white-space: nowrap; opacity: 1; transform: translateY(0); transition: opacity 120ms ease, transform 180ms ease; }
+.busy .submit-label, .succeeded .submit-label { opacity: 0; transform: translateY(10rpx); }
+.submit-symbol { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.submit-spinner { width: 38rpx; height: 38rpx; box-sizing: border-box; border: 4rpx solid rgba(255,255,255,.28); border-top-color: #fff; border-right-color: #fff; border-radius: 50%; animation: auth-submit-spin 800ms linear infinite; }
+.submit-check { width: 20rpx; height: 36rpx; margin-top: -6rpx; border-right: 4rpx solid #fff; border-bottom: 4rpx solid #fff; transform: rotate(45deg); animation: auth-tick-in 320ms var(--auth-spring) both; }
+.success-ripple { position: absolute; width: 100rpx; height: 100rpx; border: 2rpx solid rgba(21,132,102,.2); border-radius: 50%; pointer-events: none; animation: auth-success-ring 520ms ease-out both; }
+.submit-status { min-height: 32rpx; margin-top: 12rpx; text-align: center; font-size: 23rpx; line-height: 32rpx; color: var(--text-sub); opacity: 0; transform: translateY(6rpx); transition: opacity 180ms ease, transform 240ms var(--auth-ease); }
+.submit-active .submit-status { opacity: 1; transform: none; }
+.auth-success .submit-status { color: #158466; }
 @keyframes auth-submit-spin { to { transform: rotate(360deg); } }
 @keyframes auth-check-in { from { transform: scale(.6); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+@keyframes auth-tick-in { from { opacity: 0; transform: rotate(45deg) scale(.45); } to { opacity: 1; transform: rotate(45deg) scale(1); } }
+@keyframes auth-success-ring { from { transform: scale(.95); opacity: .8; } to { transform: scale(1.65); opacity: 0; } }
 .security-note { display: block; text-align: center; color: var(--text-dim); font-size: 21rpx; margin: 20rpx 0 4rpx; }
-.contact-link { display: block; width: fit-content; margin: 20rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
+.contact-link { display: block; width: fit-content; margin: 6rpx auto 0; padding: 8rpx 0; background: transparent; color: var(--primary); font-size: 24rpx; line-height: 1.5; text-decoration: underline; }
 .contact-link::after { border: 0; }
 @media (prefers-reduced-motion: reduce) {
   .logo-area, .auth-card, .mode-indicator, .mode-item, .method-indicator, .method-item,
-  .auth-panel-frame, .field, .flabel, .eye, .check, .btn-primary { transition: none; }
-  .auth-panel-content, .ck, .submit-spinner, .submit-check { animation: none; }
+  .auth-panel-frame, .field, .flabel, .eye, .check, .btn-primary, .ambient-glow,
+  .submit-label, .submit-status { transition: none; }
+  .auth-ready .brand-emblem, .auth-panel-content, .field, .ck, .submit-spinner, .submit-check, .success-ripple { animation: none; }
+  .success-ripple { display: none; }
   .logo-area, .auth-card { transform: none; }
   .mode-item:active, .method-item:active, .eye:active, .check:active,
   .btn-primary:not(.disabled):not(.busy):not(.succeeded):active { transform: none; }
