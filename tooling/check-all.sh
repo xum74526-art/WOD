@@ -3,6 +3,8 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
+node "$repo_root/tooling/test-braces-security.mjs"
+
 if [ -x "$repo_root/services/api/.venv/bin/python" ]; then
   (cd "$repo_root/services/api" && .venv/bin/python -m compileall -q app init_db.py)
   (cd "$repo_root/services/api" && .venv/bin/python -m unittest discover -s tests -p 'test_*.py')

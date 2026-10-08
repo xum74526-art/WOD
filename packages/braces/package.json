@@ -1,0 +1,28 @@
+{
+  "name": "@kai/braces",
+  "version": "3.0.3-kai.1",
+  "private": true,
+  "description": "Repository-maintained braces 3.0.3 with bounded parser and AST traversal (CVE-2026-93687).",
+  "license": "MIT",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "contributors": [
+    "Brian Woodward (https://twitter.com/doowb)",
+    "Elan Shanker (https://github.com/es128)",
+    "Eugene Sharygin (https://github.com/eush77)",
+    "hemanth.hm (http://h3manth.com)",
+    "Jon Schlinkert (http://twitter.com/jonschlinkert)"
+  ],
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "dependencies": {
+    "fill-range": "7.1.1"
+  }
+}
