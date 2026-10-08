@@ -146,17 +146,31 @@
       <view v-if="canConfigure" class="risk">{{ t(commerce.directTradeEnabled ? (purchaseType === 'holding' ? 'holdingRisk' : 'usageRisk') : 'inquiryRiskHint') }}</view>
     </scroll-view>
     <BottomActionBar v-if="product">
-      <DirectTradeProductCheckout
-        v-if="commerce.directTradeEnabled"
-        :product="product"
-        :hours="hours"
-        :quantity="quantity"
-        :purchase-type="purchaseType"
-        :estimated-rebate="rebateEstimate.amount"
-        :estimated-rebate-rate="rebateEstimate.ratePercent"
-        :disabled="!canBuy"
-        :unavailable-message="purchaseUnavailableText"
-      />
+      <view v-if="commerce.directTradeEnabled" class="checkout-choice-row" :class="{ single: !holdingModeAvailable }">
+        <DirectTradeProductCheckout
+          :product="product"
+          :hours="hours"
+          :quantity="quantity"
+          purchase-type="usage"
+          :estimated-rebate="usageRebateEstimate.amount"
+          :estimated-rebate-rate="usageRebateEstimate.ratePercent"
+          :disabled="!canBuyUsage"
+          :unavailable-message="usagePurchaseUnavailableText"
+          button-variant="primary"
+          @select="purchaseType = 'usage'"
+        />
+        <DirectTradeProductCheckout
+          v-if="holdingModeAvailable"
+          :product="product"
+          :hours="hours"
+          :quantity="quantity"
+          purchase-type="holding"
+          :disabled="!canBuyHolding"
+          :unavailable-message="holdingPurchaseUnavailableText"
+          button-variant="secondary"
+          @select="purchaseType = 'holding'"
+        />
+      </view>
       <view v-else-if="commerce.matchmakingEnabled && product.inquiry_available !== false" class="buy-btn" :class="{ disabled: submitting || !canInquire }" @tap="submitInquiry">{{ t(submitting ? 'submitting' : 'submitRequirement') }}</view>
       <view v-else class="buy-btn disabled">{{ t('operationTemporarilyUnavailable') }}</view>
     </BottomActionBar>
@@ -237,6 +251,19 @@ const rebateEstimate = computed(() => {
     summary.cap_remaining,
   )
 })
+const usageRebateEstimate = computed(() => {
+  const summary = rebateSummary.value
+  if (!summary) return { amount: 0, ratePercent: 0 }
+  return estimateUsageExpiryRebate(
+    orderAmount.value,
+    'usage',
+    summary.rewards_enabled,
+    summary.month_spent,
+    summary.minimum_order_amount,
+    summary.tiers,
+    summary.cap_remaining,
+  )
+})
 const sellerDisplayName = computed(() => {
   const name = product.value?.seller_name || product.value?.supplier_name
   if (isKaiProduct.value && (!name || name === 'KAI 自营')) return t('kaiSelfOperated')
@@ -266,14 +293,18 @@ const maxQuantity = computed(() => {
   }
   return Math.min(remaining, 99)
 })
-const canBuy = computed(() => Boolean(
-  product.value
-  && maxQuantity.value > 0
-  && (
-    product.value.purchasable === true
-    || (purchaseType.value === 'holding' && holdingModeAvailable.value)
-  ),
-))
+function canBuyPurchaseType(type: PurchaseType) {
+  return Boolean(
+    product.value
+    && maxQuantity.value > 0
+    && (
+      product.value.purchasable === true
+      || (type === 'holding' && holdingModeAvailable.value)
+    )
+  )
+}
+const canBuyUsage = computed(() => canBuyPurchaseType('usage'))
+const canBuyHolding = computed(() => canBuyPurchaseType('holding'))
 const canInquire = computed(() => Boolean(
   commerce.matchmakingEnabled
   && product.value
@@ -283,15 +314,18 @@ const canConfigure = computed(() => commerce.directTradeEnabled
   ? Boolean(product.value && maxQuantity.value > 0 && (product.value.purchasable === true || holdingModeAvailable.value))
   : canInquire.value)
 const quantityLimit = computed(() => commerce.directTradeEnabled ? Math.max(maxQuantity.value, 1) : MAX_INQUIRY_QUANTITY)
-const purchaseUnavailableText = computed(() => {
+function purchaseUnavailableMessage(type: PurchaseType) {
   if (!commerce.available) return t('dataUnavailable')
   if (commerce.directTradeEnabled) {
     if (maxQuantity.value <= 0) return t(isKaiProduct.value ? 'kaiAllocationUnavailable' : 'noStockAvailable')
-    if (purchaseType.value === 'holding' && holdingModeAvailable.value) return ''
+    if (type === 'holding' && holdingModeAvailable.value) return ''
     return product.value?.purchase_unavailable_reason ? tr(product.value.purchase_unavailable_reason) : t('marketOfferUnavailableShort')
   }
   return t('inquiryAvailabilityPending')
-})
+}
+const purchaseUnavailableText = computed(() => purchaseUnavailableMessage(purchaseType.value))
+const usagePurchaseUnavailableText = computed(() => purchaseUnavailableMessage('usage'))
+const holdingPurchaseUnavailableText = computed(() => purchaseUnavailableMessage('holding'))
 const sourceName = computed(() => {
   return marketSourceDisplayName(product.value?.market_source || 'wod', t)
 })
@@ -564,6 +598,8 @@ function goStore() {
 .mode-title { color: var(--text); font-size: 28rpx; font-weight: 700; }
 .mode-card.active .mode-title { color: var(--primary); }
 .mode-desc { color: var(--text-sub); font-size: 22rpx; line-height: 1.5; }
+.checkout-choice-row { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; }
+.checkout-choice-row.single { grid-template-columns: minmax(0, 1fr); }
 .fee { padding: 8rpx 32rpx; margin-bottom: 24rpx; }
 .rebate-estimate-note { display: block; color: var(--text-sub); font-size: 21rpx; line-height: 1.55; padding: 0 8rpx 8rpx; }
 .risk { color: var(--text-dim); font-size: 24rpx; padding: 16rpx 8rpx; line-height: 1.6; }

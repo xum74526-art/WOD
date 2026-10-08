@@ -1,6 +1,6 @@
 <template>
   <view class="direct-checkout">
-    <view class="buy-btn" :class="{ disabled: submitting || couponLoading || disabled }" @tap="openConfirm">
+    <view class="buy-btn" :class="[buttonVariant, { disabled: submitting || couponLoading || disabled }]" @tap="openConfirm">
       {{ t(couponLoading ? 'couponLoading' : submitting ? '处理中...' : (disabled ? 'viewDetail' : (purchaseType === 'holding' ? 'buyHolding' : 'k_25575fc0'))) }}
     </view>
     <ConfirmSheet
@@ -67,6 +67,11 @@ const props = defineProps<{
   estimatedRebateRate?: number
   disabled?: boolean
   unavailableMessage?: string
+  buttonVariant?: 'primary' | 'secondary'
+}>()
+
+const emit = defineEmits<{
+  (event: 'select'): void
 }>()
 
 const i18n = useI18nStore()
@@ -108,6 +113,7 @@ function ensureRequestId(): string {
 
 async function openConfirm() {
   if (couponLoading.value) return
+  emit('select')
   if (props.disabled) {
     uni.showToast({ title: props.unavailableMessage || t('marketOfferUnavailableShort'), icon: 'none' })
     return
@@ -167,7 +173,8 @@ async function submitOrder() {
 
 <style scoped>
 .direct-checkout { width: 100%; }
-.buy-btn { width: 100%; height: 88rpx; display: flex; align-items: center; justify-content: center; color: #fff; background: var(--primary); border-radius: var(--radius); font-size: 30rpx; font-weight: 700; }
+.buy-btn { width: 100%; height: 88rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: #fff; background: var(--primary); border: 2rpx solid var(--primary); border-radius: var(--radius); font-size: 28rpx; font-weight: 700; }
+.buy-btn.secondary { color: var(--primary); background: var(--card); }
 .buy-btn.disabled { opacity: 0.45; }
 .confirm-fee { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; color: var(--text-sub); }
 .confirm-value { color: var(--up); font-weight: 700; }
