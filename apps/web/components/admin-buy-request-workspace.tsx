@@ -51,10 +51,12 @@ const statusLabels: Record<string, string> = {
 
 const statusFilterGroups = [
   {
+    translationKey: "admin.buyRequest.statusGroup.platformAction",
     label: "需要平台处理",
     values: ["platform_review", "credential_submitted", "delivery_disputed"],
   },
   {
+    translationKey: "admin.buyRequest.statusGroup.inProgress",
     label: "撮合进行中",
     values: [
       "published",
@@ -68,6 +70,7 @@ const statusFilterGroups = [
     ],
   },
   {
+    translationKey: "admin.buyRequest.statusGroup.closed",
     label: "已结束",
     values: ["completed", "expired", "closed", "rejected"],
   },
@@ -182,7 +185,7 @@ export function AdminBuyRequestWorkspace() {
       <select aria-label="需求类型" value={requestType} onChange={(event) => setRequestType(event.target.value as "" | "online" | "offline")}><option value="">全部类型</option><option value="online">在线算力</option><option value="offline">线下设备</option></select>
       <select aria-label="需求状态" value={status} onChange={(event) => setStatus(event.target.value)}>
         <option value="">全部状态</option>
-        {statusFilterGroups.map((group) => <optgroup key={group.label} label={group.label}>
+        {statusFilterGroups.map((group) => <optgroup key={group.translationKey} label={t(group.translationKey, group.label)}>
           {group.values.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}
         </optgroup>)}
       </select>

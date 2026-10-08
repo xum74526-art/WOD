@@ -1220,7 +1220,7 @@ function LegacyLocaleBridge({ locale, displayCurrency, displayCurrencyConfig }: 
     };
     const translateElement = (element: Element) => {
       if (shouldSkip(element)) return;
-      for (const name of ["placeholder", "title", "aria-label", "aria-description", "alt"]) {
+      for (const name of ["placeholder", "title", "aria-label", "aria-description", "alt", "label"]) {
         const raw = element.getAttribute(name);
         if (!raw) continue;
         const translated = translate(raw);
@@ -1250,7 +1250,7 @@ function LegacyLocaleBridge({ locale, displayCurrency, displayCurrencyConfig }: 
       subtree: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["placeholder", "title", "aria-label", "aria-description", "alt"],
+      attributeFilter: ["placeholder", "title", "aria-label", "aria-description", "alt", "label"],
     });
     return () => observer.disconnect();
   }, [displayCurrency, displayCurrencyConfig, locale]);

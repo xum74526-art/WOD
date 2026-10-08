@@ -62,6 +62,7 @@ test("Web root, global fallback bridge, and language control expose Traditional 
   }
   assert.match(localeRoot, /MutationObserver/);
   assert.match(localeRoot, /"aria-description", "alt"/);
+  assert.match(localeRoot, /"aria-description", "alt", "label"/);
   assert.match(settings, /value: "zh-Hant", label: "繁體中文"/);
   assert.match(settings, /value: "zh-Hans", label: "简体中文"/);
   assert.match(settings, /value: "en", label: "English"/);

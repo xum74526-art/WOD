@@ -92,6 +92,7 @@ test("administrator request filters cover every persisted workflow stage", () =>
   assert.match(filterSource, /需要平台处理/);
   assert.match(filterSource, /撮合进行中/);
   assert.match(filterSource, /已结束/);
+  assert.match(admin, /label=\{t\(group\.translationKey, group\.label\)\}/);
   assert.match(admin, /group\.values\.map\(\(value\) => <option key=\{value\} value=\{value\}>\{statusLabel\(value\)\}<\/option>/);
   assert.match(adminApi, /params\.set\("status", input\.status\.trim\(\)\)/);
 });
