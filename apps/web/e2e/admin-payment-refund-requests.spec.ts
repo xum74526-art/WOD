@@ -68,8 +68,20 @@ test("administrator can inspect and reject a customer recharge refund request", 
   await expect(page.getByText(/前.*件下.*有退款申/)).toBeVisible();
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(hasHorizontalOverflow).toBe(false);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".payment-operation-tabs")).toBeVisible();
-  const hasMobileHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-  expect(hasMobileHorizontalOverflow).toBe(false);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator(".payment-operation-tabs")).toBeVisible();
+    const hasMobileHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasMobileHorizontalOverflow).toBe(false);
+    const header = page.locator(".workspace-mobile-head");
+    await expect(header.locator(".workspace-mobile-menu")).toBeInViewport({ ratio: 1 });
+    await expect(header.locator(".brand")).toBeInViewport({ ratio: 1 });
+    for (const button of await header.locator(".ui-settings").all()) {
+      await expect(button).toBeInViewport({ ratio: 1 });
+    }
+    await header.locator(".ui-settings--language").click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toBeHidden();
+  }
 });
