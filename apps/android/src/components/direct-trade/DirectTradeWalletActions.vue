@@ -69,7 +69,7 @@ import {
   formatNumberInput,
 } from '@/utils/format'
 import { ensureClientRequestIntent } from '@/utils/financial-request-intent'
-import { openPaymentCheckout } from '@/utils/payment-checkout'
+import { openPaymentCheckout, paymentCheckoutFailureCopy } from '@/utils/payment-checkout'
 import {
   DEFAULT_RECHARGE_TTL_SECONDS,
   effectiveRechargeMinimum,
@@ -84,6 +84,9 @@ import {
 import { navigateTo as nav } from '@/utils/nav'
 import { useI18nStore } from '@/store/i18n'
 import { useCommerceStore } from '@/store/commerce'
+import { useUserStore } from '@/store/user'
+import { getToken } from '@/utils/auth'
+import { createPaymentAccountStorage } from '@/utils/payment-account-storage'
 
 const props = defineProps<{
   wallet: WalletInfo | null
@@ -94,6 +97,10 @@ const props = defineProps<{
 const emit = defineEmits<{ paymentStarted: []; paymentReturned: []; walletUpdated: [] }>()
 const { t } = useI18nStore()
 const commerce = useCommerceStore()
+const userStore = useUserStore()
+function paymentStorage() {
+  return createPaymentAccountStorage(uni, () => ({ userId: userStore.userInfo?.id, token: getToken() }))
+}
 const PENDING_PAYMENT_KEY = 'wod-pending-recharge-order'
 const RECHARGE_REQUEST_INTENT_KEY = 'wod-recharge-request-intent'
 const WITHDRAWAL_REQUEST_INTENT_KEY = 'wod-withdrawal-request-intent'
@@ -145,8 +152,19 @@ watch(() => props.openWithdrawal, requested => {
   void openWithdraw()
 }, { immediate: true })
 
+watch(() => [userStore.token, userStore.userInfo?.id], (_current, previous) => {
+  if (!previous[1]) return
+  consumedPrefill.value = false
+  consumedWithdrawalIntent.value = false
+  closeSheet()
+  bankCards.value = []
+  withdrawConfig.value = null
+  cardIndex.value = 0
+  submitting.value = false
+}, { flush: 'sync' })
+
 function currentSession(): StoredRechargeSession | null {
-  return readStoredRechargeSession(uni.getStorageSync(PENDING_PAYMENT_KEY))
+  return readStoredRechargeSession(paymentStorage().getStorageSync(PENDING_PAYMENT_KEY))
 }
 
 function openRecharge(prefill?: RechargePrefill | null) {
@@ -162,7 +180,10 @@ function openRecharge(prefill?: RechargePrefill | null) {
 }
 
 async function openWithdraw() {
+  const storage = paymentStorage()
+  if (!storage.isCurrent()) return
   const [configResult, cardsResult] = await Promise.allSettled([getWithdrawalConfig(), getBankCards()])
+  if (!storage.isCurrent()) return
   if (configResult.status === 'fulfilled') withdrawConfig.value = configResult.value
   if (cardsResult.status === 'fulfilled') {
     bankCards.value = cardsResult.value.filter(card => (
@@ -184,18 +205,20 @@ function closeSheet() { sheet.type = '' }
 function onCardChange(event: { detail: { value: number } }) { cardIndex.value = Number(event.detail.value) || 0 }
 function goBankCards() { closeSheet(); nav('/pages/bank-cards/index') }
 
-function financialRequestId(storageKey: string, fingerprint: string, prefix: string): string {
+function financialRequestId(storageKey: string, fingerprint: string, prefix: string, storage: ReturnType<typeof paymentStorage>): string {
   const generated = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   const intent = ensureClientRequestIntent(
-    uni.getStorageSync(storageKey),
+    storage.getStorageSync(storageKey),
     fingerprint,
     generated,
   )
-  uni.setStorageSync(storageKey, intent)
+  storage.setStorageSync(storageKey, intent)
   return intent.requestId
 }
 
 async function submitRecharge() {
+  const storage = paymentStorage()
+  if (!storage.isCurrent()) return
   const raw = String(sheet.amount || '').trim()
   const rawAmount = Number(raw)
   const amount = Number(rawAmount.toFixed(2))
@@ -225,8 +248,10 @@ async function submitRecharge() {
       RECHARGE_REQUEST_INTENT_KEY,
       `${amount.toFixed(2)}|${sheet.paymentType}`,
       'recharge',
+      storage,
     )
     const payment = await createRechargePayment(amount, sheet.paymentType, requestId)
+    if (!storage.isCurrent()) return
     const checkoutUrl = resolveBackendUrl(payment.checkout_url)
     if (!checkoutUrl) throw new Error('invalid checkout url')
     const session: StoredRechargeSession = {
@@ -238,21 +263,27 @@ async function submitRecharge() {
       amountCny: amount,
       paymentType: sheet.paymentType,
     }
-    uni.setStorageSync(PENDING_PAYMENT_KEY, session)
-    uni.removeStorageSync(RECHARGE_REQUEST_INTENT_KEY)
+    storage.setStorageSync(PENDING_PAYMENT_KEY, session)
+    storage.removeStorageSync(RECHARGE_REQUEST_INTENT_KEY)
     closeSheet()
     emit('paymentStarted')
     openPaymentCheckout(
       checkoutUrl,
-      () => uni.showToast({ title: t('paymentStartFailed'), icon: 'none' }),
-      () => emit('paymentReturned'),
+      failure => {
+        if (!storage.isCurrent()) return
+        const copy = paymentCheckoutFailureCopy(failure)
+        uni.showModal({ title: t(copy.title), content: t(copy.message), showCancel: false, confirmText: t('understood') })
+      },
+      () => { if (storage.isCurrent()) emit('paymentReturned') },
     )
   } finally {
-    submitting.value = false
+    if (storage.isCurrent()) submitting.value = false
   }
 }
 
 async function submitWithdrawal() {
+  const storage = paymentStorage()
+  if (!storage.isCurrent()) return
   const raw = String(sheet.amount || '').trim()
   const rawAmount = Number(raw)
   const amount = Number(rawAmount.toFixed(3))
@@ -272,19 +303,21 @@ async function submitWithdrawal() {
       WITHDRAWAL_REQUEST_INTENT_KEY,
       `${amount.toFixed(6)}|${card.id}`,
       'withdraw',
+      storage,
     )
     const order = await createWithdrawal({
       amount_card_hours: amount,
       bank_card_id: card.id,
       client_request_id: requestId,
     })
-    uni.removeStorageSync(WITHDRAWAL_REQUEST_INTENT_KEY)
+    if (!storage.isCurrent()) return
+    storage.removeStorageSync(WITHDRAWAL_REQUEST_INTENT_KEY)
     closeSheet()
     emit('walletUpdated')
     uni.showToast({ title: t('withdrawalSubmitted'), icon: 'success' })
     nav(`/pages/withdrawals/detail?id=${order.id}`)
   } finally {
-    submitting.value = false
+    if (storage.isCurrent()) submitting.value = false
   }
 }
 </script>

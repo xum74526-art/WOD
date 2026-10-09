@@ -5,7 +5,7 @@
     "locale" : "zh-Hant",
     "vueVersion" : "3",
     "versionName" : "1.2.4",
-    "versionCode" : "128",
+    "versionCode" : "130",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
@@ -48,6 +48,7 @@
                 "devices" : "iphone",
                 "dSYMs" : false,
                 "urltypes" : "kai",
+                "urlschemewhitelist" : "alipays,alipay,weixin",
                 "privacyDescription" : {
                     "NSPhotoLibraryUsageDescription" : "用于选择头像或身份认证资料。",
                     "NSCameraUsageDescription" : "用于拍摄头像或身份认证资料。"

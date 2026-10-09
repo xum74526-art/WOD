@@ -3,6 +3,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, Bank, CheckCircle, ClockCountdown, Coins, LockKey, Receipt, WarningCircle } from "@phosphor-icons/react";
 import { errorMessage } from "@/lib/commerce-ui";
+import { ApiError } from "@/lib/api";
+import { useAuthenticatedAccount } from "@/lib/authenticated-account";
+import { createPaymentAccountStorage, type PaymentAccountStorage } from "@/lib/payment-account-storage";
 import {
   canPrepareRechargeRestart,
   isRegisteredBankCardStatus,
@@ -44,9 +47,6 @@ const RECHARGE_INTENT_KEY = "wod-web-recharge-request-intent";
 const WITHDRAWAL_INTENT_KEY = "wod-web-withdrawal-request-intent";
 const REFUND_REQUEST_INTENT_KEY_PREFIX = "wod-web-refund-request-intent";
 type PendingRechargeSession = { order_no?: string; checkout_url?: string | null; expires_at?: string | null };
-function requestIntentStorage() {
-  try { return window.sessionStorage; } catch { return null; }
-}
 
 function paymentLabel(order?: RechargePaymentOrder | null) {
   return rechargeUiLabel(order);
@@ -62,6 +62,21 @@ function paymentQueryNotice(order: RechargePaymentOrder) {
 }
 
 export function PaymentWorkspace() {
+  const userId = useAuthenticatedAccount();
+  const sequence = useRef(0);
+  const [account, setAccount] = useState<{ userId: number; sequence: number; storage: PaymentAccountStorage } | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    const storage = createPaymentAccountStorage(userId);
+    setAccount({ userId, sequence: ++sequence.current, storage });
+    return () => storage.dispose();
+  }, [userId]);
+  if (!account || account.userId !== userId) return null;
+  return <AccountPaymentWorkspace key={`${userId}:${account.sequence}`} account={account.storage} />;
+}
+
+function AccountPaymentWorkspace({ account }: { account: PaymentAccountStorage }) {
+  function requestIntentStorage() { return account.session; }
   const { displayCurrency, formatLedgerMoney } = useI18n();
   const { capabilities } = usePlatformCapabilities();
   const directTradeEnabled = capabilities.direct_trade_enabled === true;
@@ -106,6 +121,7 @@ export function PaymentWorkspace() {
   const rechargeFormRef = useRef<HTMLFormElement>(null);
 
   const load = useCallback(async () => {
+    if (!account.isCurrent()) return;
     setError("");
     const [walletResult, ledgerResult, paymentResult, rechargeOrderResult, refundRequestResult, withdrawalResult] = await Promise.allSettled([
       getMobileWallet(),
@@ -115,6 +131,7 @@ export function PaymentWorkspace() {
       listRechargeRefundRequests({ page: refundRequestPage, page_size: 20, status: refundRequestStatus }),
       getWithdrawalBundle({ page: withdrawalPage, page_size: 20, status_filter: withdrawalStatus }),
     ]);
+    if (!account.isCurrent()) return;
     if (walletResult.status === "fulfilled") setWallet(walletResult.value);
     if (ledgerResult.status === "fulfilled") setLedger(ledgerResult.value.items || []);
     if (paymentResult.status === "fulfilled") {
@@ -147,33 +164,42 @@ export function PaymentWorkspace() {
     }
     const failed = [walletResult, ledgerResult, paymentResult, rechargeOrderResult, refundRequestResult, withdrawalResult].find((result) => result.status === "rejected");
     if (failed?.status === "rejected") setError(errorMessage(failed.reason));
-  }, [rechargeOrderNo, rechargePage, rechargeStatus, refundRequestPage, refundRequestStatus, withdrawalPage, withdrawalStatus]);
+  }, [account, rechargeOrderNo, rechargePage, rechargeStatus, refundRequestPage, refundRequestStatus, withdrawalPage, withdrawalStatus]);
 
   const refreshPayment = useCallback(async (showError = false) => {
+    if (!account.isCurrent()) return;
     let stored: PendingRechargeSession | null = null;
-    try { stored = JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || "null") as PendingRechargeSession | null; } catch { localStorage.removeItem(PENDING_PAYMENT_KEY); }
+    try { stored = JSON.parse(account.local.getItem(PENDING_PAYMENT_KEY) || "null") as PendingRechargeSession | null; } catch { account.local.removeItem(PENDING_PAYMENT_KEY); }
     const orderNo = stored?.order_no;
     if (!orderNo || checkingPayment.current) return;
     checkingPayment.current = true; setPaymentChecking(true);
     if (showError) { setError(""); setMessage(""); }
     try {
       let order = await getRechargePayment(orderNo);
+      if (!account.isCurrent()) return;
       let providerQueryFailed = false;
       if (rechargeBlocksNewOrder(order) && rechargeCanQuery(order)) {
         try { order = await queryRechargePayment(orderNo); }
         catch (reason) {
+          if (!account.isCurrent()) return;
           providerQueryFailed = true;
           if (showError) setError(`暂时无法查询支付平台：${errorMessage(reason)}`);
         }
       }
+      if (!account.isCurrent()) return;
       setPendingPayment(order);
       setRechargeOrders((rows) => rows.map((row) => row.order_no === order.order_no ? order : row));
-      localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ ...stored, order_no: order.order_no, checkout_url: order.checkout_url || stored?.checkout_url, expires_at: order.expires_at }));
+      account.local.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ ...stored, order_no: order.order_no, checkout_url: order.checkout_url || stored?.checkout_url, expires_at: order.expires_at }));
       if (showError && !providerQueryFailed) setMessage(paymentQueryNotice(order));
       if (order.credited_at) await load();
-    } catch (reason) { if (showError) setError(errorMessage(reason)); }
-    finally { checkingPayment.current = false; setPaymentChecking(false); }
-  }, [load]);
+    } catch (reason) {
+      if (!account.isCurrent()) return;
+      if (reason instanceof ApiError && (reason.status === 403 || reason.status === 404)) {
+        account.local.removeItem(PENDING_PAYMENT_KEY);
+        setPendingPayment(null);
+      } else if (showError) setError(errorMessage(reason));
+    } finally { if (account.isCurrent()) { checkingPayment.current = false; setPaymentChecking(false); } }
+  }, [account, load]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void refreshPayment(false); }, [refreshPayment]);
@@ -201,6 +227,7 @@ export function PaymentWorkspace() {
 
   async function submitRecharge(event: FormEvent) {
     event.preventDefault();
+    if (!account.isCurrent()) return;
     if (creatingRecharge.current) return;
     const raw = recharge.amount.trim();
     const value = Number(raw);
@@ -229,6 +256,7 @@ export function PaymentWorkspace() {
       rechargeIntent.current = intent;
       if (storage) saveClientRequestIntent(storage, RECHARGE_INTENT_KEY, intent);
       const order = await createRechargePayment(normalizedValue, recharge.payment_type, intent.requestId);
+      if (!account.isCurrent()) return;
       rechargeIntent.current = null;
       if (storage) clearClientRequestIntent(storage, RECHARGE_INTENT_KEY);
       setPendingPayment(order);
@@ -236,7 +264,7 @@ export function PaymentWorkspace() {
       setRechargeTotal((total) => total + 1);
       setRechargePage(1);
       setRechargeStatus(""); setRechargeSearchInput(""); setRechargeOrderNo("");
-      localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ order_no: order.order_no, checkout_url: order.checkout_url, expires_at: order.expires_at }));
+      account.local.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ order_no: order.order_no, checkout_url: order.checkout_url, expires_at: order.expires_at }));
       if (order.checkout_url) {
         const href = qixiangCheckoutHref(order.checkout_url, window.location.origin);
         if (!href) {
@@ -245,11 +273,12 @@ export function PaymentWorkspace() {
         }
         window.location.assign(href);
       } else await load();
-    } catch (reason) { setError(errorMessage(reason)); } finally { creatingRecharge.current = false; setBusy(""); }
+    } catch (reason) { if (account.isCurrent()) setError(errorMessage(reason)); } finally { if (account.isCurrent()) { creatingRecharge.current = false; setBusy(""); } }
   }
 
   async function submitWithdrawal(event: FormEvent) {
     event.preventDefault();
+    if (!account.isCurrent()) return;
     if (creatingWithdrawal.current) return;
     const raw = withdrawal.amount.trim();
     const value = Number(raw);
@@ -273,33 +302,38 @@ export function PaymentWorkspace() {
       withdrawalIntent.current = intent;
       if (storage) saveClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY, intent);
       await createWithdrawal({ amount_card_hours: normalizedValue, bank_card_id: card.id, client_request_id: intent.requestId });
+      if (!account.isCurrent()) return;
       withdrawalIntent.current = null;
       if (storage) clearClientRequestIntent(storage, WITHDRAWAL_INTENT_KEY);
       setWithdrawal((current) => ({ ...current, amount: "" }));
       setWithdrawalPage(1); setWithdrawalStatus(""); setTab("withdrawals"); await load();
-    } catch (reason) { setError(errorMessage(reason)); } finally { creatingWithdrawal.current = false; setBusy(""); }
+    } catch (reason) { if (account.isCurrent()) setError(errorMessage(reason)); } finally { if (account.isCurrent()) { creatingWithdrawal.current = false; setBusy(""); } }
   }
 
   async function cancel(id: number) {
+    if (!account.isCurrent()) return;
     if (!window.confirm("确定取消这笔提现申请？")) return;
     setBusy(`cancel-${id}`); setError("");
-    try { await cancelWithdrawal(id); await load(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(""); }
+    try { await cancelWithdrawal(id); await load(); } catch (reason) { if (account.isCurrent()) setError(errorMessage(reason)); } finally { if (account.isCurrent()) setBusy(""); }
   }
 
   async function refreshRechargeOrder(row: RechargePaymentOrder) {
+    if (!account.isCurrent()) return;
     if (!rechargeCanQuery(row)) return;
     setBusy(`recharge-query-${row.order_no}`); setError(""); setMessage("");
     try {
       const order = await queryRechargePayment(row.order_no);
+      if (!account.isCurrent()) return;
       if (pendingPayment?.order_no === order.order_no) setPendingPayment(order);
       setRechargeOrders((rows) => rows.map((item) => item.order_no === order.order_no ? order : item));
       setMessage(paymentQueryNotice(order));
       if (order.credited_at) await load();
-    } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    } catch (reason) { if (account.isCurrent()) setError(errorMessage(reason)); }
+    finally { if (account.isCurrent()) setBusy(""); }
   }
 
   async function cancelRechargeOrder(row: RechargePaymentOrder) {
+    if (!account.isCurrent()) return;
     if (!rechargeCanCancel(row)) {
       setMessage("七相支付没有主动关闭订单接口。支付时限内不能安全取消，请在倒计时结束并查询确认未支付后再取消。");
       return;
@@ -308,25 +342,27 @@ export function PaymentWorkspace() {
     setBusy(`recharge-cancel-${row.order_no}`); setError(""); setMessage("");
     try {
       const order = await cancelRechargePayment(row.order_no);
+      if (!account.isCurrent()) return;
       setRechargeOrders((rows) => rows.map((item) => item.order_no === order.order_no ? order : item));
       if (pendingPayment?.order_no === order.order_no) {
         setPendingPayment(order);
-        localStorage.removeItem(PENDING_PAYMENT_KEY);
+        account.local.removeItem(PENDING_PAYMENT_KEY);
       }
       setMessage(`充值订单 ${order.order_no} 已取消，可以选择“再来一单”。`);
-    } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(""); }
+    } catch (reason) { if (account.isCurrent()) setError(errorMessage(reason)); }
+    finally { if (account.isCurrent()) setBusy(""); }
   }
 
   function restartRecharge(row: RechargePaymentOrder) {
+    if (!account.isCurrent()) return;
     let storedOrderNo = "";
     try {
-      const stored = JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || "null") as PendingRechargeSession | null;
+      const stored = JSON.parse(account.local.getItem(PENDING_PAYMENT_KEY) || "null") as PendingRechargeSession | null;
       storedOrderNo = String(stored?.order_no || "");
     } catch {
       // A malformed value cannot identify a valid live checkout; remove only
       // that unreadable value before preparing a terminal-order restart.
-      localStorage.removeItem(PENDING_PAYMENT_KEY);
+      account.local.removeItem(PENDING_PAYMENT_KEY);
     }
     if (!canPrepareRechargeRestart(pendingPayment, storedOrderNo, row.order_no)) {
       setError("");
@@ -335,7 +371,7 @@ export function PaymentWorkspace() {
     }
     const paymentType = row.channel === "wxpay" ? "wxpay" : "alipay";
     setRecharge({ amount: Number(row.amount_cny).toFixed(2), payment_type: paymentType });
-    localStorage.removeItem(PENDING_PAYMENT_KEY);
+    account.local.removeItem(PENDING_PAYMENT_KEY);
     if (pendingPayment?.order_no === row.order_no) setPendingPayment(null);
     setError("");
     setMessage(`已带入上一单的 ${formatCnySettlement(row.amount_cny)} 和${paymentType === "wxpay" ? "微信支付" : "支付宝"}，确认后即可重新下单。`);
@@ -343,11 +379,13 @@ export function PaymentWorkspace() {
   }
 
   async function replaceRechargeAmount() {
+    if (!account.isCurrent()) return;
     if (!pendingPayment || busy || checkingPayment.current) return;
     checkingPayment.current = true;
     setBusy("payment-replace"); setError(""); setMessage("");
     try {
       const order = await queryRechargePayment(pendingPayment.order_no);
+      if (!account.isCurrent()) return;
       setPendingPayment(order);
       setRechargeOrders((rows) => rows.map((row) => row.order_no === order.order_no ? order : row));
       if (rechargeUiState(order) !== "pending") {
@@ -355,18 +393,19 @@ export function PaymentWorkspace() {
         return;
       }
       if (!window.confirm(`当前 ${formatCnySettlement(order.amount_cny)} 订单不会被支付平台立即关闭，仍会保留在充值订单中，并可能继续被支付。\n\n请不要再支付旧订单。确认后仅放弃本机支付会话并重新填写金额。`)) return;
-      localStorage.removeItem(PENDING_PAYMENT_KEY);
+      account.local.removeItem(PENDING_PAYMENT_KEY);
       setPendingPayment(null);
       setMessage(`已放弃订单 ${order.order_no} 的本机支付会话，原订单仍保留在充值记录中。请填写正确金额。`);
       window.requestAnimationFrame(() => rechargeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
     } catch (reason) {
-      setError(`暂时无法查询支付平台，未更换金额：${errorMessage(reason)}`);
-    } finally { checkingPayment.current = false; setBusy(""); }
+      if (account.isCurrent()) setError(`暂时无法查询支付平台，未更换金额：${errorMessage(reason)}`);
+    } finally { if (account.isCurrent()) { checkingPayment.current = false; setBusy(""); } }
   }
 
   function continueCheckout() {
+    if (!account.isCurrent()) return;
     try {
-      const stored = JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || "null") as { checkout_url?: string } | null;
+      const stored = JSON.parse(account.local.getItem(PENDING_PAYMENT_KEY) || "null") as { checkout_url?: string } | null;
       if (stored?.checkout_url) {
         const href = qixiangCheckoutHref(stored.checkout_url, window.location.origin);
         if (!href) {
@@ -375,10 +414,10 @@ export function PaymentWorkspace() {
         }
         window.location.assign(href);
       }
-    } catch { localStorage.removeItem(PENDING_PAYMENT_KEY); }
+    } catch { account.local.removeItem(PENDING_PAYMENT_KEY); }
   }
 
-  function dismissPayment() { localStorage.removeItem(PENDING_PAYMENT_KEY); setPendingPayment(null); }
+  function dismissPayment() { account.local.removeItem(PENDING_PAYMENT_KEY); setPendingPayment(null); }
 
   function applyRechargeSearch(event: FormEvent) {
     event.preventDefault();
@@ -396,6 +435,7 @@ export function PaymentWorkspace() {
 
   async function submitRefundRequest(event: FormEvent) {
     event.preventDefault();
+    if (!account.isCurrent()) return;
     if (!refundFormOrder || busy === "refund-request") return;
     const reason = refundReason.trim().replace(/\s+/g, " ");
     if (reason.length < 5 || reason.length > 500) {
@@ -418,20 +458,23 @@ export function PaymentWorkspace() {
         client_request_id: intent.requestId,
         reason,
       });
+      if (!account.isCurrent()) return;
       refundRequestIntent.current = null;
       if (storage) clearClientRequestIntent(storage, intentKey);
       setRefundFormOrder(null); setRefundReason(""); setRefundRequestPage(1); setRefundRequestStatus(""); setTab("refundRequests");
       try {
         const pageResult = await listRechargeRefundRequests({ page: 1, page_size: 20 });
+        if (!account.isCurrent()) return;
         setRefundRequests(pageResult.items || [created]);
         setRefundRequestTotal(pageResult.total || 1);
       } catch {
+        if (!account.isCurrent()) return;
         setRefundRequests((rows) => [created, ...rows.filter((row) => row.id !== created.id)].slice(0, 20));
         setRefundRequestTotal((total) => Math.max(1, total));
       }
       setMessage(`退款申请 ${created.request_no} 已提交，平台审核前不会直接扣减或退回资金。`);
-    } catch (reasonValue) { setError(errorMessage(reasonValue)); }
-    finally { setBusy(""); }
+    } catch (reasonValue) { if (account.isCurrent()) setError(errorMessage(reasonValue)); }
+    finally { if (account.isCurrent()) setBusy(""); }
   }
 
   const pendingState = rechargeUiState(pendingPayment);

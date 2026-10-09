@@ -535,9 +535,9 @@ test("Web wallet keeps safe history actions and capability-gates future money mo
   assert.match(rendered, /申请提现/);
 
   const replaceFlow = wallet.slice(wallet.indexOf("async function replaceRechargeAmount"), wallet.indexOf("function continueCheckout"));
-  assert.ok(replaceFlow.indexOf("queryRechargePayment") < replaceFlow.indexOf("localStorage.removeItem"));
+  assert.ok(replaceFlow.indexOf("queryRechargePayment") < replaceFlow.indexOf("account.local.removeItem"));
   const failedQueryBranch = replaceFlow.slice(replaceFlow.indexOf("catch (reason)"), replaceFlow.indexOf("finally"));
-  assert.doesNotMatch(failedQueryBranch, /localStorage\.removeItem|setPendingPayment\(null\)/);
+  assert.doesNotMatch(failedQueryBranch, /account\.local\.removeItem|setPendingPayment\(null\)/);
 });
 
 test("Web matchmaking selection requests platform coordination without creating a financial order", () => {

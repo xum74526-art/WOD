@@ -135,10 +135,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { cancelRechargePayment, getRechargePayment, getWallet, queryRechargePayment, type RechargePaymentOrder, type WalletInfo } from '@/api/wallet'
 import { useAssetStore } from '@/store/asset'
+import { useUserStore } from '@/store/user'
+import { getToken } from '@/utils/auth'
+import { createPaymentAccountStorage } from '@/utils/payment-account-storage'
+import { ApiRequestError } from '@/api/request'
 import { formatCardHourCurrency, formatDisplayReference, formatNumber, formatSettlementCny } from '@/utils/format'
 import AppNavBar from '@/components/AppNavBar.vue'
 import AmountText from '@/components/AmountText.vue'
@@ -167,6 +171,11 @@ const i18n = useI18nStore()
 const { t } = i18n
 const assetStore = useAssetStore()
 const commerce = useCommerceStore()
+const userStore = useUserStore()
+function paymentStorage() {
+  return createPaymentAccountStorage(uni, () => ({ userId: userStore.userInfo?.id, token: getToken() }))
+}
+let sessionStorage: ReturnType<typeof paymentStorage> | null = null
 const wallet = ref<WalletInfo | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
@@ -252,6 +261,30 @@ const canDismissPaymentState = computed(() => (
 ))
 let resumePromise: Promise<void> | null = null
 
+watch(() => [userStore.token, userStore.userInfo?.id], (_current, previous) => {
+  // Cached pages can survive a login change. Drop all account-owned UI and
+  // polling state before any response from the old session can arrive.
+  stopPaymentTracking()
+  wallet.value = null
+  pendingPayment.value = null
+  paymentSession.value = null
+  sessionStorage = null
+  paymentDeadlineMs.value = null
+  countdownRemainingMs.value = null
+  expiryRefreshOrderNo = ''
+  checkingStatus.value = false
+  cancelingPayment.value = false
+  paymentReturnRefreshQueued = false
+  if (previous[1]) {
+    directRechargePrefill.value = null
+    directWithdrawRequested.value = false
+  }
+  loadError.value = false
+  loading.value = true
+  resumePromise = null
+  if (pageActive) void resumePage()
+}, { flush: 'sync' })
+
 onLoad(query => {
   directRechargePrefill.value = readRechargePrefillQuery(query)
   directWithdrawRequested.value = String(query?.withdraw || '') === '1'
@@ -291,17 +324,21 @@ onUnmounted(() => {
 })
 
 async function resumePage() {
+  const storage = paymentStorage()
+  if (!storage.isCurrent()) return
   if (resumePromise) return resumePromise
-  resumePromise = (async () => {
+  const pending = (async () => {
     hydratePaymentSession()
     await fetchWallet()
+    if (!storage.isCurrent()) return
     await refreshPendingPayment(true, true)
-    startPaymentTracking()
+    if (storage.isCurrent()) startPaymentTracking()
   })()
+  resumePromise = pending
   try {
-    await resumePromise
+    await pending
   } finally {
-    resumePromise = null
+    if (resumePromise === pending) resumePromise = null
   }
 }
 
@@ -322,14 +359,17 @@ function handleBrowserPageShow() {
 }
 
 async function fetchWallet() {
+  const storage = paymentStorage()
+  if (!storage.isCurrent()) return
   loading.value = true
   loadError.value = false
   try {
-    wallet.value = await getWallet()
+    const result = await getWallet()
+    if (storage.isCurrent()) wallet.value = result
   } catch {
-    loadError.value = true
+    if (storage.isCurrent()) loadError.value = true
   } finally {
-    loading.value = false
+    if (storage.isCurrent()) loading.value = false
   }
 }
 
@@ -354,10 +394,12 @@ function handleDirectWalletUpdated() {
 }
 
 function hydratePaymentSession() {
-  if (paymentSession.value) return
-  const stored = readStoredRechargeSession(uni.getStorageSync(PENDING_PAYMENT_KEY))
+  if (paymentSession.value && sessionStorage?.isCurrent()) return
+  sessionStorage = paymentStorage()
+  if (!sessionStorage.isCurrent()) return
+  const stored = readStoredRechargeSession(sessionStorage.getStorageSync(PENDING_PAYMENT_KEY))
   if (!stored) {
-    uni.removeStorageSync(PENDING_PAYMENT_KEY)
+    sessionStorage.removeStorageSync(PENDING_PAYMENT_KEY)
     return
   }
   paymentSession.value = stored
@@ -366,7 +408,7 @@ function hydratePaymentSession() {
 
 function savePaymentSession() {
   if (!paymentSession.value) return
-  uni.setStorageSync(PENDING_PAYMENT_KEY, paymentSession.value)
+  sessionStorage?.setStorageSync(PENDING_PAYMENT_KEY, paymentSession.value)
 }
 
 function clearPaymentSession() {
@@ -376,7 +418,7 @@ function clearPaymentSession() {
   paymentDeadlineMs.value = null
   countdownRemainingMs.value = null
   expiryRefreshOrderNo = ''
-  uni.removeStorageSync(PENDING_PAYMENT_KEY)
+  sessionStorage?.removeStorageSync(PENDING_PAYMENT_KEY)
 }
 
 function applyPayment(payment: RechargePaymentOrder) {
@@ -440,10 +482,13 @@ function startPaymentTracking() {
 async function refreshPendingPayment(silent = true, queryProvider = true) {
   hydratePaymentSession()
   const orderNo = paymentSession.value?.orderNo || ''
-  if (!orderNo || checkingStatus.value) return
+  const storage = sessionStorage
+  if (!orderNo || !storage?.isCurrent() || checkingStatus.value) return
+  const isCurrentPayment = () => storage.isCurrent() && paymentSession.value?.orderNo === orderNo
   checkingStatus.value = true
   try {
     let payment = await getRechargePayment(orderNo, silent)
+    if (!isCurrentPayment()) return
     applyPayment(payment)
     if (clearCanceledCurrentPayment(payment)) return
     const stateBeforeQuery = paymentCardState.value
@@ -456,6 +501,7 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
       } catch {
         // A pending order is a normal provider response, not a frontend error.
       }
+      if (!isCurrentPayment()) return
       applyPayment(payment)
       if (clearCanceledCurrentPayment(payment)) return
     }
@@ -466,6 +512,7 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
       paymentSession.value.successNotified = true
       savePaymentSession()
       await Promise.allSettled([fetchWallet(), assetStore.refresh()])
+      if (!isCurrentPayment()) return
       uni.showToast({ title: t('rechargeSuccess'), icon: 'success' })
     }
 
@@ -483,14 +530,21 @@ async function refreshPendingPayment(silent = true, queryProvider = true) {
           : 'paymentNotCompleted'
       uni.showToast({ title: t(message), icon: 'none' })
     }
-  } catch {
-    if (!silent) uni.showToast({ title: t('paymentStatusUnavailable'), icon: 'none' })
+  } catch (error) {
+    if (!isCurrentPayment()) return
+    // A forbidden/missing order cannot be recovered by this account. Remove
+    // only its local pointer; transient network failures retain retry state.
+    if (error instanceof ApiRequestError && (error.statusCode === 404 || error.statusCode === 403)) {
+      clearPaymentSession()
+    } else if (!silent) uni.showToast({ title: t('paymentStatusUnavailable'), icon: 'none' })
   } finally {
-    checkingStatus.value = false
-    startPaymentTracking()
-    if (paymentReturnRefreshQueued) {
-      paymentReturnRefreshQueued = false
-      void refreshPendingPayment(false, true)
+    if (storage.isCurrent()) {
+      checkingStatus.value = false
+      startPaymentTracking()
+      if (paymentReturnRefreshQueued) {
+        paymentReturnRefreshQueued = false
+        void refreshPendingPayment(false, true)
+      }
     }
   }
 }
@@ -524,12 +578,15 @@ async function requestCancelPayment() {
     uni.showToast({ title: t('rechargeCancelNotAllowed'), icon: 'none' })
     return
   }
-  if (!await confirmCancelPayment()) return
+  const storage = sessionStorage
+  const orderNo = paymentSession.value.orderNo
+  if (!storage?.isCurrent() || !await confirmCancelPayment() || !storage.isCurrent()) return
 
   cancelingPayment.value = true
   stopPaymentTracking()
   try {
-    const payment = await cancelRechargePayment(paymentSession.value.orderNo, true)
+    const payment = await cancelRechargePayment(orderNo, true)
+    if (!storage.isCurrent()) return
     if (clearCanceledCurrentPayment(payment)) {
       uni.showToast({ title: t('rechargeOrderCanceled'), icon: 'success' })
       return
@@ -538,10 +595,12 @@ async function requestCancelPayment() {
     uni.showToast({ title: t('rechargeCancelNotAllowed'), icon: 'none' })
   } catch {
     // Preserve both the order number and server state so the user can retry.
-    uni.showToast({ title: t('rechargeCancelFailed'), icon: 'none' })
+    if (storage.isCurrent()) uni.showToast({ title: t('rechargeCancelFailed'), icon: 'none' })
   } finally {
-    cancelingPayment.value = false
-    startPaymentTracking()
+    if (storage.isCurrent()) {
+      cancelingPayment.value = false
+      startPaymentTracking()
+    }
   }
 }
 

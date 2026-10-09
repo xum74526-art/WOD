@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { CLIENT_PLATFORM } from '../src/utils/client-platform.ts'
+import { isPaymentAppUrl } from '../src/utils/payment-checkout.ts'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(resolve(appRoot, 'src/manifest.json'), 'utf8'))
@@ -20,7 +21,7 @@ test('native package identity and icon paths use the KAI星算 Vue 3 source tree
   assert.equal(manifest.description, '算力资源撮合平台 App')
   assert.equal(manifest.h5.title, 'KAI星算')
   assert.equal(manifest.versionName, '1.2.4')
-  assert.equal(manifest.versionCode, '128')
+  assert.equal(manifest.versionCode, '130')
   assert.equal(manifest.vueVersion, '3')
   assert.equal(manifest.appid, '__UNI__47CF9D3')
 
@@ -40,6 +41,18 @@ test('native package identity and icon paths use the KAI星算 Vue 3 source tree
 
 test('native transport refuses untrusted TLS certificates', () => {
   assert.deepEqual(manifest['app-plus'].ssl, { untrustedca: 'refuse' })
+})
+
+test('iOS permits querying every wallet scheme that checkout hands to the native runtime', () => {
+  const configured = manifest['app-plus'].distribute.ios.urlschemewhitelist
+  const schemes = typeof configured === 'string' ? configured.split(',') : (configured || [])
+  // Build 129 omitted Alipay. Its native runtime calls canOpenURL before openURL,
+  // which fails for undeclared schemes even when the wallet app is installed.
+  for (const url of ['alipays://platformapi/startapp', 'alipay://platformapi/startapp', 'weixin://wap/pay']) {
+    assert.equal(isPaymentAppUrl(url), true)
+    assert.ok(schemes.includes(url.split(':')[0]), `iOS query whitelist must cover ${url.split(':')[0]}`)
+  }
+  assert.ok(schemes.length <= 50)
 })
 
 test('login, registration and the native icon present the KAI星算 brand', () => {

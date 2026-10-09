@@ -2,6 +2,8 @@
  * Web requests stay on the Next.js origin. The server-side BFF forwards them
  * to the canonical KAI API without exposing its JWT to browser code.
  */
+import { clearPaymentAccountStorage } from "./payment-account-storage.ts";
+
 export const apiBaseUrl = "";
 
 export type ApiErrorBody = {
@@ -394,6 +396,7 @@ export function getCurrentUser(force = false) {
 }
 
 export function logoutCurrentUser() {
+  clearPaymentAccountStorage();
   currentUserCache = null;
   currentUserFailure = null;
   return apiRequest<{ logged_out: boolean; session_revoked: boolean }>("/api/v1/auth/logout", { method: "POST" });

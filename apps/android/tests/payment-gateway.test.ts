@@ -25,14 +25,14 @@ test('recharge history supports server-authorized query and cancellation', () =>
 
 test('wallet keeps historical query and cancellation without opening a new recharge', () => {
   assert.match(walletPage, /queryRechargePayment\(orderNo, true\)/)
-  assert.match(walletPage, /cancelRechargePayment\(paymentSession\.value\.orderNo, true\)/)
+  assert.match(walletPage, /cancelRechargePayment\(orderNo, true\)/)
   assert.doesNotMatch(walletPage, /createRechargePayment|requestReplaceRecharge|handleRestartRecharge|continueCurrentPayment/)
   assert.doesNotMatch(rechargeOrdersPage, /restartOrder|restartRecharge|createRechargeRestartRoute/)
 })
 
 test('native payment return closes only on the dedicated HTTPS route and triggers server verification', () => {
   assert.match(checkout, /QIXIANGPAY_RETURN_URL = 'https:\/\/wod\.kai\.com\/payment\/qixiang\/return'/)
-  assert.match(walletActions, /\(\) => emit\('paymentReturned'\)/)
+  assert.match(walletActions, /\(\) => \{ if \(storage\.isCurrent\(\)\) emit\('paymentReturned'\) \}/)
   assert.match(walletPage, /@payment-returned="handleDirectPaymentReturned"/)
   assert.match(walletPage, /handleDirectPaymentReturned\(\)[\s\S]*?refreshPendingPayment\(false, true\)/)
   assert.match(walletPage, /server-authoritative/)

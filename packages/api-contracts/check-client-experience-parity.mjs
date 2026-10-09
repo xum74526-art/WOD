@@ -608,7 +608,8 @@ const commonCapabilities = [
             'isRegisteredBankCardStatus(card.status) && card.consent_recorded',
             'createWithdrawal({',
             'client_request_id: requestId',
-            "() => emit('paymentReturned')",
+            "if (storage.isCurrent()) emit('paymentReturned')",
+            'paymentCheckoutFailureCopy(failure)',
           ],
         },
         {
@@ -630,6 +631,38 @@ const commonCapabilities = [
             'payment = await queryRechargePayment(orderNo, true)',
             'server-authoritative',
           ],
+        },
+      ]),
+    ],
+  },
+  {
+    name: 'account-isolated payment recovery and request intents',
+    evidence: [
+      {
+        client: 'Web account-owned payment recovery',
+        file: 'apps/web/components/payment-workspace.tsx',
+        patterns: ['useAuthenticatedAccount()', 'createPaymentAccountStorage(userId)', 'if (!account.isCurrent()) return;', 'account.local.setItem(PENDING_PAYMENT_KEY'],
+      },
+      {
+        client: 'Web logout invalidates payment recovery',
+        file: 'apps/web/lib/api.ts',
+        patterns: ['clearPaymentAccountStorage();'],
+      },
+      ...['android', 'ios'].flatMap(client => [
+        {
+          client: `${client} isolated recharge and withdrawal intents`,
+          file: `apps/${client}/src/components/direct-trade/DirectTradeWalletActions.vue`,
+          patterns: ['createPaymentAccountStorage(uni,', 'if (!storage.isCurrent()) return', 'storage.setStorageSync(PENDING_PAYMENT_KEY'],
+        },
+        {
+          client: `${client} logout drops previous account recovery`,
+          file: `apps/${client}/src/utils/auth.ts`,
+          patterns: ['clearPaymentAccountStorage(uni)'],
+        },
+        {
+          client: `${client} ignores late wallet and order responses`,
+          file: `apps/${client}/src/pages/wallet/index.vue`,
+          patterns: ['if (!isCurrentPayment()) return', 'sessionStorage?.setStorageSync(PENDING_PAYMENT_KEY', 'if (storage.isCurrent()) wallet.value = result'],
         },
       ]),
     ],

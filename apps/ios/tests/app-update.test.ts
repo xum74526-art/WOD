@@ -68,7 +68,7 @@ test('the app wires automatic and manual update checks through its platform adap
   const api = readFileSync(resolve(appRoot, 'src/api/platform.ts'), 'utf8')
 
   assert.equal(manifest.versionName, '1.2.4')
-  assert.equal(manifest.versionCode, '128')
+  assert.equal(manifest.versionCode, '130')
   assert.match(update, /APP_FALLBACK_VERSION_NAME = '1\.2\.4'/)
   assert.match(update, /APP_FALLBACK_VERSION_CODE = 128/)
   assert.match(app, /checkForAppUpdate\(CLIENT_PLATFORM\)/)

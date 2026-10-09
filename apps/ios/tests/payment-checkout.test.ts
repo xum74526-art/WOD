@@ -10,6 +10,7 @@ import {
   normalizePaymentCheckoutUrl,
   openH5PaymentCheckout,
   openNativePaymentCheckout,
+  paymentCheckoutFailureCopy,
   type NativePaymentRuntime,
   type PaymentCheckoutFailure,
 } from '../src/utils/payment-checkout.ts'
@@ -172,6 +173,63 @@ test('intercepted payment schemes go to native runtime and report launch failure
   assert.equal(failures.length, 1)
   assert.equal(failures[0].code, 'payment-app-open-failed')
   assert.equal(failures[0].message, 'Alipay is not installed')
+  assert.equal(capture.animation, 'pop-in')
+  assert.equal(capture.closeAnimation, '')
+  assert.deepEqual(paymentCheckoutFailureCopy(failures[0]), {
+    title: 'paymentAppUnavailableTitle', message: 'paymentAppUnavailable',
+  })
+})
+
+test('WeChat checkout hands off the complete signed URL and verifies only on the dedicated return', () => {
+  for (const paymentUrl of [
+    'weixin://wap/pay?prepayid=test-prepay&package=Sign%3DWXPay&redirect_url=https%3A%2F%2Fwod.kai.com%2Fpayment%2Fqixiang%2Freturn',
+    'weixin://dl/business/?t=test-business-link',
+  ]) {
+    const { runtime, capture, opened } = fakeNativeRuntime()
+    const failures: PaymentCheckoutFailure[] = []
+    let returns = 0
+    assert.equal(openNativePaymentCheckout(
+      runtime,
+      'https://wod.kai.com/api/payments/qixiang/checkout/test-token',
+      failure => failures.push(failure),
+      () => { returns += 1 },
+    ), true)
+
+    const interception = new RegExp(String(capture.overrideOptions.match))
+    assert.equal(interception.test(paymentUrl), true)
+    capture.intercepted?.({ url: paymentUrl })
+    assert.equal(opened.length, 1)
+    assert.equal(opened[0].url, paymentUrl, 'payment parameters must not be decoded or rewritten')
+    assert.equal(failures.length, 0)
+    assert.equal(returns, 0, 'opening WeChat is not evidence of payment')
+    assert.equal(capture.closeAnimation, '')
+
+    const returnUrl = `${QIXIANGPAY_RETURN_URL}?result=success`
+    assert.equal(interception.test(returnUrl), true)
+    capture.intercepted?.({ url: returnUrl })
+    capture.intercepted?.({ url: returnUrl })
+    assert.equal(returns, 1, 'the wallet should query the server once on return')
+    assert.equal(capture.closeAnimation, 'none')
+  }
+})
+
+test('WeChat launch failure preserves checkout and never signals a successful return', () => {
+  const { runtime, capture, opened } = fakeNativeRuntime()
+  const failures: PaymentCheckoutFailure[] = []
+  let returns = 0
+  openNativePaymentCheckout(
+    runtime,
+    'https://wod.kai.com/api/payments/qixiang/checkout/test-token',
+    failure => failures.push(failure),
+    () => { returns += 1 },
+  )
+  capture.intercepted?.({ url: 'weixin://wap/pay?prepayid=test-prepay' })
+  opened[0].fail?.({ code: -3, message: 'Client not installed' })
+  assert.equal(failures.length, 1)
+  assert.equal(failures[0].code, 'payment-app-open-failed')
+  assert.equal(paymentCheckoutFailureCopy(failures[0]).message, 'paymentAppUnavailable')
+  assert.equal(returns, 0)
+  assert.equal(capture.closeAnimation, '', 'the cashier and QR fallback remain available')
 })
 
 test('a synchronous native app launch error also reaches the failure handler', () => {
@@ -198,6 +256,20 @@ test('invalid native checkout is rejected before a WebView is created', () => {
   assert.equal(openNativePaymentCheckout(runtime, 'alipays://platformapi/startapp', failure => failures.push(failure)), false)
   assert.equal(capture.id, '')
   assert.equal(failures[0]?.code, 'invalid-checkout-url')
+  assert.deepEqual(paymentCheckoutFailureCopy(failures[0]), {
+    title: 'paymentPageOpenFailedTitle', message: 'paymentPageOpenFailed',
+  })
+})
+
+test('failure to create checkout reports a page error rather than a missing wallet app', () => {
+  const { runtime } = fakeNativeRuntime()
+  runtime.webview.create = () => { throw new Error('WebView unavailable') }
+  const failures: PaymentCheckoutFailure[] = []
+  assert.equal(openNativePaymentCheckout(runtime, 'https://wod.kai.com/checkout', failure => failures.push(failure)), false)
+  assert.equal(failures[0].code, 'checkout-open-failed')
+  assert.deepEqual(paymentCheckoutFailureCopy(failures[0]), {
+    title: 'paymentPageOpenFailedTitle', message: 'paymentPageOpenFailed',
+  })
 })
 
 test('H5 checkout keeps same-window location navigation', () => {

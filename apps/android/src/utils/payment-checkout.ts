@@ -17,6 +17,13 @@ export interface PaymentCheckoutFailure {
 export type PaymentCheckoutFailureHandler = (failure: PaymentCheckoutFailure) => void
 export type PaymentCheckoutReturnHandler = () => void
 
+/** Opening the wallet app can fail after checkout has already loaded. */
+export function paymentCheckoutFailureCopy(failure: PaymentCheckoutFailure) {
+  return failure.code === 'payment-app-open-failed'
+    ? { title: 'paymentAppUnavailableTitle', message: 'paymentAppUnavailable' }
+    : { title: 'paymentPageOpenFailedTitle', message: 'paymentPageOpenFailed' }
+}
+
 interface PaymentUrlLoadingEvent {
   url?: unknown
 }

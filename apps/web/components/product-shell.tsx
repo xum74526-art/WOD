@@ -34,6 +34,7 @@ import {
 import { Brand } from "@/components/brand";
 import { UiSettings } from "@/components/ui-settings";
 import { ApiError, getCurrentUser, logoutCurrentUser, type AuthUser } from "@/lib/api";
+import { AuthenticatedAccount } from "@/lib/authenticated-account";
 import { locationReturnPath, loginHref } from "@/lib/auth-navigation";
 import { useI18n } from "@/components/locale-root";
 
@@ -261,7 +262,7 @@ export function ProductShell({ children, variant = "account" }: { children: Reac
             </footer>
           </aside>
         </div>}
-        <main id="workspace-content" tabIndex={-1}>{children}</main>
+        <main id="workspace-content" tabIndex={-1}><AuthenticatedAccount value={user.id}>{children}</AuthenticatedAccount></main>
       </div>
     </div>
   );
