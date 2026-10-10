@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.market_price import MarketSourceStatus
 from app.models.product import Product
 from app.models.supplier import Supplier
+from app.models.user import User
 from app.schemas.product import ProductOut
 from app.services.purchase_cycles import (
     MAX_PURCHASE_HOURS,
@@ -73,7 +74,12 @@ def _current_product_query(
     cutoff = utcnow() - timedelta(seconds=max(settings.PRODUCT_OFFER_MAX_AGE_SECONDS, 60))
     # Only approved merchant listings and current KAI self-operated cards are
     # eligible for the public catalogue. Retired sources remain audit-only.
-    approved_supplier_ids = db.query(Supplier.id).filter(Supplier.status == "approved")
+    approved_supplier_ids = db.query(Supplier.id).join(
+        User, User.id == Supplier.user_id
+    ).filter(
+        Supplier.status == "approved",
+        User.account_status == "active",
+    )
     source_filters = []
     if include_merchants and settings.THIRD_PARTY_MERCHANT_PUBLIC_CATALOG_ENABLED is True:
         source_filters.append(and_(
@@ -240,7 +246,13 @@ def _product_serialization_context(
     suppliers = (
         {
             int(supplier.id): supplier
-            for supplier in db.query(Supplier).filter(Supplier.id.in_(supplier_ids)).all()
+            for supplier in db.query(Supplier).join(
+                User, User.id == Supplier.user_id
+            ).filter(
+                Supplier.id.in_(supplier_ids),
+                Supplier.status == "approved",
+                User.account_status == "active",
+            ).all()
         }
         if supplier_ids else {}
     )

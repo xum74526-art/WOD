@@ -13,6 +13,8 @@ from app.models.account_admin_action import AccountAdminAction
 from app.models.account_deletion import AccountDeletionRequest
 from app.models.account_recovery import AccountRecoveryToken
 from app.models.auth_session import AuthSession
+from app.models.product import Product
+from app.models.supplier import Supplier
 from app.models.user import User
 from app.schemas.admin_account import AdminUserActionIn
 from app.services import account_recovery
@@ -141,6 +143,7 @@ def perform_user_action(
     target = _target(db, actor, target_user_id)
     allowed = {
         "send_password_reset": ("active",),
+        "issue_password_reset_code": ("active",),
         "freeze": ("active",),
         "unfreeze": ("suspended",),
         "delete": ("active", "suspended"),
@@ -175,9 +178,35 @@ def perform_user_action(
             result_code="reset_email_queued",
         )
         account_recovery.request_password_reset_for_user(db, target)
+    elif data.action == "issue_password_reset_code":
+        if (data.confirm_username or "").strip() != target.username:
+            raise BizError("请输入完整用户名以确认生成重置码", status_code=400)
+        reset_token, reset_expires_at = account_recovery.issue_admin_password_reset_token(
+            db,
+            target,
+        )
+        row = _record(
+            db,
+            actor=actor,
+            target=target,
+            data=data,
+            previous_status=previous_status,
+            result_code="reset_code_issued",
+        )
     elif data.action == "freeze":
         target.account_status = "suspended"
         _revoke_all_credentials(db, target)
+        supplier = db.query(Supplier).filter(Supplier.user_id == target.id).first()
+        if supplier and supplier.status == "approved":
+            supplier.status = "suspended"
+            target.supplier_status = "suspended"
+            db.query(Product).filter(
+                Product.supplier_id == supplier.id,
+                Product.status == "on",
+            ).update({
+                Product.status: "off",
+                Product.version: Product.version + 1,
+            }, synchronize_session=False)
         row = _record(
             db,
             actor=actor,
@@ -238,7 +267,13 @@ def perform_user_action(
 
     db.commit()
     db.refresh(row)
-    return action_out(row)
+    result = action_out(row)
+    if data.action == "issue_password_reset_code":
+        # Never persist or expose this value through history/idempotent replay.
+        # It is deliberately present only in the first successful response.
+        result["reset_token"] = reset_token
+        result["reset_expires_at"] = reset_expires_at
+    return result
 
 
 def list_user_actions(

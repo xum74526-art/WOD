@@ -525,8 +525,17 @@ class MerchantCommerceFlowTests(unittest.TestCase):
 
         original = settings.PLATFORM_FULFILLMENT_USER_IDS
         try:
-            settings.PLATFORM_FULFILLMENT_USER_IDS = str(self.admin.id)
+            settings.PLATFORM_FULFILLMENT_USER_IDS = ""
             queue = supplier_orders(None, self.admin, self.db)["data"]
+            with self.assertRaises(BizError) as ordinary_user_delivery:
+                deliver_ssh(
+                    kai_order.id,
+                    OrderDeliverIn(ssh_info="ssh ubuntu@192.0.2.98 -p 22"),
+                    self.buyer,
+                    self.db,
+                    "android",
+                )
+            self.assertEqual(ordinary_user_delivery.exception.status_code, 403)
             with self.assertRaises(BizError) as retired_delivery:
                 deliver_ssh(
                     retired_order.id,
@@ -536,6 +545,14 @@ class MerchantCommerceFlowTests(unittest.TestCase):
                     "admin",
                 )
             self.assertEqual(retired_delivery.exception.status_code, 403)
+            delivered = deliver_ssh(
+                kai_order.id,
+                OrderDeliverIn(ssh_info="ssh ubuntu@192.0.2.99 -p 22"),
+                self.admin,
+                self.db,
+                "admin",
+            )["data"]
+            self.assertEqual(delivered["status"], "delivering")
         finally:
             settings.PLATFORM_FULFILLMENT_USER_IDS = original
 

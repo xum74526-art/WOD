@@ -54,6 +54,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _assert_not_self(actor: User, owner_user_id: int) -> None:
     if actor.id == owner_user_id:
         raise BizError("管理员不能审核或打款自己的资料/申请", status_code=403)
@@ -79,9 +85,14 @@ def finance_me(user: User = Depends(get_current_user)):
 
 @router.get("/audit-logs")
 def audit_logs(
-    action_filter: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
+    action_filter: str | None = Query(default=None, max_length=64),
+    actor_user_id: int | None = Query(default=None, gt=0),
+    object_type: str | None = Query(default=None, max_length=32),
+    object_id: int | None = Query(default=None, gt=0),
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     actor: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -89,6 +100,16 @@ def audit_logs(
     query = db.query(FinanceAuditLog)
     if action_filter:
         query = query.filter(FinanceAuditLog.action == action_filter[:64])
+    if actor_user_id:
+        query = query.filter(FinanceAuditLog.actor_user_id == actor_user_id)
+    if object_type:
+        query = query.filter(FinanceAuditLog.object_type == object_type.strip())
+    if object_id:
+        query = query.filter(FinanceAuditLog.object_id == object_id)
+    if created_from:
+        query = query.filter(FinanceAuditLog.created_at >= _naive_utc(created_from))
+    if created_to:
+        query = query.filter(FinanceAuditLog.created_at <= _naive_utc(created_to))
     total = query.count()
     rows = query.order_by(FinanceAuditLog.created_at.desc(), FinanceAuditLog.id.desc()).offset(
         (page - 1) * page_size

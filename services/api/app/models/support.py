@@ -77,8 +77,8 @@ class SupportTicket(Base):
     subject: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(32), default="other", index=True)
-    # Until an operator system is configured, new tickets truthfully remain
-    # pending_unassigned.  No fake agent, email address, or SLA is generated.
+    # New tickets remain unassigned until a real administrator claims or
+    # assigns them. No fake agent identity or response SLA is generated.
     status: Mapped[str] = mapped_column(String(32), default="pending_unassigned", index=True)
     assigned_to: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

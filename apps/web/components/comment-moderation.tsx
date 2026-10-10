@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { canonicalApiPath as path } from "@/lib/canonical-api";
 import { useI18n } from "@/components/locale-root";
+import { AdminQueuePagination } from "@/components/admin-queue-pagination";
 
 type ReportStatus = "pending" | "resolved" | "dismissed" | "";
 type Resolution = "dismissed" | "content_removed" | "user_restricted";
@@ -42,20 +43,28 @@ export function CommentModeration() {
   const [status, setStatus] = useState<ReportStatus>("pending");
   const [message, setMessage] = useState(() => t("admin.moderation.loading", "正在读取举报队列……"));
   const [busy, setBusy] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextPage = 1) => {
+    setLoading(true);
     setMessage(t("admin.moderation.loading", "正在读取举报队列……"));
     try {
-      const query = new URLSearchParams({ page: "1", page_size: "100", status });
+      const query = new URLSearchParams({ page: String(nextPage), page_size: "20", status });
       const result = await apiRequest<ReportPage>(path(`/admin/community/reports?${query}`));
       setItems(result.items);
+      setPage(result.page);
+      setTotal(result.total);
       setMessage(result.items.length ? "" : t("admin.moderation.empty", "当前没有符合条件的举报"));
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : t("admin.moderation.loadError", "暂时无法连接服务，请稍后重试"));
+    } finally {
+      setLoading(false);
     }
   }, [status, t]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(1); }, [load]);
 
   async function review(item: ReportItem, resolution: Resolution) {
     const labels: Record<Resolution, string> = {
@@ -75,7 +84,7 @@ export function CommentModeration() {
         method: "PATCH",
         body: JSON.stringify({ resolution, note: note.trim() || null }),
       });
-      await load();
+      await load(page);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : t("admin.moderation.reviewError", "处置失败，请稍后重试"));
     } finally {
@@ -112,5 +121,6 @@ export function CommentModeration() {
         </div>}
       </footer>
     </article>)}</div>
+    <AdminQueuePagination page={page} total={total} loading={loading} onPageChange={(value) => void load(value)}/>
   </section>;
 }

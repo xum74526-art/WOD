@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
+from app.core.security import verify_password
 from app.core.sensitive import fingerprint, protect
 from app.db.base import Base
 from app.db.session import get_db
@@ -25,6 +26,7 @@ from app.models import (
 )
 from app.routers import admin as admin_router
 from app.services.auth_session import create_authenticated_session
+from app.services import account_recovery
 from app.utils.response import BizError, error
 
 
@@ -177,6 +179,61 @@ class AdminAccountManagementTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 409, response.text)
         self.assertIn("未绑定已验证", response.json()["msg"])
+        self.assertEqual(self.db.query(AccountAdminAction).count(), 0)
+
+    def test_admin_can_issue_one_time_reset_code_without_bound_email(self):
+        response = self.post_action(
+            self.no_email.id,
+            self.payload(
+                "issue_password_reset_code",
+                "admin-reset-code-0001",
+                confirm_username=self.no_email.username,
+            ),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+        token = data["reset_token"]
+        self.assertGreaterEqual(len(token), 32)
+        self.assertEqual(data["result_code"], "reset_code_issued")
+        self.assertIn("reset_expires_at", data)
+        token_row = self.db.query(AccountRecoveryToken).one()
+        self.assertEqual(token_row.purpose, account_recovery.PASSWORD_RESET_ADMIN)
+        self.assertNotEqual(token_row.token_hash, token)
+
+        repeated = self.post_action(
+            self.no_email.id,
+            self.payload(
+                "issue_password_reset_code",
+                "admin-reset-code-0001",
+                confirm_username=self.no_email.username,
+            ),
+        )
+        self.assertEqual(repeated.status_code, 200, repeated.text)
+        self.assertNotIn("reset_token", repeated.json()["data"])
+        self.assertEqual(self.db.query(AccountRecoveryToken).count(), 1)
+        self.assertEqual(self.db.query(AccountAdminAction).count(), 1)
+
+        notification_email = account_recovery.reset_password(
+            self.db,
+            token,
+            "new-secure-password",
+        )
+        self.assertIsNone(notification_email)
+        self.db.refresh(self.no_email)
+        self.assertTrue(verify_password("new-secure-password", self.no_email.password))
+
+    def test_admin_reset_code_requires_full_username_confirmation(self):
+        response = self.post_action(
+            self.no_email.id,
+            self.payload(
+                "issue_password_reset_code",
+                "admin-reset-code-0002",
+                confirm_username="错误用户名",
+            ),
+        )
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("完整用户名", response.json()["msg"])
+        self.assertEqual(self.db.query(AccountRecoveryToken).count(), 0)
         self.assertEqual(self.db.query(AccountAdminAction).count(), 0)
 
     def test_freeze_revokes_every_session_and_unfreeze_does_not_restore_it(self):

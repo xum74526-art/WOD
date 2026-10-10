@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class AdminUserActionIn(BaseModel):
-    action: Literal["send_password_reset", "freeze", "unfreeze", "delete"]
+    action: Literal[
+        "send_password_reset",
+        "issue_password_reset_code",
+        "freeze",
+        "unfreeze",
+        "delete",
+    ]
     client_request_id: str = Field(
         min_length=12,
         max_length=64,

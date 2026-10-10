@@ -68,3 +68,28 @@ class SupportTicketOut(BaseModel):
     assigned_to: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class AdminSupportTicketActionIn(BaseModel):
+    action: Literal["claim", "assign", "reply", "resolve", "close", "reopen"]
+    expected_status: Literal["pending_unassigned", "assigned", "resolved", "closed"]
+    assignee_user_id: int | None = Field(default=None, gt=0)
+    reply: str | None = Field(default=None, max_length=2000)
+    note: str | None = Field(default=None, max_length=500)
+    request_id: str = Field(min_length=8, max_length=64)
+
+    @field_validator("reply", "note")
+    @classmethod
+    def clean_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("request_id")
+    @classmethod
+    def clean_request_id(cls, value: str) -> str:
+        cleaned = value.strip()
+        if any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_:" for char in cleaned):
+            raise ValueError("请求标识无效")
+        return cleaned

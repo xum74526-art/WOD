@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +31,12 @@ from app.utils.response import BizError
 VERIFY_EMAIL = "verify_email"
 PASSWORD_RESET_EMAIL = "password_reset_email"
 PASSWORD_RESET_KAI = "password_reset_kai"
-RESET_PURPOSES = (PASSWORD_RESET_EMAIL, PASSWORD_RESET_KAI)
+PASSWORD_RESET_ADMIN = "password_reset_admin"
+RESET_PURPOSES = (
+    PASSWORD_RESET_EMAIL,
+    PASSWORD_RESET_KAI,
+    PASSWORD_RESET_ADMIN,
+)
 INVALID_TOKEN_MESSAGE = "链接无效或已过期，请重新申请"
 INVALID_SESSION_MESSAGE = "会话无效或已过期"
 
@@ -307,7 +312,10 @@ def _queue_password_reset_for_user(db: Session, user: User, stored_email: str) -
     """Queue a reset proof inside the caller's current transaction."""
 
     now = utcnow()
-    _expire_open_tokens(db, user.id, (PASSWORD_RESET_EMAIL,), now)
+    # Only the newest password-reset proof should remain usable, regardless of
+    # whether it was issued by email, KAI re-authentication, or verified
+    # administrator-assisted recovery.
+    _expire_open_tokens(db, user.id, RESET_PURPOSES, now)
     token = _new_token()
     token_row = AccountRecoveryToken(
         user_id=user.id,
@@ -368,7 +376,7 @@ def issue_kai_recovery_token(db: Session, user: User) -> str:
     ensure_active_user(user)
     _refresh_locked_user(db, user)
     now = utcnow()
-    _expire_open_tokens(db, user.id, (PASSWORD_RESET_KAI,), now)
+    _expire_open_tokens(db, user.id, RESET_PURPOSES, now)
     token = _new_token()
     db.add(AccountRecoveryToken(
         user_id=user.id,
@@ -379,6 +387,29 @@ def issue_kai_recovery_token(db: Session, user: User) -> str:
     ))
     db.commit()
     return token
+
+
+def issue_admin_password_reset_token(db: Session, user: User) -> tuple[str, datetime]:
+    """Create a short-lived reset proof inside the caller's transaction.
+
+    The privileged account service must hold the target-account write fence
+    before calling this helper. Only the digest is persisted; the plaintext is
+    returned once so support can pass it to the verified account owner.
+    """
+
+    ensure_active_user(user)
+    now = utcnow()
+    _expire_open_tokens(db, user.id, RESET_PURPOSES, now)
+    token = _new_token()
+    expires_at = now + timedelta(seconds=settings.ACCOUNT_RECOVERY_RESET_TTL_SECONDS)
+    db.add(AccountRecoveryToken(
+        user_id=user.id,
+        purpose=PASSWORD_RESET_ADMIN,
+        token_hash=_token_hash(token),
+        auth_version_snapshot=user.auth_version,
+        expires_at=expires_at,
+    ))
+    return token, expires_at
 
 
 def _set_password_and_revoke(db: Session, user: User, password: str, now=None) -> None:

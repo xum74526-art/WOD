@@ -155,22 +155,22 @@ def unknown_reply(lang: str) -> str:
     if lang == "en":
         return (
             "I could not find a reliable self-service answer for that question. "
-            "You can create a real support ticket below. No human agent or response SLA is configured yet, "
-            "so the ticket will be saved as Pending assignment until an operator channel is connected."
+            "You can create a support ticket below. An administrator can claim it and reply in this conversation; "
+            "no fixed response SLA is promised."
         )
     return (
         "我暂时没有找到可靠的自助答案。您可以在下方创建真实工单。"
-        "目前尚未配置人工坐席和回复时限，工单会如实保存为“待分配”，待人工服务通道接入后处理。"
+        "管理员认领后会在本会话回复；当前不承诺固定回复时限。"
     )
 
 
 def human_request_reply(lang: str) -> str:
     if lang == "en":
         return (
-            "Human agents are not connected yet. You can still create a real support ticket below; "
-            "it will be stored as Pending assignment, without claiming that an agent has accepted it."
+            "Create a support ticket below. It will remain Pending assignment until a real administrator claims it, "
+            "then the reply will appear in this conversation and your inbox."
         )
-    return "人工坐席尚未接入。您仍可在下方创建真实工单；工单将保存为“待分配”，不会虚构已接通或已受理。"
+    return "您可以在下方创建真实工单；管理员认领后会在本会话和消息中心回复，认领前状态会如实显示为“待分配”。"
 
 
 def localized_builtin_reply(topic: str | None, lang: str) -> str | None:

@@ -89,7 +89,9 @@ def _platform_fulfillment_user_ids() -> set[int]:
 
 
 def is_platform_fulfiller(user: User) -> bool:
-    return int(user.id) in _platform_fulfillment_user_ids()
+    return (user.account_status or "active") == "active" and (
+        user.role == "admin" or int(user.id) in _platform_fulfillment_user_ids()
+    )
 
 
 _SSH_ACCOUNT_RE = re.compile(

@@ -4,6 +4,18 @@ import type { AuditPlatform } from "@/lib/mobile-finance-api";
 import type { MobileBuyQuote, MobileBuyRequestDeal, MobileBuyRequestEvent } from "@/lib/mobile-buy-request-api";
 
 export type AdminCounts = { users: number; orders: number; recharge_orders: number; verifications: number; bank_cards: number; withdrawals: number };
+export type AdminWorkQueues = {
+  support_tickets: number;
+  community_reports: number;
+  suppliers: number;
+  onboardings: number;
+  verifications: number;
+  order_disputes: number;
+  refund_requests: number;
+  bank_cards: number;
+  withdrawals: number;
+  buy_requests: number;
+};
 export type AdminCouponCampaignStatus = "active" | "scheduled" | "disabled" | "expired" | "exhausted";
 export type AdminCouponCampaign = {
   id: number;
@@ -26,7 +38,58 @@ export type AdminCouponCampaign = {
   updated_at: string | null;
 };
 export type AdminCouponCampaignCreated = AdminCouponCampaign & { code: string };
-export type AdminOverview = { created_platform: AuditPlatform | null; counts: AdminCounts; by_platform: Array<{ created_platform: AuditPlatform; counts: AdminCounts }> };
+export type AdminOverview = { created_platform: AuditPlatform | null; counts: AdminCounts; by_platform: Array<{ created_platform: AuditPlatform; counts: AdminCounts }>; work_queues: AdminWorkQueues; pending_total: number };
+export type AdminSupportTicketStatus = "pending_unassigned" | "assigned" | "resolved" | "closed";
+export type AdminSupportTicket = {
+  id: number;
+  ticket_no: string;
+  user: { id: number; username: string | null };
+  conversation_id: number;
+  source_message_id: number | null;
+  subject: string;
+  description: string;
+  category: string;
+  status: AdminSupportTicketStatus;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type AdminSupportMessage = {
+  id: number;
+  role: "user" | "assistant" | "system" | string;
+  content: string;
+  response_mode: string;
+  topic: string | null;
+  reply_to_id: number | null;
+  created_at: string;
+};
+export type AdminSupportTicketDetail = {
+  ticket: AdminSupportTicket;
+  messages: AdminPage<AdminSupportMessage>;
+  idempotent_replay?: boolean;
+};
+export type AdminFinanceAuditLog = {
+  id: number;
+  actor_user_id: number;
+  actor_username: string | null;
+  action: string;
+  object_type: string;
+  object_id: number;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+};
+export type AdminSupplierProduct = {
+  id: number;
+  name: string;
+  gpu_model: string;
+  memory: string;
+  price: number;
+  stock: number;
+  status: "on" | "off";
+  version: number;
+  open_order_count: number;
+  created_at: string;
+};
 export type AdminUserItem = {
   id: number;
   username: string;
@@ -41,7 +104,7 @@ export type AdminUserItem = {
   created_platform: AuditPlatform;
   created_at: string;
 };
-export type AdminUserActionKind = "send_password_reset" | "freeze" | "unfreeze" | "delete";
+export type AdminUserActionKind = "send_password_reset" | "issue_password_reset_code" | "freeze" | "unfreeze" | "delete";
 export type AdminUserAction = {
   id: number;
   actor_user_id: number;
@@ -52,6 +115,8 @@ export type AdminUserAction = {
   new_status: string;
   result_code: string;
   created_at: string | null;
+  reset_token?: string;
+  reset_expires_at?: string;
 };
 export type AdminOrderItem = {
   id: number;
@@ -282,6 +347,108 @@ export function getAdminOverview(platform?: AuditPlatform) {
   return apiRequest<AdminOverview>(canonicalApiPath(`/admin/overview${suffix}`));
 }
 
+export function listAdminSupportTickets(input: {
+  status?: AdminSupportTicketStatus | "";
+  category?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  if (input.status) params.set("status", input.status);
+  if (input.category?.trim()) params.set("category", input.category.trim());
+  if (input.keyword?.trim()) params.set("keyword", input.keyword.trim());
+  return apiRequest<AdminPage<AdminSupportTicket>>(
+    canonicalApiPath(`/admin/support-tickets?${params.toString()}`),
+  );
+}
+
+export function getAdminSupportTicket(id: number, messagePage = 1, messagePageSize = 100) {
+  const params = new URLSearchParams({
+    message_page: String(messagePage),
+    message_page_size: String(messagePageSize),
+  });
+  return apiRequest<AdminSupportTicketDetail>(
+    canonicalApiPath(`/admin/support-tickets/${id}?${params.toString()}`),
+  );
+}
+
+export function manageAdminSupportTicket(
+  id: number,
+  input: {
+    action: "claim" | "assign" | "reply" | "resolve" | "close" | "reopen";
+    expected_status: AdminSupportTicketStatus;
+    assignee_user_id?: number;
+    reply?: string;
+    note?: string;
+    request_id: string;
+  },
+) {
+  return apiRequest<AdminSupportTicketDetail>(
+    canonicalApiPath(`/admin/support-tickets/${id}/actions`),
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function listAdminFinanceAuditLogs(input: {
+  action?: string;
+  actorUserId?: number;
+  objectType?: string;
+  objectId?: number;
+  createdFrom?: string;
+  createdTo?: string;
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  if (input.action?.trim()) params.set("action_filter", input.action.trim());
+  if (input.actorUserId) params.set("actor_user_id", String(input.actorUserId));
+  if (input.objectType?.trim()) params.set("object_type", input.objectType.trim());
+  if (input.objectId) params.set("object_id", String(input.objectId));
+  if (input.createdFrom) params.set("created_from", input.createdFrom);
+  if (input.createdTo) params.set("created_to", input.createdTo);
+  return apiRequest<AdminPage<AdminFinanceAuditLog>>(
+    canonicalApiPath(`/finance/audit-logs?${params.toString()}`),
+  );
+}
+
+export function manageAdminSupplierStatus(
+  id: number,
+  input: { action: "suspend" | "reactivate"; expected_status: "approved" | "suspended"; reason: string },
+) {
+  return apiRequest<{ supplier: { id: number; status: string }; disabled_products: number; open_order_count: number; requires_order_follow_up: boolean }>(
+    canonicalApiPath(`/supplier/admin/suppliers/${id}/status`),
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function listAdminSupplierProducts(id: number, input: { status?: "on" | "off" | ""; page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams({
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 20),
+  });
+  if (input.status) params.set("status", input.status);
+  return apiRequest<AdminPage<AdminSupplierProduct>>(
+    canonicalApiPath(`/supplier/admin/applications/${id}/products?${params.toString()}`),
+  );
+}
+
+export function manageAdminSupplierProduct(
+  id: number,
+  input: { status: "on" | "off"; expected_version: number; reason: string },
+) {
+  return apiRequest<{ id: number; status: "on" | "off"; version: number }>(
+    canonicalApiPath(`/supplier/admin/products/${id}/status`),
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
 export function listAdminNotificationBroadcasts(input: { page?: number; pageSize?: number } = {}) {
   const params = new URLSearchParams({
     page: String(input.page ?? 1),
@@ -406,6 +573,13 @@ export function listAdminUserActions(id: number, input: { page?: number; pageSiz
 
 export function listAdminOrders(input: { platform?: AuditPlatform; status?: string; orderNo?: string; page?: number; pageSize?: number } = {}) {
   return apiRequest<AdminPage<AdminOrderItem>>(canonicalApiPath(`/admin/orders${query(input)}`));
+}
+
+export function deliverAdminOrder(id: number, sshInfo: string) {
+  return apiRequest<AdminOrderItem>(canonicalApiPath(`/orders/${id}/deliver`), {
+    method: "POST",
+    body: JSON.stringify({ ssh_info: sshInfo }),
+  });
 }
 
 export function resolveAdminOrderDispute(id: number, input: { action: "refund" | "release"; note: string }) {

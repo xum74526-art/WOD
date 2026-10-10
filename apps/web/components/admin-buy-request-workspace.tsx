@@ -18,6 +18,9 @@ import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { buyRequestAdditionalRequirements } from "@/lib/web-business-contract";
 import { useI18n } from "@/components/locale-root";
 import { formatQuoteAmountForLocale } from "@/lib/quote-currency";
+import { AdminQueuePagination } from "@/components/admin-queue-pagination";
+
+const PAGE_SIZE = 20;
 
 const statusLabels: Record<string, string> = {
   published: "待报价",
@@ -118,6 +121,7 @@ export function AdminBuyRequestWorkspace() {
   const { t, locale, displayCurrencyConfig } = useI18n();
   const [rows, setRows] = useState<AdminBuyRequestItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
   const [requestType, setRequestType] = useState<"" | "online" | "offline">("");
   const [keyword, setKeyword] = useState("");
@@ -136,20 +140,20 @@ export function AdminBuyRequestWorkspace() {
     setDetail(await getAdminBuyRequest(id));
   }, []);
 
-  const load = useCallback(async (preferredId?: number) => {
+  const load = useCallback(async (nextPage = page, preferredId?: number) => {
     setLoading(true); setError("");
     try {
-      const page = await listAdminBuyRequests({ status: status || undefined, requestType: requestType || undefined, keyword: keyword.trim() || undefined, pageSize: 100 });
-      setRows(page.items); setTotal(page.total);
-      const id = preferredId || selectedId || page.items[0]?.id;
-      if (id && page.items.some((row) => row.id === id)) await loadDetail(id);
-      else if (page.items[0]) await loadDetail(page.items[0].id);
+      const result = await listAdminBuyRequests({ status: status || undefined, requestType: requestType || undefined, keyword: keyword.trim() || undefined, page: nextPage, pageSize: PAGE_SIZE });
+      setRows(result.items); setTotal(result.total); setPage(result.page);
+      const id = preferredId || selectedId || result.items[0]?.id;
+      if (id && result.items.some((row) => row.id === id)) await loadDetail(id);
+      else if (result.items[0]) await loadDetail(result.items[0].id);
       else { setSelectedId(null); setDetail(null); }
     } catch (reason) { setError(errorMessage(reason)); } finally { setLoading(false); }
-  }, [keyword, loadDetail, requestType, selectedId, status]);
+  }, [keyword, loadDetail, page, requestType, selectedId, status]);
 
-  useEffect(() => { void load(); }, [status, requestType]);
-  function submit(event: FormEvent) { event.preventDefault(); void load(); }
+  useEffect(() => { void load(1); }, [status, requestType]);
+  function submit(event: FormEvent) { event.preventDefault(); void load(1); }
 
   async function dealAction(action: "approve" | "reject" | "release" | "reject-credential") {
     if (!detail?.deal) return;
@@ -168,7 +172,7 @@ export function AdminBuyRequestWorkspace() {
         : action === "release"
           ? t("admin.buyRequest.released", "凭据已向购买人放行。")
           : t("admin.buyRequest.returned", "已退回并记录原因。"));
-      await load(detail.request.id);
+      await load(page, detail.request.id);
     } catch (reasonValue) { setError(errorMessage(reasonValue)); } finally { setBusy(""); }
   }
 
@@ -202,6 +206,7 @@ export function AdminBuyRequestWorkspace() {
             <b>{statusLabel(row.deal?.status || row.status)}</b>
           </button>;
         }) : !loading && <div className="commerce-empty"><ClipboardText size={25}/><strong>没有符合条件的需求</strong><span>用户提交成功后会在这里显示。</span></div>}
+        <AdminQueuePagination page={page} total={total} loading={loading} onPageChange={(value) => void load(value)}/>
       </div>
       <main className="admin-request-detail">{detail ? <>
         <header><div><small>REQUEST #{detail.request.id}</small><h2 data-i18n-skip>{metadata(detail.request, "product_name") || detail.request.gpu_model} × {detail.request.quantity}</h2><span>{formatDate(detail.request.created_at)}</span></div><b>{statusLabel(detail.deal?.status || detail.request.status)}</b></header>

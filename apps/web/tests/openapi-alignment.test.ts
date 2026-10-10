@@ -199,6 +199,7 @@ test("administrator account actions are explicit, audited, and idempotent", () =
   const action = bodySchema("/api/admin/users/{user_id}/actions", "post");
   assert.deepEqual(action.properties?.action?.enum, [
     "send_password_reset",
+    "issue_password_reset_code",
     "freeze",
     "unfreeze",
     "delete",
@@ -220,4 +221,23 @@ test("administrator account actions are explicit, audited, and idempotent", () =
   const historyNames = operation("/api/admin/users/{user_id}/actions", "get").parameters?.map((parameter) => parameter.name) ?? [];
   assert.ok(historyNames.includes("page"));
   assert.ok(historyNames.includes("page_size"));
+});
+
+test("administrator support and merchant controls are explicit canonical contracts", () => {
+  const support = bodySchema("/api/admin/support-tickets/{ticket_id}/actions", "post");
+  assert.deepEqual(support.properties?.action?.enum, ["claim", "assign", "reply", "resolve", "close", "reopen"]);
+  assert.deepEqual(support.required, ["action", "expected_status", "request_id"]);
+
+  const supplier = bodySchema("/api/supplier/admin/suppliers/{supplier_id}/status", "post");
+  assert.deepEqual(supplier.properties?.action?.enum, ["suspend", "reactivate"]);
+  assert.deepEqual(supplier.required, ["action", "expected_status", "reason"]);
+
+  const product = bodySchema("/api/supplier/admin/products/{product_id}/status", "post");
+  assert.deepEqual(product.properties?.status?.enum, ["on", "off"]);
+  assert.deepEqual(product.required, ["status", "expected_version", "reason"]);
+
+  const auditParameters = operation("/api/finance/audit-logs", "get").parameters?.map((parameter) => parameter.name) ?? [];
+  for (const name of ["action_filter", "actor_user_id", "object_type", "object_id", "created_from", "created_to", "page", "page_size"]) {
+    assert.ok(auditParameters.includes(name), `audit log must expose ${name}`);
+  }
 });

@@ -15,6 +15,7 @@ test("notification actions map the exact mobile allowlist onto Web routes", () =
   assert.equal(notificationActionPath("/pages/market/index"), "/market");
   assert.equal(notificationActionPath("/pages/community/index"), "/community");
   assert.equal(notificationActionPath("/pages/settings/index"), "/account/settings");
+  assert.equal(notificationActionPath("/pages/kefu/index"), "/support");
 });
 
 test("notification actions reject malformed IDs and non-exact query strings", () => {

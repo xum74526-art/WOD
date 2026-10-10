@@ -12,6 +12,7 @@ import {
 import { errorMessage, formatDate } from "@/lib/commerce-ui";
 import { useI18n } from "@/components/locale-root";
 import { localDateTimeInputToUtcIso } from "@/lib/date-time";
+import { AdminQueuePagination } from "@/components/admin-queue-pagination";
 
 const TYPE_LABELS: Record<AdminNotificationBroadcast["notification_type"], string> = {
   major_announcement: "重大公告（首页展示）",
@@ -46,6 +47,8 @@ function draftSignature(draft: BroadcastDraft) {
 export function AdminNotificationWorkspace() {
   const { locale, t } = useI18n();
   const [rows, setRows] = useState<AdminNotificationBroadcast[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [form, setForm] = useState({
     title: "",
     content: "",
@@ -62,12 +65,14 @@ export function AdminNotificationWorkspace() {
   const [message, setMessage] = useState("");
   const pendingRequest = useRef<{ signature: string; id: string } | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextPage = 1) => {
     setLoading(true);
     setError("");
     try {
-      const result = await listAdminNotificationBroadcasts({ page: 1, pageSize: 20 });
+      const result = await listAdminNotificationBroadcasts({ page: nextPage, pageSize: 20 });
       setRows(result.items);
+      setPage(result.page);
+      setTotal(result.total);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -75,7 +80,7 @@ export function AdminNotificationWorkspace() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(1); }, [load]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,7 +129,7 @@ export function AdminNotificationWorkspace() {
         ? t("admin.notification.majorPublished", "重大公告已发布，三端首页将显示，{count} 个有效账号也会收到站内消息。", { count: result.recipient_count })
         : t("admin.notification.published", "已发布，{count} 个有效账号将收到消息。", { count: result.recipient_count }));
       setForm((current) => ({ ...current, content: "", content_en: "", expires_at: "" }));
-      await load();
+      await load(1);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -147,7 +152,7 @@ export function AdminNotificationWorkspace() {
     try {
       await revokeAdminNotificationBroadcast(row.id, reason);
       setMessage(t("admin.notification.revoked", "公告已撤销，并已从所有用户通知中心下架。审计记录仍然保留。"));
-      await load();
+      await load(page);
     } catch (reasonValue) {
       setError(errorMessage(reasonValue));
     } finally {
@@ -188,12 +193,13 @@ export function AdminNotificationWorkspace() {
     {message && <div className="commerce-success">{message}</div>}
 
     <section className="notification-broadcast-history">
-      <header><div><p>DELIVERY AUDIT</p><h2>最近发布记录</h2></div><button type="button" onClick={() => void load()} disabled={loading}><ClockCounterClockwise size={16} />{loading ? "读取中" : "刷新"}</button></header>
+      <header><div><p>DELIVERY AUDIT</p><h2>最近发布记录</h2></div><button type="button" onClick={() => void load(page)} disabled={loading}><ClockCounterClockwise size={16} />{loading ? "读取中" : "刷新"}</button></header>
       {rows.length ? <div>{rows.map((row) => {
         const localizedTitle = locale === "en" && row.title_en ? row.title_en : row.title;
         const localizedContent = locale === "en" && row.content_en ? row.content_en : row.content;
         return <article key={row.id}><span className="notification-broadcast-history__dot"><Bell size={17} /></span><div><header><strong data-i18n-skip>{localizedTitle}</strong><small>{TYPE_LABELS[row.notification_type] || row.notification_type} · {formatDate(row.created_at)}{locale === "en" && !row.title_en && <em> · {t("admin.notification.originalLanguage", "原文内容")}</em>}</small></header><p data-i18n-skip>{localizedContent}</p><footer><span>已送达 {row.recipient_count} 个有效账号</span>{row.expires_at && <span>有效期至 {formatDate(row.expires_at)}</span>}{row.revoked_at && <span>撤销于 {formatDate(row.revoked_at)} · <i data-i18n-skip>{row.revoke_reason}</i></span>}<code>{row.client_request_id}</code></footer></div><div className="notification-broadcast-history__actions"><b className={`status-chip status-chip--${row.status === "completed" ? "published" : row.status}`}>{statusLabel(row.status)}</b>{row.status === "completed" && <button type="button" className="commerce-danger" disabled={revokingId !== null} onClick={() => void revoke(row)}><Prohibit size={14} />{revokingId === row.id ? "撤销中…" : "撤销"}</button>}</div></article>;
       })}</div> : <div className="commerce-empty"><Bell size={26} /><strong>{loading ? "正在读取发布记录…" : "还没有发布记录"}</strong></div>}
+      <AdminQueuePagination page={page} total={total} loading={loading} onPageChange={(value) => void load(value)}/>
     </section>
   </section>;
 }

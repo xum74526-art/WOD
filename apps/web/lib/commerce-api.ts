@@ -13,7 +13,7 @@ export type SupplierApplication = {
   contact_phone: string;
   region: string | null;
   description: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "suspended";
   review_note: string | null;
   reviewed_at: string | null;
   created_at: string;

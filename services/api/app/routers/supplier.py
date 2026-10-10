@@ -1,6 +1,7 @@
 import hashlib
 import json
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -11,6 +12,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import settings
 from app.core.deps import get_current_user, require_admin
+from app.core.rate_limit import limit_admin_supplier_action
 from app.db.session import get_db
 from app.models.asset import Asset
 from app.models.ledger import Ledger
@@ -29,6 +31,8 @@ from app.schemas.supplier import (
     SupplierRegisterIn,
 )
 from app.services.trade_mode import withdrawal_enabled
+from app.services.manual_payout import record_audit
+from app.services.notification_service import create_notification
 from app.utils.response import BizError, success
 
 router = APIRouter(prefix="/api/supplier", tags=["supplier"])
@@ -42,6 +46,18 @@ _DEVICE_PRICE_QUANTUM = Decimal("0.0001")
 class SupplierReviewIn(BaseModel):
     version: int = Field(default=1, ge=1)
     note: str | None = Field(default=None, max_length=1000)
+
+
+class SupplierAdminStatusIn(BaseModel):
+    action: Literal["suspend", "reactivate"]
+    expected_status: Literal["approved", "suspended"]
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class SupplierAdminProductStatusIn(BaseModel):
+    status: Literal["on", "off"]
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=2, max_length=500)
 
 
 def _identity_verified(user_id: int, db: Session) -> bool:
@@ -182,6 +198,8 @@ def _get_supplier(user: User, db: Session) -> Supplier:
         raise BizError("您还不是供应商", status_code=403)
     if s.status == "pending":
         raise BizError("商家入驻申请审核中", status_code=403)
+    if s.status == "suspended":
+        raise BizError("商家账号已停用，请联系平台管理员", status_code=403)
     if s.status != "approved":
         raise BizError("商家入驻申请未通过", status_code=403)
     return s
@@ -631,7 +649,7 @@ def admin_list_applications(
     del admin
     query = db.query(Supplier, User).join(User, User.id == Supplier.user_id)
     if status_filter:
-        if status_filter not in {"pending", "approved", "rejected"}:
+        if status_filter not in {"pending", "approved", "rejected", "suspended"}:
             raise BizError("商家审核状态无效")
         query = query.filter(Supplier.status == status_filter)
     if search and search.strip():
@@ -701,6 +719,207 @@ def admin_review_application(
     ))
 
 
+@router.post("/admin/suppliers/{supplier_id}/status")
+def admin_manage_supplier_status(
+    supplier_id: int,
+    data: SupplierAdminStatusIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Stop new sales immediately or restore an approved merchant account.
+
+    Reactivation deliberately leaves listings offline so an operator must
+    review each product before it can accept new orders again.
+    """
+
+    limit_admin_supplier_action(admin.id)
+    supplier = db.query(Supplier).filter(
+        Supplier.id == supplier_id
+    ).with_for_update().first()
+    if supplier is None:
+        raise BizError("商家不存在", status_code=404)
+    if supplier.status != data.expected_status:
+        raise BizError("商家状态已更新，请刷新后重试", status_code=409)
+    applicant = db.query(User).filter(User.id == supplier.user_id).first()
+    if applicant is None:
+        raise BizError("商家账号不存在", status_code=404)
+    if applicant.id == admin.id:
+        raise BizError("管理员不能操作自己的商家账号", status_code=403)
+
+    previous_status = supplier.status
+    if data.action == "suspend":
+        if supplier.status != "approved":
+            raise BizError("只有已通过的商家可以停用", status_code=409)
+        supplier.status = "suspended"
+        applicant.supplier_status = "suspended"
+        products = db.query(Product).filter(Product.supplier_id == supplier.id).all()
+        disabled_products = 0
+        for product in products:
+            if product.status != "off":
+                product.status = "off"
+                disabled_products += 1
+        title = "商家账号已停用"
+        content = f"平台已停用您的商家权限并下架在售商品。原因：{data.reason}"
+        title_en = "Merchant account suspended"
+        content_en = f"Your merchant access was suspended and active listings were taken offline. Reason: {data.reason}"
+    else:
+        if supplier.status != "suspended":
+            raise BizError("只有已停用的商家可以恢复", status_code=409)
+        if applicant.account_status != "active":
+            raise BizError("用户账号仍处于冻结或注销状态，不能恢复商家权限", status_code=409)
+        supplier.status = "approved"
+        applicant.supplier_status = "approved"
+        disabled_products = 0
+        title = "商家账号已恢复"
+        content = "平台已恢复您的商家权限。为保障交易安全，商品需经管理员逐项重新上架。"
+        title_en = "Merchant account restored"
+        content_en = "Your merchant access was restored. Listings must be reviewed and re-enabled individually."
+
+    open_order_count = db.query(Order.id).join(
+        Product, Product.id == Order.product_id
+    ).filter(
+        Product.supplier_id == supplier.id,
+        Order.status.in_(("paid", "delivering", "disputed")),
+    ).count()
+    create_notification(
+        db,
+        user_id=applicant.id,
+        title=title,
+        content=content,
+        title_en=title_en,
+        content_en=content_en,
+        notification_type="system",
+        action_url="/pages/supplier/dashboard",
+        dedupe_key=f"supplier:{supplier.id}:{data.action}:{previous_status}",
+        respect_preferences=False,
+    )
+    record_audit(
+        db,
+        actor_user_id=admin.id,
+        action=f"supplier_{data.action}",
+        object_type="supplier",
+        object_id=supplier.id,
+        detail={
+            "previous_status": previous_status,
+            "status": supplier.status,
+            "disabled_products": disabled_products,
+            "open_order_count": open_order_count,
+            "reason": data.reason,
+        },
+    )
+    db.commit()
+    db.refresh(supplier)
+    return success({
+        "supplier": _admin_application_out(
+            supplier,
+            applicant,
+            identity_verified=_identity_verified(applicant.id, db),
+        ),
+        "disabled_products": disabled_products,
+        "open_order_count": open_order_count,
+        "requires_order_follow_up": open_order_count > 0,
+    })
+
+
+@router.get("/admin/applications/{supplier_id}/products")
+def admin_supplier_products(
+    supplier_id: int,
+    status_filter: Literal["on", "off"] | None = Query(default=None, alias="status"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    del admin
+    if db.query(Supplier.id).filter(Supplier.id == supplier_id).first() is None:
+        raise BizError("商家不存在", status_code=404)
+    query = db.query(Product).filter(Product.supplier_id == supplier_id)
+    if status_filter:
+        query = query.filter(Product.status == status_filter)
+    total = query.count()
+    products = query.order_by(Product.created_at.desc(), Product.id.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+    ids = [product.id for product in products]
+    open_counts = {
+        int(product_id): int(count)
+        for product_id, count in db.query(Order.product_id, func.count(Order.id)).filter(
+            Order.product_id.in_(ids or [-1]),
+            Order.status.in_(("paid", "delivering", "disputed")),
+        ).group_by(Order.product_id).all()
+    }
+    return success({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [{
+            "id": product.id,
+            "name": product.name,
+            "gpu_model": product.gpu_model,
+            "memory": product.memory,
+            "price": float(product.price),
+            "stock": product.stock,
+            "status": product.status,
+            "version": product.version,
+            "open_order_count": open_counts.get(product.id, 0),
+            "created_at": product.created_at,
+        } for product in products],
+    })
+
+
+@router.post("/admin/products/{product_id}/status")
+def admin_manage_supplier_product(
+    product_id: int,
+    data: SupplierAdminProductStatusIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    limit_admin_supplier_action(admin.id)
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.supplier_id.isnot(None),
+    ).with_for_update().first()
+    if product is None:
+        raise BizError("商家商品不存在", status_code=404)
+    if int(product.version or 1) != data.expected_version:
+        raise BizError("商品状态已更新，请刷新后重试", status_code=409)
+    supplier = db.query(Supplier).filter(Supplier.id == product.supplier_id).first()
+    owner = db.query(User).filter(User.id == supplier.user_id).first() if supplier else None
+    if supplier is None or owner is None:
+        raise BizError("商品所属商家不存在", status_code=404)
+    if data.status == "on" and (
+        supplier.status != "approved" or owner.account_status != "active"
+    ):
+        raise BizError("商家账号未处于正常状态，不能上架商品", status_code=409)
+    previous_status = product.status
+    if previous_status != data.status:
+        product.status = data.status
+    record_audit(
+        db,
+        actor_user_id=admin.id,
+        action=f"supplier_product_{data.status}",
+        object_type="product",
+        object_id=product.id,
+        detail={
+            "supplier_id": supplier.id,
+            "previous_status": previous_status,
+            "status": data.status,
+            "reason": data.reason,
+        },
+    )
+    try:
+        db.commit()
+    except StaleDataError as exc:
+        db.rollback()
+        raise BizError("商品状态已更新，请刷新后重试", status_code=409) from exc
+    db.refresh(product)
+    return success({
+        "id": product.id,
+        "status": product.status,
+        "version": product.version,
+    })
+
+
 @router.put("/profile")
 def update_supplier_profile(data: SupplierProfileUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = _get_supplier(user, db)
@@ -717,7 +936,11 @@ def store_page(sid: int, db: Session = Depends(get_db)):
         # Do not reveal whether a merchant exists while the public directory is
         # disabled. Supplier management APIs remain available to the owner.
         raise BizError("供应商不存在", status_code=404)
-    s = db.query(Supplier).filter(Supplier.id == sid, Supplier.status == "approved").first()
+    s = db.query(Supplier).join(User, User.id == Supplier.user_id).filter(
+        Supplier.id == sid,
+        Supplier.status == "approved",
+        User.account_status == "active",
+    ).first()
     if not s:
         raise BizError("供应商不存在", status_code=404)
     products = db.query(Product).filter(Product.supplier_id == sid, Product.status == "on").limit(20).all()

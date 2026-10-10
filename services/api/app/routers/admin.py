@@ -19,18 +19,22 @@ from app.core.deps import require_admin
 from app.core.rate_limit import (
     limit_admin_account_action,
     limit_admin_onboarding_action,
+    limit_admin_support_action,
     limit_notification_broadcast,
     limit_payment_admin,
 )
 from app.core.sensitive import reveal
 from app.db.session import get_db
 from app.models.bank_card import BankCard
+from app.models.buy_request import BuyRequestDeal
 from app.models.community import CommunityReport, Comment, Post
 from app.models.external_identity import ExternalIdentity
 from app.models.order import Order
 from app.models.onboarding import ComputeOnboarding
 from app.models.payment import PaymentEvent, PaymentOrder, PaymentRefund, PaymentRefundRequest
 from app.models.product import Product
+from app.models.supplier import Supplier
+from app.models.support import SupportTicket
 from app.models.user import User
 from app.models.verification import Verification
 from app.models.withdrawal import WithdrawalOrder
@@ -38,6 +42,7 @@ from app.schemas.community import CommunityReportReviewIn
 from app.schemas.admin_account import AdminUserActionIn
 from app.schemas.notification import NotificationBroadcastCreateIn, NotificationBroadcastRevokeIn
 from app.schemas.onboarding import OnboardingReviewIn
+from app.schemas.support import AdminSupportTicketActionIn
 from app.schemas.payment import (
     PaymentRefundCreateIn,
     PaymentRefundRequestReviewIn,
@@ -64,6 +69,12 @@ from app.services.payment_refund_requests import (
 )
 from app.services.notification_broadcast import create_broadcast, list_broadcasts, revoke_broadcast
 from app.services.notification_service import create_notification
+from app.services.admin_support import (
+    SUPPORT_TICKET_STATUSES,
+    get_admin_support_ticket,
+    list_admin_support_tickets,
+    perform_admin_support_action,
+)
 from app.utils.response import BizError, success
 
 
@@ -287,6 +298,36 @@ def overview(
         }
 
     sources = (platform,) if platform else AUDIT_PLATFORMS
+    work_queues = {
+        "support_tickets": db.query(SupportTicket.id).filter(
+            SupportTicket.status.in_(("pending_unassigned", "assigned"))
+        ).count(),
+        "community_reports": db.query(CommunityReport.id).filter(
+            CommunityReport.status == "pending"
+        ).count(),
+        "suppliers": db.query(Supplier.id).filter(Supplier.status == "pending").count(),
+        "onboardings": db.query(ComputeOnboarding.id).filter(
+            ComputeOnboarding.status.in_(("submitted", "contacted"))
+        ).count(),
+        "verifications": db.query(Verification.id).filter(
+            Verification.status == "pending"
+        ).count(),
+        "order_disputes": db.query(Order.id).filter(Order.status == "disputed").count(),
+        "refund_requests": db.query(PaymentRefundRequest.id).filter(
+            PaymentRefundRequest.status == "pending_review"
+        ).count(),
+        "bank_cards": db.query(BankCard.id).filter(
+            BankCard.status == "pending_review"
+        ).count(),
+        "withdrawals": db.query(WithdrawalOrder.id).filter(
+            WithdrawalOrder.status.in_(("reviewing", "manual_payment_pending"))
+        ).count(),
+        "buy_requests": db.query(BuyRequestDeal.id).filter(
+            BuyRequestDeal.status.in_((
+                "platform_review", "credential_submitted", "delivery_disputed",
+            ))
+        ).count(),
+    }
     return success({
         "created_platform": platform,
         "counts": counts_for(platform),
@@ -294,7 +335,71 @@ def overview(
             {"created_platform": source, "counts": counts_for(source)}
             for source in sources
         ],
+        "work_queues": work_queues,
+        "pending_total": sum(work_queues.values()),
     })
+
+
+@router.get("/support-tickets")
+def admin_support_tickets(
+    status: Literal["pending_unassigned", "assigned", "resolved", "closed"] | None = None,
+    category: str | None = Query(default=None, max_length=32),
+    keyword: str | None = Query(default=None, max_length=64),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return the real human-support queue to platform administrators."""
+
+    _page(page, page_size)
+    if status and status not in SUPPORT_TICKET_STATUSES:
+        raise BizError("客服工单状态无效")
+    return success(list_admin_support_tickets(
+        db,
+        status=status,
+        category=category,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    ))
+
+
+@router.get("/support-tickets/{ticket_id}")
+def admin_support_ticket_detail(
+    ticket_id: int,
+    message_page: int = Query(default=1, ge=1),
+    message_page_size: int = Query(default=100, ge=1, le=100),
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return one ticket and its durable user/operator conversation."""
+
+    _page(message_page, message_page_size)
+    return success(get_admin_support_ticket(
+        db,
+        ticket_id=ticket_id,
+        message_page=message_page,
+        message_page_size=message_page_size,
+    ))
+
+
+@router.post("/support-tickets/{ticket_id}/actions")
+def manage_support_ticket(
+    ticket_id: int,
+    data: AdminSupportTicketActionIn,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Claim, reply to, resolve, close, or reopen one support ticket."""
+
+    limit_admin_support_action(actor.id)
+    return success(perform_admin_support_action(
+        db,
+        ticket_id=ticket_id,
+        actor=actor,
+        data=data,
+    ))
 
 
 @router.get("/notification-broadcasts")

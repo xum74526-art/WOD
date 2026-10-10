@@ -55,7 +55,7 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
         session = get_support_session("zh", self.user, self.db)["data"]
         self.assertEqual(session["conversation_id"], first["data"]["conversation_id"])
         self.assertEqual(len(session["messages"]), 2)
-        self.assertFalse(session["human_support_configured"])
+        self.assertTrue(session["human_support_configured"])
         english_session = get_support_session("en", self.user, self.db)["data"]
         self.assertEqual(english_session["messages"][0]["content"], request.message)
         self.assertIn("submit a requirement", english_session["messages"][1]["content"].lower())
@@ -69,7 +69,7 @@ class SupportChatTests(unittest.IsolatedAsyncioTestCase):
                 lang="zh",
             ), self.user, self.db)
         self.assertTrue(answer["data"]["can_create_ticket"])
-        self.assertIn("待分配", answer["data"]["reply"])
+        self.assertIn("管理员认领", answer["data"]["reply"])
 
         created = create_support_ticket(SupportTicketIn(
             conversation_id=answer["data"]["conversation_id"],

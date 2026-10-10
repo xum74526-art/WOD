@@ -199,23 +199,23 @@ def get_support_session(
     ).order_by(SupportConversation.updated_at.desc(), SupportConversation.id.desc()).first()
     messages: list[SupportMessage] = []
     if conversation:
-        messages = db.query(SupportMessage).filter(
+        messages = list(reversed(db.query(SupportMessage).filter(
             SupportMessage.conversation_id == conversation.id,
             SupportMessage.user_id == user.id,
-        ).order_by(SupportMessage.id.asc()).limit(100).all()
+        ).order_by(SupportMessage.id.desc()).limit(100).all()))
     tickets = db.query(SupportTicket).filter(SupportTicket.user_id == user.id).order_by(
         SupportTicket.created_at.desc(), SupportTicket.id.desc()
     ).limit(20).all()
     return success({
         "conversation_id": conversation.id if conversation else None,
         "service_mode": _service_mode(),
-        "human_support_configured": False,
+        "human_support_configured": True,
         "messages": [_message_dict(item, lang) for item in messages],
         "tickets": [_ticket_dict(item) for item in tickets],
         "notice": (
-            "Self-service FAQ is available. Human agents are not configured."
+            "Self-service FAQ and human support tickets are available. Replies appear in this conversation and your inbox."
             if lang == "en" else
-            "自助客服已启用，人工坐席尚未配置。"
+            "自助客服和人工工单均已启用，人工回复会显示在本会话和消息中心。"
         ),
     })
 
@@ -373,9 +373,9 @@ def create_support_ticket(
     return success({
         "ticket": _ticket_dict(ticket),
         "notice": (
-            "Ticket saved as Pending assignment. Human agents and a response SLA are not configured yet."
+            "Ticket submitted. An operator will claim it and reply in Support; no fixed response SLA is promised."
             if data.lang == "en" else
-            "工单已保存为“待分配”。目前尚未配置人工坐席和回复时限。"
+            "工单已提交，管理员认领后会在客服页回复；当前不承诺固定回复时限。"
         ),
     })
 

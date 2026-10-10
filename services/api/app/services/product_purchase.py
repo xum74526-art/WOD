@@ -23,12 +23,21 @@ def configured_platform_fulfiller_ids(db: Session) -> set[int]:
             configured.add(int(value.strip()))
         except (TypeError, ValueError):
             continue
-    if not configured:
-        return set()
-    return {
+    configured_ids = {
         int(user_id)
-        for (user_id,) in db.query(User.id).filter(User.id.in_(configured)).all()
+        for (user_id,) in db.query(User.id).filter(
+            User.id.in_(configured or {-1}),
+            User.account_status == "active",
+        ).all()
     }
+    administrator_ids = {
+        int(user_id)
+        for (user_id,) in db.query(User.id).filter(
+            User.role == "admin",
+            User.account_status == "active",
+        ).all()
+    }
+    return configured_ids | administrator_ids
 
 
 def product_purchase_availability(
@@ -67,4 +76,11 @@ def product_purchase_availability(
     )
     if not supplier or supplier.status != "approved":
         return False, UNVERIFIED_SUPPLIER_REASON
+    if suppliers is None:
+        owner_active = db.query(User.id).filter(
+            User.id == supplier.user_id,
+            User.account_status == "active",
+        ).first()
+        if owner_active is None:
+            return False, UNVERIFIED_SUPPLIER_REASON
     return True, None

@@ -84,6 +84,8 @@ admin_account_action_rate_limit = SlidingWindowRateLimiter(limit=60, window_seco
 admin_onboarding_action_rate_limit = SlidingWindowRateLimiter(limit=120, window_seconds=60)
 coupon_redeem_rate_limit = SlidingWindowRateLimiter(limit=10, window_seconds=600)
 admin_coupon_action_rate_limit = SlidingWindowRateLimiter(limit=60, window_seconds=60)
+admin_support_action_rate_limit = SlidingWindowRateLimiter(limit=120, window_seconds=60)
+admin_supplier_action_rate_limit = SlidingWindowRateLimiter(limit=120, window_seconds=60)
 
 
 def _identity_key(value: str) -> str:
@@ -205,3 +207,15 @@ def limit_admin_coupon_action(user_id: int) -> None:
     """Contain accidental campaign creation or repeated status changes."""
 
     admin_coupon_action_rate_limit.check(f"admin-coupon-action:{int(user_id)}")
+
+
+def limit_admin_support_action(user_id: int) -> None:
+    """Bound operator writes while allowing normal support-queue throughput."""
+
+    admin_support_action_rate_limit.check(f"admin-support-action:{int(user_id)}")
+
+
+def limit_admin_supplier_action(user_id: int) -> None:
+    """Contain accidental repeated supplier and catalogue mutations."""
+
+    admin_supplier_action_rate_limit.check(f"admin-supplier-action:{int(user_id)}")
